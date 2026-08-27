@@ -1,0 +1,10 @@
+{
+  "name": "docs-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Shared Mermaid batch renderer for docs/ — launches Chromium once for all diagrams.",
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.2",
+    "puppeteer": "^23.10.4"
+  }
+}
