@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: backend
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/stock?useSSL=false&serverTimezone=UTC
+    username: app
+    password: 1234
