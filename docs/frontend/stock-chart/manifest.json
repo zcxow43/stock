@@ -1,0 +1,39 @@
+[
+  {
+    "file": "step-1.html",
+    "caption": "初始畫面：股票總覽列出全市場股票，含最新收盤、漲跌（紅漲綠跌）與成交量。",
+    "api": [
+      "GET /api/stocks?keyword=&market=&includeInactive=&page=1&size=50&sort=&order= — 進頁載入第 1 頁清單"
+    ]
+  },
+  {
+    "file": "step-2.html",
+    "caption": "在搜尋框輸入「台積」：清單即時篩出 2330 台積電一檔。",
+    "api": [
+      "GET /api/stocks?keyword=台積&page=1&size=50 — 以關鍵字重新查詢清單"
+    ]
+  },
+  {
+    "file": "step-3.html",
+    "caption": "點擊 2330 該列：進入日 K 線圖，主圖為蠟燭圖，下方為成交量、MACD、KD 三個副圖；單擊 08/25 那根 K 棒已將十字準星與 tooltip 釘選在該日。",
+    "api": [
+      "GET /api/stocks/2330 — 取頁首名稱、市場、最新收盤與漲跌",
+      "GET /api/stocks/statistics?stockIds=2330&includeSeries=true&startDate=&endDate= — 取日 K 序列與 MACD／KD"
+    ]
+  },
+  {
+    "file": "step-4.html",
+    "caption": "連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。",
+    "api": [
+      "GET /api/stocks/2330/minute-bars?tradeDate=2025-08-25&interval=1 — 首次呼叫即向外部來源抓取該日分 K",
+      "GET /api/stocks/statistics?stockIds=2330&includeSeries=true&startDate=&endDate= — 僅為取得相鄰交易日"
+    ]
+  },
+  {
+    "file": "step-5.html",
+    "caption": "點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。",
+    "api": [
+      "GET /api/stocks/2330/minute-bars?tradeDate=2025-08-25&interval=5 — 已抓過的日期直接讀庫，不再外抓"
+    ]
+  }
+]

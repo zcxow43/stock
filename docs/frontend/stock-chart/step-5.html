@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>2330 台積電 — 2026-08-25 分 K</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-minute">
+  <div class="topbar">
+    <div class="brand">台股 <span>K 線</span> 瀏覽</div>
+    <div class="back">← 返回日 K</div>
+  </div>
+  <div class="wrap">
+    <div class="head">
+      <div class="ident">
+        <div class="code">2330</div>
+        <div class="nm">台積電</div>
+        <div class="day">2026-08-25</div>
+        <div class="daylbl">分 K</div>
+      </div>
+      <div class="seg" id="ivs">
+        <div>1 分</div><div class="on">5 分</div><div>15 分</div>
+        <div>30 分</div><div>60 分</div>
+      </div>
+    </div>
+    <div class="strip" id="daily"></div>
+    <div class="panel" data-target><svg id="chart" width="1368" height="596" viewBox="0 0 1368 596"></svg></div>
+    <div class="navrow">
+      <div class="nb">← 前一交易日</div>
+      <div class="nb">後一交易日 →</div>
+    </div>
+    <div class="meta">資料來源 YAHOO ・ 抓取時間 2026-08-27 09:12:33 ・ 共 55 根 K 棒（由 271 根 1 分 K 聚合）</div>
+  </div>
+<script>
+const INTERVAL = 5;   /* aggregated from the stored 1-minute bars, anchored at 09:00 */
+/* ---------- deterministic 1-minute series for 2026-08-25, 09:00-13:30 ---------- */
+function lcg(s){ return function(){ s = (s*1664525 + 1013904223) % 4294967296; return s/4294967296; }; }
+const rnd = lcg(825825);
+const DAY = { o:2355, h:2380, l:2350, c:2375, v:18234 };
+const N = 271;
+let px = DAY.o, one = [];
+for (let i=0;i<N;i++){
+  const drift = (DAY.c - DAY.o)/N;
+  const o = px;
+  px = px + drift + (rnd()-0.5)*7;
+  px = Math.min(DAY.h, Math.max(DAY.l, px));
+  const c = Math.round(px*2)/2;
+  const hi = Math.min(DAY.h, Math.round((Math.max(o,c) + rnd()*4)*2)/2);
+  const lo = Math.max(DAY.l, Math.round((Math.min(o,c) - rnd()*4)*2)/2);
+  const mins = 9*60 + i;
+  const t = String(Math.floor(mins/60)).padStart(2,"0") + ":" + String(mins%60).padStart(2,"0");
+  const shape = 1 + 2.2*Math.exp(-i/26) + 1.7*Math.exp(-(N-1-i)/22);
+  one.push({ t, o, h:hi, l:lo, c, v: Math.round((14 + rnd()*36) * shape) });
+}
+one[0].o = DAY.o; one[N-1].c = DAY.c;
+
+/* ---------- aggregate 1m -> INTERVAL, anchored at 09:00 ---------- */
+let bars = [];
+if (INTERVAL === 1) bars = one;
+else {
+  for (let s=0; s<N; s+=INTERVAL) {
+    const g = one.slice(s, s+INTERVAL);
+    if (!g.length) continue;
+    bars.push({ t:g[0].t, o:g[0].o, h:Math.max(...g.map(b=>b.h)), l:Math.min(...g.map(b=>b.l)),
+                c:g[g.length-1].c, v:g.reduce((a,b)=>a+b.v,0) });
+  }
+}
+const n = bars.length;
+
+/* ---------- daily context strip ---------- */
+const f2 = v => v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+const dcls = DAY.c >= DAY.o ? "up" : "down";
+document.getElementById("daily").innerHTML =
+  `<div><div class="k">當日開盤</div><div class="v">${f2(DAY.o)}</div></div>` +
+  `<div><div class="k">當日最高</div><div class="v up">${f2(DAY.h)}</div></div>` +
+  `<div><div class="k">當日最低</div><div class="v down">${f2(DAY.l)}</div></div>` +
+  `<div><div class="k">當日收盤</div><div class="v ${dcls}">${f2(DAY.c)}</div></div>` +
+  `<div><div class="k">當日成交量</div><div class="v">${DAY.v.toLocaleString()} 張</div></div>`;
+
+/* ---------- chart ---------- */
+const W=1368, L=52, R=1310, cw=(R-L)/n, bw=Math.max(2.2, cw*0.6);
+const P = { price:{t:14,h:410}, vol:{t:446,h:112} };
+const UP="#E04B45", DN="#16A75C", GRID="#1F2C3A", AX="#93A4B8";
+const x = i => L + cw*i + cw/2;
+let s = "";
+function frame(p, label){
+  s += `<rect x="${L}" y="${p.t}" width="${R-L}" height="${p.h}" fill="none" stroke="${GRID}"/>`;
+  for (let g=1; g<4; g++) s += `<line x1="${L}" y1="${p.t+p.h*g/4}" x2="${R}" y2="${p.t+p.h*g/4}" stroke="${GRID}" stroke-dasharray="2 4"/>`;
+  if (label) s += `<text x="${L+8}" y="${p.t+15}" fill="${AX}" font-size="12">${label}</text>`;
+}
+const yScale = (p,lo,hi) => v => p.t + p.h - (v-lo)/(hi-lo)*p.h;
+const pLo=Math.min(...bars.map(b=>b.l)), pHi=Math.max(...bars.map(b=>b.h)), pad=(pHi-pLo)*0.05;
+const yP = yScale(P.price, pLo-pad, pHi+pad);
+frame(P.price, `${INTERVAL} 分 K`);
+for (let g=0; g<=4; g++){
+  const v = pLo-pad + (pHi+pad-(pLo-pad))*g/4;
+  s += `<text x="${R+8}" y="${yP(v)+4}" fill="${AX}" font-size="11">${v.toFixed(2)}</text>`;
+}
+s += `<line x1="${L}" y1="${yP(DAY.o)}" x2="${R}" y2="${yP(DAY.o)}" stroke="#3A4757" stroke-dasharray="5 4"/>`;
+s += `<text x="${L+6}" y="${yP(DAY.o)-5}" fill="#6B7C90" font-size="11">開盤 ${f2(DAY.o)}</text>`;
+bars.forEach((b,i)=>{
+  const col = b.c>=b.o ? UP : DN;
+  const yo=yP(b.o), yc=yP(b.c);
+  s += `<line x1="${x(i)}" y1="${yP(b.h)}" x2="${x(i)}" y2="${yP(b.l)}" stroke="${col}" stroke-width="1"/>`;
+  s += `<rect x="${x(i)-bw/2}" y="${Math.min(yo,yc)}" width="${bw}" height="${Math.max(1.2,Math.abs(yc-yo))}" fill="${col}"/>`;
+});
+const vHi = Math.max(...bars.map(b=>b.v));
+const yV = yScale(P.vol, 0, vHi*1.1);
+frame(P.vol, "成交量（張）");
+bars.forEach((b,i)=>{
+  s += `<rect x="${x(i)-bw/2}" y="${yV(b.v)}" width="${bw}" height="${P.vol.t+P.vol.h-yV(b.v)}" fill="${b.c>=b.o?'#9A3B37':'#12784A'}"/>`;
+});
+const tickEvery = INTERVAL === 1 ? 30 : Math.max(1, Math.round(30/INTERVAL));
+bars.forEach((b,i)=>{
+  if (i % tickEvery === 0 || i === n-1)
+    s += `<text x="${x(i)}" y="${P.vol.t+P.vol.h+20}" fill="${AX}" font-size="11" text-anchor="middle">${b.t}</text>`;
+});
+
+/* crosshair + tooltip parked mid-session */
+const tIdx = Math.round(n*0.42), tb = bars[tIdx], tx = x(tIdx);
+s += `<line x1="${tx}" y1="${P.price.t}" x2="${tx}" y2="${P.vol.t+P.vol.h}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
+s += `<line x1="${L}" y1="${yP(tb.c)}" x2="${R}" y2="${yP(tb.c)}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
+s += `<rect x="${tx-26}" y="${P.vol.t+P.vol.h+4}" width="52" height="18" fill="#3A4757" rx="3"/>`;
+s += `<text x="${tx}" y="${P.vol.t+P.vol.h+17}" fill="#E6EDF5" font-size="11" text-anchor="middle">${tb.t}</text>`;
+const pctFromOpen = (tb.c-DAY.o)/DAY.o*100;
+const rows = [
+  ["開", f2(tb.o)], ["高", f2(tb.h)], ["低", f2(tb.l)], ["收", f2(tb.c)],
+  ["對開盤", (pctFromOpen>0?"+":"")+pctFromOpen.toFixed(2)+"%"],
+  ["成交量", tb.v.toLocaleString()+" 張"]
+];
+const tipX = tx + 18, tipY = P.price.t + 22;
+s += `<rect x="${tipX}" y="${tipY}" width="196" height="${26+rows.length*17}" fill="#1B2836" stroke="#3A4757" rx="5"/>`;
+s += `<text x="${tipX+12}" y="${tipY+19}" fill="#E6EDF5" font-size="12" font-weight="600">2026-08-25 ${tb.t}</text>`;
+rows.forEach(([k,v],i)=>{
+  s += `<text x="${tipX+12}" y="${tipY+38+i*17}" fill="#93A4B8" font-size="11.5">${k}</text>`;
+  s += `<text x="${tipX+184}" y="${tipY+38+i*17}" fill="#E6EDF5" font-size="11.5" text-anchor="end">${v}</text>`;
+});
+document.getElementById("chart").innerHTML = s;
+</script>
+</body>
+</html>

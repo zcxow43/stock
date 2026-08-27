@@ -10,7 +10,7 @@ requirement: "統計兩個月股票資料含 MACD/KD 指標 — 儲存日線 OHL
 
 建立日線行情表，儲存個股每個交易日的 OHLC 與成交量資訊。此表是**所有技術指標的唯一原始資料來源**：指標一律由本表的 OHLC 重新推導，不從外部抓取指標數值。
 
-指標運算結果存放於獨立的 `stock_daily_indicator` 表（見 `specs/dba/stock-daily-indicator.md`，V002）。兩表分離的理由：行情是不可變的事實，指標會隨參數組合而有多份，生命週期不同。
+指標運算結果存放於獨立的 `stock_daily_indicator` 表（見 `specs/dba/stock-daily-indicator.md`，V003）。兩表分離的理由：行情是不可變的事實，指標會隨參數組合而有多份，生命週期不同。
 
 **本 migration 為 V001，是專案的第一個 migration，無前置。**
 
@@ -29,7 +29,7 @@ requirement: "統計兩個月股票資料含 MACD/KD 指標 — 儲存日線 OHL
 2. **所有價格欄位使用 `DECIMAL`，嚴禁 `FLOAT` / `DOUBLE`。**
    MACD 與 KD 皆為**遞迴**指標，當日結果會作為隔日的輸入。浮點數的表示誤差會沿遞迴鏈逐日累積放大，最終表現為「指標值與市面看盤軟體有微小但持續的偏差」——這是最難追查的一類 bug。
 
-3. **日線與分線必須是不同的表。** 本表僅存日線。分線（`stock_minute_price`）為後續階段，其資料量級（全市場約每年 1.46 億列）需要 RANGE 分區等完全不同的設計，不可用單一表加 `period` 欄位混存。
+3. **日線與分線必須是不同的表。** 本表僅存日線。分線存放於 `stock_minute_price`（見 `specs/dba/stock-minute-price.md`，V005），其資料量級（全市場約每年 1.46 億列）需要 RANGE 分區等完全不同的設計，不可用單一表加 `period` 欄位混存。
 
 ## Implementation Details
 

@@ -1,0 +1,9 @@
+{
+  "name": "docs-frontend-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Storyboard renderer for docs/frontend/ — screenshots each step-N.html and composes the filmstrip board (png/html/pdf).",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

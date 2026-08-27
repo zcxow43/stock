@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>股票總覽</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-list">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,378</b> 檔</div>
+    </div>
+    <div class="filters">
+      <label class="search" data-trigger>
+        <span class="ico">⌕</span>
+        <input type="text" placeholder="輸入股票代號或名稱">
+      </label>
+      <select><option>全部市場</option></select>
+      <label class="chk"><span class="box"></span>顯示已下市</label>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="sorted">代號</th>
+          <th class="sortable">名稱</th>
+          <th class="sortable">市場</th>
+          <th>最新交易日</th>
+          <th class="r">收盤價</th>
+          <th class="r">漲跌</th>
+          <th class="r">漲跌幅</th>
+          <th class="r">成交量</th>
+          <th>狀態</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="pager">
+      <div class="psize">每頁 <select><option>50 筆</option></select></div>
+      <div class="pbtns">
+        <span>第 1 / 28 頁</span>
+        <div class="btn dis">上一頁</div>
+        <div class="btn">下一頁</div>
+      </div>
+    </div>
+  </div>
+<script>
+const data = [
+  ["1101","台泥","TSE",33.85,-0.25,-0.73,12456789],
+  ["1301","台塑","TSE",42.50,0.30,0.71,8234100],
+  ["2303","聯電","TSE",58.90,-0.50,-0.84,45123000],
+  ["2317","鴻海","TSE",218.50,3.50,1.63,62341200],
+  ["2330","台積電","TSE",2410.00,-5.00,-0.21,17557736],
+  ["2454","聯發科","TSE",1385.00,15.00,1.09,5432100],
+  ["2603","長榮","TSE",195.00,0.00,0.00,23111000],
+  ["2881","富邦金","TSE",92.30,0.50,0.54,18900000],
+  ["3008","大立光","TSE",2895.00,-35.00,-1.19,1203400],
+  ["3037","欣興","TSE",152.50,2.50,1.67,31200000],
+  ["4966","譜瑞-KY","OTC",905.00,-12.00,-1.31,842300],
+  ["5483","中美晶","OTC",188.00,1.50,0.80,6721000]
+];
+const n2 = v => v.toFixed(2);
+const sgn = v => (v > 0 ? "+" : "") + n2(v);
+const cls = v => v > 0 ? "up" : (v < 0 ? "down" : "flat");
+document.getElementById("rows").innerHTML = data.map(([c,nm,mk,close,chg,pct,vol],i) => `
+  <tr class="${i===4?'hover':''}">
+    <td class="code">${c}</td>
+    <td>${nm}</td>
+    <td><span class="tag ${mk==='TSE'?'tse':'otc'}">${mk==='TSE'?'上市':'上櫃'}</span></td>
+    <td>2026-08-27</td>
+    <td class="r">${n2(close)}</td>
+    <td class="r ${cls(chg)}">${sgn(chg)}</td>
+    <td class="r ${cls(chg)}">${(chg>0?"+":"")+pct.toFixed(2)}%</td>
+    <td class="r">${vol.toLocaleString()}</td>
+    <td></td>
+  </tr>`).join("");
+</script>
+</body>
+</html>

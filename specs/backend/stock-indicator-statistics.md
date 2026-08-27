@@ -59,6 +59,18 @@ KD 的 RSV 需要最近 9 日的最高與最低價，故增量模式除前一日
 - `startDate` 省略時，取 `endDate` 往前推兩個曆月後的第一個交易日。
 - 統計僅涵蓋區間內實際有交易的日期；停牌日不計入 `tradingDays`，也不佔序列位置。
 
+### 指標尚未運算時的行為
+
+逐日序列以 `stock_daily_price` 為主表、`stock_daily_indicator` 為**外連接**（LEFT JOIN），不可用內連接。
+
+原因：行情與指標是兩個獨立的作業寫入的（`stock-price-ingestion` 與本 spec 的重算端點），行情已回補但指標尚未重算是完全正常的中間狀態。內連接會讓這種狀態下的查詢回傳空序列——對呼叫端而言與「這檔沒有行情」無法區分，K 線圖會畫不出任何一根 K 棒，儘管價格資料就在庫裡。
+
+具體行為：
+
+- 某日有行情但無指標列時，該日仍出現在 `series` 中，OHLC 與 `volume` 有值，`dif` / `dea` / `osc` / `k` / `d` / `j` 為 `null`。
+- 區間內完全沒有任何指標列時，`summary` 中的價格與成交量統計照常計算，`latestDif` / `latestDea` / `latestOsc` / `latestK` / `latestD` / `latestJ` 與四個交叉次數欄位為 `null`（**不是 `0`**——`0` 代表「算過，沒有發生交叉」，`null` 代表「還沒算」，兩者在畫面上要顯示不同的內容）。
+- 交叉次數的計算僅比較**兩日皆有指標值**的相鄰交易日；任一日指標為 `null` 時該組不計入，亦不中斷其後的比較。
+
 ### 統計內容
 
 除逐日序列外，每檔須計算區間摘要，包含價格區間統計與**指標交叉次數**——後者是「統計 MACD／KD」的實質內容，僅列出每日數值不構成統計。
@@ -198,6 +210,8 @@ Response `200`：
 
 `scope` 為 `SELECTED` 或 `ALL`。全市場查詢時各 item 不含 `series` 欄位。
 
+`series` 各列的 `dif` / `dea` / `osc` / `k` / `d` / `j`，以及 `summary` 的 `latest*` 與四個交叉次數欄位，在該日／該區間尚未運算指標時為 `null`（見上方「指標尚未運算時的行為」）。價格與成交量相關欄位不受影響，永遠有值。
+
 數值格式：價格與漲跌金額 2 位小數、漲跌百分比 2 位小數、指標值 4 位小數。指標以資料庫中的完整精度參與所有計算，僅在序列化為回應時才四捨五入。
 
 錯誤：
@@ -209,6 +223,7 @@ Response `200`：
 | `startDate` 晚於 `endDate` | `400` | `{"code":"INVALID_DATE_RANGE"}` |
 | `stockIds` 含未知代號 | `400` | `{"code":"UNKNOWN_STOCK_ID","unknownIds":["9999"]}` |
 | 指定標的在區間內無任何行情資料 | `200` | 該 item 的 `tradingDays` 為 `0`、`summary` 為 `null`、`series` 為空陣列 |
+| 指定標的在區間內有行情但尚未運算指標 | `200` | `series` 照常回傳且 OHLC 有值，指標欄位為 `null`；`summary` 的 `latest*` 與交叉次數為 `null` |
 
 ### 資料來源對應
 
@@ -221,7 +236,7 @@ Response `200`：
 | `warmupSufficient` | 該檔區間起日之前 `is_warmup = 0` 的指標列數是否達 250 |
 | 交叉次數 | 由區間內 `osc` 與 `k`/`d` 的逐日序列推導，不落地儲存 |
 
-查詢一律排除 `is_warmup = 1` 的列。
+查詢一律排除 `is_warmup = 1` 的列。序列以 `stock_daily_price` 為主表外連接 `stock_daily_indicator`，故指標欄位可為 `null`；價格欄位不可為 `null`。
 
 ## Acceptance Criteria
 
@@ -247,4 +262,7 @@ Response `200`：
 - [ ] `stockIds` 帶 51 檔時回 `400` 與 `TOO_MANY_STOCK_IDS`
 - [ ] 交叉次數以相鄰交易日比較得出；於已知含交叉的區間驗證次數與發生日期正確
 - [ ] 區間內無行情的標的回 `200`，`tradingDays` 為 `0`、`summary` 為 `null`
+- [ ] 某檔已有行情但尚未執行指標重算時，`series` 仍回傳完整的 OHLC 與成交量，指標欄位為 `null`（而非回空序列）
+- [ ] 上述情況下 `summary` 的 `macdGoldenCross` 等交叉次數為 `null` 而非 `0`
+- [ ] 區間中間有數日缺指標列時，其前後兩端有指標的相鄰交易日仍正常參與交叉判定
 - [ ] 回應中的指標值為 4 位小數，且中間計算未使用四捨五入後的值

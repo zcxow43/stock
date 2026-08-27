@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>stock-chart storyboard</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
+  .board { position:relative; width:2360px; height:1484px; }
+  .frame { position:absolute; }
+  .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
+
+  .caption { position:relative; z-index:6; margin-top:14px; font-size:19px; line-height:1.5; color:#33312d; }
+  .caption .num { display:inline-block; min-width:26px; height:26px; line-height:26px; text-align:center;
+                  background:#d6743a; color:#fff; border-radius:13px; font-size:15px; margin-right:9px; vertical-align:1px; }
+  .apis { position:relative; z-index:6; margin-top:9px; }
+  .api { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin-top:5px;
+         font-size:15px; line-height:1.45; }
+  .api .verb { flex:none; display:inline-block; min-width:44px; text-align:center; padding:1px 7px;
+               border-radius:4px; background:#5b6b7c; color:#fff; font-size:12px; letter-spacing:.4px; font-weight:600; }
+  .api .verb.v-get { background:#2f6f4f; }
+  .api .verb.v-post { background:#9a5a1e; }
+  /* path and its purpose note share one wrapping block, so the note always
+     stays right after the path it explains instead of drifting to the margin */
+  .api .sig { flex:1 1 0; min-width:0; }
+  .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
+              word-break:break-all; }
+  .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
+  svg.links { position:absolute; inset:0; width:2360px; height:1484px; pointer-events:none; z-index:5; }
+</style>
+</head>
+<body>
+<div class="board">
+  <svg class="links" viewBox="0 0 2360 1484">
+    <defs>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
+      </filter>
+    </defs>
+    <rect x="77.8" y="127.9" width="165.8" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="858.1" y="174.0" width="643.9" height="31.1"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1637.8" y="165.0" width="644.3" height="297.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="2226.1" y="209.3" width="16.3" height="32.8"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1637.8" y="904.7" width="644.3" height="290.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="2150.2" y="847.3" width="35.3" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="857.8" y="904.7" width="644.3" height="290.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <polygon points="250.5,148.3 831.0,175.6 830.7,182.1 851.1,174.1 831.5,164.1 831.2,170.6 250.8,143.3"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1284.1,208.7 1610.8,260.8 1609.8,267.2 1630.9,261.4 1612.6,249.4 1611.6,255.8 1284.9,203.7"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="2224.2,248.0 2014.5,878.3 2008.3,876.2 2010.5,898.1 2025.4,881.9 2019.2,879.9 2229.0,249.6"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="2142.8,861.9 1528.2,980.3 1527.0,973.9 1509.0,986.5 1530.4,991.6 1529.2,985.2 2143.8,866.9"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+  </svg>
+  
+  <div class="frame" style="left:70px; top:70px; width:660px;">
+    <img src="step-1.png" width="660" height="413" alt="初始畫面：股票總覽列出全市場股票，含最新收盤、漲跌（紅漲綠跌）與成交量。">
+    <div class="caption"><span class="num">1</span>初始畫面：股票總覽列出全市場股票，含最新收盤、漲跌（紅漲綠跌）與成交量。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks?keyword=&amp;market=&amp;includeInactive=&amp;page=1&amp;size=50&amp;sort=&amp;order=</code><span class="note">進頁載入第 1 頁清單</span></span></div></div>
+  </div>
+  <div class="frame" style="left:850px; top:70px; width:660px;">
+    <img src="step-2.png" width="660" height="413" alt="在搜尋框輸入「台積」：清單即時篩出 2330 台積電一檔。">
+    <div class="caption"><span class="num">2</span>在搜尋框輸入「台積」：清單即時篩出 2330 台積電一檔。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks?keyword=台積&amp;page=1&amp;size=50</code><span class="note">以關鍵字重新查詢清單</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:70px; width:660px;">
+    <img src="step-3.png" width="660" height="413" alt="點擊 2330 該列：進入日 K 線圖，主圖為蠟燭圖，下方為成交量、MACD、KD 三個副圖；單擊 08/25 那根 K 棒已將十字準星與 tooltip 釘選在該日。">
+    <div class="caption"><span class="num">3</span>點擊 2330 該列：進入日 K 線圖，主圖為蠟燭圖，下方為成交量、MACD、KD 三個副圖；單擊 08/25 那根 K 棒已將十字準星與 tooltip 釘選在該日。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330</code><span class="note">取頁首名稱、市場、最新收盤與漲跌</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/statistics?stockIds=2330&amp;includeSeries=true&amp;startDate=&amp;endDate=</code><span class="note">取日 K 序列與 MACD／KD</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:817px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。">
+    <div class="caption"><span class="num">4</span>連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=1</code><span class="note">首次呼叫即向外部來源抓取該日分 K</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/statistics?stockIds=2330&amp;includeSeries=true&amp;startDate=&amp;endDate=</code><span class="note">僅為取得相鄰交易日</span></span></div></div>
+  </div>
+  <div class="frame" style="left:850px; top:817px; width:660px;">
+    <img src="step-5.png" width="660" height="413" alt="點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。">
+    <div class="caption"><span class="num">5</span>點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=5</code><span class="note">已抓過的日期直接讀庫，不再外抓</span></span></div></div>
+  </div>
+</div>
+</body>
+</html>

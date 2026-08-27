@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>2330 台積電 — 日 K</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-chart">
+  <div class="topbar">
+    <div class="brand">台股 <span>K 線</span> 瀏覽</div>
+    <div class="back">← 返回清單</div>
+  </div>
+  <div class="wrap">
+    <div class="head">
+      <div class="ident">
+        <div class="code">2330</div>
+        <div class="nm">台積電</div>
+        <span class="tag tse">上市</span>
+        <div class="quote">
+          <div class="last">2,410.00</div>
+          <div class="chg down">-5.00　(-0.21%)</div>
+        </div>
+      </div>
+      <div class="seg">
+        <div>1 個月</div><div class="on">3 個月</div><div>6 個月</div>
+        <div>1 年</div><div>自訂</div>
+      </div>
+    </div>
+    <div class="strip" id="summary"></div>
+    <div class="panel" data-target><svg id="chart" width="1368" height="612" viewBox="0 0 1368 612"></svg></div>
+    <div class="hint">連點兩下任一根 K 棒可查看當日分 K</div>
+  </div>
+<script>
+/* ---------- deterministic daily series (3 個月) ---------- */
+function lcg(s){ return function(){ s = (s*1664525 + 1013904223) % 4294967296; return s/4294967296; }; }
+const rnd = lcg(20260827);
+const holidays = new Set(["2026-06-19","2026-06-22","2026-08-07"]);
+const dates = [];
+for (let d = new Date(2026,4,27); d <= new Date(2026,7,27); d.setDate(d.getDate()+1)) {
+  const dow = d.getDay(); if (dow===0 || dow===6) continue;
+  const iso = d.toISOString().slice(0,10); if (holidays.has(iso)) continue;
+  dates.push(iso);
+}
+const n = dates.length;
+let walk = [0];
+for (let i=1;i<n;i++) walk.push(walk[i-1] + (rnd()-0.46)*2.6);
+const wMin = Math.min(...walk), wMax = Math.max(...walk);
+const LOW = 2085, HIGH = 2535;
+let close = walk.map(v => LOW + (v-wMin)/(wMax-wMin)*(HIGH-LOW));
+const shift = 2410 - close[n-1];
+close = close.map(v => Math.round((v + shift*0.55)*2)/2);
+const bars = close.map((c,i) => {
+  const prev = i ? close[i-1] : c*0.995;
+  const o = Math.round((prev + (rnd()-0.5)*14)*2)/2;
+  const hi = Math.round((Math.max(o,c) + rnd()*16)*2)/2;
+  const lo = Math.round((Math.min(o,c) - rnd()*16)*2)/2;
+  const vol = Math.round(11000 + rnd()*26000 + Math.abs(c-o)*260);
+  return { date: dates[i], o, h: hi, l: lo, c, v: vol };
+});
+bars[n-1] = { date: dates[n-1], o: 2430, h: 2435, l: 2410, c: 2410, v: 17558 };
+
+/* ---------- indicators ---------- */
+const ema = (arr,p) => { const k = 2/(p+1); let e = arr[0]; return arr.map((v,i)=> i? (e = v*k + e*(1-k)) : e); };
+const c = bars.map(b=>b.c);
+const e12 = ema(c,12), e26 = ema(c,26);
+const dif = c.map((_,i)=> e12[i]-e26[i]);
+const dea = ema(dif,9);
+const osc = dif.map((v,i)=> v-dea[i]);
+let K=[], D=[], J=[];
+for (let i=0;i<n;i++){
+  const s = Math.max(0,i-8);
+  const hh = Math.max(...bars.slice(s,i+1).map(b=>b.h));
+  const ll = Math.min(...bars.slice(s,i+1).map(b=>b.l));
+  const rsv = hh===ll ? 50 : (c[i]-ll)/(hh-ll)*100;
+  const pk = i? K[i-1] : 50, pd = i? D[i-1] : 50;
+  K.push(pk*2/3 + rsv/3); D.push(pd*2/3 + K[i]/3); J.push(3*K[i]-2*D[i]);
+}
+
+/* ---------- summary strip ---------- */
+const hiIdx = bars.reduce((a,b,i)=> b.h>bars[a].h?i:a, 0);
+const loIdx = bars.reduce((a,b,i)=> b.l<bars[a].l?i:a, 0);
+const chgAmt = bars[n-1].c - bars[0].o, chgPct = chgAmt/bars[0].o*100;
+const totVol = bars.reduce((s,b)=>s+b.v,0);
+let mg=0,md=0,kg=0,kd=0;
+for (let i=1;i<n;i++){
+  if (osc[i-1]<=0 && osc[i]>0) mg++; if (osc[i-1]>=0 && osc[i]<0) md++;
+  if (K[i-1]<=D[i-1] && K[i]>D[i]) kg++; if (K[i-1]>=D[i-1] && K[i]<D[i]) kd++;
+}
+const f2 = v => v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+const cellHtml = (k,v,cls,sub) => `<div><div class="k">${k}</div><div class="v ${cls||''}">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+document.getElementById("summary").innerHTML =
+  cellHtml("區間開盤", f2(bars[0].o)) +
+  cellHtml("最新收盤", f2(bars[n-1].c)) +
+  cellHtml("區間最高", f2(bars[hiIdx].h), "up", bars[hiIdx].date) +
+  cellHtml("區間最低", f2(bars[loIdx].l), "down", bars[loIdx].date) +
+  cellHtml("區間漲跌", (chgAmt>0?"+":"")+f2(chgAmt), chgAmt>=0?"up":"down", (chgAmt>0?"+":"")+chgPct.toFixed(2)+"%") +
+  cellHtml("交易日數", n) +
+  cellHtml("總成交量", totVol.toLocaleString(), "", "張") +
+  cellHtml("MACD 交叉", `黃金 ${mg} ／ 死亡 ${md}`) +
+  cellHtml("KD 交叉", `黃金 ${kg} ／ 死亡 ${kd}`);
+
+/* ---------- chart ---------- */
+const W=1368, L=52, R=1310, cw=(R-L)/n, bw=Math.max(3, cw*0.62);
+const P = { price:{t:14,h:262}, vol:{t:292,h:78}, macd:{t:386,h:88}, kd:{t:490,h:88} };
+const UP="#E04B45", DN="#16A75C", GRID="#1F2C3A", AX="#93A4B8", ZERO="#3A4757";
+const x = i => L + cw*i + cw/2;
+let s = "";
+function frame(p, label){
+  s += `<rect x="${L}" y="${p.t}" width="${R-L}" height="${p.h}" fill="none" stroke="${GRID}"/>`;
+  for (let g=1; g<4; g++) s += `<line x1="${L}" y1="${p.t+p.h*g/4}" x2="${R}" y2="${p.t+p.h*g/4}" stroke="${GRID}" stroke-dasharray="2 4"/>`;
+  s += `<text x="${L+8}" y="${p.t+15}" fill="${AX}" font-size="12">${label}</text>`;
+}
+function yScale(p, lo, hi){ return v => p.t + p.h - (v-lo)/(hi-lo)*p.h; }
+
+// price
+const pLo = Math.min(...bars.map(b=>b.l)), pHi = Math.max(...bars.map(b=>b.h));
+const pad = (pHi-pLo)*0.05, yP = yScale(P.price, pLo-pad, pHi+pad);
+frame(P.price, "");
+for (let g=0; g<=4; g++){
+  const v = pLo-pad + (pHi+pad-(pLo-pad))*g/4;
+  s += `<text x="${R+8}" y="${yP(v)+4}" fill="${AX}" font-size="11">${v.toFixed(2)}</text>`;
+}
+bars.forEach((b,i)=>{
+  const col = b.c>=b.o ? UP : DN;
+  const yo=yP(b.o), yc=yP(b.c);
+  s += `<line x1="${x(i)}" y1="${yP(b.h)}" x2="${x(i)}" y2="${yP(b.l)}" stroke="${col}" stroke-width="1.3"/>`;
+  s += `<rect x="${x(i)-bw/2}" y="${Math.min(yo,yc)}" width="${bw}" height="${Math.max(1.6,Math.abs(yc-yo))}" fill="${col}"/>`;
+});
+// volume
+const vHi = Math.max(...bars.map(b=>b.v)), yV = yScale(P.vol, 0, vHi*1.08);
+frame(P.vol, "成交量（張）");
+bars.forEach((b,i)=>{
+  s += `<rect x="${x(i)-bw/2}" y="${yV(b.v)}" width="${bw}" height="${P.vol.t+P.vol.h-yV(b.v)}" fill="${b.c>=b.o?'#9A3B37':'#12784A'}"/>`;
+});
+// macd
+const mAll = dif.concat(dea, osc), mLo=Math.min(...mAll), mHi=Math.max(...mAll);
+const yM = yScale(P.macd, mLo*1.15, mHi*1.15);
+frame(P.macd, "MACD (12,26,9)");
+s += `<line x1="${L}" y1="${yM(0)}" x2="${R}" y2="${yM(0)}" stroke="${ZERO}"/>`;
+osc.forEach((v,i)=>{
+  const y0=yM(0), y1=yM(v);
+  s += `<rect x="${x(i)-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.max(1,Math.abs(y1-y0))}" fill="${v>=0?UP:DN}"/>`;
+});
+const path = (arr,y) => arr.map((v,i)=> (i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ");
+s += `<path d="${path(dif,yM)}" fill="none" stroke="#E8B84B" stroke-width="1.6"/>`;
+s += `<path d="${path(dea,yM)}" fill="none" stroke="#4B9FE8" stroke-width="1.6"/>`;
+s += `<text x="${L+120}" y="${P.macd.t+15}" fill="#E8B84B" font-size="11">DIF ${dif[n-1].toFixed(4)}</text>`;
+s += `<text x="${L+220}" y="${P.macd.t+15}" fill="#4B9FE8" font-size="11">DEA ${dea[n-1].toFixed(4)}</text>`;
+s += `<text x="${L+320}" y="${P.macd.t+15}" fill="${osc[n-1]>=0?UP:DN}" font-size="11">OSC ${osc[n-1].toFixed(4)}</text>`;
+// kd
+const yK = yScale(P.kd, -20, 120);
+frame(P.kd, "KD (9,3,3)");
+[20,80].forEach(v => s += `<line x1="${L}" y1="${yK(v)}" x2="${R}" y2="${yK(v)}" stroke="${ZERO}" stroke-dasharray="3 3"/>`);
+s += `<path d="${path(K,yK)}" fill="none" stroke="#E8B84B" stroke-width="1.6"/>`;
+s += `<path d="${path(D,yK)}" fill="none" stroke="#4B9FE8" stroke-width="1.6"/>`;
+s += `<path d="${path(J,yK)}" fill="none" stroke="#C77DD8" stroke-width="1.3"/>`;
+s += `<text x="${L+110}" y="${P.kd.t+15}" fill="#E8B84B" font-size="11">K ${K[n-1].toFixed(4)}</text>`;
+s += `<text x="${L+195}" y="${P.kd.t+15}" fill="#4B9FE8" font-size="11">D ${D[n-1].toFixed(4)}</text>`;
+s += `<text x="${L+280}" y="${P.kd.t+15}" fill="#C77DD8" font-size="11">J ${J[n-1].toFixed(4)}</text>`;
+// x axis
+bars.forEach((b,i)=>{ if (i%8===0) s += `<text x="${x(i)}" y="${P.kd.t+P.kd.h+18}" fill="${AX}" font-size="11" text-anchor="middle">${b.date.slice(5)}</text>`; });
+
+/* crosshair + tooltip parked on 08/25 — the candle the user clicks next */
+const tIdx = bars.findIndex(b => b.date === "2026-08-25");
+const tb = bars[tIdx], tx = x(tIdx);
+s += `<line x1="${tx}" y1="${P.price.t}" x2="${tx}" y2="${P.kd.t+P.kd.h}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
+s += `<line x1="${L}" y1="${yP(tb.c)}" x2="${R}" y2="${yP(tb.c)}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
+s += `<rect x="${tx-34}" y="${P.kd.t+P.kd.h+4}" width="68" height="18" fill="#3A4757" rx="3"/>`;
+s += `<text x="${tx}" y="${P.kd.t+P.kd.h+17}" fill="#E6EDF5" font-size="11" text-anchor="middle">${tb.date}</text>`;
+const tipX = tx - 250, tipY = P.price.t + 16;
+const rows = [
+  ["開", f2(tb.o)], ["高", f2(tb.h)], ["低", f2(tb.l)], ["收", f2(tb.c)],
+  ["漲跌", ((tb.c-bars[tIdx-1].c)>0?"+":"")+f2(tb.c-bars[tIdx-1].c)],
+  ["成交量", tb.v.toLocaleString()+" 張"],
+  ["DIF / DEA", dif[tIdx].toFixed(4)+" / "+dea[tIdx].toFixed(4)],
+  ["OSC", osc[tIdx].toFixed(4)],
+  ["K / D / J", K[tIdx].toFixed(4)+" / "+D[tIdx].toFixed(4)+" / "+J[tIdx].toFixed(4)]
+];
+s += `<rect x="${tipX}" y="${tipY}" width="228" height="${26+rows.length*17}" fill="#1B2836" stroke="#3A4757" rx="5"/>`;
+s += `<text x="${tipX+12}" y="${tipY+19}" fill="#E6EDF5" font-size="12" font-weight="600">${tb.date}</text>`;
+rows.forEach(([k,v],i)=>{
+  s += `<text x="${tipX+12}" y="${tipY+38+i*17}" fill="#93A4B8" font-size="11.5">${k}</text>`;
+  s += `<text x="${tipX+216}" y="${tipY+38+i*17}" fill="#E6EDF5" font-size="11.5" text-anchor="end">${v}</text>`;
+});
+document.getElementById("chart").innerHTML = s;
+
+/* mark the clicked candle for the storyboard connector */
+const marker = document.createElementNS("http://www.w3.org/2000/svg","rect");
+marker.setAttribute("x", tx-bw/2-1); marker.setAttribute("y", yP(tb.h)-2);
+marker.setAttribute("width", bw+2); marker.setAttribute("height", yP(tb.l)-yP(tb.h)+4);
+marker.setAttribute("fill","none"); marker.setAttribute("stroke","#3E8FD8"); marker.setAttribute("stroke-width","1.5");
+marker.setAttribute("data-trigger","");
+document.getElementById("chart").appendChild(marker);
+</script>
+</body>
+</html>

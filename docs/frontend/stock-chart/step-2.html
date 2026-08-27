@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>股票總覽</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-list">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1</b> 檔</div>
+    </div>
+    <div class="filters">
+      <label class="search">
+        <span class="ico">⌕</span>
+        <input type="text" placeholder="輸入股票代號或名稱" value="台積">
+      </label>
+      <select><option>全部市場</option></select>
+      <label class="chk"><span class="box"></span>顯示已下市</label>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="sorted">代號</th>
+          <th class="sortable">名稱</th>
+          <th class="sortable">市場</th>
+          <th>最新交易日</th>
+          <th class="r">收盤價</th>
+          <th class="r">漲跌</th>
+          <th class="r">漲跌幅</th>
+          <th class="r">成交量</th>
+          <th>狀態</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="pager">
+      <div class="psize">每頁 <select><option>50 筆</option></select></div>
+      <div class="pbtns">
+        <span>第 1 / 1 頁</span>
+        <div class="btn dis">上一頁</div>
+        <div class="btn dis">下一頁</div>
+      </div>
+    </div>
+  </div>
+<script>
+const data = [
+  ["2330","台積電","TSE",2410.00,-5.00,-0.21,17557736]
+];
+const n2 = v => v.toFixed(2);
+const sgn = v => (v > 0 ? "+" : "") + n2(v);
+const cls = v => v > 0 ? "up" : (v < 0 ? "down" : "flat");
+document.getElementById("rows").innerHTML = data.map(([c,nm,mk,close,chg,pct,vol],i) => `
+  <tr class="hover" data-target data-trigger>
+    <td class="code">${c}</td>
+    <td>${nm}</td>
+    <td><span class="tag ${mk==='TSE'?'tse':'otc'}">${mk==='TSE'?'上市':'上櫃'}</span></td>
+    <td>2026-08-27</td>
+    <td class="r">${n2(close)}</td>
+    <td class="r ${cls(chg)}">${sgn(chg)}</td>
+    <td class="r ${cls(chg)}">${(chg>0?"+":"")+pct.toFixed(2)}%</td>
+    <td class="r">${vol.toLocaleString()}</td>
+    <td></td>
+  </tr>`).join("");
+</script>
+</body>
+</html>

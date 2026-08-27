@@ -1,0 +1,57 @@
+/* stock-chart group — page-specific styles on top of ../_scripts/shell.css.
+ * Scoped by <body class="page-list|page-chart|page-minute">. */
+
+/* ---------- page-list: 股票總覽 ---------- */
+.page-list .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:20px; }
+.count { font-size:14px; color:#93A4B8; }
+.count b { color:#E6EDF5; font-weight:600; }
+.filters { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
+.search { position:relative; }
+.search input { width:340px; height:38px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+                color:#E6EDF5; padding:0 12px 0 34px; font-size:14px; font-family:inherit; }
+.search input::placeholder { color:#6B7C90; }
+.search .ico { position:absolute; left:11px; top:10px; color:#6B7C90; font-size:15px; }
+.chk { display:flex; align-items:center; gap:7px; font-size:14px; color:#93A4B8; cursor:pointer; }
+.chk .box { width:16px; height:16px; border:1px solid #26333F; border-radius:3px; background:#0F1620; }
+thead th.sortable::after { content:"↕"; color:#4A5866; margin-left:6px; font-size:11px; }
+thead th.sorted::after { content:"↑"; color:#3E8FD8; margin-left:6px; font-size:11px; }
+.pager { display:flex; align-items:center; justify-content:space-between; margin-top:16px; font-size:13px; color:#93A4B8; }
+.pbtns { display:flex; gap:8px; align-items:center; }
+.psize { display:flex; align-items:center; gap:8px; }
+.psize select { height:32px; font-size:13px; }
+
+/* ---------- shared by 日K / 分K detail pages ---------- */
+.page-chart .wrap, .page-minute .wrap { padding:16px 28px 0; }
+.page-chart .head, .page-minute .head { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:12px; }
+.ident { display:flex; align-items:baseline; gap:12px; }
+.ident .code { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+.nm { font-size:22px; font-weight:600; }
+.strip { display:flex; background:#16202C; border:1px solid #26333F; border-radius:8px; padding:11px 0; margin-bottom:12px; }
+.strip > div { flex:1; border-right:1px solid #26333F; }
+.strip > div:last-child { border-right:none; }
+.strip .k { font-size:12px; color:#93A4B8; margin-bottom:3px; }
+.strip .v { font-weight:600; font-variant-numeric:tabular-nums; }
+.strip .sub { font-size:11px; color:#6B7C90; margin-top:1px; }
+.seg { display:flex; gap:8px; }
+.seg > div { height:32px; padding:0 15px; display:flex; align-items:center; font-size:13px; border-radius:6px;
+             background:#1B2836; color:#93A4B8; border:1px solid #26333F; }
+.seg > div.on { background:#3E8FD8; color:#FFFFFF; border-color:#3E8FD8; }
+.hint, .meta { text-align:center; color:#6B7C90; }
+.hint { font-size:13px; margin-top:8px; }
+.meta { font-size:12px; margin-top:7px; }
+
+/* ---------- page-chart only: 日 K ---------- */
+.quote { display:flex; align-items:baseline; gap:10px; margin-left:16px; }
+.last { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+.chg { font-size:15px; font-variant-numeric:tabular-nums; }
+.page-chart .strip > div { padding:0 16px; }
+.page-chart .strip .v { font-size:16px; }
+
+/* ---------- page-minute only: 分 K ---------- */
+.day { font-size:22px; font-weight:600; color:#E6EDF5; margin-left:14px; font-variant-numeric:tabular-nums; }
+.daylbl { font-size:13px; color:#93A4B8; margin-left:6px; }
+.page-minute .strip > div { padding:0 18px; }
+.page-minute .strip .v { font-size:17px; }
+.navrow { display:flex; justify-content:center; gap:14px; margin-top:10px; }
+.nb { height:32px; padding:0 16px; display:flex; align-items:center; font-size:13px; border-radius:6px;
+      background:#1B2836; color:#E6EDF5; border:1px solid #26333F; }
