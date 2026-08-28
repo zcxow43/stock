@@ -2,3 +2,6 @@
 
 # Node dependencies (docs mermaid renderer — pulls in Chromium via puppeteer)
 node_modules/
+
+# Maven build output
+target/

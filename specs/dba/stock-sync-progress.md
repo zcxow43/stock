@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "批次同步進度表 stock_sync_progress"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 全市場回補需逐檔進行且受資料源速率限制，需記錄每檔進度以支援斷點續傳與失敗重試"
 ---
@@ -61,8 +61,21 @@ CREATE TABLE stock_sync_progress (
 - 重試時只挑 `status = 'FAILED'` 且 `attempt_count` 未達上限者。
 
 ## Acceptance Criteria
-- [ ] `stock_sync_progress` 表建立成功，欄位、型別、註解與上述 DDL 一致
-- [ ] 主鍵為 `(stock_id, job_type)`
-- [ ] `status` 寫入列舉外的值時被 CHECK 約束拒絕；`job_type` 同理
-- [ ] 對同一 `(stock_id, job_type)` 重複 UPSERT，表中僅一列
-- [ ] 以 `WHERE job_type = ? AND status IN ('PENDING','FAILED')` 查詢時，`EXPLAIN` 顯示使用 `idx_job_status`
+- [x] `stock_sync_progress` 表建立成功，欄位、型別、註解與上述 DDL 一致
+- [x] 主鍵為 `(stock_id, job_type)`
+- [x] `status` 寫入列舉外的值時被 CHECK 約束拒絕；`job_type` 同理
+- [x] 對同一 `(stock_id, job_type)` 重複 UPSERT，表中僅一列
+- [x] 以 `WHERE job_type = ? AND status IN ('PENDING','FAILED')` 查詢時，`EXPLAIN` 顯示使用 `idx_job_status`
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: `specs/dba/stock-sync-progress.md` (migration applied directly to live `stock` database; no standalone `.sql` file created)
+- Notes:
+  - Applied V004 `CREATE TABLE stock_sync_progress` against the live `stock` database via `mysql` CLI. Table did not previously exist (clean slate); creation succeeded on first attempt.
+  - Verified via `SHOW CREATE TABLE`: all 11 columns, types, defaults, and comments match the DDL exactly (`stock_id` VARCHAR(10), `job_type` VARCHAR(20), `status` VARCHAR(12) DEFAULT 'PENDING', `target_start_date`/`target_end_date` DATE NOT NULL, `last_synced_date` DATE NULL, `attempt_count` INT UNSIGNED DEFAULT 0, `last_error` VARCHAR(500) NULL, `started_at`/`finished_at` DATETIME NULL, `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP), plus `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci` and table comment.
+  - Verified via `SHOW INDEX`: `PRIMARY` is `(stock_id, job_type)`; `idx_job_status` is `(job_type, status)`.
+  - Verified CHECK constraints: inserting `status='BOGUS'` raised `ERROR 3819 (HY000): Check constraint 'chk_ssp_status' is violated`; inserting `job_type='BOGUS_JOB'` raised `ERROR 3819 (HY000): Check constraint 'chk_ssp_job_type' is violated`.
+  - Verified UPSERT idempotency: three sequential `INSERT ... ON DUPLICATE KEY UPDATE` statements against the same `(stock_id, job_type) = ('2330','PRICE_BACKFILL')` key resulted in exactly one row, with `status` reflecting the last write (`DONE`).
+  - Verified index usage: `EXPLAIN SELECT * FROM stock_sync_progress WHERE job_type = 'PRICE_BACKFILL' AND status IN ('PENDING','FAILED')` showed `key: idx_job_status`, `type: range`, `Extra: Using index condition`.
+  - All test rows inserted during verification were deleted afterward (`DELETE FROM stock_sync_progress;`, confirmed `COUNT(*) = 0`); table left schema-only.

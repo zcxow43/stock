@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockMapper">
+
+    <insert id="upsert" parameterType="com.stock.domain.Stock">
+        INSERT INTO stock (stock_id, stock_name, market, is_active)
+        VALUES (#{stockId}, #{stockName}, #{market}, #{active})
+        ON DUPLICATE KEY UPDATE
+            stock_name = VALUES(stock_name),
+            market = VALUES(market),
+            is_active = VALUES(is_active)
+    </insert>
+
+    <select id="findActiveStockIds" resultType="string">
+        SELECT stock_id FROM stock WHERE is_active = 1
+    </select>
+
+    <select id="findExistingStockIds" resultType="string">
+        SELECT stock_id FROM stock
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="findById" resultType="com.stock.domain.Stock">
+        SELECT stock_id, stock_name, market, is_active AS active
+        FROM stock
+        WHERE stock_id = #{stockId}
+    </select>
+
+    <select id="findByIds" resultType="com.stock.domain.Stock">
+        SELECT stock_id, stock_name, market, is_active AS active
+        FROM stock
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="findActiveStocks" resultType="com.stock.domain.Stock">
+        SELECT stock_id, stock_name, market, is_active AS active
+        FROM stock
+        WHERE is_active = 1
+    </select>
+
+    <sql id="listFilter">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (stock_id LIKE CONCAT('%', #{keyword}, '%') OR stock_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="market != null and market != ''">
+                AND market = #{market}
+            </if>
+            <if test="!includeInactive">
+                AND is_active = 1
+            </if>
+        </where>
+    </sql>
+
+    <!--
+        sortColumn / orderDirection are interpolated with ${} rather than bound with #{}: MyBatis cannot
+        bind column/direction identifiers as query parameters. This is safe only because the caller
+        (StockQueryService) validates both against a fixed whitelist before calling this query.
+    -->
+    <select id="findPage" resultType="com.stock.domain.Stock">
+        SELECT stock_id, stock_name, market, is_active AS active
+        FROM stock
+        <include refid="listFilter"/>
+        ORDER BY ${sortColumn} ${orderDirection}
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM stock
+        <include refid="listFilter"/>
+    </select>
+
+</mapper>

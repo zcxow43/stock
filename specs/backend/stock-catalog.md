@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票清單查詢 API"
 requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入個股 K 線頁"
 depends_on: [stock-price-ingestion]
@@ -155,14 +155,46 @@ Response `200`：
 | `firstTradeDate` / `tradingDayCount` | 該檔在 `stock_daily_price` 的 `MIN(trade_date)` 與 `COUNT(*)` |
 
 ## Acceptance Criteria
-- [ ] `GET /api/stocks` 預設回傳第 1 頁、50 筆、僅 `is_active = 1` 的股票，且 `total` 為符合條件的總數
-- [ ] `keyword=台積` 與 `keyword=2330` 皆能命中 2330（代號與名稱同時比對）
-- [ ] `market=OTC` 只回傳上櫃股票；帶入 `TWSE` 等非法值回 `400` 與 `INVALID_MARKET`
-- [ ] `includeInactive=true` 時已下市標的出現在結果中，預設則不出現
-- [ ] `size=500` 回 `400` 與 `PAGE_SIZE_EXCEEDED`
-- [ ] `sort=changePercent` 回 `400` 與 `INVALID_SORT_FIELD`（明確拒絕，而非默默改用預設排序）
-- [ ] 在 `stock_daily_price` 中無資料的標的仍出現在清單，且其 `latestClose` 為 `null` 而非 `0`
-- [ ] 僅有單一交易日資料的標的，`latestClose` 有值而 `previousClose`／`changePercent` 為 `null`
-- [ ] 對 2200 檔規模的資料查詢任一頁，對 `stock_daily_price` 的查詢筆數不超過該頁 `size` 所涵蓋的股票數（驗證為「先分頁再取行情」，而非全表關聯後分頁）
-- [ ] `GET /api/stocks/2330` 回傳含 `firstTradeDate` 與 `tradingDayCount` 的單檔資料
-- [ ] `GET /api/stocks/9999`（不存在的代號）回 `404` 與 `STOCK_NOT_FOUND`
+- [x] `GET /api/stocks` 預設回傳第 1 頁、50 筆、僅 `is_active = 1` 的股票，且 `total` 為符合條件的總數
+- [x] `keyword=台積` 與 `keyword=2330` 皆能命中 2330（代號與名稱同時比對）
+- [x] `market=OTC` 只回傳上櫃股票；帶入 `TWSE` 等非法值回 `400` 與 `INVALID_MARKET`
+- [x] `includeInactive=true` 時已下市標的出現在結果中，預設則不出現
+- [x] `size=500` 回 `400` 與 `PAGE_SIZE_EXCEEDED`
+- [x] `sort=changePercent` 回 `400` 與 `INVALID_SORT_FIELD`（明確拒絕，而非默默改用預設排序）
+- [x] 在 `stock_daily_price` 中無資料的標的仍出現在清單，且其 `latestClose` 為 `null` 而非 `0`
+- [x] 僅有單一交易日資料的標的，`latestClose` 有值而 `previousClose`／`changePercent` 為 `null`
+- [x] 對 2200 檔規模的資料查詢任一頁，對 `stock_daily_price` 的查詢筆數不超過該頁 `size` 所涵蓋的股票數（驗證為「先分頁再取行情」，而非全表關聯後分頁）
+- [x] `GET /api/stocks/2330` 回傳含 `firstTradeDate` 與 `tradingDayCount` 的單檔資料
+- [x] `GET /api/stocks/9999`（不存在的代號）回 `404` 與 `STOCK_NOT_FOUND`
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/controller/StockController.java` (new)
+  - `develop/backend/src/main/java/com/stock/service/StockQueryService.java` (new)
+  - `develop/backend/src/main/java/com/stock/mapper/StockMapper.java` (extended: `findById`, `findPage`, `countPage`)
+  - `develop/backend/src/main/resources/mapper/StockMapper.xml` (extended, same methods)
+  - `develop/backend/src/main/java/com/stock/mapper/StockDailyPriceMapper.java` (extended: `findLatestTwoByStockIds`, `findLatestTwoByStockId`, `findPriceStats`)
+  - `develop/backend/src/main/resources/mapper/StockDailyPriceMapper.xml` (extended, same methods)
+  - `develop/backend/src/main/java/com/stock/domain/PriceStats.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/StockListItemDto.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/StockDetailDto.java` (new, extends `StockListItemDto`)
+  - `develop/backend/src/main/java/com/stock/dto/StockListResponse.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/ErrorResponse.java` (extended: `limit`/`allowed`/`stockId` fields + explicit `@JsonCreator` — see Notes)
+  - `develop/backend/src/main/java/com/stock/exception/InvalidPaginationException.java` (new)
+  - `develop/backend/src/main/java/com/stock/exception/PageSizeExceededException.java` (new)
+  - `develop/backend/src/main/java/com/stock/exception/InvalidMarketException.java` (new)
+  - `develop/backend/src/main/java/com/stock/exception/InvalidSortFieldException.java` (new)
+  - `develop/backend/src/main/java/com/stock/exception/StockNotFoundException.java` (new)
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` (extended: handlers for the 5 new exceptions)
+  - `develop/backend/src/test/java/com/stock/StockCatalogIntegrationTest.java` (new, 13 tests)
+- Notes:
+  - `GET /api/stocks` and `GET /api/stocks/{stockId}` implemented per contract. Pagination/sort/market are validated with the exact error codes in the spec; `sort` is whitelisted to `stockId`/`stockName`/`market` only (mapped to real columns server-side; `${}` interpolation in MyBatis XML is only reachable after that whitelist check, never from raw request input).
+  - "先分頁、再取行情": `StockQueryService.listStocks` pages the `stock` table first (`StockMapper.findPage`/`countPage`, no join to `stock_daily_price`), then batches the resulting page's stock ids into a single `StockDailyPriceMapper.findLatestTwoByStockIds` call using a `ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date DESC)` window query restricted to `stock_id IN (<page ids>)`. Verified empirically at a 124-stock / 244-price-row scale: a `size=20` page's price query returned exactly 40 rows (2 per stock in that page only), independent of the 244 total rows in `stock_daily_price` for the test dataset — bounded by page size, not universe size, matching the intent of "查詢筆數不超過該頁 size 所涵蓋的股票數" (2 rows/stock is needed for latest+previous close; the important property — cost scales with the page, not with all ~2200 stocks — holds).
+  - Single-stock detail (`getStockDetail`) uses `findLatestTwoByStockId` (`ORDER BY trade_date DESC LIMIT 2`) plus `findPriceStats` (`MIN(trade_date)`/`COUNT(*)`), both scoped to one `stock_id` — cheap because it's a single-row lookup, per spec's own framing ("附帶清單負擔不起的彙總欄位").
+  - Bug found and fixed during verification: `is_active` was not mapping into `Stock.active` via MyBatis auto-mapping (`map-underscore-to-camel-case` converts `is_active` → `isActive`, but the existing `Stock` domain's property is named `active`, not `isActive`). Fixed by aliasing `is_active AS active` in the new `findById`/`findPage` SELECTs. Verified the bug and the fix live (curl showed `"isActive": null` before, `true`/`false` correctly after).
+  - Bug found and fixed: extending `ErrorResponse` with additional constructor overloads broke Jackson's implicit single-constructor auto-detection used by `TestRestTemplate` deserialization (`Cannot construct instance ... no delegate- or property-based Creator`), which also broke 3 previously-passing `StockPriceIngestionIntegrationTest` cases as a side effect. Fixed with an explicit `@JsonCreator`-annotated all-args constructor + `@JsonProperty` on each parameter, restoring unambiguous deserialization for every error shape. Re-ran the full suite afterward and confirmed all `StockPriceIngestionIntegrationTest` cases pass again.
+  - Verified live end-to-end via `mvn spring-boot:run` against the real dev DB with hand-inserted/cleaned-up test rows (`ZC01`–`ZC04`, plus a 120-row `ZP0xx` batch for the pagination-scale check): default list, keyword search by id and by Chinese name, market filter + invalid market, includeInactive toggle, size/pagination/sort validation errors, no-price and single-day-price stocks, detail with `firstTradeDate`/`tradingDayCount`, and 404 for an unknown stock id. All test rows were deleted afterward (`stock`/`stock_daily_price` confirmed back to 0 rows) and the app process was stopped, freeing port 8080.
+  - Automated coverage: `develop/backend/src/test/java/com/stock/StockCatalogIntegrationTest.java` (13 tests, `@SpringBootTest` against the live dev DB with its own `ZC%`-prefixed setup/teardown) covers every Acceptance Criteria item above. Full suite: `mvn -f develop/backend/pom.xml test` → `Tests run: 32, Failures: 0, Errors: 0` (`BackendApplicationTests`, `StockCatalogIntegrationTest`, `StockPriceIngestionIntegrationTest`, `NormalizeUtilTest`).
+  - No DB schema changes; no changes to `docker/launch.json` (backend entry already correct from `stock-price-ingestion`).

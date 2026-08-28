@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockDailyIndicatorMapper">
+
+    <insert id="upsertBatch">
+        INSERT INTO stock_daily_indicator
+            (stock_id, trade_date, param_key, ema_fast, ema_slow, dif, dea, osc,
+             rsv, k_value, d_value, j_value, is_warmup)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.stockId}, #{r.tradeDate}, #{r.paramKey}, #{r.emaFast}, #{r.emaSlow}, #{r.dif}, #{r.dea}, #{r.osc},
+             #{r.rsv}, #{r.kValue}, #{r.dValue}, #{r.jValue}, #{r.isWarmup})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            ema_fast = VALUES(ema_fast),
+            ema_slow = VALUES(ema_slow),
+            dif = VALUES(dif),
+            dea = VALUES(dea),
+            osc = VALUES(osc),
+            rsv = VALUES(rsv),
+            k_value = VALUES(k_value),
+            d_value = VALUES(d_value),
+            j_value = VALUES(j_value),
+            is_warmup = VALUES(is_warmup)
+    </insert>
+
+    <delete id="deleteByStockAndParam">
+        DELETE FROM stock_daily_indicator WHERE stock_id = #{stockId} AND param_key = #{paramKey}
+    </delete>
+
+    <select id="findOne" resultType="com.stock.domain.StockDailyIndicator">
+        SELECT stock_id, trade_date, param_key, ema_fast, ema_slow, dif, dea, osc,
+               rsv, k_value, d_value, j_value, is_warmup
+        FROM stock_daily_indicator
+        WHERE stock_id = #{stockId} AND trade_date = #{tradeDate} AND param_key = #{paramKey}
+    </select>
+
+    <select id="findLatestNonWarmup" resultType="com.stock.domain.StockDailyIndicator">
+        SELECT stock_id, trade_date, param_key, ema_fast, ema_slow, dif, dea, osc,
+               rsv, k_value, d_value, j_value, is_warmup
+        FROM stock_daily_indicator
+        WHERE stock_id = #{stockId} AND param_key = #{paramKey} AND is_warmup = 0
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
+    <select id="countNonWarmupBefore" resultType="int">
+        SELECT COUNT(*) FROM (
+            SELECT trade_date FROM stock_daily_indicator
+            WHERE stock_id = #{stockId} AND param_key = #{paramKey}
+              AND trade_date &lt; #{beforeDate} AND is_warmup = 0
+            ORDER BY trade_date DESC
+            LIMIT #{cap}
+        ) recent
+    </select>
+
+</mapper>

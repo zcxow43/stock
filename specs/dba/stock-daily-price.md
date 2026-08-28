@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票日線行情表 stock_daily_price"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 儲存日線 OHLC 原始行情，作為指標運算的唯一資料來源"
 ---
@@ -66,9 +66,22 @@ CREATE TABLE stock_daily_price (
 抓取排程必須以 **UPSERT** 寫入（`INSERT ... ON DUPLICATE KEY UPDATE`），不可先刪後插。重跑同一天的抓取必須是冪等的——資料源事後修正（如成交筆數更正）時，重跑即修正，不產生重複列，也不留下空窗。
 
 ## Acceptance Criteria
-- [ ] `stock_daily_price` 表建立成功，欄位、型別、註解與上述 DDL 完全一致
-- [ ] 主鍵為 `(stock_id, trade_date)` 複合鍵，且表中**不存在** `AUTO_INCREMENT` 欄位
-- [ ] 四個價格欄位型別皆為 `DECIMAL(10,2)`，表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
-- [ ] 對同一 `(stock_id, trade_date)` 重複執行 UPSERT 兩次，表中僅有一列，且第二次的值覆蓋第一次
-- [ ] 插入 `high_price < low_price` 的資料時被 CHECK 約束拒絕
-- [ ] `EXPLAIN` 驗證「單檔股票 + 日期區間」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`），而非全表掃描
+- [x] `stock_daily_price` 表建立成功，欄位、型別、註解與上述 DDL 完全一致
+- [x] 主鍵為 `(stock_id, trade_date)` 複合鍵，且表中**不存在** `AUTO_INCREMENT` 欄位
+- [x] 四個價格欄位型別皆為 `DECIMAL(10,2)`，表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
+- [x] 對同一 `(stock_id, trade_date)` 重複執行 UPSERT 兩次，表中僅有一列，且第二次的值覆蓋第一次
+- [x] 插入 `high_price < low_price` 的資料時被 CHECK 約束拒絕
+- [x] `EXPLAIN` 驗證「單檔股票 + 日期區間」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`），而非全表掃描
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: specs/dba/stock-daily-price.md (Migration SQL V001 applied to live database; no standalone .sql file created)
+- Notes: Applied `V001__create_stock_daily_price.sql` directly against the live `stock` database via `mysql` CLI. Verified all 6 acceptance criteria with real queries:
+  - `SHOW CREATE TABLE` confirms columns, types, comments, engine, charset/collation, and CHECK constraint match the DDL exactly.
+  - `information_schema.columns` confirms composite PRIMARY KEY `(stock_id, trade_date)` and no column has `auto_increment` in EXTRA.
+  - `information_schema.columns` confirms all four price columns (`open_price`, `high_price`, `low_price`, `close_price`) are `decimal(10,2)`; no `float`/`double` columns exist anywhere in the table.
+  - Ran the same `INSERT ... ON DUPLICATE KEY UPDATE` twice for `('2330','2026-08-27')` with different values each time; `COUNT(*)` for that key stayed at 1 and the row reflected the second call's values.
+  - Attempted to insert a row with `high_price(90.00) < low_price(95.00)`; MySQL rejected it with `ERROR 3819 (HY000): Check constraint 'chk_sdp_high_low' is violated.`
+  - `EXPLAIN SELECT * FROM stock_daily_price WHERE stock_id='2330' AND trade_date BETWEEN ...` returned `type=range, key=PRIMARY` (not a full table scan).
+  - All test rows were deleted afterward (`DELETE FROM stock_daily_price`); table confirmed empty (`COUNT(*) = 0`), left schema-only.

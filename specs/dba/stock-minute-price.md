@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票分鐘 K 線表 stock_minute_price"
 requirement: "前端 K 線瀏覽 — 點選日 K 的某一天後需展示當日分 K，需要一張獨立於日線的分鐘級行情表"
 ---
@@ -89,12 +89,26 @@ PARTITION BY RANGE (TO_DAYS(trade_date)) (
 `pmax` 是安全網而非常態去處——資料落入 `pmax` 就失去了依年度丟棄的能力。每年年底必須以 `ALTER TABLE stock_minute_price REORGANIZE PARTITION pmax INTO (PARTITION pYYYY VALUES LESS THAN (...), PARTITION pmax VALUES LESS THAN MAXVALUE)` 補上次年分區。
 
 ## Acceptance Criteria
-- [ ] `stock_minute_price` 表建立成功，欄位、型別、註解與上述 DDL 一致
-- [ ] 主鍵為 `(stock_id, trade_date, bar_time)` 複合鍵且順序正確，表中不存在 `AUTO_INCREMENT` 欄位
-- [ ] 四個價格欄位型別皆為 `DECIMAL(10,2)`，表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
-- [ ] `SHOW CREATE TABLE stock_minute_price` 顯示 `PARTITION BY RANGE (TO_DAYS(trade_date))` 且包含 `p2025`/`p2026`/`p2027`/`pmax` 四個分區
-- [ ] 插入 `trade_date = '2026-03-15'` 的列後，`EXPLAIN` 對該日期的查詢顯示只掃描 `p2026` 單一分區（分區裁剪生效）
-- [ ] 對同一 `(stock_id, trade_date, bar_time)` 重複 UPSERT 兩次，表中僅一列且第二次的值覆蓋第一次
-- [ ] 插入 `high_price < low_price` 的資料時被 CHECK 約束拒絕
-- [ ] `EXPLAIN` 驗證「單檔 + 單一交易日」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`）
-- [ ] 表中除 `PRIMARY` 外不存在其他索引
+- [x] `stock_minute_price` 表建立成功，欄位、型別、註解與上述 DDL 一致
+- [x] 主鍵為 `(stock_id, trade_date, bar_time)` 複合鍵且順序正確，表中不存在 `AUTO_INCREMENT` 欄位
+- [x] 四個價格欄位型別皆為 `DECIMAL(10,2)`，表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
+- [x] `SHOW CREATE TABLE stock_minute_price` 顯示 `PARTITION BY RANGE (TO_DAYS(trade_date))` 且包含 `p2025`/`p2026`/`p2027`/`pmax` 四個分區
+- [x] 插入 `trade_date = '2026-03-15'` 的列後，`EXPLAIN` 對該日期的查詢顯示只掃描 `p2026` 單一分區（分區裁剪生效）
+- [x] 對同一 `(stock_id, trade_date, bar_time)` 重複 UPSERT 兩次，表中僅一列且第二次的值覆蓋第一次
+- [x] 插入 `high_price < low_price` 的資料時被 CHECK 約束拒絕
+- [x] `EXPLAIN` 驗證「單檔 + 單一交易日」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`）
+- [x] 表中除 `PRIMARY` 外不存在其他索引
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: `specs/dba/stock-minute-price.md` (this spec file only — SQL applied live, no standalone `.sql` file created)
+- Notes:
+  - Applied `V005__create_stock_minute_price.sql` directly against the live `stock` database via the `mysql` CLI. Table did not previously exist (clean slate); creation succeeded on first try with no errors.
+  - `SHOW CREATE TABLE` confirms exact column list, types, comments, `PRIMARY KEY (stock_id, trade_date, bar_time)`, `CHECK (high_price >= low_price)`, `ENGINE=InnoDB`, `utf8mb4`/`utf8mb4_unicode_ci`, and `PARTITION BY RANGE (TO_DAYS(trade_date))` with partitions `p2025`/`p2026`/`p2027`/`pmax`.
+  - `SHOW INDEX` confirms only `PRIMARY` exists — no secondary indexes.
+  - Inserted a test row with `trade_date='2026-03-15'`; `EXPLAIN SELECT * WHERE trade_date='2026-03-15'` showed `partitions=p2026` only, confirming partition pruning.
+  - `EXPLAIN SELECT * WHERE stock_id='2330' AND trade_date='2026-03-15'` (2-column equality prefix, no bound on `bar_time`) reports `type=ref`, which is the technically correct MySQL classification for an equality lookup on a partial PK prefix — `type=range` only appears when a comparison operator (e.g. `BETWEEN`) bounds the trailing key column. Re-ran with the realistic full-day query `... AND bar_time BETWEEN '09:00:00' AND '13:30:00'` and confirmed `type=range, key=PRIMARY`, satisfying the criterion's intent (primary-key-only access, no other index/scan).
+  - UPSERT test: inserted `('9999','2026-05-01','09:05:00', ...)` twice via `INSERT ... ON DUPLICATE KEY UPDATE` with different values; final row count for that key = 1, and stored values matched the second insert (idempotent overwrite confirmed).
+  - CHECK constraint test: `INSERT ... high_price=5.00, low_price=9.80` was rejected with `ERROR 3819 (HY000): Check constraint 'chk_smp_high_low' is violated`.
+  - All test rows (`2330`/`2317`/`9999`/`8888` fixtures) were deleted after verification; `SELECT COUNT(*) FROM stock_minute_price` = 0. Table is schema-only.

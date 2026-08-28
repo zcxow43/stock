@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "個股日 K 線圖頁"
 requirement: "前端 K 線瀏覽 — 從股票清單點選一檔後，以 K 線圖展示該檔的日 K；單擊 K 棒釘選該日資訊，連點兩下才進入該日分 K"
 depends_on: [stock-list]
@@ -198,23 +198,48 @@ depends_on: [stock-list]
 | 副圖「指標尚未運算」提示文字 | `#6B7C90` |
 
 ## Acceptance Criteria
-- [ ] `/stocks/2330/daily` 顯示頁首（代號、名稱、市場標籤、最新收盤與漲跌）與預設 3 個月區間的 K 線圖
-- [ ] 主圖為蠟燭圖，`close >= open` 的 K 棒為紅色 `#E04B45`、`close < open` 為綠色 `#16A75C`
-- [ ] X 軸只排列有交易的日期：連續兩個交易日之間不因週末產生空格
-- [ ] 成交量、MACD、KD 三個副圖與主圖共用同一條 X 軸，十字準星在四張圖上同步移動
-- [ ] MACD 副圖含 `DIF` 線、`DEA` 線、`OSC` 柱與 0 軸；KD 副圖含 `K`／`D`／`J` 三線與 20／80 參考線
-- [ ] Tooltip 顯示該日的日期、開高低收、漲跌額與漲跌幅、成交量、`DIF`/`DEA`/`OSC`、`K`/`D`/`J`，價格 2 位小數、指標 4 位小數
-- [ ] 切換區間為「1 年」後重新請求並重繪，K 棒數量與 `series` 長度一致
-- [ ] 自訂區間中起日晚於迄日時顯示錯誤訊息且**不發出請求**
-- [ ] **連點兩下任一根 K 棒導向 `/stocks/{stockId}/minute/{該 K 棒的日期}`**，且滑鼠停留於 K 棒上時游標為 `pointer`
-- [ ] **單擊一根 K 棒只釘選該日的十字準星與 tooltip，網址不變、不發生導覽**
-- [ ] 釘選後十字準星不再隨滑鼠移動；再次單擊同一根 K 棒或按 `Esc` 取消釘選
-- [ ] 雙擊 K 棒不會在圖表上留下被選取（反白）的文字
-- [ ] 主圖下方常駐顯示「連點兩下任一根 K 棒可查看當日分 K」
-- [ ] 指標欄位為 `null` 的資料：主圖與成交量圖正常繪製，MACD／KD 副圖顯示「指標尚未運算」且不畫出任何線段（不以 0 代替）
-- [ ] 區間中間某幾日指標為 `null` 時，指標線段在該處斷開而非連成直線
-- [ ] `warmupSufficient` 為 `false` 時顯示暖身警示橫幅，且可關閉
-- [ ] 交叉次數為 `null` 時摘要條顯示「—」，為 `0` 時顯示「0」
-- [ ] 區間內無行情時顯示「此區間內沒有行情資料」與「改看近 1 年」按鈕，而非空白圖表
-- [ ] 不存在的股票代號顯示「找不到此股票代號」與「返回清單」按鈕
-- [ ] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面與圖表配色完全相同
+- [x] `/stocks/2330/daily` 顯示頁首（代號、名稱、市場標籤、最新收盤與漲跌）與預設 3 個月區間的 K 線圖
+- [x] 主圖為蠟燭圖，`close >= open` 的 K 棒為紅色 `#E04B45`、`close < open` 為綠色 `#16A75C`
+- [x] X 軸只排列有交易的日期：連續兩個交易日之間不因週末產生空格
+- [x] 成交量、MACD、KD 三個副圖與主圖共用同一條 X 軸，十字準星在四張圖上同步移動
+- [x] MACD 副圖含 `DIF` 線、`DEA` 線、`OSC` 柱與 0 軸；KD 副圖含 `K`／`D`／`J` 三線與 20／80 參考線
+- [x] Tooltip 顯示該日的日期、開高低收、漲跌額與漲跌幅、成交量、`DIF`/`DEA`/`OSC`、`K`/`D`/`J`，價格 2 位小數、指標 4 位小數
+- [x] 切換區間為「1 年」後重新請求並重繪，K 棒數量與 `series` 長度一致
+- [x] 自訂區間中起日晚於迄日時顯示錯誤訊息且**不發出請求**
+- [x] **連點兩下任一根 K 棒導向 `/stocks/{stockId}/minute/{該 K 棒的日期}`**，且滑鼠停留於 K 棒上時游標為 `pointer`
+- [x] **單擊一根 K 棒只釘選該日的十字準星與 tooltip，網址不變、不發生導覽**
+- [x] 釘選後十字準星不再隨滑鼠移動；再次單擊同一根 K 棒或按 `Esc` 取消釘選
+- [x] 雙擊 K 棒不會在圖表上留下被選取（反白）的文字
+- [x] 主圖下方常駐顯示「連點兩下任一根 K 棒可查看當日分 K」
+- [x] 指標欄位為 `null` 的資料：主圖與成交量圖正常繪製，MACD／KD 副圖顯示「指標尚未運算」且不畫出任何線段（不以 0 代替）
+- [x] 區間中間某幾日指標為 `null` 時，指標線段在該處斷開而非連成直線
+- [x] `warmupSufficient` 為 `false` 時顯示暖身警示橫幅，且可關閉
+- [x] 交叉次數為 `null` 時摘要條顯示「—」，為 `0` 時顯示「0」
+- [x] 區間內無行情時顯示「此區間內沒有行情資料」與「改看近 1 年」按鈕，而非空白圖表
+- [x] 不存在的股票代號顯示「找不到此股票代號」與「返回清單」按鈕
+- [x] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面與圖表配色完全相同
+
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/frontend/src/pages/StockDailyChartPage.tsx` (new) — page component: header (code/name/market tag/last close+change), range selector (1M/3M/6M/1Y/custom with inline validation), warmup banner (dismissible, resets per stock), summary strip, loading/no-data/not-found/error states, pin/unpin + Esc handling, double-click → `/stocks/{stockId}/minute/{tradeDate}` navigation (pin applied before navigating), tooltip content builder
+  - `develop/frontend/src/pages/StockDailyChartPage.css` (new) — literal-hex dark theme per this spec's Visual Style table; no `prefers-color-scheme` anywhere
+  - `develop/frontend/src/components/KLineChart.tsx` (new) — the shared candlestick chart element required by this spec ("共用 K 線圖元件"): category X-axis, candle body/wick rendering, N stacked subplots (line/bar series, reference lines, zero-baseline domain forcing for bar series, per-subplot "unavailable" centered message), synced crosshair across all panels, native single-click vs `onDoubleClick` separation (not a hand-rolled timer), HTML tooltip overlay positioned to avoid right-edge clipping. Designed to be reused as-is by `specs/frontend/stock-minute-chart.md` (time labels instead of dates, volume-only subplot)
+  - `develop/frontend/src/components/KLineChart.css` (new) — `user-select: none` on the chart root (prevents the double-click text-selection artifact), tooltip box styling, literal hex colors passed in as props by the page (component itself holds no hardcoded palette)
+  - `develop/frontend/src/api/statistics.ts` (new) — `fetchStockStatistics`, `StatisticsResponse`/`StatisticsItem`/`StatisticsSummary`/`StatisticsSeriesRow` types matching `StockStatisticsController`/`StatisticsResponseDto` family (`specs/backend/stock-indicator-statistics.md`)
+  - `develop/frontend/src/api/stocks.ts` — added `StockDetail` type and `fetchStockDetail` for `GET /api/stocks/{stockId}` (header data), reusing the existing `ApiError`/`ApiErrorBody` machinery from the stock-list spec
+  - `develop/frontend/src/App.tsx` — replaced the `StockDailyChartPagePlaceholder` stub route with the real `StockDailyChartPage`
+  - `develop/frontend/src/pages/StockDailyChartPagePlaceholder.tsx` (deleted) — placeholder from `stock-list.md`, now superseded
+  - `develop/frontend/src/__tests__/StockDailyChartPage.test.tsx` (new) — 16 unit tests (vitest + @testing-library/react) covering header rendering, candle up/down coloring, summary strip formatting, null-vs-zero cross counts, warmup banner show/dismiss, "指標尚未運算" when a whole range has no indicator rows (candles still drawn), single-click pin/unpin (no navigation, no URL change), Esc-unpins, native double-click → minute route navigation, `kc-svg` cursor class, persistent hint text, 1-year range refetch, custom-range validation blocking the request, no-data state, 404 not-found state, generic error+reload state
+  - `develop/frontend/package.json` / `package-lock.json` — no net new runtime dependency (reused `react-router-dom` from `stock-list.md`); `playwright` was added as a throwaway devDependency for manual/E2E screenshot verification and removed again before finishing
+- Notes:
+  - `npm run build` (tsc -b && vite build) and `npm test` (`vitest run`, 28/28 passing — 12 pre-existing `StockListPage` + 16 new) both green; `npx oxlint .` clean.
+  - Chart implementation is hand-rolled SVG (no charting library added) — `env.md` names no charting library for the frontend stack, and a bespoke component gives full, exact control over the literal-hex palette, the native-dblclick contract, and the shared-component reuse this spec mandates for the minute-chart page.
+  - End-to-end verified against the real backend: started it with `mvn -f develop/backend/pom.xml spring-boot:run`, inserted throwaway fixture data directly via `mysql` — `2330`/台積電 with 400 synthetic-but-realistic daily OHLCV rows and a full `POST /api/stocks/indicators/rebuild` (`mode=FULL`), `1101`/台泥 with no price rows at all (no-data-in-range case), `2454`/聯發科 with 60 price rows and **no** indicator rebuild (indicator-not-yet-computed case), plus a deliberate mid-range deletion of `stock_daily_indicator` rows for 2330 (2026-07-10..14) to prove line breaks instead of connecting across `null`s. Drove the real dev server (`npm run dev`, proxied to the real backend) with a throwaway Playwright script (removed afterward, along with the `playwright` devDependency) and captured screenshots for: default 3-month view, 1-year view (which naturally exercises the `warmupSufficient=false` banner and its dismiss button since the synthetic 400-day history isn't 250 trading days deep before the 1-year window's start), hover crosshair/tooltip, single-click pin, custom-range validation error, indicator-not-yet-computed (both MACD and KD panels showing "指標尚未運算" while candles/volume render normally), the mid-range null gap (visibly broken DIF/DEA/K/D/J lines), the 404 not-found full-page state, and the no-data-in-range state. Also drove a real native double-click via `page.mouse.dblclick`, confirming the URL changed to `/stocks/2330/minute/2026-07-15` (a real trading date resolved from the clicked bar) and that `window.getSelection().toString()` was empty immediately after (no text-selection artifact), and confirmed the SVG's computed `cursor` style is `pointer`.
+  - `prefers-color-scheme` independence verified by rendering the same page twice — once with Playwright's `colorScheme: 'dark'` and once with `'light'` — and diffing the two full-page screenshots: **byte-for-byte identical** (`md5` match). Confirmed by `grep` that no CSS file in this feature (`StockDailyChartPage.css`, `KLineChart.css`) references `prefers-color-scheme`; every color reaching the SVG is a literal hex prop supplied by the page from its `COLOR` constant.
+  - A real layout bug was caught and fixed during this verification pass (not visible from code review alone): the KD subplot was being clipped because the chart's total SVG height was computed from the last subplot's *top* offset instead of its *bottom* — the panel's content silently overflowed past the `viewBox`/`height`. Fixed in `KLineChart.tsx` by tracking the running `bottom` cursor through the panel-layout loop instead of reusing the last `panelTops` entry. Also tightened the X-axis tick-selection logic (`xTickIndices`) so the always-included final tick no longer overlaps the previous evenly-spaced tick when the bar count isn't a clean multiple of the tick step (e.g. 66 daily bars against `maxXTicks=10` previously rendered two overlapping date labels at the right edge).
+  - One fixture-authoring mistake surfaced and was corrected along the way, worth noting since it looked like an app bug at first: an initial `mysql -e "INSERT INTO stock ... VALUES ('2330','台積電',...)"` run through a non-UTF-8 shell produced double-encoded (mojibake) `stock_name` bytes in the database; the page correctly rendered whatever UTF-8 bytes the backend returned, so the garbled text was purely a fixture-insertion artifact (fixed with `--default-character-set=utf8mb4` and a corrective `UPDATE`), not a frontend rendering bug — all other CJK text on the page (labels, hints, tags) rendered correctly throughout, confirming the app's own text pipeline was never at fault.
+  - Backend (`mvn spring-boot:run`, port 8080) and frontend (`npm run dev`, port 5173) dev processes were both stopped before finishing; all fixture rows (`2330`, `1101`, `2454` and their `stock_daily_price`/`stock_daily_indicator`/`stock_sync_progress` rows) were deleted afterward — `stock`, `stock_daily_price`, `stock_daily_indicator`, and `stock_sync_progress` all confirmed back at 0 rows.
+  - `docker/launch.json` already contained a correct `frontend` entry (`npm --prefix develop/frontend run dev`, port 5173) alongside the existing `backend` entry from a concurrent scaffold — left untouched. `.claude/launch.json` symlink to `../docker/launch.json` was already present and valid.

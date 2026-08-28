@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票主檔 stock"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 全市場範圍需要一份股票universe，供回補排程列舉標的與統計結果顯示名稱"
 ---
@@ -52,8 +52,20 @@ CREATE TABLE stock (
 以 UPSERT 寫入。股票更名（台股實務上會發生）時，`stock_name` 直接覆蓋為最新值——本表存的是「現況」，不保留名稱異動歷史。
 
 ## Acceptance Criteria
-- [ ] `stock` 表建立成功，欄位、型別、註解與上述 DDL 一致
-- [ ] `market` 欄位寫入 `'TSE'`/`'OTC'` 以外的值時被 CHECK 約束拒絕
-- [ ] 對同一 `stock_id` 重複 UPSERT，表中僅一列且名稱被更新為最新值
-- [ ] `stock` 與 `stock_daily_price` 之間**不存在**外鍵約束（`SHOW CREATE TABLE stock_daily_price` 無 FOREIGN KEY）
-- [ ] 將某檔設為 `is_active = 0` 後，其在 `stock_daily_price` 的歷史資料仍完整存在
+- [x] `stock` 表建立成功，欄位、型別、註解與上述 DDL 一致
+- [x] `market` 欄位寫入 `'TSE'`/`'OTC'` 以外的值時被 CHECK 約束拒絕
+- [x] 對同一 `stock_id` 重複 UPSERT，表中僅一列且名稱被更新為最新值
+- [x] `stock` 與 `stock_daily_price` 之間**不存在**外鍵約束（`SHOW CREATE TABLE stock_daily_price` 無 FOREIGN KEY）
+- [x] 將某檔設為 `is_active = 0` 後，其在 `stock_daily_price` 的歷史資料仍完整存在
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: `specs/dba/stock.md` (this spec — SQL applied live, no standalone .sql file created)
+- Notes:
+  - Applied `CREATE TABLE stock` (V002) against the live `stock` database via `mysql` CLI. `SHOW CREATE TABLE stock` / `DESCRIBE stock` confirmed columns, types, comments, PK, `idx_market_active` index, and `chk_stock_market` CHECK constraint all match the spec DDL exactly.
+  - Verified CHECK constraint: `INSERT ... market='XXX'` raised `ERROR 3819 (HY000) Check constraint 'chk_stock_market' is violated`; no row was inserted.
+  - Verified UPSERT semantics: inserted `stock_id='2330'` with name `台積電`, then `INSERT ... ON DUPLICATE KEY UPDATE` with name `台積電新名`; table retained exactly one row for `2330` with the updated name.
+  - Verified no FK: `stock_daily_price` (created concurrently by the `stock_daily_price` DBA agent, confirmed present) has no `FOREIGN KEY` clause in its `SHOW CREATE TABLE` output — only its own `chk_sdp_high_low` CHECK and `idx_trade_date` index.
+  - Verified `is_active=0` does not lose history: inserted a `stock_daily_price` row for `2330` (plus 3 pre-existing rows from the concurrent agent were visible at the time), set `stock.is_active=0` for `2330`, and confirmed all `stock_daily_price` rows for `2330` remained intact afterward.
+  - Cleanup: deleted my own test rows (`stock.stock_id IN ('2330','9999')` — note `'9999'` was never actually inserted since the CHECK constraint rejected it; and the one `stock_daily_price` row I inserted for `2330`/`2026-08-01`/`source='TEST'`). Final state: `stock` table is empty (schema-only, 0 rows). `stock_daily_price` is also empty at time of writing — the concurrent agent appears to have cleaned up its own test rows independently during this verification.

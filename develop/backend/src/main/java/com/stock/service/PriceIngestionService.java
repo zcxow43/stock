@@ -1,0 +1,101 @@
+package com.stock.service;
+
+import com.stock.domain.Stock;
+import com.stock.domain.StockDailyPrice;
+import com.stock.dto.DailySyncResponse;
+import com.stock.mapper.StockDailyPriceMapper;
+import com.stock.mapper.StockMapper;
+import com.stock.mapper.StockSyncProgressMapper;
+import com.stock.service.external.dto.NormalizedPriceRow;
+import com.stock.service.external.dto.TwseSnapshotResult;
+import com.stock.service.external.dto.TwseSnapshotRow;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Owns every write into `stock` and `stock_daily_price`. All writes are UPSERTs so
+ * that re-running a day or a stock is idempotent (spec: 寫入語意 / 資料源回傳事後更正的值).
+ */
+@Service
+public class PriceIngestionService {
+
+    private static final String SOURCE_TWSE = "TWSE";
+    private static final String SOURCE_FINMIND = "FINMIND";
+    private static final String MARKET_TSE = "TSE";
+
+    private final StockMapper stockMapper;
+    private final StockDailyPriceMapper priceMapper;
+    private final StockSyncProgressMapper progressMapper;
+
+    public PriceIngestionService(StockMapper stockMapper, StockDailyPriceMapper priceMapper,
+                                  StockSyncProgressMapper progressMapper) {
+        this.stockMapper = stockMapper;
+        this.priceMapper = priceMapper;
+        this.progressMapper = progressMapper;
+    }
+
+    /**
+     * Writes a whole-market daily snapshot: upserts the stock master (name/market/active)
+     * and every stock's price row for that trade date, in one transaction.
+     */
+    @Transactional
+    public DailySyncResponse applyDailySnapshot(TwseSnapshotResult snapshot) {
+        List<TwseSnapshotRow> rows = snapshot.getRows();
+        Set<String> existingStockIds = new HashSet<>(priceMapper.findStockIdsByTradeDate(snapshot.getTradeDate()));
+
+        int inserted = 0;
+        int updated = 0;
+        int stockMasterUpserted = 0;
+
+        for (TwseSnapshotRow row : rows) {
+            stockMapper.upsert(new Stock(row.getStockId(), row.getStockName(), MARKET_TSE, Boolean.TRUE));
+            stockMasterUpserted++;
+
+            priceMapper.upsert(toDomain(row.getPrice(), SOURCE_TWSE));
+            if (existingStockIds.contains(row.getStockId())) {
+                updated++;
+            } else {
+                inserted++;
+            }
+        }
+
+        return new DailySyncResponse(snapshot.getTradeDate(), rows.size(), inserted, updated, stockMasterUpserted);
+    }
+
+    /**
+     * Writes one stock's backfilled rows and advances its progress to DONE in a single
+     * transaction, so a crash never leaves "prices written but progress not updated"
+     * (which would cause a resumed run to re-fetch data it already has).
+     */
+    @Transactional
+    public void applyBackfillResult(String stockId, String jobType, List<NormalizedPriceRow> rows) {
+        LocalDate lastSyncedDate = null;
+        for (NormalizedPriceRow row : rows) {
+            priceMapper.upsert(toDomain(row, SOURCE_FINMIND));
+            if (lastSyncedDate == null || row.getTradeDate().isAfter(lastSyncedDate)) {
+                lastSyncedDate = row.getTradeDate();
+            }
+        }
+        progressMapper.markDone(stockId, jobType, lastSyncedDate);
+    }
+
+    private StockDailyPrice toDomain(NormalizedPriceRow row, String source) {
+        StockDailyPrice price = new StockDailyPrice();
+        price.setStockId(row.getStockId());
+        price.setTradeDate(row.getTradeDate());
+        price.setOpenPrice(row.getOpen());
+        price.setHighPrice(row.getHigh());
+        price.setLowPrice(row.getLow());
+        price.setClosePrice(row.getClose());
+        price.setVolume(row.getVolume());
+        price.setTurnover(row.getTurnover());
+        price.setTransactionCount(row.getTransactionCount());
+        price.setSource(source);
+        return price;
+    }
+}

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳"
 depends_on: []
@@ -159,12 +159,47 @@ Response `200`：
 **回補**：解析標的清單（多選或全市場）→ 初始化 `stock_sync_progress` → 逐檔依速率限制請求歷史 → 正規化並 UPSERT → 更新該檔進度 → 全部完成後結束。任一檔失敗只影響該檔進度，不中止整批。
 
 ## Acceptance Criteria
-- [ ] `POST /api/stocks/sync/daily` 以單一外部請求取得全市場當日行情，並同時寫入 `stock` 與 `stock_daily_price`
-- [ ] `POST /api/stocks/sync/backfill` 帶 `stockIds: ["2330","2317"]` 時只處理該 2 檔，回應 `mode` 為 `SELECTED`
-- [ ] 同一端點省略 `stockIds` 時處理 `is_active = 1` 的全部股票，回應 `mode` 為 `ALL`
-- [ ] 回補過程對外部資料源的請求有間隔控制，且 HTTP 429 觸發指數退避重試而非立即失敗
-- [ ] 中途強制中斷後，以 `resume: true` 重新呼叫只處理未完成與失敗的標的，已完成標的不再發出外部請求
-- [ ] 對同一檔同一區間連續執行兩次回補，`stock_daily_price` 的列數不變（冪等）
-- [ ] 資料源未回傳的日期（停牌日）在 `stock_daily_price` 中不存在對應列，且**不存在任何價格為 0 的列**
-- [ ] 資料源回傳的民國日期與含千分位的價格字串被正確正規化（以 2330 某月資料驗證）
-- [ ] `GET /api/stocks/sync/progress` 回傳的各狀態計數總和等於 `total`
+- [x] `POST /api/stocks/sync/daily` 以單一外部請求取得全市場當日行情，並同時寫入 `stock` 與 `stock_daily_price`
+- [x] `POST /api/stocks/sync/backfill` 帶 `stockIds: ["2330","2317"]` 時只處理該 2 檔，回應 `mode` 為 `SELECTED`
+- [x] 同一端點省略 `stockIds` 時處理 `is_active = 1` 的全部股票，回應 `mode` 為 `ALL`
+- [x] 回補過程對外部資料源的請求有間隔控制，且 HTTP 429 觸發指數退避重試而非立即失敗
+- [x] 中途強制中斷後，以 `resume: true` 重新呼叫只處理未完成與失敗的標的，已完成標的不再發出外部請求
+- [x] 對同一檔同一區間連續執行兩次回補，`stock_daily_price` 的列數不變（冪等）
+- [x] 資料源未回傳的日期（停牌日）在 `stock_daily_price` 中不存在對應列，且**不存在任何價格為 0 的列**
+- [x] 資料源回傳的民國日期與含千分位的價格字串被正確正規化（以 2330 某月資料驗證）
+- [x] `GET /api/stocks/sync/progress` 回傳的各狀態計數總和等於 `total`
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/backend/pom.xml` — added `mybatis-spring-boot-starter`, `mysql-connector-java`, `spring-boot-starter-validation`
+  - `develop/backend/src/main/resources/application.yml` — MyBatis config, `app.external.*` (TWSE/FinMind URLs, timeouts), `app.backfill.*` (executor pool size, rate-limit interval/retries/backoff, max attempt count)
+  - `develop/backend/src/main/java/com/stock/domain/{Stock,StockDailyPrice,StockSyncProgress,StatusCount}.java`
+  - `develop/backend/src/main/java/com/stock/mapper/{StockMapper,StockDailyPriceMapper,StockSyncProgressMapper}.java` + matching XML under `develop/backend/src/main/resources/mapper/`
+  - `develop/backend/src/main/java/com/stock/util/NormalizeUtil.java` — ROC/ISO date parsing, thousands-separator/placeholder-aware price parsing
+  - `develop/backend/src/main/java/com/stock/service/external/{TwseClient,FinMindClient,RateLimitedException,ExternalApiException}.java` + `dto/{TwseDailyRow,TwseSnapshotRow,TwseSnapshotResult,FinMindRow,FinMindResponse,NormalizedPriceRow}.java`
+  - `develop/backend/src/main/java/com/stock/service/{PriceIngestionService,BackfillRunner,StockSyncService,JobRunningRegistry}.java`
+  - `develop/backend/src/main/java/com/stock/controller/StockSyncController.java`
+  - `develop/backend/src/main/java/com/stock/dto/{DailySyncRequest,DailySyncResponse,BackfillRequest,BackfillResponse,ProgressResponse,FailedItemDto,ErrorResponse}.java`
+  - `develop/backend/src/main/java/com/stock/exception/{InvalidDateRangeException,UnknownStockIdException,JobAlreadyRunningException,GlobalExceptionHandler}.java`
+  - `develop/backend/src/main/java/com/stock/config/{RestTemplateConfig,AsyncConfig,BackfillProperties}.java`
+  - `develop/backend/src/test/java/com/stock/util/NormalizeUtilTest.java`
+  - `develop/backend/src/test/java/com/stock/StockPriceIngestionIntegrationTest.java`
+  - `develop/backend/src/test/resources/application.yml` — test overrides (fast rate-limit timings for the same live DB)
+- Notes:
+  - Daily path (`TwseClient`) hits TWSE openapi `STOCK_DAY_ALL` once and derives both the `stock` master upsert and `stock_daily_price` upsert from that single response; no-trade rows (empty price fields) are dropped rather than zero-filled.
+  - Backfill path shares one code path for `SELECTED`/`ALL` mode, driven only by whether `stockIds` is provided; both dedupe with order preserved and validate unknown ids against the live `stock` table before starting.
+  - Rate limiting/retry: `BackfillRunner` runs on a dedicated single-thread `@Async` executor (`app.backfill.executor-pool-size`, default 1), sleeps `app.backfill.rate-limit.interval-ms` (default 1000ms) between stocks, and retries HTTP 429 / timeouts from FinMind with exponential backoff (`initial-backoff-ms` × `backoff-multiplier`, capped at `max-retries`) before marking the stock `FAILED`.
+  - Resume semantics: `resume=false` resets all target rows to `PENDING` (`attempt_count=0`, `last_synced_date=NULL`); `resume=true` only inserts progress rows for stocks that don't have one yet, leaves existing rows untouched, and only re-processes `PENDING`/`FAILED` rows under the attempt cap, fetching from `last_synced_date + 1`. A single crash boundary (`PriceIngestionService.applyBackfillResult`, `@Transactional`) writes all of a stock's price rows and marks it `DONE` together.
+  - `JobRunningRegistry` (in-memory, per-`jobType` flag) guards the 409 `JOB_ALREADY_RUNNING` case; set synchronously before the 202 response is returned and cleared in the async runner's `finally` after the whole batch completes.
+  - Verification performed:
+    - `mvn -f develop/backend/pom.xml compile` — clean.
+    - `mvn -f develop/backend/pom.xml test` — 19/19 passing, run 3× to confirm no flakiness (10 `NormalizeUtilTest` unit tests + 8 `StockPriceIngestionIntegrationTest` integration tests against the live MySQL DB with `MockRestServiceServer`-mocked TWSE/FinMind responses, covering: daily upsert + ROC-date/comma-price normalization + idempotency, selected-mode isolation from an untouched decoy stock, 429→200 retry sequence verified via `mockServer.verify()`, resume skipping an already-`DONE` stock with a verified zero-request assertion, `ALL` mode excluding inactive stocks, `UNKNOWN_STOCK_ID`/`INVALID_DATE_RANGE`/`JOB_ALREADY_RUNNING` error responses, and progress count-sum-equals-total including a `SKIPPED` case).
+    - Live smoke test: ran `mvn spring-boot:run` on port 8080 (stopped afterward — port confirmed free), then against the **real** TWSE/FinMind APIs and the real DB:
+      - `POST /api/stocks/sync/daily` → `{"tradeDate":"2026-08-27","stockCount":1365,"insertedCount":1365,"updatedCount":0,"stockMasterUpserted":1365}`; verified `stock` (1365 rows) and `stock_daily_price` (1365 rows) both populated in one call; `2330` stored as `台積電`/`TSE`/active with close `2410.00`, matching TWSE's raw `"2,410.00"`/ROC `"1150827"` after normalization; DB-wide zero-price-row count = 0.
+      - `POST /api/stocks/sync/backfill` with `stockIds:["2330"]`, `2026-08-01..2026-08-27` → `mode:"SELECTED"`, 19 rows written (one per real trading day in range, no zero/placeholder rows for weekends/holidays), `last_synced_date=2026-08-27`, `status=DONE`.
+      - Re-ran the identical backfill request → row count for `2330` in that range stayed at 19 (idempotent) against real FinMind data.
+      - `stockIds:["9999NOPE"]` → `400 {"code":"UNKNOWN_STOCK_ID","unknownIds":["9999NOPE"]}`; `startDate` after `endDate` → `400 {"code":"INVALID_DATE_RANGE"}`; firing the same backfill request twice back-to-back → second call `409 {"code":"JOB_ALREADY_RUNNING"}`.
+      - `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` → `{"total":1,"pending":0,"running":0,"done":1,"failed":0,"skipped":0,"failedItems":[]}`, counts sum to total.
+  - No blockers. Every acceptance criterion above was verified both by an isolated integration test and, where practical, by a live run against the real external APIs and the real database.

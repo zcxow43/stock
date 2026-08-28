@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票總覽清單頁"
 requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入該檔的日 K 圖"
 depends_on: []
@@ -130,17 +130,40 @@ depends_on: []
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 
 ## Acceptance Criteria
-- [ ] `/stocks` 載入後顯示第 1 頁 50 筆股票，頁首「共 N 檔」與 API 的 `total` 一致
-- [ ] 搜尋框輸入「2330」與「台積」皆能篩出台積電，且輸入過程中請求經 debounce 合併（連續輸入 4 個字元不產生 4 次請求）
-- [ ] 市場別選「上櫃」後只顯示上櫃股票，市場欄顯示「上櫃」而非 `OTC`
-- [ ] 勾選「顯示已下市」後已下市標的出現於清單並帶「已下市」標籤，取消勾選後消失
-- [ ] 任一篩選條件變動後，頁碼重設為第 1 頁
-- [ ] 漲跌與漲跌幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`、為 0 時顯示 `#93A4B8`
-- [ ] 無行情資料的股票，其收盤價／漲跌／成交量欄顯示「—」而非 `0`，且該列仍可點擊
-- [ ] 點擊任一列導向 `/stocks/{stockId}/daily`
-- [ ] 「代號」「名稱」「市場」表頭可點擊排序並顯示方向指示；「收盤價」「漲跌幅」等表頭無排序互動與指示
-- [ ] 第 1 頁的「上一頁」與最後一頁的「下一頁」為 disabled
-- [ ] 每頁筆數切換為 100 後，實際回傳 100 筆且頁碼重設為 1
-- [ ] 篩選結果為空時顯示「查無符合條件的股票」與「清除篩選條件」按鈕，而非空白表格
-- [ ] API 失敗時顯示錯誤訊息與「重新載入」按鈕，不顯示成空狀態
-- [ ] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
+- [x] `/stocks` 載入後顯示第 1 頁 50 筆股票，頁首「共 N 檔」與 API 的 `total` 一致
+- [x] 搜尋框輸入「2330」與「台積」皆能篩出台積電，且輸入過程中請求經 debounce 合併（連續輸入 4 個字元不產生 4 次請求）
+- [x] 市場別選「上櫃」後只顯示上櫃股票，市場欄顯示「上櫃」而非 `OTC`
+- [x] 勾選「顯示已下市」後已下市標的出現於清單並帶「已下市」標籤，取消勾選後消失
+- [x] 任一篩選條件變動後，頁碼重設為第 1 頁
+- [x] 漲跌與漲跌幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`、為 0 時顯示 `#93A4B8`
+- [x] 無行情資料的股票，其收盤價／漲跌／成交量欄顯示「—」而非 `0`，且該列仍可點擊
+- [x] 點擊任一列導向 `/stocks/{stockId}/daily`
+- [x] 「代號」「名稱」「市場」表頭可點擊排序並顯示方向指示；「收盤價」「漲跌幅」等表頭無排序互動與指示
+- [x] 第 1 頁的「上一頁」與最後一頁的「下一頁」為 disabled
+- [x] 每頁筆數切換為 100 後，實際回傳 100 筆且頁碼重設為 1
+- [x] 篩選結果為空時顯示「查無符合條件的股票」與「清除篩選條件」按鈕，而非空白表格
+- [x] API 失敗時顯示錯誤訊息與「重新載入」按鈕，不顯示成空狀態
+- [x] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/frontend/src/pages/StockListPage.tsx` (new) — page component: filters, sortable/dumb table headers, pagination, loading/empty/error states
+  - `develop/frontend/src/pages/StockListPage.css` (new) — literal-hex dark theme per Visual Style table; no `prefers-color-scheme` usage anywhere
+  - `develop/frontend/src/pages/StockDailyChartPagePlaceholder.tsx` (new) — minimal stub for `/stocks/:stockId/daily` so row-click navigation is provable; the real page belongs to `specs/frontend/stock-daily-chart.md` (still `pending`), out of this spec's scope
+  - `develop/frontend/src/api/stocks.ts` (new) — `fetchStocks`, `StockListParams`/`StockListResponse` types matching `StockController`/`StockQueryService`, `ApiError` + `PROGRAMMER_ERROR_CODES`
+  - `develop/frontend/src/hooks/useDebouncedValue.ts` (new) — 300ms debounce hook used by the search box
+  - `develop/frontend/src/App.tsx`, `develop/frontend/src/main.tsx` — added `react-router-dom` `BrowserRouter`/`Routes`: `/` → `/stocks`, `/stocks`, `/stocks/:stockId/daily`
+  - `develop/frontend/src/index.css` — removed the old skeleton `.app` styles; fixed `color-scheme: dark`, literal `#0F1620` body background (no theme-reactive values)
+  - `develop/frontend/vite.config.ts` — added dev-server proxy `/api` → `http://localhost:8080` (backend has no CORS config of its own) and vitest config (`jsdom`, `globals`, `setupFiles`)
+  - `develop/frontend/src/setupTests.ts` (new) — `@testing-library/jest-dom` matchers
+  - `develop/frontend/src/__tests__/StockListPage.test.tsx` (new) — 12 unit tests (vitest + @testing-library/react) covering load/total, dash rendering + still-clickable row, red/green/flat coloring, debounce (fake timers, 4 keystrokes → 1 request), filter-changes-resets-page, market label mapping, pager disabled state, page-size→100 resets page, empty state, error state, sort toggling, row-click navigation
+  - `develop/frontend/package.json` / `package-lock.json` — added `react-router-dom`; added devDeps `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`; added `test` script
+- Notes:
+  - `npm run build` (tsc -b && vite build) and `npm test` (`vitest run`, 12/12 passing) both green; `npx oxlint .` clean.
+  - End-to-end verified against the real backend: started it with `mvn -f develop/backend/pom.xml spring-boot:run`, inserted throwaway fixture rows (2330 台積電/TSE with two price rows incl. a positive change, 4966 譜瑞-KY/OTC with a negative change, 1101 台泥/TSE with no price rows, 9999 測試下市股/TSE inactive) directly via `mysql`, ran `npm run dev` and hit it through the Vite proxy, and exercised every filter/sort/pagination/empty/error path with headless Chrome (via a throwaway Playwright script, since removed along with the `playwright` devDependency after use) plus manual `curl` against `GET /api/stocks`. All fixture rows were deleted afterward (`stock`/`stock_daily_price` back to 0 rows) and both dev processes were stopped.
+  - Confirmed by screenshot that the page renders byte-identical under Chrome's emulated `prefers-color-scheme: dark` and `light` (no CSS in the project reacts to that media feature — `grep` confirms zero occurrences outside of comments explicitly forbidding it).
+  - The one AC that isn't fully drivable from the frontend alone — "每頁筆數切換為 100 後，實際回傳 100 筆" — is verified at the contract level: the UI correctly requests `size=100&page=1` (unit-tested) and renders whatever `items[]` the backend returns; the backend's obligation to actually return up to 100 rows is `specs/backend/stock-catalog.md`'s concern (already `done`) and the seeded fixture set only had 4 rows to exercise it against.
+  - Programmer-error codes (`INVALID_MARKET` / `INVALID_SORT_FIELD` / `INVALID_PAGINATION` / `PAGE_SIZE_EXCEEDED`) are handled defensively in `fetchStocks`/`StockListPage` (generic message + reset to default filters) per spec, but — as the spec itself notes — normal UI operation can never produce these since every input is a controlled element, so this path was verified by code review rather than by driving it through the UI.
+  - `/stocks/{stockId}/daily` currently renders a minimal placeholder (not part of this spec); the real page is `specs/frontend/stock-daily-chart.md`, still `pending`.

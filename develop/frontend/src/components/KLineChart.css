@@ -1,0 +1,35 @@
+/* Shared K-line chart component. Colors are always passed in as literal hex props by the
+   page (specs/frontend/stock-daily-chart.md Visual Style) — nothing here reacts to
+   prefers-color-scheme. */
+
+.kc-root {
+  position: relative;
+  width: 100%;
+  /* Double-click must never leave a text-selection artifact on the chart (spec requirement). */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kc-svg {
+  display: block;
+  cursor: pointer;
+}
+
+.kc-tooltip {
+  position: absolute;
+  transform: translate(12px, 0);
+  min-width: 190px;
+  background: #1b2836;
+  border: 1px solid #3a4757;
+  border-radius: 5px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #e6edf5;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.kc-tooltip.kc-tooltip-left {
+  transform: translate(calc(-100% - 12px), 0);
+}

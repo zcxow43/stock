@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockMinutePriceMapper">
+
+    <insert id="upsert" parameterType="com.stock.domain.StockMinutePrice">
+        INSERT INTO stock_minute_price
+            (stock_id, trade_date, bar_time, open_price, high_price, low_price, close_price, volume, source)
+        VALUES
+            (#{stockId}, #{tradeDate}, #{barTime}, #{openPrice}, #{highPrice}, #{lowPrice}, #{closePrice}, #{volume}, #{source})
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            source = VALUES(source)
+    </insert>
+
+    <select id="findByStockAndDate" resultType="com.stock.domain.StockMinutePrice">
+        SELECT stock_id, trade_date, bar_time, open_price, high_price, low_price, close_price, volume, source
+        FROM stock_minute_price
+        WHERE stock_id = #{stockId} AND trade_date = #{tradeDate}
+        ORDER BY bar_time ASC
+    </select>
+
+</mapper>

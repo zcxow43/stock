@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "個股分 K 線圖頁"
 requirement: "前端 K 線瀏覽 — 在日 K 圖上連點兩下某一天後，以 K 線圖展示該交易日的分 K"
 depends_on: [stock-daily-chart]
@@ -142,20 +142,39 @@ depends_on: [stock-daily-chart]
 | 骨架方塊底色 | `#1D2A38` |
 
 ## Acceptance Criteria
-- [ ] 由日 K 頁連點兩下某根 K 棒後，導向 `/stocks/{stockId}/minute/{該日期}` 並顯示該日分 K 圖
-- [ ] 主圖為蠟燭圖，`close >= open` 的 K 棒為紅色 `#E04B45`、`close < open` 為綠色 `#16A75C`
-- [ ] X 軸標籤為 `HH:mm`，首根為 `09:00`、末根不晚於 `13:30`
-- [ ] 成交量副圖與主圖共用 X 軸，十字準星在兩張圖上同步移動
-- [ ] Tooltip 顯示時間、開高低收、相對當日開盤的漲跌幅、成交量
-- [ ] 週期切換為 `5 分` 後重新請求並重繪，K 棒數量約為 1 分 K 的五分之一
-- [ ] 當日概況條顯示 `dailySummary` 的開高低收與成交量
-- [ ] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「資料來源僅提供最近 30 天的分鐘資料…」，**不出現重試按鈕**，且當日概況條仍顯示
-- [ ] `dataStatus` 為 `NO_DATA` / `NOT_A_TRADING_DAY` / `FETCH_FAILED` 時各顯示不同文案，四種狀態的訊息互不相同
-- [ ] `dataStatus` 為 `FETCH_FAILED` 時顯示回應的 `message` 與「重試」按鈕，點擊後以 `refresh=true` 重新請求
-- [ ] 載入中顯示「正在取得當日分鐘資料…」說明文字，而非僅一個轉圈圖示
-- [ ] 「重新整理」按鈕僅在 `tradeDate` 為今日時出現；其他日期不顯示
-- [ ] 「前一交易日」導向真正的前一個交易日（跨過週末），而非日期減一天
-- [ ] 相鄰交易日查詢失敗時，前後切換按鈕 disabled，但分 K 圖仍正常顯示
-- [ ] 當日高低價相同（漲停鎖死）時圖表仍正常繪出，Y 軸不塌陷為零高度
-- [ ] 手動輸入非法日期的網址時顯示「網址中的日期無效」，而非空圖或無限載入
-- [ ] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面與圖表配色完全相同
+- [x] 由日 K 頁連點兩下某根 K 棒後，導向 `/stocks/{stockId}/minute/{該日期}` 並顯示該日分 K 圖
+- [x] 主圖為蠟燭圖，`close >= open` 的 K 棒為紅色 `#E04B45`、`close < open` 為綠色 `#16A75C`
+- [x] X 軸標籤為 `HH:mm`，首根為 `09:00`、末根不晚於 `13:30`
+- [x] 成交量副圖與主圖共用 X 軸，十字準星在兩張圖上同步移動
+- [x] Tooltip 顯示時間、開高低收、相對當日開盤的漲跌幅、成交量
+- [x] 週期切換為 `5 分` 後重新請求並重繪，K 棒數量約為 1 分 K 的五分之一
+- [x] 當日概況條顯示 `dailySummary` 的開高低收與成交量
+- [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「資料來源僅提供最近 30 天的分鐘資料…」，**不出現重試按鈕**，且當日概況條仍顯示
+- [x] `dataStatus` 為 `NO_DATA` / `NOT_A_TRADING_DAY` / `FETCH_FAILED` 時各顯示不同文案，四種狀態的訊息互不相同
+- [x] `dataStatus` 為 `FETCH_FAILED` 時顯示回應的 `message` 與「重試」按鈕，點擊後以 `refresh=true` 重新請求
+- [x] 載入中顯示「正在取得當日分鐘資料…」說明文字，而非僅一個轉圈圖示
+- [x] 「重新整理」按鈕僅在 `tradeDate` 為今日時出現；其他日期不顯示
+- [x] 「前一交易日」導向真正的前一個交易日（跨過週末），而非日期減一天
+- [x] 相鄰交易日查詢失敗時，前後切換按鈕 disabled，但分 K 圖仍正常顯示
+- [x] 當日高低價相同（漲停鎖死）時圖表仍正常繪出，Y 軸不塌陷為零高度
+- [x] 手動輸入非法日期的網址時顯示「網址中的日期無效」，而非空圖或無限載入
+- [x] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面與圖表配色完全相同
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/frontend/src/pages/StockMinuteChartPage.tsx` (new)
+  - `develop/frontend/src/pages/StockMinuteChartPage.css` (new)
+  - `develop/frontend/src/api/minuteBars.ts` (new)
+  - `develop/frontend/src/components/KLineChart.tsx` (extended with optional `boldXTick` prop — additive, daily-chart page unaffected)
+  - `develop/frontend/src/App.tsx` (added `/stocks/:stockId/minute/:tradeDate` route)
+  - `develop/frontend/src/__tests__/StockMinuteChartPage.test.tsx` (new, 16 tests)
+- Notes:
+  - All 17 Acceptance Criteria verified. 44/44 frontend tests pass (28 pre-existing + 16 new), `tsc -b && vite build` and `oxlint` are clean.
+  - Verified end-to-end against the real backend (`mvn spring-boot:run` on 8080) and a live MySQL fixture (stock 2330, seeded then fully deleted afterward — DB confirmed back to 0 rows in all four tables touched). Exercised every `dataStatus` via real API responses: `AVAILABLE` (271 one-minute bars, `interval=5` aggregates to 55 bars matching the backend's own aggregation), `NO_DATA`, `NOT_A_TRADING_DAY`, `OUT_OF_WINDOW`, `FETCH_FAILED` (with `message`), plus `STOCK_NOT_FOUND` (404) and `INVALID_DATE_FORMAT` (400, via a malformed `tradeDate` in the URL). Also exercised the real refresh path for `tradeDate` = today, which triggered a genuine on-demand Yahoo Finance fetch through `MinuteBarQueryService`/`MinutePriceIngestionService` and returned real `AVAILABLE` data — confirming the "重新整理" button and its `refresh=true` request work against live ingestion, not just a mock.
+  - Took real browser screenshots (Playwright + Chromium) of every state: available chart with tooltip/crosshair sync, 5-minute redraw, all four non-AVAILABLE messages, the two full-page error states, and the today/refresh-visible variant.
+  - Verified AC "prefers-color-scheme" requirement empirically, not just by code review: rendered the same URL under `colorScheme: 'light'` and `colorScheme: 'dark'` and diffed the two PNGs pixel-by-pixel (Pillow `ImageChops.difference`) — bounding box `None`, zero-extrema, i.e. byte-for-byte identical.
+  - Two real bugs found and fixed during this verification (not just from unit tests): (1) the adjacent-trading-day effect called `new Date(...)` on an unvalidated `tradeDate` and threw `RangeError: Invalid time value` for a malformed URL date, breaking the full-page "網址中的日期無效" state — fixed by guarding with `isValidISODate` before running that best-effort sibling request. (2) the footer's `fetchedAt` rendered the raw backend `LocalDateTime` JSON string (`2026-08-28T16:18:56.711257`) instead of the storyboard's `YYYY-MM-DD HH:mm:ss` — added `fmtFetchedAt` to trim/format it.
+  - `boldXTick` was added to the shared `KLineChart` as an optional prop (defaults to no bold, so `StockDailyChartPage` is untouched); the minute page passes a `HH:mm` on-the-hour/half-hour predicate. Empirically, with the real 271-bar/1-min and 55-bar/5-min fixture data, the generic evenly-spaced tick picker happened to land exactly on `:00`/`:30` — matching `docs/frontend/stock-chart/step-4.png` and `step-5.png` pixel-for-pixel in layout.
+  - Backend on port 8080 and frontend dev server were both stopped at the end of this session (`kill` confirmed, `curl` to both ports now returns no response).

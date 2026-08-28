@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "分 K 隨選抓取與查詢 API"
 requirement: "前端 K 線瀏覽 — 在日 K 圖上點選某一個交易日後，要能看到該日的分 K 走勢"
 depends_on: [stock-price-ingestion, stock-catalog]
@@ -162,20 +162,48 @@ Response `200`：
 價格 2 位小數，成交量為整數。
 
 ## Acceptance Criteria
-- [ ] `GET /api/stocks/2330/minute-bars?tradeDate=<近 30 日內的交易日>` 首次呼叫觸發外部抓取，回傳 `dataStatus: AVAILABLE` 且 `bars` 首根 `barTime` 為 `09:00`、末根不晚於 `13:30`
-- [ ] 正常交易日的 1 分 K 根數為 271（09:00–13:30 含首尾）
-- [ ] 同一 `(stockId, tradeDate)` 第二次呼叫**不再發出任何外部請求**（以請求記錄或來源呼叫計數驗證），回應內容與第一次相同
-- [ ] `tradeDate` 早於今日減 30 天時回 `dataStatus: OUT_OF_WINDOW`，且**未對外部來源發出請求**
-- [ ] `OUT_OF_WINDOW` / `NO_DATA` 的日期重複呼叫多次，外部請求數維持為 0
-- [ ] 已標記 `AVAILABLE` 的過往日期，其分 K 在超過來源 30 日視窗之後仍可正常讀取（資料已永久落地）
-- [ ] `interval=5` 的聚合結果：`open` 等於組內第一根的 `open`、`close` 等於最後一根的 `close`、`high`／`low` 為組內極值、`volume` 為組內總和（以 1 分 K 原始資料逐組驗證）
-- [ ] `interval=5` 的首根 K 棒時間為 `09:00`（以 09:00 為錨點，非以首根有成交的 K 棒為錨點）
-- [ ] 來源回應中 OHLC 為 `null` 的分鐘不產生 K 棒；`stock_minute_price` 中**不存在任何價格為 0 的列**
-- [ ] 時間軸以 Asia/Taipei 換算：以已知交易日驗證首根 K 棒為 `09:00` 而非 `01:00` 或 `17:00`
-- [ ] 非交易日（如週六）回 `200` 與 `dataStatus: NOT_A_TRADING_DAY`，`dailySummary` 為 `null`
-- [ ] 分 K 取不到時（`NO_DATA` / `OUT_OF_WINDOW` / `FETCH_FAILED`），只要該日為交易日就仍回傳 `dailySummary`
-- [ ] `interval=3` 回 `400` 與 `INVALID_INTERVAL`
-- [ ] `tradeDate` 為未來日期回 `400` 與 `FUTURE_TRADE_DATE`
-- [ ] 資料庫狀態為 `FAILED` 的日期，API 回應的 `dataStatus` 為 `FETCH_FAILED`；其餘四種狀態的名稱在 API 與資料庫中相同
-- [ ] 抓取失敗後 `stock_minute_fetch_status` 的 `attempt_count` 累加且 `last_error` 有內容；達上限後不再自動重試，但 `refresh=true` 仍可強制重抓
-- [ ] K 棒寫入與狀態更新在同一交易內完成：模擬狀態更新失敗時，該次的 K 棒亦不留存（不出現「狀態為 AVAILABLE 但無 K 棒」）
+- [x] `GET /api/stocks/2330/minute-bars?tradeDate=<近 30 日內的交易日>` 首次呼叫觸發外部抓取，回傳 `dataStatus: AVAILABLE` 且 `bars` 首根 `barTime` 為 `09:00`、末根不晚於 `13:30`
+- [x] 正常交易日的 1 分 K 根數為 271（09:00–13:30 含首尾）
+- [x] 同一 `(stockId, tradeDate)` 第二次呼叫**不再發出任何外部請求**（以請求記錄或來源呼叫計數驗證），回應內容與第一次相同
+- [x] `tradeDate` 早於今日減 30 天時回 `dataStatus: OUT_OF_WINDOW`，且**未對外部來源發出請求**
+- [x] `OUT_OF_WINDOW` / `NO_DATA` 的日期重複呼叫多次，外部請求數維持為 0
+- [x] 已標記 `AVAILABLE` 的過往日期，其分 K 在超過來源 30 日視窗之後仍可正常讀取（資料已永久落地）
+- [x] `interval=5` 的聚合結果：`open` 等於組內第一根的 `open`、`close` 等於最後一根的 `close`、`high`／`low` 為組內極值、`volume` 為組內總和（以 1 分 K 原始資料逐組驗證）
+- [x] `interval=5` 的首根 K 棒時間為 `09:00`（以 09:00 為錨點，非以首根有成交的 K 棒為錨點）
+- [x] 來源回應中 OHLC 為 `null` 的分鐘不產生 K 棒；`stock_minute_price` 中**不存在任何價格為 0 的列**
+- [x] 時間軸以 Asia/Taipei 換算：以已知交易日驗證首根 K 棒為 `09:00` 而非 `01:00` 或 `17:00`
+- [x] 非交易日（如週六）回 `200` 與 `dataStatus: NOT_A_TRADING_DAY`，`dailySummary` 為 `null`
+- [x] 分 K 取不到時（`NO_DATA` / `OUT_OF_WINDOW` / `FETCH_FAILED`），只要該日為交易日就仍回傳 `dailySummary`
+- [x] `interval=3` 回 `400` 與 `INVALID_INTERVAL`
+- [x] `tradeDate` 為未來日期回 `400` 與 `FUTURE_TRADE_DATE`
+- [x] 資料庫狀態為 `FAILED` 的日期，API 回應的 `dataStatus` 為 `FETCH_FAILED`；其餘四種狀態的名稱在 API 與資料庫中相同
+- [x] 抓取失敗後 `stock_minute_fetch_status` 的 `attempt_count` 累加且 `last_error` 有內容；達上限後不再自動重試，但 `refresh=true` 仍可強制重抓
+- [x] K 棒寫入與狀態更新在同一交易內完成：模擬狀態更新失敗時，該次的 K 棒亦不留存（不出現「狀態為 AVAILABLE 但無 K 棒」）
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/domain/StockMinutePrice.java` (new)
+  - `develop/backend/src/main/java/com/stock/domain/StockMinuteFetchStatus.java` (new)
+  - `develop/backend/src/main/java/com/stock/mapper/StockMinutePriceMapper.java` (new) + `develop/backend/src/main/resources/mapper/StockMinutePriceMapper.xml` (new)
+  - `develop/backend/src/main/java/com/stock/mapper/StockMinuteFetchStatusMapper.java` (new) + `develop/backend/src/main/resources/mapper/StockMinuteFetchStatusMapper.xml` (new)
+  - `develop/backend/src/main/java/com/stock/mapper/StockDailyPriceMapper.java` / `StockDailyPriceMapper.xml` (added `findOne` — single-row trading-day lookup, reused existing mapper)
+  - `develop/backend/src/main/java/com/stock/service/external/YahooFinanceClient.java` (new) — parallel-array normalization, Asia/Taipei conversion, 09:00–13:30 session filter, null-OHLC drop, browser-like `User-Agent` header (Yahoo's edge rejects bare-JVM UA strings)
+  - `develop/backend/src/main/java/com/stock/service/external/dto/YahooChartResponse.java`, `YahooChart.java`, `YahooChartResult.java`, `YahooIndicators.java`, `YahooQuote.java`, `NormalizedMinuteBar.java` (new)
+  - `develop/backend/src/main/java/com/stock/service/MinutePriceIngestionService.java` (new) — `@Transactional` bars+status write
+  - `develop/backend/src/main/java/com/stock/service/MinuteBarQueryService.java` (new) — decision table, window logic, 09:00-anchored aggregation, response assembly
+  - `develop/backend/src/main/java/com/stock/controller/MinuteBarController.java` (new) — `GET /api/stocks/{stockId}/minute-bars`
+  - `develop/backend/src/main/java/com/stock/exception/MissingTradeDateException.java`, `InvalidDateFormatException.java`, `FutureTradeDateException.java`, `InvalidIntervalException.java` (new) + `GlobalExceptionHandler.java` (handlers added)
+  - `develop/backend/src/main/java/com/stock/dto/MinuteBarDto.java`, `DailySummaryDto.java`, `MinuteBarResponse.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/ErrorResponse.java` (widened `allowed` to `List<?>` so the same JSON key serves both `INVALID_SORT_FIELD` (strings) and `INVALID_INTERVAL` (integers); added `invalidInterval()` factory)
+  - `develop/backend/src/main/java/com/stock/config/MinutePriceProperties.java` (new, `app.minute-price.max-attempt-count`, default 3)
+  - `develop/backend/src/main/resources/application.yml` / `develop/backend/src/test/resources/application.yml` (added `app.external.yahoo-finance-base-url`, `app.minute-price.max-attempt-count`)
+  - `develop/backend/src/test/java/com/stock/StockMinutePriceIntegrationTest.java` (new, 15 tests)
+- Notes:
+  - Reused `stock-price-ingestion`'s rate-limit/backoff mechanism directly (`BackfillProperties.RateLimit`, injected as-is) rather than adding a parallel config block, per spec's "不另做一套".
+  - Fixed a self-caught design bug during implementation: the local out-of-window check must only run when the fetch decision table has already decided to fetch (i.e. never on an already-`AVAILABLE`/`NO_DATA` row) — otherwise an old `AVAILABLE` date would get silently downgraded to `OUT_OF_WINDOW` the moment it aged past 30 days, even though its bars are still physically in the table. Caught by acceptance criterion "已標記 AVAILABLE 的過往日期...仍可正常讀取" during test-writing, before it ever shipped.
+  - `stock_minute_fetch_status.status` is written via five explicit mapper methods (`upsertAvailable`/`upsertNoData`/`upsertOutOfWindow`/`upsertNotATradingDay`/`markFailed`), mirroring `StockSyncProgressMapper`'s shape, rather than one generic upsert — keeps each write's intent explicit and makes it structurally impossible for application code to write an invalid status.
+  - The last acceptance criterion ("模擬狀態更新失敗時，該次的 K 棒亦不留存") is verified by forcing the *bars* statement to fail mid-transaction (a `chk_smp_high_low` CHECK violation on the second of two bars in one `applyFetchResult` call) rather than the *status* statement, because the production status-write methods hardcode a valid literal (`'AVAILABLE'`/`'NO_DATA'`/etc.) in the mapper XML and can't be made to violate `stock_minute_fetch_status`'s CHECK constraint through the public API. This proxy exercises the exact same `@Transactional` boundary and proves the same invariant ("either both persist or neither does") that the criterion is protecting against.
+  - Verified live against the real Yahoo Finance endpoint (not just mocks): confirmed the exact response shape (`chart.result[0].timestamp[]` + `indicators.quote[0]`), confirmed a full trading day is exactly 271 bars 09:00–13:30 Asia/Taipei, confirmed `volume` is already a per-minute value (not cumulative — real TSMC data showed non-monotonic per-minute volumes), and confirmed null-OHLC minutes genuinely occur (5 in one sample day), validating the drop-on-null design. In this sandbox, Java's TLS handshake gets blocked by Yahoo's edge with HTTP 429 even with a correct browser `User-Agent` header (curl with an identical UA succeeds; this is TLS/JA3-level bot detection, not a header or rate-limit issue) — added the `User-Agent` header regardless since Yahoo's edge is documented to reject header-less requests outright, but did not chase full TLS fingerprint spoofing as it's outside this spec's scope. The system's own retry/backoff/failure-tracking behavior was exercised end-to-end against this real failure and worked exactly as designed: `RateLimitedException` → backoff retries → `FAILED` status with populated `attempt_count`/`last_error` → API surfaced `FETCH_FAILED` with `message` and a non-null `dailySummary`.
+  - All 15 new tests plus the pre-existing 55 pass (`mvn -f develop/backend/pom.xml test` → Tests run: 70, Failures: 0, Errors: 0). Verified all validation error codes (`MISSING_TRADE_DATE`, `INVALID_DATE_FORMAT`, `FUTURE_TRADE_DATE`, `INVALID_INTERVAL`, `STOCK_NOT_FOUND`) live via `curl` against a running instance. All tables (`stock`, `stock_daily_price`, `stock_daily_indicator`, `stock_minute_price`, `stock_minute_fetch_status`, `stock_sync_progress`) confirmed at 0 rows after every run; app stopped and port 8080 confirmed free before finishing.

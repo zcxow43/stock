@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票日線技術指標表 stock_daily_indicator"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 儲存每日 MACD、KD 指標值與其遞迴中間狀態，供統計 API 直接讀取並支援逐日增量推進"
 ---
@@ -96,9 +96,22 @@ CREATE TABLE stock_daily_indicator (
 指標序列開頭數值尚未收斂（見 backend spec 的暖身規範）。這些列**必須寫入**——它們是遞迴鏈的必要環節——但不得對外呈現。以此旗標區分，而非刪除。
 
 ## Acceptance Criteria
-- [ ] `stock_daily_indicator` 表建立成功，欄位、型別、註解與上述 DDL 一致
-- [ ] 主鍵為 `(stock_id, trade_date, param_key)` 且順序正確
-- [ ] 表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
-- [ ] `ema_fast`、`ema_slow` 兩個遞迴狀態欄位存在且為 `DECIMAL(18,8)`
-- [ ] 寫入 `j_value = -150.5` 與 `j_value = 250.75` 皆成功（J 值可超出 0~100 範圍）
-- [ ] `EXPLAIN` 驗證「單檔 + 日期區間 + param_key」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`）
+- [x] `stock_daily_indicator` 表建立成功，欄位、型別、註解與上述 DDL 一致
+- [x] 主鍵為 `(stock_id, trade_date, param_key)` 且順序正確
+- [x] 表中不存在任何 `FLOAT` 或 `DOUBLE` 欄位
+- [x] `ema_fast`、`ema_slow` 兩個遞迴狀態欄位存在且為 `DECIMAL(18,8)`
+- [x] 寫入 `j_value = -150.5` 與 `j_value = 250.75` 皆成功（J 值可超出 0~100 範圍）
+- [x] `EXPLAIN` 驗證「單檔 + 日期區間 + param_key」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`）
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: `specs/dba/stock-daily-indicator.md` (migration executed against live database; no standalone `.sql` file created)
+- Notes:
+  - Applied `V003__create_stock_daily_indicator.sql` directly against the live `stock` database via the `mysql` CLI (`app`/`stock`).
+  - `SHOW CREATE TABLE` confirms all 16 columns, types (`decimal(18,8)` for MACD fields, `decimal(12,8)` for KD fields), comments, and table-level options (`ENGINE=InnoDB`, `utf8mb4`/`utf8mb4_unicode_ci`, table comment) exactly match the spec DDL.
+  - `SHOW INDEX` confirms `PRIMARY KEY (stock_id, trade_date, param_key)` in that column order, plus secondary index `idx_date_param (trade_date, param_key)`.
+  - `information_schema.columns` scan confirms no `float`/`double` column types are present anywhere in the table.
+  - Inserted and read back rows with `j_value = -150.5` and `j_value = 250.75`; both round-tripped exactly as `-150.50000000` / `250.75000000`.
+  - `EXPLAIN SELECT * FROM stock_daily_indicator WHERE stock_id='2330' AND param_key='MACD_12_26_9__KD_9_3_3' AND trade_date BETWEEN ... AND ...` returned `type=range`, `key=PRIMARY`, `key_len=207` (full 3-column prefix).
+  - All test rows were deleted after verification (`DELETE FROM stock_daily_indicator WHERE stock_id='2330'`); `SELECT COUNT(*)` confirms the table is now empty (schema-only).

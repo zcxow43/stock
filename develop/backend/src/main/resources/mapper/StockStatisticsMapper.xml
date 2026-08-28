@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockStatisticsMapper">
+
+    <!--
+        LEFT JOIN is mandatory here: price and indicator data are written by two independent
+        jobs (stock-price-ingestion vs. this spec's rebuild endpoint), so "price backfilled but
+        indicator not yet rebuilt" is a normal intermediate state, not an error. An INNER JOIN
+        would silently return an empty series for that state, indistinguishable from "no price
+        data at all" to the caller. is_warmup rows are excluded via the join condition (not a
+        WHERE clause) so that excluding them never turns a left row into a dropped row.
+    -->
+    <select id="findSeries" resultType="com.stock.domain.StatSeriesRow">
+        SELECT p.stock_id AS stock_id, p.trade_date AS trade_date,
+               p.open_price AS open_price, p.high_price AS high_price,
+               p.low_price AS low_price, p.close_price AS close_price, p.volume AS volume,
+               i.dif AS dif, i.dea AS dea, i.osc AS osc,
+               i.k_value AS k_value, i.d_value AS d_value, i.j_value AS j_value
+        FROM stock_daily_price p
+        LEFT JOIN stock_daily_indicator i
+            ON i.stock_id = p.stock_id AND i.trade_date = p.trade_date
+           AND i.param_key = #{paramKey} AND i.is_warmup = 0
+        WHERE p.stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND p.trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY p.stock_id ASC, p.trade_date ASC
+    </select>
+
+</mapper>

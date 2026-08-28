@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "分 K 抓取狀態表 stock_minute_fetch_status"
 requirement: "前端 K 線瀏覽 — 分 K 為隨點選隨抓取，需記錄每個「股票×交易日」的抓取結果，避免對永遠取不到資料的日期重複請求外部來源"
 ---
@@ -78,9 +78,22 @@ CREATE TABLE stock_minute_fetch_status (
 清除舊分 K 分區時，對應日期的狀態列必須一併刪除；否則狀態表會宣稱 `AVAILABLE`，而 K 棒已隨分區消失。
 
 ## Acceptance Criteria
-- [ ] `stock_minute_fetch_status` 表建立成功，欄位、型別、註解與上述 DDL 一致
-- [ ] 主鍵為 `(stock_id, trade_date)`
-- [ ] `status` 寫入五種列舉值以外的值時被 CHECK 約束拒絕
-- [ ] 對同一 `(stock_id, trade_date)` 重複 UPSERT，表中僅一列
-- [ ] 以 `WHERE status = 'FAILED' AND trade_date >= ?` 查詢時，`EXPLAIN` 顯示使用 `idx_status_date`
-- [ ] `fetched_at` 與 `source` 允許為 `NULL`（尚未成功抓取的列可寫入）
+- [x] `stock_minute_fetch_status` 表建立成功，欄位、型別、註解與上述 DDL 一致
+- [x] 主鍵為 `(stock_id, trade_date)`
+- [x] `status` 寫入五種列舉值以外的值時被 CHECK 約束拒絕
+- [x] 對同一 `(stock_id, trade_date)` 重複 UPSERT，表中僅一列
+- [x] 以 `WHERE status = 'FAILED' AND trade_date >= ?` 查詢時，`EXPLAIN` 顯示使用 `idx_status_date`
+- [x] `fetched_at` 與 `source` 允許為 `NULL`（尚未成功抓取的列可寫入）
+
+---
+## Execution Result
+- Status: DONE
+- Files changed: `specs/dba/stock-minute-fetch-status.md` (Migration SQL executed against live DB; no standalone `.sql` files created)
+- Notes:
+  - Applied `V006__create_stock_minute_fetch_status.sql` directly against the live `stock` database via `mysql` CLI. Table did not previously exist (clean slate); creation succeeded with no errors.
+  - Verified `SHOW CREATE TABLE` output matches the spec's DDL exactly: all 9 columns, types, comments, `PRIMARY KEY (stock_id, trade_date)`, `idx_status_date (status, trade_date)`, and `chk_smfs_status` CHECK constraint present.
+  - Verified CHECK constraint: `INSERT ... status='BOGUS'` failed with `ERROR 3819 (HY000): Check constraint 'chk_smfs_status' is violated.`
+  - Verified UPSERT: inserted `(2330, 2026-08-27, FAILED, ...)` then `INSERT ... ON DUPLICATE KEY UPDATE` with `status='AVAILABLE', bar_count=271, source='YAHOO', ...` on the same key; `COUNT(*)` for that key remained 1, and the row reflected the updated values.
+  - Verified `EXPLAIN SELECT * FROM stock_minute_fetch_status WHERE status = 'FAILED' AND trade_date >= '2026-08-01'` returned `key: idx_status_date`, `type: range`, `Extra: Using index condition`.
+  - Verified NULL acceptance: inserted a row with `status='NOT_A_TRADING_DAY'` omitting `source`/`fetched_at` (defaulting to NULL) — insert succeeded, and a row with explicit `NULL` for `source`/`fetched_at` was also accepted (tested during the UPSERT setup insert as well).
+  - All test rows (`2330`/`2026-08-27`, `2330`/`2026-08-26`, `2317`/`2026-08-20`, `2412`/`2026-08-21`, `1101`/`2026-08-22`) were deleted after verification. Table confirmed empty (`COUNT(*) = 0`), left schema-only.

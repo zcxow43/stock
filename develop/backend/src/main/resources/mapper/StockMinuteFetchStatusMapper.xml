@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockMinuteFetchStatusMapper">
+
+    <select id="findOne" resultType="com.stock.domain.StockMinuteFetchStatus">
+        SELECT stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at
+        FROM stock_minute_fetch_status
+        WHERE stock_id = #{stockId} AND trade_date = #{tradeDate}
+    </select>
+
+    <insert id="upsertAvailable">
+        INSERT INTO stock_minute_fetch_status
+            (stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at)
+        VALUES
+            (#{stockId}, #{tradeDate}, 'AVAILABLE', #{barCount}, #{source}, 0, NULL, #{fetchedAt})
+        ON DUPLICATE KEY UPDATE
+            status = 'AVAILABLE',
+            bar_count = VALUES(bar_count),
+            source = VALUES(source),
+            attempt_count = 0,
+            last_error = NULL,
+            fetched_at = VALUES(fetched_at)
+    </insert>
+
+    <insert id="upsertNoData">
+        INSERT INTO stock_minute_fetch_status
+            (stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at)
+        VALUES
+            (#{stockId}, #{tradeDate}, 'NO_DATA', 0, #{source}, 0, NULL, #{fetchedAt})
+        ON DUPLICATE KEY UPDATE
+            status = 'NO_DATA',
+            bar_count = 0,
+            source = VALUES(source),
+            attempt_count = 0,
+            last_error = NULL,
+            fetched_at = VALUES(fetched_at)
+    </insert>
+
+    <insert id="upsertOutOfWindow">
+        INSERT INTO stock_minute_fetch_status
+            (stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at)
+        VALUES
+            (#{stockId}, #{tradeDate}, 'OUT_OF_WINDOW', 0, NULL, 0, NULL, NULL)
+        ON DUPLICATE KEY UPDATE
+            status = 'OUT_OF_WINDOW',
+            bar_count = 0,
+            source = NULL,
+            attempt_count = 0,
+            last_error = NULL,
+            fetched_at = NULL
+    </insert>
+
+    <insert id="upsertNotATradingDay">
+        INSERT INTO stock_minute_fetch_status
+            (stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at)
+        VALUES
+            (#{stockId}, #{tradeDate}, 'NOT_A_TRADING_DAY', 0, NULL, 0, NULL, NULL)
+        ON DUPLICATE KEY UPDATE
+            status = 'NOT_A_TRADING_DAY',
+            bar_count = 0,
+            source = NULL,
+            attempt_count = 0,
+            last_error = NULL,
+            fetched_at = NULL
+    </insert>
+
+    <insert id="markFailed">
+        INSERT INTO stock_minute_fetch_status
+            (stock_id, trade_date, status, bar_count, source, attempt_count, last_error, fetched_at)
+        VALUES
+            (#{stockId}, #{tradeDate}, 'FAILED', 0, NULL, 1, #{lastError}, NULL)
+        ON DUPLICATE KEY UPDATE
+            status = 'FAILED',
+            attempt_count = attempt_count + 1,
+            last_error = VALUES(last_error)
+    </insert>
+
+</mapper>

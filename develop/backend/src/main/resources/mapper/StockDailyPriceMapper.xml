@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockDailyPriceMapper">
+
+    <insert id="upsert" parameterType="com.stock.domain.StockDailyPrice">
+        INSERT INTO stock_daily_price
+            (stock_id, trade_date, open_price, high_price, low_price, close_price,
+             volume, turnover, transaction_count, source)
+        VALUES
+            (#{stockId}, #{tradeDate}, #{openPrice}, #{highPrice}, #{lowPrice}, #{closePrice},
+             #{volume}, #{turnover}, #{transactionCount}, #{source})
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            turnover = VALUES(turnover),
+            transaction_count = VALUES(transaction_count),
+            source = VALUES(source)
+    </insert>
+
+    <select id="findStockIdsByTradeDate" resultType="string">
+        SELECT stock_id FROM stock_daily_price WHERE trade_date = #{tradeDate}
+    </select>
+
+    <select id="findOne" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+               volume, turnover, transaction_count, source
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date = #{tradeDate}
+    </select>
+
+    <select id="countByStockAndDateRange" resultType="int">
+        SELECT COUNT(*) FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <select id="findLatestTwoByStockIds" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, close_price, volume
+        FROM (
+            SELECT stock_id, trade_date, close_price, volume,
+                   ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date DESC) AS rn
+            FROM stock_daily_price
+            WHERE stock_id IN
+            <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        ) ranked
+        WHERE rn &lt;= 2
+        ORDER BY stock_id, trade_date DESC
+    </select>
+
+    <select id="findLatestTwoByStockId" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, close_price, volume
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId}
+        ORDER BY trade_date DESC
+        LIMIT 2
+    </select>
+
+    <select id="findPriceStats" resultType="com.stock.domain.PriceStats">
+        SELECT MIN(trade_date) AS first_trade_date, COUNT(*) AS trading_day_count
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId}
+    </select>
+
+    <select id="findByStockAndDateRange" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, high_price, low_price, close_price, volume
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY trade_date ASC
+    </select>
+
+    <select id="findRecentTradeDatesBefore" resultType="java.time.LocalDate">
+        SELECT trade_date FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date &lt; #{beforeDate}
+        ORDER BY trade_date DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findRecentHighLow" resultType="com.stock.domain.HighLow">
+        SELECT MAX(high_price) AS high_price, MIN(low_price) AS low_price
+        FROM (
+            SELECT high_price, low_price FROM stock_daily_price
+            WHERE stock_id = #{stockId} AND trade_date &lt;= #{tradeDate}
+            ORDER BY trade_date DESC
+            LIMIT #{days}
+        ) recent
+    </select>
+
+    <select id="findLatestTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM stock_daily_price WHERE stock_id = #{stockId}
+    </select>
+
+    <select id="findPreviousTradeDate" resultType="java.time.LocalDate">
+        SELECT trade_date FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date &lt; #{beforeDate}
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
+    <select id="findNextTradeDateAfter" resultType="java.time.LocalDate">
+        SELECT trade_date FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date &gt; #{afterDate}
+        ORDER BY trade_date ASC
+        LIMIT 1
+    </select>
+
+    <select id="findGlobalLatestTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM stock_daily_price
+    </select>
+
+    <select id="findGlobalFirstTradeDateOnOrAfter" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM stock_daily_price WHERE trade_date &gt;= #{candidateStart}
+    </select>
+
+</mapper>

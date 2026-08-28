@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "MACD／KD 指標運算與兩個月統計"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 由日線 OHLC 推導 MACD 與 KD，落地遞迴狀態供增量推進，並提供兩個月區間統計查詢，支援多選股票與全市場"
 depends_on: [stock-price-ingestion]
@@ -241,28 +241,43 @@ Response `200`：
 ## Acceptance Criteria
 
 ### 指標正確性（以真實資料驗證）
-- [ ] 以 2330、截至 `2026-08-27`、暖身 ≥ 250 個交易日運算，`dif` = `8.6416`、`dea` = `5.5740`、`osc` = `3.0677`（容差 ±0.001）
-- [ ] 同上條件，`k_value` = `63.9981`、`d_value` = `56.3474`（容差 ±0.0001）
-- [ ] 上述 `dif` 四捨五入為整數後為 `9`，與 TradingView 公開技術指標頁的 `MACD Level (12, 26)` 一致
-- [ ] 對同一檔分別以 250 根與 400 根暖身運算，輸出區間內所有日期的指標值差異均小於 0.001
-- [ ] `j_value` 等於 `3 × k_value - 2 × d_value`（逐列驗證）
+- [x] 以 2330、截至 `2026-08-27`、暖身 ≥ 250 個交易日運算，`dif` = `8.6416`、`dea` = `5.5740`、`osc` = `3.0677`（容差 ±0.001）
+- [x] 同上條件，`k_value` = `63.9981`、`d_value` = `56.3474`（容差 ±0.0001）
+- [x] 上述 `dif` 四捨五入為整數後為 `9`，與 TradingView 公開技術指標頁的 `MACD Level (12, 26)` 一致
+- [x] 對同一檔分別以 250 根與 400 根暖身運算，輸出區間內所有日期的指標值差異均小於 0.001
+- [x] `j_value` 等於 `3 × k_value - 2 × d_value`（逐列驗證）
 
 ### 暖身與增量
-- [ ] 暖身區間的指標列確實寫入資料庫且 `is_warmup = 1`，並且不出現在統計 API 回應中
-- [ ] 歷史不足 250 個交易日的標的仍回傳指標，且 `warmupSufficient` 為 `false`
-- [ ] `mode: INCREMENTAL` 推進一日的結果，與對同一檔執行 `mode: FULL` 的同日結果完全相同
-- [ ] 已有 `INDICATOR_REBUILD` 作業執行中時，再次呼叫重算端點回 `409` 與 `JOB_ALREADY_RUNNING`
-- [ ] 增量推進時若前一交易日指標列不存在，該檔被標記為需全量重建，而非以初始值 50 起算
+- [x] 暖身區間的指標列確實寫入資料庫且 `is_warmup = 1`，並且不出現在統計 API 回應中
+- [x] 歷史不足 250 個交易日的標的仍回傳指標，且 `warmupSufficient` 為 `false`
+- [x] `mode: INCREMENTAL` 推進一日的結果，與對同一檔執行 `mode: FULL` 的同日結果完全相同
+- [x] 已有 `INDICATOR_REBUILD` 作業執行中時，再次呼叫重算端點回 `409` 與 `JOB_ALREADY_RUNNING`
+- [x] 增量推進時若前一交易日指標列不存在，該檔被標記為需全量重建，而非以初始值 50 起算
 
 ### 統計查詢
-- [ ] 省略 `startDate`／`endDate` 時，預設回傳最新交易日往前兩個曆月的區間，`scope` 為對應值
-- [ ] `stockIds=2330,2317` 回傳 2 個 item 且含 `series`，`scope` 為 `SELECTED`
-- [ ] 省略 `stockIds` 時回傳全市場摘要、`scope` 為 `ALL`，且各 item **不含** `series` 欄位
-- [ ] 全市場查詢帶 `includeSeries=true` 回 `400` 與 `SERIES_NOT_ALLOWED_FOR_ALL_SCOPE`，而非截斷資料
-- [ ] `stockIds` 帶 51 檔時回 `400` 與 `TOO_MANY_STOCK_IDS`
-- [ ] 交叉次數以相鄰交易日比較得出；於已知含交叉的區間驗證次數與發生日期正確
-- [ ] 區間內無行情的標的回 `200`，`tradingDays` 為 `0`、`summary` 為 `null`
-- [ ] 某檔已有行情但尚未執行指標重算時，`series` 仍回傳完整的 OHLC 與成交量，指標欄位為 `null`（而非回空序列）
-- [ ] 上述情況下 `summary` 的 `macdGoldenCross` 等交叉次數為 `null` 而非 `0`
-- [ ] 區間中間有數日缺指標列時，其前後兩端有指標的相鄰交易日仍正常參與交叉判定
-- [ ] 回應中的指標值為 4 位小數，且中間計算未使用四捨五入後的值
+- [x] 省略 `startDate`／`endDate` 時，預設回傳最新交易日往前兩個曆月的區間，`scope` 為對應值
+- [x] `stockIds=2330,2317` 回傳 2 個 item 且含 `series`，`scope` 為 `SELECTED`
+- [x] 省略 `stockIds` 時回傳全市場摘要、`scope` 為 `ALL`，且各 item **不含** `series` 欄位
+- [x] 全市場查詢帶 `includeSeries=true` 回 `400` 與 `SERIES_NOT_ALLOWED_FOR_ALL_SCOPE`，而非截斷資料
+- [x] `stockIds` 帶 51 檔時回 `400` 與 `TOO_MANY_STOCK_IDS`
+- [x] 交叉次數以相鄰交易日比較得出；於已知含交叉的區間驗證次數與發生日期正確
+- [x] 區間內無行情的標的回 `200`，`tradingDays` 為 `0`、`summary` 為 `null`
+- [x] 某檔已有行情但尚未執行指標重算時，`series` 仍回傳完整的 OHLC 與成交量，指標欄位為 `null`（而非回空序列）
+- [x] 上述情況下 `summary` 的 `macdGoldenCross` 等交叉次數為 `null` 而非 `0`
+- [x] 區間中間有數日缺指標列時，其前後兩端有指標的相鄰交易日仍正常參與交叉判定
+- [x] 回應中的指標值為 4 位小數，且中間計算未使用四捨五入後的值
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/test/java/com/stock/service/IndicatorCalculationServiceTest.java` (new — pure-math unit tests, no Spring/DB)
+  - `develop/backend/src/test/java/com/stock/StockIndicatorStatisticsIntegrationTest.java` (new — 16 integration tests covering both endpoints)
+  - No production code required changes; the implementation left by the two prior interrupted agents (controllers, services, mappers, XML, DTOs, domain, config) was reviewed line-by-line against this spec and against `specs/dba/stock-daily-indicator.md`, and found correct as written. No bugs were found in the MACD/KD recursion, the warmup flagging, the LEFT JOIN series query, the null-vs-zero cross-count contract, or the error handling. Nothing else was touched.
+
+### What was verified and how
+1. **Pure math** (`IndicatorCalculationServiceTest`, 7 tests, no DB): `J = 3K-2D` on every row; first-row EMA/K/D seeding; `computeIncrementalStep` reproduces the exact same row `computeFull` would produce for that day (bit-identical after the shared 8-decimal rounding point); the null-previous-state guard throws instead of silently seeding; warmup-flag boundary logic; and a synthetic 250-vs-400-day-lookback convergence property test (diff < 0.001 on all 50 output days) reproducing the spec's own measured-convergence claim without depending on a live data fetch.
+2. **Integration tests** (`StockIndicatorStatisticsIntegrationTest`, 16 tests, real MySQL via `TI`-prefixed synthetic stock ids, cleaned up in `@BeforeEach`/`@AfterEach`): rebuild validation (`UNKNOWN_STOCK_ID`, `INVALID_DATE_RANGE`, `JOB_ALREADY_RUNNING`), INCREMENTAL == FULL for the same day end-to-end through the real async runner, INCREMENTAL routing to `FAILED`/`NEEDS_FULL_REBUILD` instead of seeding 50 when no previous row exists, warmup rows written as `is_warmup=1` and excluded from the statistics series, `warmupSufficient=false` for a thin-history stock, statistics default date-range resolution, `SELECTED` vs `ALL` scope (including the raw-JSON check that `series` is *absent*, not merely `null`, for `ALL` scope), `SERIES_NOT_ALLOWED_FOR_ALL_SCOPE` / `TOO_MANY_STOCK_IDS` / no-price-data (`tradingDays=0`, `summary=null`) responses, price-without-indicator (`series` OHLC populated, indicator fields `null`, cross counts `null` not `0`), a hand-crafted osc/k/d sequence with a deliberate mid-series gap proving cross-counting skips the gap without breaking later comparisons, and 4-decimal-place response rounding of an 8-decimal stored value.
+3. **Live app verification against real market data** (`mvn spring-boot:run` on port 8080, stopped before finishing): inserted a real `2330` row, ran `POST /api/stocks/sync/backfill` against the live FinMind API for 2024-06-03..2026-08-27 (544 real trading days — this sandbox's external APIs serve data through the environment's current date, 2026-08-27/28), then ran `POST /api/stocks/indicators/rebuild` (`mode=FULL`, `startDate=2026-06-27`, `endDate=2026-08-27`, 250-day auto warmup). Result for 2026-08-27: `dif=8.64165936`, `dea=5.57401144`, `osc=3.06764792`, `k=63.99805947`, `d=56.34735184`, `j=79.29947473` — all within the spec's stated tolerance of its reference table (`dif` diff 6e-5 vs ±0.001 tolerance; `k`/`d` diff ~4-5e-5 vs ±0.0001 tolerance), `dif` rounds to `9` matching the spec's stated TradingView cross-check, and `j = 3k-2d` holds exactly. Re-ran the same narrow-window rebuild with `app.indicator.warmup-trading-days` temporarily bumped to `400` (app restarted, config restored to `250` afterward) — the two runs' `dif`/`dea` differ by ~3e-7 and `k`/`d` are bit-identical across all 43 output days, confirming the spec's warmup-convergence claim on live 2330 data, not just synthetic data. Also reproduced `INCREMENTAL == FULL` for the real last trading day (deleted the row, re-ran `mode=INCREMENTAL`, got back the bit-identical row) and the `409 JOB_ALREADY_RUNNING` race by firing two real concurrent HTTP requests. Also confirmed `GET /api/stocks/statistics` over this real data serializes `latestDif=8.6417` etc. at 4 decimal places, matching the DB-precision computation.
+4. Also discovered and confirmed (not a bug, by design): `warmupSufficient` per the spec's own "資料來源對應" contract counts `is_warmup=0` rows before the query window's start date — so a stock whose *only* rebuild ever was a narrow-window `FULL` rebuild (explicit `startDate`) will read `warmupSufficient=false` even with ample underlying price history, because everything before that `startDate` is by construction flagged `is_warmup=1`. Verified live: re-running the same 2330 rebuild without an explicit `startDate` (so the entire 544-day history becomes real, non-warmup output, per the documented "no explicit startDate → mark nothing as warmup" contract) flips `warmupSufficient` to `true` for the same 2-month statistics window. This is the intended production lifecycle (an initial full-history rebuild followed by daily `INCREMENTAL` steps, each of which is always non-warmup) — not something this task's scope covers changing, but noted here since it's easy to misread as a bug.
+5. Full suite (`mvn -f develop/backend/pom.xml test`, all classes including `StockCatalogIntegrationTest` and `StockPriceIngestionIntegrationTest`): **55/55 passed**, 0 failures/errors. `stock`, `stock_daily_price`, `stock_daily_indicator`, `stock_sync_progress`, `stock_minute_price`, `stock_minute_fetch_status` all confirmed at 0 rows after the full suite and after the live manual verification (all seeded/computed rows for `2330` and `TI*` ids were deleted). Port 8080 confirmed free before finishing.
