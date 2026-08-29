@@ -25,6 +25,11 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("UNKNOWN_STOCK_ID", e.getUnknownIds()));
     }
 
+    @ExceptionHandler(InvalidSyncModeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSyncMode(InvalidSyncModeException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_SYNC_MODE"));
+    }
+
     @ExceptionHandler(JobAlreadyRunningException.class)
     public ResponseEntity<ErrorResponse> handleJobAlreadyRunning(JobAlreadyRunningException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("JOB_ALREADY_RUNNING"));

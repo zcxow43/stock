@@ -3,6 +3,7 @@ package com.stock.service;
 import com.stock.domain.StatSeriesRow;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyIndicator;
+import com.stock.domain.StockLatestTradeDate;
 import com.stock.dto.StatisticsItemDto;
 import com.stock.dto.StatisticsResponseDto;
 import com.stock.dto.StatisticsSeriesRowDto;
@@ -102,12 +103,28 @@ public class StockStatisticsService {
             }
         }
 
-        LocalDate endDate = endDateParam != null ? endDateParam : priceMapper.findGlobalLatestTradeDate();
+        LocalDate endDate;
+        if (endDateParam != null) {
+            endDate = endDateParam;
+        } else {
+            // Default endDate is each requested stock's OWN latest trade date, not a market-wide
+            // MAX(trade_date) — a single grouped query scoped to targetIds, never one query per id.
+            // See specs/backend/stock-indicator-statistics.md, "統計區間".
+            endDate = null;
+            if (!targetIds.isEmpty()) {
+                for (StockLatestTradeDate row : priceMapper.findLatestTradeDatesByStockIds(targetIds)) {
+                    if (endDate == null || row.getTradeDate().isAfter(endDate)) {
+                        endDate = row.getTradeDate();
+                    }
+                }
+            }
+        }
         LocalDate startDate;
         if (startDateParam != null) {
             startDate = startDateParam;
         } else if (endDate != null) {
-            LocalDate candidate = priceMapper.findGlobalFirstTradeDateOnOrAfter(endDate.minusMonths(2));
+            LocalDate candidate = targetIds.isEmpty() ? null
+                    : priceMapper.findFirstTradeDateOnOrAfterByStockIds(targetIds, endDate.minusMonths(2));
             startDate = candidate != null ? candidate : endDate.minusMonths(2);
         } else {
             startDate = null;

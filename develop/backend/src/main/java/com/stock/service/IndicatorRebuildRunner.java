@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sequentially works through the target stock list for an INDICATOR_REBUILD batch. Unlike
@@ -52,11 +53,20 @@ public class IndicatorRebuildRunner {
         this.properties = properties;
     }
 
+    /**
+     * @param computeModeByStockId compute mode ("FULL" or "INCREMENTAL") per stock id. The manual
+     *                             endpoint uses the same fixed mode for every id in the batch; the
+     *                             startup auto-rebuild decides it per stock instead (spec: 模式逐檔決定,
+     *                             stock-indicator-statistics.md) — a stock with no existing indicator
+     *                             rows must use FULL, since INCREMENTAL has no prior state to advance
+     *                             from and would fail with NEEDS_FULL_REBUILD.
+     */
     @Async("indicatorRebuildExecutor")
-    public void run(String jobType, List<String> processableStockIds, String computeMode,
+    public void run(String jobType, List<String> processableStockIds, Map<String, String> computeModeByStockId,
                      LocalDate requestStartDate, LocalDate requestEndDate, String paramKey) {
         try {
             for (String stockId : processableStockIds) {
+                String computeMode = computeModeByStockId.getOrDefault(stockId, "FULL");
                 try {
                     if ("INCREMENTAL".equals(computeMode)) {
                         processIncremental(jobType, stockId, requestEndDate, paramKey);

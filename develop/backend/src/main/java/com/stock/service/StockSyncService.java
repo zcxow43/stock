@@ -9,6 +9,7 @@ import com.stock.dto.DailySyncResponse;
 import com.stock.dto.FailedItemDto;
 import com.stock.dto.ProgressResponse;
 import com.stock.exception.InvalidDateRangeException;
+import com.stock.exception.InvalidSyncModeException;
 import com.stock.exception.JobAlreadyRunningException;
 import com.stock.exception.UnknownStockIdException;
 import com.stock.mapper.StockMapper;
@@ -23,6 +24,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class StockSyncService {
@@ -56,6 +58,23 @@ public class StockSyncService {
     }
 
     public BackfillResponse startBackfill(BackfillRequest request) {
+        return startBackfillInternal(request).getResponse();
+    }
+
+    /**
+     * Same behavior as {@link #startBackfill}, but also returns the batch's actual completion
+     * future. Used only by in-process callers (the startup catch-up runner) that need to chain
+     * work onto the point the whole batch actually finishes; the HTTP controller uses
+     * {@link #startBackfill} and never sees the future.
+     */
+    public BackfillOutcome startBackfillTrackingCompletion(BackfillRequest request) {
+        return startBackfillInternal(request);
+    }
+
+    private BackfillOutcome startBackfillInternal(BackfillRequest request) {
+        if (request.isResume() && request.isCatchUp()) {
+            throw new InvalidSyncModeException();
+        }
         if (request.getStartDate().isAfter(request.getEndDate())) {
             throw new InvalidDateRangeException("startDate must not be after endDate");
         }
@@ -86,23 +105,39 @@ public class StockSyncService {
             throw new JobAlreadyRunningException(jobType);
         }
 
+        CompletableFuture<Void> completion;
         try {
-            if (request.isResume()) {
+            List<String> processableIds;
+            if (request.isCatchUp()) {
+                // Per-stock decision by last_synced_date vs endDate (spec: catchUp 的語意):
+                // already-caught-up stocks are skipped entirely, left untouched, no request at all.
+                List<String> caughtUpIds = progressMapper.findCaughtUpStockIds(
+                        jobType, targetIds, request.getEndDate());
+                processableIds = new ArrayList<>(targetIds);
+                processableIds.removeAll(caughtUpIds);
+                if (!processableIds.isEmpty()) {
+                    progressMapper.upsertPendingForCatchUp(
+                            processableIds, jobType, request.getStartDate(), request.getEndDate());
+                }
+            } else if (request.isResume()) {
                 progressMapper.upsertPendingIfAbsent(targetIds, jobType, request.getStartDate(), request.getEndDate());
+                processableIds = progressMapper.findProcessableStockIds(
+                        jobType, targetIds, backfillProperties.getMaxAttemptCount());
             } else {
                 progressMapper.upsertPendingReset(targetIds, jobType, request.getStartDate(), request.getEndDate());
+                processableIds = progressMapper.findProcessableStockIds(
+                        jobType, targetIds, backfillProperties.getMaxAttemptCount());
             }
 
-            List<String> processableIds = progressMapper.findProcessableStockIds(
-                    jobType, targetIds, backfillProperties.getMaxAttemptCount());
-
-            backfillRunner.run(jobType, processableIds, request.isResume());
+            completion = backfillRunner.run(jobType, processableIds, request.isResume());
         } catch (RuntimeException e) {
             jobRunningRegistry.finish(jobType);
             throw e;
         }
 
-        return new BackfillResponse(jobType, targetIds.size(), request.getStartDate(), request.getEndDate(), mode);
+        BackfillResponse response = new BackfillResponse(
+                jobType, targetIds.size(), request.getStartDate(), request.getEndDate(), mode);
+        return new BackfillOutcome(response, completion);
     }
 
     public ProgressResponse getProgress(String jobType) {

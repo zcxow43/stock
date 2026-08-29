@@ -34,6 +34,25 @@ public interface StockSyncProgressMapper {
                                           @Param("stockIds") List<String> stockIds,
                                           @Param("maxAttempts") int maxAttempts);
 
+    /**
+     * Ids within stockIds already synced through (or past) endDate. Used by catchUp mode to
+     * decide which stocks to skip entirely (no external request at all).
+     */
+    List<String> findCaughtUpStockIds(@Param("jobType") String jobType,
+                                       @Param("stockIds") List<String> stockIds,
+                                       @Param("endDate") LocalDate endDate);
+
+    /**
+     * Re-opens each id (in stockIds, which must exclude already-caught-up ids) as PENDING for a
+     * catchUp run: continues from last_synced_date + 1 day when a prior progress row exists (or
+     * from startDate for a brand-new/never-synced row), and resets attempt_count to 0 since
+     * falling behind is due to time passing, not prior failures.
+     */
+    void upsertPendingForCatchUp(@Param("stockIds") List<String> stockIds,
+                                  @Param("jobType") String jobType,
+                                  @Param("startDate") LocalDate startDate,
+                                  @Param("endDate") LocalDate endDate);
+
     StockSyncProgress findOne(@Param("stockId") String stockId, @Param("jobType") String jobType);
 
     int markRunning(@Param("stockId") String stockId, @Param("jobType") String jobType);
@@ -45,6 +64,16 @@ public interface StockSyncProgressMapper {
                     @Param("lastError") String lastError);
 
     int markSkipped(@Param("stockId") String stockId, @Param("jobType") String jobType);
+
+    /**
+     * Marks a stock SKIPPED (no trading data in the queried range) while still recording
+     * last_synced_date as the range's endDate. Distinct from markSkipped (used by other job
+     * types that don't track catch-up continuation) so that a queried range landing entirely on
+     * a weekend/holiday is remembered as "already processed through endDate" and a subsequent
+     * catchUp call for the same endDate makes no external request at all.
+     */
+    int markSkippedThrough(@Param("stockId") String stockId, @Param("jobType") String jobType,
+                            @Param("lastSyncedDate") LocalDate lastSyncedDate);
 
     int countTotal(@Param("jobType") String jobType);
 

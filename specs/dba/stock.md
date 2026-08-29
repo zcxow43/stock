@@ -1,7 +1,7 @@
 ---
 status: done
 title: "股票主檔 stock"
-requirement: "統計兩個月股票資料含 MACD/KD 指標 — 全市場範圍需要一份股票universe，供回補排程列舉標的與統計結果顯示名稱"
+requirement: "統計兩個月股票資料含 MACD/KD 指標 — 全市場範圍需要一份股票universe，供回補排程列舉標的與統計結果顯示名稱；並內建一批上市股票種子資料，讓空白開發資料庫能立即在總覽頁選到標的"
 ---
 
 # 股票主檔 stock — DBA Spec
@@ -51,12 +51,73 @@ CREATE TABLE stock (
 ### 維護語意
 以 UPSERT 寫入。股票更名（台股實務上會發生）時，`stock_name` 直接覆蓋為最新值——本表存的是「現況」，不保留名稱異動歷史。
 
+### Migration SQL — V007__seed_listed_stocks.sql
+
+開發用種子資料：一批常見上市（`TSE`）股票，讓剛建好、還沒跑過任何行情抓取的資料庫也能在股票總覽頁搜尋並點選標的。接在 `V006`（`stock_minute_fetch_status`）之後，是本表繼 `V002` 之後擁有的第二個版本；它只寫資料、不改結構。
+
+以 `INSERT ... ON DUPLICATE KEY UPDATE` 寫入，因此可重複執行：既有列被更新為最新名稱，不會因主鍵重複而失敗，也不會產生重複股票。`SET NAMES utf8mb4` 是必要的——少了它，中文名稱會依連線端預設字元集寫成亂碼。
+
+```sql
+SET NAMES utf8mb4;
+
+INSERT INTO stock (stock_id, stock_name, market, is_active) VALUES
+    ('1101', '台泥',       'TSE', 1),
+    ('1102', '亞泥',       'TSE', 1),
+    ('1216', '統一',       'TSE', 1),
+    ('1301', '台塑',       'TSE', 1),
+    ('1303', '南亞',       'TSE', 1),
+    ('2002', '中鋼',       'TSE', 1),
+    ('2207', '和泰車',     'TSE', 1),
+    ('2303', '聯電',       'TSE', 1),
+    ('2308', '台達電',     'TSE', 1),
+    ('2317', '鴻海',       'TSE', 1),
+    ('2327', '國巨',       'TSE', 1),
+    ('2330', '台積電',     'TSE', 1),
+    ('2345', '智邦',       'TSE', 1),
+    ('2357', '華碩',       'TSE', 1),
+    ('2379', '瑞昱',       'TSE', 1),
+    ('2382', '廣達',       'TSE', 1),
+    ('2395', '研華',       'TSE', 1),
+    ('2412', '中華電',     'TSE', 1),
+    ('2454', '聯發科',     'TSE', 1),
+    ('2603', '長榮',       'TSE', 1),
+    ('2609', '陽明',       'TSE', 1),
+    ('2615', '萬海',       'TSE', 1),
+    ('2881', '富邦金',     'TSE', 1),
+    ('2882', '國泰金',     'TSE', 1),
+    ('2886', '兆豐金',     'TSE', 1),
+    ('2891', '中信金',     'TSE', 1),
+    ('3008', '大立光',     'TSE', 1),
+    ('3034', '聯詠',       'TSE', 1),
+    ('3231', '緯創',       'TSE', 1),
+    ('3661', '世芯-KY',    'TSE', 1),
+    ('3711', '日月光投控', 'TSE', 1),
+    ('4904', '遠傳',       'TSE', 1),
+    ('6505', '台塑化',     'TSE', 1),
+    ('6669', '緯穎',       'TSE', 1)
+ON DUPLICATE KEY UPDATE
+    stock_name = VALUES(stock_name),
+    market     = VALUES(market),
+    is_active  = VALUES(is_active);
+```
+
+共 34 檔，全部為 `TSE`、`is_active = 1`。
+
+**種子只建立股票主檔，不虛構任何成交價格。** 這是刻意的：捏造的 OHLC 會讓日 K 圖與 MACD／KD 顯示看似合理實則不存在的走勢，比空白更難察覺是假的。因此點進種子股票的日 K 頁時，在跑過行情抓取之前圖表是空的——真實行情由 `specs/backend/stock-price-ingestion.md` 的回補流程寫入 `stock_daily_price`，指標再由 `specs/backend/stock-indicator-statistics.md` 從那份 OHLC 推導。種子資料與行情抓取是互補的兩步，不是替代關係。
+
+種子清單是開發樣本，不是完整上市清單。全市場 universe 一律由行情抓取流程以 UPSERT 補齊——兩者寫入同一張表、同一種語意，所以先跑哪個都不會衝突。
+
 ## Acceptance Criteria
 - [x] `stock` 表建立成功，欄位、型別、註解與上述 DDL 一致
 - [x] `market` 欄位寫入 `'TSE'`/`'OTC'` 以外的值時被 CHECK 約束拒絕
 - [x] 對同一 `stock_id` 重複 UPSERT，表中僅一列且名稱被更新為最新值
 - [x] `stock` 與 `stock_daily_price` 之間**不存在**外鍵約束（`SHOW CREATE TABLE stock_daily_price` 無 FOREIGN KEY）
 - [x] 將某檔設為 `is_active = 0` 後，其在 `stock_daily_price` 的歷史資料仍完整存在
+- [x] V007 套用後，`SELECT COUNT(*) FROM stock` 為 34，且全部 `market = 'TSE'`、`is_active = 1`
+- [x] 搜尋 `2330` 與 `台積` 皆可找到台積電；`鴻海`、`聯發科`、`中華電` 亦各自可由名稱找到
+- [x] 中文名稱在資料庫中正確顯示為中文，非亂碼或問號（連線端字元集為 `utf8mb4`）
+- [x] V007 連續執行兩次後，`stock` 的列數不變，且名稱為最新值
+- [x] V007 的 SQL 完整存在於本 spec 內，專案中不存在對應的獨立 `.sql` 檔
 
 ---
 ## Execution Result
@@ -69,3 +130,13 @@ CREATE TABLE stock (
   - Verified no FK: `stock_daily_price` (created concurrently by the `stock_daily_price` DBA agent, confirmed present) has no `FOREIGN KEY` clause in its `SHOW CREATE TABLE` output — only its own `chk_sdp_high_low` CHECK and `idx_trade_date` index.
   - Verified `is_active=0` does not lose history: inserted a `stock_daily_price` row for `2330` (plus 3 pre-existing rows from the concurrent agent were visible at the time), set `stock.is_active=0` for `2330`, and confirmed all `stock_daily_price` rows for `2330` remained intact afterward.
   - Cleanup: deleted my own test rows (`stock.stock_id IN ('2330','9999')` — note `'9999'` was never actually inserted since the CHECK constraint rejected it; and the one `stock_daily_price` row I inserted for `2330`/`2026-08-01`/`source='TEST'`). Final state: `stock` table is empty (schema-only, 0 rows). `stock_daily_price` is also empty at time of writing — the concurrent agent appears to have cleaned up its own test rows independently during this verification.
+
+### Increment 2 — 2026-08-28（V007 種子資料）
+
+由 `/reset-env` 對空資料庫重建時套用，V002 建表後緊接 V007。
+
+- 套用方式：spec 的 `## Migration SQL` 區段直接以 `mysql` CLI 送進現行資料庫，未產生任何獨立 `.sql` 檔（`find . -name "*.sql"` 在 repo 中無結果）。
+- **執行環境問題（根因已記錄於 `.claude/agents/dba.md`）**：Windows 的 `mysql` client 若未加 `--default-character-set=utf8mb4`，會以 OS codepage 編碼送出，把中文欄位註解與中文股名靜默寫成 `?` 位元組——語句仍然成功，肉眼也看不出異常。V001 首次套用即踩到此問題（已 DROP 重做），其後所有 migration 一律帶上該參數。
+- 驗證（皆為實際查詢結果，非代理回報）：`COUNT(*) = 34`，34 檔全為 `market='TSE'`、`is_active=1`；`HEX(stock_name)` 對 `2330` 為 `E58FB0E7A98DE99BBB`，與 `台積電` 的 UTF-8 位元組完全相符，確認非亂碼；`台積`／`鴻海`／`聯發科`／`中華電` 皆可由名稱命中。
+- 冪等性：自 spec 抽出 V007 的 SQL 再套用一次，列數仍為 34、名稱不變——同時也證明 spec 內嵌的 SQL 可直接執行。
+- 本次未寫入任何行情：`stock_daily_price` 為 0 列。日 K 需先由 `specs/backend/stock-price-ingestion.md` 的回補流程取得真實 OHLC。

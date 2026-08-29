@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Sequentially works through the target stock list for a PRICE_BACKFILL batch, applying
@@ -41,8 +42,15 @@ public class BackfillRunner {
         this.properties = properties;
     }
 
+    /**
+     * Returns a future that completes once the whole batch (every stock in the list, success or
+     * failure) has actually finished — not merely once it has been scheduled. Callers that need
+     * to chain work onto the batch's real completion (e.g. StartupCatchUpRunner triggering the
+     * indicator rebuild only after price catch-up is done) must observe this future rather than
+     * treating the return of the method call itself as completion, since this method is async.
+     */
     @Async("backfillExecutor")
-    public void run(String jobType, List<String> processableStockIds, boolean resume) {
+    public CompletableFuture<Void> run(String jobType, List<String> processableStockIds, boolean resume) {
         try {
             for (int i = 0; i < processableStockIds.size(); i++) {
                 String stockId = processableStockIds.get(i);
@@ -61,6 +69,7 @@ public class BackfillRunner {
         } finally {
             jobRunningRegistry.finish(jobType);
         }
+        return CompletableFuture.completedFuture(null);
     }
 
     private void processOne(String jobType, String stockId, boolean resume) {
@@ -73,15 +82,18 @@ public class BackfillRunner {
         LocalDate fetchEnd = progress.getTargetEndDate();
 
         if (fetchStart.isAfter(fetchEnd)) {
-            progressMapper.markDone(stockId, jobType, progress.getLastSyncedDate());
+            progressMapper.markDone(stockId, jobType, fetchEnd);
             return;
         }
 
         List<NormalizedPriceRow> rows = fetchWithRetry(stockId, fetchStart, fetchEnd);
         if (rows.isEmpty()) {
-            progressMapper.markSkipped(stockId, jobType);
+            // No trading data in the queried range (e.g. it lands entirely on a weekend/holiday).
+            // Still record last_synced_date = fetchEnd so a later catchUp for the same endDate
+            // recognizes this range as already processed and skips it without a request.
+            progressMapper.markSkippedThrough(stockId, jobType, fetchEnd);
         } else {
-            priceIngestionService.applyBackfillResult(stockId, jobType, rows);
+            priceIngestionService.applyBackfillResult(stockId, jobType, rows, fetchEnd);
         }
     }
 

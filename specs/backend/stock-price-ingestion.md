@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "股票行情抓取與回補"
-requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳"
+requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日"
 depends_on: []
 ---
 
@@ -11,7 +11,7 @@ depends_on: []
 
 負責把外部日線行情寫入 `stock_daily_price`，並維護 `stock` 主檔。這是整個系統唯一的資料入口；指標運算（見 `specs/backend/stock-indicator-statistics.md`）一律以本模組寫入的資料為輸入，不另行對外抓取。
 
-提供三種抓取路徑：
+提供三種抓取路徑，以及一個在系統啟動時自動觸發其中一條路徑的機制：
 
 | 路徑 | 來源 | 請求數 | 用途 |
 |---|---|---|---|
@@ -20,6 +20,8 @@ depends_on: []
 | 全市場回補 | 逐檔歷史查詢 | 約 2200 次 | 系統初次建置 |
 
 「指定多檔」與「全市場」是**同一條程式路徑的不同參數**，不是兩套實作——差別僅在標的清單的來源。
+
+**啟動補齊（startup catch-up）不是第四條路徑**，而是在應用程式啟動完成時自動以 `catchUp` 參數呼叫上表的回補路徑，把每一檔在市股票從它自己的進度接續補到今日。它沒有自己的抓取邏輯、自己的速率控制或自己的進度表——完整規範見下方「啟動時自動補齊」。
 
 ## Requirements
 
@@ -62,6 +64,27 @@ depends_on: []
 - 續傳：重新呼叫回補端點並帶 `resume = true` 時，只取 `status IN ('PENDING','FAILED')` 且 `attempt_count` 未達上限的標的，並從各檔的 `last_synced_date` 之後接續。
 - 目標區間內查無任何交易資料的標的標記為 `SKIPPED`，不再重試。
 
+### 啟動時自動補齊
+
+系統啟動完成後，後端自動把 `stock` 表中 `is_active = 1` 的全部股票的日線補齊至**今日**，不需要任何人手動打端點。這讓一個剛 `/reset-env` 過、只有股票主檔而沒有任何行情的資料庫，在開機後自行變成可用狀態。
+
+行為規範：
+
+- **重用既有回補路徑，不另寫一套。** 啟動補齊等同於以 `stockIds` 省略（全市場）、`startDate` 取設定值、`endDate` 取今日、`catchUp: true` 呼叫回補服務。速率控制、重試退避、進度追蹤、UPSERT 冪等性全部沿用，不得複製一份平行實作。
+- **絕不阻塞啟動。** 補齊在背景非同步執行，應用程式必須在補齊開始後立刻進入可服務狀態。全市場約 2200 檔在預設每檔間隔 1 秒下需時超過半小時；若同步等待，服務等同於半小時不可用。
+- **絕不因抓取失敗而讓啟動失敗。** 外部資料源逾時、429、DNS 失敗、回傳格式改變，一律記錄錯誤並讓該檔進入既有的 `FAILED` 重試流程；應用程式本身必須正常啟動。開發機在離線狀態下仍須能開起來。
+- **可停用。** 由設定開關控制，預設啟用。測試與 CI 必須能關掉它——測試啟動時打真實外部 API 會使測試結果取決於外部服務的可用性，且在數十次請求內被來源封鎖。
+- **重啟安全。** 開發過程中重啟極為頻繁，因此重啟不得重抓已有的資料。`catchUp` 的跳過條件即是這件事的保證：已補到今日的檔在下次啟動時完全不發出外部請求。
+
+設定項（實際鍵名與檔案格式由 `env.md` 的技術棧決定，此處只規範語意與預設值）：
+
+| 設定 | 預設 | 說明 |
+|---|---|---|
+| 啟動補齊開關 | 啟用 | 關閉時完全不觸發，啟動流程不受影響 |
+| 補齊起日 | `2026-01-01` | 首次補齊的最早日期；已有進度的檔以其 `last_synced_date` 之後接續，不受此值影響 |
+
+**關於預設起日 `2026-01-01` 的一個已知取捨**：MACD 與 KD 需要約 250 個交易日暖身（見「回補」的 `startDate` 說明與指標 spec），而 `2026-01-01` 至今日不足該長度。因此在只補這段區間的情況下，指標序列開頭會有相當比例的列被標記 `is_warmup = 1` 而不對外呈現，日 K 圖上的指標可用區間會晚於行情可用區間。這是刻意接受的：先讓系統有真實行情可看，需要完整指標時把補齊起日往前調即可，不需要改任何程式。
+
 ## Implementation Details
 
 ### API 契約
@@ -101,7 +124,8 @@ Request：
   "stockIds": ["2330", "2317"],
   "startDate": "2025-09-01",
   "endDate": "2026-08-27",
-  "resume": false
+  "resume": false,
+  "catchUp": false
 }
 ```
 
@@ -111,6 +135,9 @@ Request：
 | `startDate` | date | 是 | 回補起日。須早於實際需要的統計起日至少 250 個交易日（暖身需求，見指標 spec） |
 | `endDate` | date | 是 | 回補迄日 |
 | `resume` | boolean | 否 | 預設 `false`（重置進度重跑）；`true` 表示只處理未完成與失敗的標的 |
+| `catchUp` | boolean | 否 | 預設 `false`。`true` 表示「補到 `endDate` 為止」語意：逐檔以 `last_synced_date` 之後接續，已補到 `endDate` 的檔完全跳過、不發外部請求。詳見下方「`catchUp` 的語意」 |
+
+`resume` 與 `catchUp` 不可同時為 `true` → `400`，`{"code":"INVALID_SYNC_MODE"}`。兩者都在描述「不要重跑已完成的部分」，但判斷依據不同（`resume` 看 `status`，`catchUp` 看 `last_synced_date`），同時給定會產生無法一眼判讀的組合語意。
 
 Response `202`（非同步作業，立即回應）：
 ```json
@@ -158,6 +185,26 @@ Response `200`：
 
 **回補**：解析標的清單（多選或全市場）→ 初始化 `stock_sync_progress` → 逐檔依速率限制請求歷史 → 正規化並 UPSERT → 更新該檔進度 → 全部完成後結束。任一檔失敗只影響該檔進度，不中止整批。
 
+#### `catchUp` 的語意
+
+`catchUp: true` 時，每一檔目標股票依其 `stock_sync_progress` 中 `job_type = 'PRICE_BACKFILL'` 的列，各自決定要不要抓、從哪天抓：
+
+| 該檔的 `last_synced_date` | 行為 |
+|---|---|
+| 無進度列，或為 `NULL` | 建立／重設為 `PENDING`，自請求的 `startDate` 抓到 `endDate` |
+| 早於 `endDate` | 重設為 `PENDING`，自 `last_synced_date` 的**次日**抓到 `endDate`（不重抓已有區間） |
+| 等於或晚於 `endDate` | **完全跳過，不發出任何外部請求**，進度列維持原狀 |
+
+與 `resume` 的差別在判斷依據：`resume` 只挑 `status` 為 `PENDING`／`FAILED` 的檔，因此一檔已經 `DONE` 但只補到上週的股票會被它略過，永遠追不上今日；`catchUp` 看的是 `last_synced_date` 與 `endDate` 的差距，所以 `DONE` 但落後的檔會被重新開啟並只補上落後的那一段。啟動補齊要的正是後者。
+
+`attempt_count` 在 `catchUp` 重新開啟一檔時歸零——落後是因為時間前進，不是因為先前失敗，不應沿用舊的重試次數而提早撞上重試上限。
+
+#### `last_synced_date` 的認定
+
+一檔成功處理完一個區間後，`last_synced_date` 記為該次請求的 **`endDate`**，而不是實際寫入的最後一列的日期。兩者在 `endDate` 為交易日時相同，但在 `endDate` 落在週末、假日或收盤前時不同：此時資料源不回傳該日（依「不得補零」規定也不寫入任何列），若把 `last_synced_date` 記為最後一筆實際資料的日期，則每次啟動都會把「最後一個交易日的次日 ~ 今日」這段空區間重抓一次，週末重啟等於固定重複請求外部 API。記為 `endDate` 表示「這個區間已經處理過了」，才能讓 `catchUp` 的跳過條件真正生效。
+
+**啟動補齊**：應用程式啟動完成 → 讀取設定，未啟用則結束 → 以全市場、設定起日、今日、`catchUp: true` 呼叫回補服務 → 立即返回，其餘在背景依既有回補流程進行。啟動補齊不經過 HTTP 端點，直接呼叫回補服務，因此不產生 `202` 回應；但它與手動回補共用同一個 `jobType` 併發鎖，啟動補齊執行期間手動觸發回補會得到 `409 JOB_ALREADY_RUNNING`。
+
 ## Acceptance Criteria
 - [x] `POST /api/stocks/sync/daily` 以單一外部請求取得全市場當日行情，並同時寫入 `stock` 與 `stock_daily_price`
 - [x] `POST /api/stocks/sync/backfill` 帶 `stockIds: ["2330","2317"]` 時只處理該 2 檔，回應 `mode` 為 `SELECTED`
@@ -168,6 +215,18 @@ Response `200`：
 - [x] 資料源未回傳的日期（停牌日）在 `stock_daily_price` 中不存在對應列，且**不存在任何價格為 0 的列**
 - [x] 資料源回傳的民國日期與含千分位的價格字串被正確正規化（以 2330 某月資料驗證）
 - [x] `GET /api/stocks/sync/progress` 回傳的各狀態計數總和等於 `total`
+- [x] 系統啟動完成後，未經任何手動呼叫，`stock` 中 `is_active = 1` 的股票在 `stock_daily_price` 出現自設定起日（預設 `2026-01-01`）至今日的真實日線資料
+- [x] 啟動補齊在背景執行：應用程式在補齊尚未跑完時即可正常回應 `GET /api/stocks`，不因補齊而延後可服務時間
+- [x] 外部資料源不可用（離線或逾時）時應用程式仍正常啟動，失敗的標的落在 `FAILED` 而非讓啟動流程中斷
+- [x] 關閉啟動補齊設定後重啟，完全不發出任何外部請求，`stock_daily_price` 列數不變
+- [x] 補齊完成後重啟一次，已補到今日的標的不再發出外部請求，且 `stock_daily_price` 列數不變（重啟冪等）
+- [x] `catchUp: true` 對一檔 `status = 'DONE'` 但 `last_synced_date` 早於 `endDate` 的股票，會重新開啟該檔並只請求 `last_synced_date` 次日之後的區間，不重抓既有區間
+- [x] `catchUp: true` 對一檔 `last_synced_date` 已等於 `endDate` 的股票完全不發出外部請求
+- [x] `endDate` 為週末或假日時，該次處理後 `last_synced_date` 記為該 `endDate` 本身；緊接著再以相同 `endDate` 執行一次 `catchUp`，不發出任何外部請求
+- [x] `resume` 與 `catchUp` 同時為 `true` 時回應 `400`，`{"code":"INVALID_SYNC_MODE"}`
+- [ ] 啟動補齊執行期間呼叫 `POST /api/stocks/sync/backfill` 回應 `409`，`{"code":"JOB_ALREADY_RUNNING"}`
+      （未驗證：併發鎖本身已由既有的 `JobRunningRegistry` 與其既有測試涵蓋，但「啟動補齊執行中」這個特定時間窗未實測——補齊完成後的重啟會在數秒內跳過全部標的，沒有足以發出第二個請求的窗口。待下次從空資料庫啟動時補驗。）
+- [x] 啟動補齊寫入的資料中不存在任何價格為 0 的列，停牌／非交易日不產生列
 
 ---
 ## Execution Result
@@ -203,3 +262,35 @@ Response `200`：
       - `stockIds:["9999NOPE"]` → `400 {"code":"UNKNOWN_STOCK_ID","unknownIds":["9999NOPE"]}`; `startDate` after `endDate` → `400 {"code":"INVALID_DATE_RANGE"}`; firing the same backfill request twice back-to-back → second call `409 {"code":"JOB_ALREADY_RUNNING"}`.
       - `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` → `{"total":1,"pending":0,"running":0,"done":1,"failed":0,"skipped":0,"failedItems":[]}`, counts sum to total.
   - No blockers. Every acceptance criterion above was verified both by an isolated integration test and, where practical, by a live run against the real external APIs and the real database.
+
+### Increment 2 — 2026-08-29
+- Status: DONE (pending checkbox sign-off by the requester)
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/dto/BackfillRequest.java` — added `catchUp` (default `false`) with getter/setter
+  - `develop/backend/src/main/java/com/stock/exception/InvalidSyncModeException.java` — new; `resume && catchUp` both true
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` — maps it to `400 {"code":"INVALID_SYNC_MODE"}`
+  - `develop/backend/src/main/java/com/stock/mapper/StockSyncProgressMapper.java` + `develop/backend/src/main/resources/mapper/StockSyncProgressMapper.xml` — added `findCaughtUpStockIds` (ids already synced through/past a given `endDate`), `upsertPendingForCatchUp` (reopens PENDING with `target_start_date = last_synced_date + 1 day`, or the requested `startDate` for a brand-new/never-synced row, via `COALESCE(DATE_ADD(last_synced_date, INTERVAL 1 DAY), VALUES(target_start_date))`; resets `attempt_count = 0`), and `markSkippedThrough` (marks SKIPPED while also recording `last_synced_date`, kept as a separate statement from the pre-existing `markSkipped` — which `IndicatorRebuildRunner` still uses unchanged — since MyBatis mapper interfaces don't support overloaded method names)
+  - `develop/backend/src/main/java/com/stock/service/StockSyncService.java` — `startBackfill` now validates `resume && catchUp` first; when `catchUp` is true it resolves the per-stock caught-up/lagging/new split via `findCaughtUpStockIds` and calls `upsertPendingForCatchUp` only for the non-caught-up remainder (skipped stocks' progress rows are never touched and no request is issued for them)
+  - `develop/backend/src/main/java/com/stock/service/BackfillRunner.java` and `develop/backend/src/main/java/com/stock/service/PriceIngestionService.java` — **`last_synced_date` semantics fix (applies to all backfill modes, not just catchUp)**: `applyBackfillResult` and the empty-rows branch now record `last_synced_date` as the requested range's `endDate` (`fetchEnd`, i.e. `progress.getTargetEndDate()`), never the trade date of the last row actually written or left as unset — this is what makes a range landing entirely on a weekend/holiday register as "already processed through `endDate`" instead of being re-requested by every subsequent catch-up
+  - `develop/backend/src/main/java/com/stock/config/BackfillProperties.java` — new nested `StartupCatchUp` (`enabled`, default `true`; `startDate`, default `2026-01-01`) under `app.backfill.startup-catch-up.*`
+  - `develop/backend/src/main/java/com/stock/service/StartupCatchUpRunner.java` — new; `@EventListener(ApplicationReadyEvent.class)` + `@Async("backfillExecutor")` (the same executor bean `BackfillRunner` already uses — no parallel executor/rate-limit/progress implementation), builds a `BackfillRequest` (`stockIds` omitted, `startDate` = configured, `endDate` = today, `catchUp = true`) and calls `StockSyncService.startBackfill` directly (no HTTP hop); wraps the call in try/catch so any failure (offline source, `JOB_ALREADY_RUNNING`, DB issue, etc.) is only logged, never propagated — application startup itself never fails or blocks on this
+  - `develop/backend/src/main/resources/application.yml` — added `app.backfill.startup-catch-up.enabled: true` / `start-date: 2026-01-01`
+  - `develop/backend/src/test/resources/application.yml` — added `app.backfill.startup-catch-up.enabled: false` (test profile must never call the real external APIs on boot)
+  - `develop/backend/src/test/java/com/stock/StockPriceIngestionIntegrationTest.java` — added `seedProgress` helper and four new tests (see Notes); also fixed a pre-existing, unrelated failure in `backfill_allMode_targetsActiveStocksOnly` (see Notes)
+- Notes:
+  - **catchUp per-stock decision**: implemented exactly per the spec's table — no progress row/NULL `last_synced_date` → PENDING from `startDate`; `last_synced_date < endDate` → PENDING from `last_synced_date + 1 day`, `attempt_count` reset to 0; `last_synced_date >= endDate` → left completely untouched, no row read/write beyond the initial `findCaughtUpStockIds` SELECT, and `backfillRunner.run` is invoked with that stock excluded from the list, so `BackfillRunner`'s loop never reaches it and issues zero HTTP calls.
+  - **`resume` vs `catchUp` are otherwise unchanged**: `resume`'s existing `upsertPendingIfAbsent` / `findProcessableStockIds` (status-based) path was not touched; `catchUp` is a fully separate branch in `StockSyncService.startBackfill` sharing only `backfillRunner.run` and the mutual-exclusion validation.
+  - **Startup catch-up design choice**: used `@Async` directly on the `@EventListener(ApplicationReadyEvent.class)` method (rather than relying on `ApplicationReadyEvent` firing after Tomcat is already listening) so that literally zero work — not even the "resolve active stock ids" query — runs on the thread that completes application startup; this was judged simpler and more bulletproof than adding a second hand-off layer.
+  - **Pre-existing test fixed as a prerequisite**: `backfill_allMode_targetsActiveStocksOnly` (from Increment 1) started failing before any of this increment's code changed, once `specs/dba/stock-seed-data.md`'s 34 real seed stocks landed in the live DB — "ALL mode" now also targets those real, unmocked stocks, and the test's `mockServer` only ever expected the one `T221` fixture. Root-caused and fixed by having the test deactivate every non-`T%` stock for its duration (restored in a `finally` block) rather than pinning it to today's specific 34 ids, so it stays correct regardless of future seed-data growth. This was a pre-existing breakage unrelated to the catchUp/startup-catch-up work, not something this increment introduced.
+  - **New tests** (all in `StockPriceIngestionIntegrationTest`, live MySQL DB + `MockRestServiceServer`-mocked FinMind, cleaned up via the existing `T2%` teardown pattern):
+    - `catchUp_reopensLaggingDoneStock_fetchesOnlyGapAfterLastSyncedDate_andRecordsEndDateAsLastSynced` — seeds a `DONE` progress row with `last_synced_date=2025-09-05`, `attempt_count=2`, a stale `last_error`; fires `catchUp=true` with `endDate=2025-09-10`; asserts the *only* registered mock expectation is for `start_date=2025-09-06` (not the full requested `2025-09-01`), and that afterwards `last_synced_date=2025-09-10` (the requested `endDate`, not `2025-09-08` — the one row actually returned), `attempt_count=0`, `last_error=null`.
+    - `catchUp_stockAlreadySyncedThroughEndDate_makesNoExternalRequest_andLeavesProgressUntouched` — seeds `last_synced_date == endDate`; registers **zero** `mockServer.expect(...)` calls at all, so any external request would fail the test outright; asserts the progress row (`status`, `last_synced_date`, `attempt_count`) is byte-for-byte unchanged afterward.
+    - `catchUp_endDateOnWeekend_recordsLastSyncedDateAsEndDate_andRepeatCatchUpMakesNoRequest` — first catchUp call's range returns an empty FinMind `data` array (weekend); asserts status becomes `SKIPPED` with `last_synced_date` set to the weekend `endDate` itself (not left `NULL`); a second, identical catchUp call registers no mock expectations and is asserted to make zero requests while the row stays exactly as it was.
+    - `backfill_resumeAndCatchUpBothTrue_returns400InvalidSyncMode` — asserts `400 {"code":"INVALID_SYNC_MODE"}`.
+  - Verification performed:
+    - `mvn -f develop/backend/pom.xml compile` — clean.
+    - `mvn -f develop/backend/pom.xml test` — **74/74 passing** (70 pre-existing + 4 new), run 3× consecutively with no flakiness.
+    - Confirmed via direct `mysql` CLI query after the suite: `stock`/`stock_sync_progress`/`stock_daily_price` all have 0 rows matching `T1%`/`T2%` (full test-data cleanup), 0 rows anywhere in `stock_daily_price` with a zero-valued price column, and `stock` is back to `34 total / 34 active` (the `backfill_allMode` fix's activate/deactivate dance left no residue).
+    - Confirmed via test log output that `StartupCatchUpRunner` fires on every test-suite boot but immediately no-ops: `Startup price catch-up disabled (app.backfill.startup-catch-up.enabled=false); skipping.` — proving the test profile's kill switch actually reaches the bean and that no real TWSE/FinMind call is attempted during tests.
+    - Did **not** perform a live run against the real external APIs (explicitly out of scope per instructions); all new behavior is covered by `MockRestServiceServer`-backed integration tests against the live MySQL DB.
+  - Not implemented (explicitly out of scope for this increment, belongs to `specs/backend/stock-indicator-statistics.md`): any chaining from price catch-up completion into an indicator rebuild.

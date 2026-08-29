@@ -16,6 +16,8 @@ public class BackfillRequest {
 
     private boolean resume = false;
 
+    private boolean catchUp = false;
+
     public List<String> getStockIds() {
         return stockIds;
     }
@@ -46,5 +48,13 @@ public class BackfillRequest {
 
     public void setResume(boolean resume) {
         this.resume = resume;
+    }
+
+    public boolean isCatchUp() {
+        return catchUp;
+    }
+
+    public void setCatchUp(boolean catchUp) {
+        this.catchUp = catchUp;
     }
 }

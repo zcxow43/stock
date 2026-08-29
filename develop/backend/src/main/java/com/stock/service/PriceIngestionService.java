@@ -71,17 +71,19 @@ public class PriceIngestionService {
      * Writes one stock's backfilled rows and advances its progress to DONE in a single
      * transaction, so a crash never leaves "prices written but progress not updated"
      * (which would cause a resumed run to re-fetch data it already has).
+     *
+     * last_synced_date is recorded as the requested range's endDate, not the trade date of the
+     * last row actually written: the source omits weekends/holidays entirely, so recording the
+     * last real trading day would make every later catch-up re-request that already-processed
+     * empty tail forever (spec: `last_synced_date` 的認定).
      */
     @Transactional
-    public void applyBackfillResult(String stockId, String jobType, List<NormalizedPriceRow> rows) {
-        LocalDate lastSyncedDate = null;
+    public void applyBackfillResult(String stockId, String jobType, List<NormalizedPriceRow> rows,
+                                     LocalDate requestedEndDate) {
         for (NormalizedPriceRow row : rows) {
             priceMapper.upsert(toDomain(row, SOURCE_FINMIND));
-            if (lastSyncedDate == null || row.getTradeDate().isAfter(lastSyncedDate)) {
-                lastSyncedDate = row.getTradeDate();
-            }
         }
-        progressMapper.markDone(stockId, jobType, lastSyncedDate);
+        progressMapper.markDone(stockId, jobType, requestedEndDate);
     }
 
     private StockDailyPrice toDomain(NormalizedPriceRow row, String source) {

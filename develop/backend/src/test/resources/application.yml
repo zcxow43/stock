@@ -31,5 +31,13 @@ app:
       initial-backoff-ms: 30
       backoff-multiplier: 2
     max-attempt-count: 5
+    # Must stay disabled in tests: startup catch-up would otherwise fire real requests against
+    # the live TWSE/FinMind APIs on every test-suite boot, making results depend on external
+    # availability and risking the source rate-limiting/blocking us within a few dozen requests.
+    startup-catch-up:
+      enabled: false
+      # Set here too so the LocalDate binding is exercised by the context-load test;
+      # without it the test config shadows main and a bad value ships undetected.
+      start-date: "2026-01-01"
   minute-price:
     max-attempt-count: 3

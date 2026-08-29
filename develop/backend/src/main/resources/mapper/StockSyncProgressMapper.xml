@@ -58,6 +58,35 @@
         ORDER BY stock_id
     </select>
 
+    <select id="findCaughtUpStockIds" resultType="string">
+        SELECT stock_id FROM stock_sync_progress
+        WHERE job_type = #{jobType}
+          AND last_synced_date IS NOT NULL
+          AND last_synced_date &gt;= #{endDate}
+          AND stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <insert id="upsertPendingForCatchUp">
+        INSERT INTO stock_sync_progress
+            (stock_id, job_type, status, target_start_date, target_end_date,
+             last_synced_date, attempt_count, last_error, started_at, finished_at)
+        VALUES
+        <foreach collection="stockIds" item="id" separator=",">
+            (#{id}, #{jobType}, 'PENDING', #{startDate}, #{endDate}, NULL, 0, NULL, NULL, NULL)
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            status = 'PENDING',
+            target_start_date = COALESCE(DATE_ADD(last_synced_date, INTERVAL 1 DAY), VALUES(target_start_date)),
+            target_end_date = VALUES(target_end_date),
+            attempt_count = 0,
+            last_error = NULL,
+            started_at = NULL,
+            finished_at = NULL
+    </insert>
+
     <select id="findOne" resultMap="progressResultMap">
         SELECT * FROM stock_sync_progress WHERE stock_id = #{stockId} AND job_type = #{jobType}
     </select>
@@ -83,6 +112,12 @@
     <update id="markSkipped">
         UPDATE stock_sync_progress
         SET status = 'SKIPPED', finished_at = NOW()
+        WHERE stock_id = #{stockId} AND job_type = #{jobType}
+    </update>
+
+    <update id="markSkippedThrough">
+        UPDATE stock_sync_progress
+        SET status = 'SKIPPED', last_synced_date = #{lastSyncedDate}, finished_at = NOW()
         WHERE stock_id = #{stockId} AND job_type = #{jobType}
     </update>
 

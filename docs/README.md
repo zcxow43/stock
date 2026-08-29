@@ -1,7 +1,7 @@
 # 文件索引
 
 ## Blueprints (integrated architecture specs)
-- [backend](blueprint/backend.md) — 整合 `stock-price-ingestion`、`stock-indicator-statistics`、`stock-catalog` 與 `stock-minute-price`：從行情入庫、指標推導，到前端清單／日 K／分 K 讀取的完整系統圖景。大方向／圖表導向——欄位、限制條件與 API 契約細節見下方 `docs/backend/` 各文件。
+- [backend](blueprint/backend.md) — 整合 `stock-price-ingestion`、`stock-indicator-statistics`、`stock-catalog` 與 `stock-minute-price`：從應用程式啟動時的自動補齊與指標重算，經行情入庫、指標推導，到前端清單／日 K／分 K 讀取的完整系統圖景。大方向／圖表導向——欄位、限制條件與 API 契約細節見下方 `docs/backend/` 各文件。
 
 ## Backend API 詳細定義
 - [stock-price-ingestion](backend/stock-price-ingestion.md) — 股票行情抓取與回補：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出

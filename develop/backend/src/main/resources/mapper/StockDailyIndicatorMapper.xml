@@ -54,4 +54,12 @@
         ) recent
     </select>
 
+    <select id="findStockIdsWithAnyIndicator" resultType="string">
+        SELECT DISTINCT stock_id FROM stock_daily_indicator
+        WHERE param_key = #{paramKey} AND stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
 </mapper>

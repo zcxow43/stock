@@ -8,15 +8,19 @@ import com.stock.dto.IndicatorRebuildResponse;
 import com.stock.exception.InvalidDateRangeException;
 import com.stock.exception.JobAlreadyRunningException;
 import com.stock.exception.UnknownStockIdException;
+import com.stock.mapper.StockDailyIndicatorMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -37,15 +41,17 @@ public class IndicatorRebuildService {
 
     private final StockMapper stockMapper;
     private final StockSyncProgressMapper progressMapper;
+    private final StockDailyIndicatorMapper indicatorMapper;
     private final IndicatorRebuildRunner runner;
     private final JobRunningRegistry jobRunningRegistry;
     private final IndicatorProperties properties;
 
     public IndicatorRebuildService(StockMapper stockMapper, StockSyncProgressMapper progressMapper,
-                                    IndicatorRebuildRunner runner, JobRunningRegistry jobRunningRegistry,
-                                    IndicatorProperties properties) {
+                                    StockDailyIndicatorMapper indicatorMapper, IndicatorRebuildRunner runner,
+                                    JobRunningRegistry jobRunningRegistry, IndicatorProperties properties) {
         this.stockMapper = stockMapper;
         this.progressMapper = progressMapper;
+        this.indicatorMapper = indicatorMapper;
         this.runner = runner;
         this.jobRunningRegistry = jobRunningRegistry;
         this.properties = properties;
@@ -98,7 +104,11 @@ public class IndicatorRebuildService {
             List<String> processableIds = progressMapper.findProcessableStockIds(
                     jobType, targetIds, properties.getMaxAttemptCount());
 
-            runner.run(jobType, processableIds, computeMode, request.getStartDate(), request.getEndDate(),
+            Map<String, String> computeModeByStockId = new HashMap<>();
+            for (String stockId : processableIds) {
+                computeModeByStockId.put(stockId, computeMode);
+            }
+            runner.run(jobType, processableIds, computeModeByStockId, request.getStartDate(), request.getEndDate(),
                     StockDailyIndicator.PARAM_KEY);
         } catch (RuntimeException e) {
             jobRunningRegistry.finish(jobType);
@@ -106,6 +116,58 @@ public class IndicatorRebuildService {
         }
 
         return new IndicatorRebuildResponse(jobType, targetIds.size(), mode, computeMode,
+                properties.getWarmupTradingDays(), StockDailyIndicator.PARAM_KEY);
+    }
+
+    /**
+     * Startup-only variant used by {@link StartupCatchUpRunner} once the price catch-up batch has
+     * actually finished. Unlike the manual endpoint above — which always applies one fixed mode to
+     * every id in the batch — this decides FULL vs INCREMENTAL independently per stock (spec:
+     * stock-indicator-statistics.md "模式逐檔決定"):
+     * <ul>
+     *   <li>a stock with no rows at all in stock_daily_indicator is rebuilt with FULL;</li>
+     *   <li>a stock that already has indicator rows is advanced with INCREMENTAL.</li>
+     * </ul>
+     * A single fixed mode cannot satisfy both a freshly reset database (every stock has zero
+     * indicator rows, so INCREMENTAL would fail every stock with NEEDS_FULL_REBUILD) and a normal
+     * restart (recomputing every stock's whole history with FULL on every restart would violate the
+     * "restart must not redo work" constraint) — hence the per-stock decision.
+     * <p>
+     * Whole market, no explicit date window (mirrors the manual endpoint's all-stocks/open-ended
+     * call), and reuses the exact same runner, progress table and INDICATOR_REBUILD job-type lock as
+     * {@link #rebuild}; no parallel implementation.
+     */
+    public IndicatorRebuildResponse rebuildForStartup() {
+        List<String> targetIds = stockMapper.findActiveStockIds();
+
+        String jobType = StockSyncProgress.JOB_INDICATOR_REBUILD;
+        if (!jobRunningRegistry.tryStart(jobType)) {
+            throw new JobAlreadyRunningException(jobType);
+        }
+
+        try {
+            progressMapper.upsertPendingReset(targetIds, jobType, OPEN_START_SENTINEL, OPEN_END_SENTINEL);
+
+            List<String> processableIds = progressMapper.findProcessableStockIds(
+                    jobType, targetIds, properties.getMaxAttemptCount());
+
+            Set<String> hasExistingIndicators = processableIds.isEmpty()
+                    ? Collections.emptySet()
+                    : new HashSet<>(indicatorMapper.findStockIdsWithAnyIndicator(
+                            processableIds, StockDailyIndicator.PARAM_KEY));
+
+            Map<String, String> computeModeByStockId = new HashMap<>();
+            for (String stockId : processableIds) {
+                computeModeByStockId.put(stockId, hasExistingIndicators.contains(stockId) ? "INCREMENTAL" : "FULL");
+            }
+
+            runner.run(jobType, processableIds, computeModeByStockId, null, null, StockDailyIndicator.PARAM_KEY);
+        } catch (RuntimeException e) {
+            jobRunningRegistry.finish(jobType);
+            throw e;
+        }
+
+        return new IndicatorRebuildResponse(jobType, targetIds.size(), "ALL", "AUTO",
                 properties.getWarmupTradingDays(), StockDailyIndicator.PARAM_KEY);
     }
 }

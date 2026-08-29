@@ -3,6 +3,7 @@ package com.stock.mapper;
 import com.stock.domain.HighLow;
 import com.stock.domain.PriceStats;
 import com.stock.domain.StockDailyPrice;
+import com.stock.domain.StockLatestTradeDate;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -63,9 +64,17 @@ public interface StockDailyPriceMapper {
     /** The trading day immediately after afterDate, or null if none exists. */
     LocalDate findNextTradeDateAfter(@Param("stockId") String stockId, @Param("afterDate") LocalDate afterDate);
 
-    /** MAX(trade_date) across the whole table; used as the default statistics endDate when omitted. */
-    LocalDate findGlobalLatestTradeDate();
+    /**
+     * MAX(trade_date) per stock, scoped to the given stock ids — one grouped query, not one query
+     * per id. Used to resolve each requested stock's own default statistics endDate; a stock absent
+     * from the result has no price rows at all.
+     */
+    List<StockLatestTradeDate> findLatestTradeDatesByStockIds(@Param("stockIds") List<String> stockIds);
 
-    /** MIN(trade_date) across the whole table that is on/after candidateStart; used as the default statistics startDate. */
-    LocalDate findGlobalFirstTradeDateOnOrAfter(@Param("candidateStart") LocalDate candidateStart);
+    /**
+     * MIN(trade_date) that is on/after candidateStart, scoped to the given stock ids; used as the
+     * default statistics startDate, derived from the already-resolved (per-stock-scoped) endDate.
+     */
+    LocalDate findFirstTradeDateOnOrAfterByStockIds(@Param("stockIds") List<String> stockIds,
+                                                     @Param("candidateStart") LocalDate candidateStart);
 }

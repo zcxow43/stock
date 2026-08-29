@@ -29,4 +29,13 @@ public interface StockDailyIndicatorMapper {
      */
     int countNonWarmupBefore(@Param("stockId") String stockId, @Param("paramKey") String paramKey,
                               @Param("beforeDate") LocalDate beforeDate, @Param("cap") int cap);
+
+    /**
+     * Subset of the given ids that already have at least one indicator row (any is_warmup value) for
+     * this param_key. Used only by the startup auto-rebuild to decide FULL vs INCREMENTAL per stock
+     * (spec: stock-indicator-statistics.md "模式逐檔決定") in a single batch query rather than one
+     * existence check per stock.
+     */
+    List<String> findStockIdsWithAnyIndicator(@Param("stockIds") List<String> stockIds,
+                                               @Param("paramKey") String paramKey);
 }

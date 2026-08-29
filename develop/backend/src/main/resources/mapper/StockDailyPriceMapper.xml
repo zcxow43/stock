@@ -107,12 +107,23 @@
         LIMIT 1
     </select>
 
-    <select id="findGlobalLatestTradeDate" resultType="java.time.LocalDate">
-        SELECT MAX(trade_date) FROM stock_daily_price
+    <select id="findLatestTradeDatesByStockIds" resultType="com.stock.domain.StockLatestTradeDate">
+        SELECT stock_id AS stock_id, MAX(trade_date) AS trade_date
+        FROM stock_daily_price
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY stock_id
     </select>
 
-    <select id="findGlobalFirstTradeDateOnOrAfter" resultType="java.time.LocalDate">
-        SELECT MIN(trade_date) FROM stock_daily_price WHERE trade_date &gt;= #{candidateStart}
+    <select id="findFirstTradeDateOnOrAfterByStockIds" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM stock_daily_price
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND trade_date &gt;= #{candidateStart}
     </select>
 
 </mapper>
