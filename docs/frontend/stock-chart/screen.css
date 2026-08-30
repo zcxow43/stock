@@ -55,3 +55,13 @@ thead th.sorted::after { content:"↑"; color:#3E8FD8; margin-left:6px; font-siz
 .navrow { display:flex; justify-content:center; gap:14px; margin-top:10px; }
 .nb { height:32px; padding:0 16px; display:flex; align-items:center; font-size:13px; border-radius:6px;
       background:#1B2836; color:#E6EDF5; border:1px solid #26333F; }
+
+/* ---------- 頁籤列（總覽 / 策略），跨分頁共用 ---------- */
+.tabs { display:flex; gap:24px; border-bottom:1px solid #26333F; margin-bottom:18px; }
+.tab { background:none; border:0; padding:10px 2px; font-family:inherit; font-size:14px;
+       color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
+.ops { white-space:nowrap; }
+.ops-th { width:132px; }
+.btn.xs { height:24px; padding:0 9px; font-size:12px; margin-right:5px; }
+.btn.danger { background:#8A3A34; color:#fff; border-color:#8A3A34; }

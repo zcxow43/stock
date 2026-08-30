@@ -1,7 +1,7 @@
 ---
 status: done
 title: "股票清單查詢 API"
-requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入個股 K 線頁"
+requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入個股 K 線頁；總覽分頁另需能新增、修改、下市股票主檔"
 depends_on: [stock-price-ingestion]
 ---
 
@@ -140,6 +140,73 @@ Response `200`：
 | `stockId` 不存在於 `stock` 主檔 | `404` | `{"code":"STOCK_NOT_FOUND","stockId":"9999"}` |
 | 該檔在庫中無任何行情 | `200` | 行情欄位為 `null`，`firstTradeDate` 為 `null`，`tradingDayCount` 為 `0` |
 
+#### 3. 新增股票
+
+```
+POST /api/stocks
+```
+
+Request：
+```json
+{ "stockId": "6488", "stockName": "環球晶", "market": "TSE" }
+```
+
+| 欄位 | 型別 | 必填 | 規則 |
+|---|---|---|---|
+| `stockId` | string | 是 | 1–10 字元，去除前後空白後不得為空 |
+| `stockName` | string | 是 | 1–60 字元，去除前後空白後不得為空 |
+| `market` | string | 是 | `TSE` 或 `OTC` |
+
+新增的股票 `isActive` 一律為 `true`，不接受由請求指定——「新增一檔已下市的股票」沒有實際意義，要下市請新增後再呼叫下市端點。
+
+Response `201`：回傳與 `GET /api/stocks/{stockId}` 相同結構的單檔資料（行情欄位為 `null`，因為剛建立尚無行情）。
+
+- 代號已存在 → `409`，`{"code":"STOCK_ALREADY_EXISTS"}`。**不得默默改為更新**：使用者按的是「新增」，靜默覆寫既有股票的名稱是資料損失。
+- `market` 非 `TSE`／`OTC` → `400`，`{"code":"INVALID_MARKET"}`
+- 必填欄位缺漏或超長 → `400`，`{"code":"INVALID_STOCK_PAYLOAD","fields":["stockName"]}`
+
+#### 4. 修改股票
+
+```
+PUT /api/stocks/{stockId}
+```
+
+Request：
+```json
+{ "stockName": "環球晶圓", "market": "TSE", "isActive": true }
+```
+
+| 欄位 | 型別 | 必填 | 規則 |
+|---|---|---|---|
+| `stockName` | string | 是 | 同新增 |
+| `market` | string | 是 | 同新增 |
+| `isActive` | boolean | 是 | `false` 等同下市；`true` 可讓已下市標的重新上架 |
+
+`stockId` 不可修改——它是主鍵，也是行情、指標、進度三張表的依附鍵。要「改代號」實際上是新增一檔再把舊的下市，兩者的行情歷史本來就不該混為一談。
+
+Response `200`：回傳更新後的單檔資料。
+
+- 代號不存在 → `404`，`{"code":"STOCK_NOT_FOUND"}`
+- 其餘驗證與錯誤同新增
+
+#### 5. 下市股票（軟刪除）
+
+```
+DELETE /api/stocks/{stockId}
+```
+
+將該檔 `isActive` 設為 `false`，**不刪除任何一列資料**。
+
+Response `200`：
+```json
+{ "stockId": "6488", "stockName": "環球晶", "isActive": false }
+```
+
+**此端點刻意不做實體刪除。** `specs/dba/stock.md` 已明訂下市標的的歷史行情必須保留、不得刪除 `stock_daily_price` 既有資料；若在此提供硬刪除，同一份資料就會有兩套互相矛盾的規則。使用者要看已下市標的時，清單帶 `includeInactive=true` 即可，要恢復則呼叫修改端點把 `isActive` 設回 `true`。
+
+- 代號不存在 → `404`，`{"code":"STOCK_NOT_FOUND"}`
+- 已經是下市狀態 → 仍回 `200`（冪等），不視為錯誤
+
 ### 數值格式
 
 價格與漲跌金額 2 位小數，漲跌百分比 2 位小數。`changePercent` 定義為 `(latestClose - previousClose) / previousClose × 100`。
@@ -166,6 +233,17 @@ Response `200`：
 - [x] 對 2200 檔規模的資料查詢任一頁，對 `stock_daily_price` 的查詢筆數不超過該頁 `size` 所涵蓋的股票數（驗證為「先分頁再取行情」，而非全表關聯後分頁）
 - [x] `GET /api/stocks/2330` 回傳含 `firstTradeDate` 與 `tradingDayCount` 的單檔資料
 - [x] `GET /api/stocks/9999`（不存在的代號）回 `404` 與 `STOCK_NOT_FOUND`
+- [x] `POST /api/stocks` 新增成功回 `201`，且新股票立即出現在 `GET /api/stocks` 結果中、`isActive` 為 `true`
+- [x] 新增已存在的代號回 `409` 與 `STOCK_ALREADY_EXISTS`，且既有股票的名稱未被覆寫
+- [x] 新增時 `market` 帶入 `TSE`／`OTC` 以外的值回 `400` 與 `INVALID_MARKET`
+- [x] 新增時 `stockName` 為空字串或純空白回 `400` 與 `INVALID_STOCK_PAYLOAD`
+- [x] `PUT /api/stocks/{stockId}` 可改名稱與市場別，回應為更新後的資料
+- [x] `PUT` 對已下市標的把 `isActive` 設為 `true` 可使其重新出現在預設清單中
+- [x] `PUT` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
+- [x] `DELETE /api/stocks/{stockId}` 後該檔 `isActive` 為 `false`，且其 `stock_daily_price` 與 `stock_daily_indicator` 列數完全不變
+- [x] 下市後該檔不出現在預設清單，帶 `includeInactive=true` 則出現
+- [x] 對已下市標的重複呼叫 `DELETE` 仍回 `200`（冪等）
+- [x] `DELETE` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
 
 ---
 ## Execution Result
@@ -198,3 +276,31 @@ Response `200`：
   - Verified live end-to-end via `mvn spring-boot:run` against the real dev DB with hand-inserted/cleaned-up test rows (`ZC01`–`ZC04`, plus a 120-row `ZP0xx` batch for the pagination-scale check): default list, keyword search by id and by Chinese name, market filter + invalid market, includeInactive toggle, size/pagination/sort validation errors, no-price and single-day-price stocks, detail with `firstTradeDate`/`tradingDayCount`, and 404 for an unknown stock id. All test rows were deleted afterward (`stock`/`stock_daily_price` confirmed back to 0 rows) and the app process was stopped, freeing port 8080.
   - Automated coverage: `develop/backend/src/test/java/com/stock/StockCatalogIntegrationTest.java` (13 tests, `@SpringBootTest` against the live dev DB with its own `ZC%`-prefixed setup/teardown) covers every Acceptance Criteria item above. Full suite: `mvn -f develop/backend/pom.xml test` → `Tests run: 32, Failures: 0, Errors: 0` (`BackendApplicationTests`, `StockCatalogIntegrationTest`, `StockPriceIngestionIntegrationTest`, `NormalizeUtilTest`).
   - No DB schema changes; no changes to `docker/launch.json` (backend entry already correct from `stock-price-ingestion`).
+
+### Increment 2 — 2026-08-30
+
+Implements the three write endpoints (`POST`/`PUT`/`DELETE /api/stocks{,/{stockId}}`) described in the spec's `#### 3`–`#### 5` sections. The two read endpoints from Increment 1 were not touched.
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/StockCatalogService.java` (new) — create/update/soft-delete; kept separate from `StockQueryService`, which is documented read-only.
+  - `develop/backend/src/main/java/com/stock/controller/StockController.java` (extended: `POST`, `PUT /{stockId}`, `DELETE /{stockId}`)
+  - `develop/backend/src/main/java/com/stock/mapper/StockMapper.java` (extended: `insert`, `update`)
+  - `develop/backend/src/main/resources/mapper/StockMapper.xml` (extended, same two statements)
+  - `develop/backend/src/main/java/com/stock/dto/CreateStockRequest.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/UpdateStockRequest.java` (new)
+  - `develop/backend/src/main/java/com/stock/dto/StockDeleteResponse.java` (new) — the small `{stockId, stockName, isActive}` shape the `DELETE` response uses, distinct from `StockDetailDto`.
+  - `develop/backend/src/main/java/com/stock/dto/ErrorResponse.java` (extended: `fields` property + `invalidStockPayload(List<String>)` factory; `@JsonCreator` constructor updated to the new arity)
+  - `develop/backend/src/main/java/com/stock/exception/StockAlreadyExistsException.java` (new) → 409 `STOCK_ALREADY_EXISTS`
+  - `develop/backend/src/main/java/com/stock/exception/InvalidStockPayloadException.java` (new) → 400 `INVALID_STOCK_PAYLOAD` with `fields`
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` (extended: handlers for the two exceptions above)
+  - `develop/backend/src/test/java/com/stock/StockCatalogWriteIntegrationTest.java` (new, 11 tests, own `ZW`-prefixed fixtures)
+- Notes:
+  - **Duplicate check never silently updates.** `POST` does `findById` first and throws `StockAlreadyExistsException` (409) rather than falling back to the pre-existing `stockMapper.upsert(...)` used by the ingestion pipeline — reusing `upsert` here would have silently overwritten an existing stock's name, which the spec explicitly forbids. `upsert` itself was left untouched (still used by `PriceIngestionService`).
+  - **Check-then-act race closed.** `createStock` calls `findById` then `insert`; two concurrent `POST`s for the same `stockId` could otherwise both pass the pre-check and let the loser's `INSERT` hit the primary-key constraint, surfacing as a raw 500 instead of the spec's 409. Added a `catch (DuplicateKeyException e)` around the insert that translates it into the same `StockAlreadyExistsException` → 409. Found via the `code-quality` skill's concurrency checklist, not by a failing test (a genuine race is impractical to reproduce deterministically in a single-process integration test).
+  - **`stockId` is immutable on `PUT`.** `UpdateStockRequest` has no `stockId` field at all — it is the path variable and primary key that `stock_daily_price`/`stock_daily_indicator`/`stock_sync_progress` all hang off, matching the spec's explicit rationale.
+  - **Validation precedence** (not fully pinned down by the spec's acceptance criteria, so documented here as the concrete decision): for both `POST` and `PUT`, field-shape checks (`stockId`/`stockName` blank-or-oversized, `isActive` missing on `PUT`) are checked first → `INVALID_STOCK_PAYLOAD`; then `market` membership → `INVALID_MARKET`; then, for `POST`, existence → `STOCK_ALREADY_EXISTS`, or for `PUT`, existence → `STOCK_NOT_FOUND`. No acceptance criterion exercises two simultaneous violations, so this ordering was never actually forced by a test — noted for whoever revisits this.
+  - **Soft delete is genuinely soft.** `deactivateStock` never issues a `DELETE` SQL statement — only `UPDATE stock SET is_active = 0 ...`, and only when the row isn't already inactive (idempotent no-op otherwise, still 200). Verified explicitly in `delete_softDeletesWithoutTouchingPriceOrIndicatorRows`: seeded one `stock_daily_price` row and one `stock_daily_indicator` row for a test stock, captured counts before/after the `DELETE` call, and asserted they're identical (and both still `1`, i.e., not merely "still zero").
+  - Full suite: `mvn -f develop/backend/pom.xml test` → `Tests run: 98, Failures: 0, Errors: 0` across all 10 test classes (`BackendApplicationTests`, `StockCatalogIntegrationTest` (13), `StockCatalogWriteIntegrationTest` (11, new), `StockIndicatorStatisticsIntegrationTest` (16), `StockMinutePriceIntegrationTest` (15), `StockPriceIngestionIntegrationTest` (15), `IndicatorCalculationServiceTest` (7), `IndicatorRebuildServiceTest` (5), `StartupCatchUpRunnerTest` (5), `NormalizeUtilTest` (10)).
+  - Live DB verified unchanged before and after the full run: `stock` = 34 rows (all `is_active=1`), `stock_daily_price` = 5372, `stock_daily_indicator` = 5372, `stock_sync_progress` = 68 — identical to the pre-existing baseline. All new test fixtures use a `ZW`-prefixed `stock_id` and are deleted in `@BeforeEach`/`@AfterEach`; no `Z%`-prefixed row remained after the run.
+  - Did not run `mvn spring-boot:run` per instructions (port 8080 risk); all verification is via the `@SpringBootTest(webEnvironment = RANDOM_PORT)` integration tests against the live dev DB.
+  - Left unfixed / deliberately out of scope: no bean-validation (`@Valid`) annotations were added to `CreateStockRequest`/`UpdateStockRequest` — validation is done manually in `StockCatalogService` so the exact `fields` list in `INVALID_STOCK_PAYLOAD` can be constructed precisely, matching the spec's example response shape; a generic `@Valid`-driven `MethodArgumentNotValidException` would have collapsed to the existing generic `VALIDATION_ERROR` code instead.

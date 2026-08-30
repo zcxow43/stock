@@ -1,5 +1,6 @@
 package com.stock.dto;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class ProgressResponse {
@@ -11,10 +12,12 @@ public class ProgressResponse {
     private final int done;
     private final int failed;
     private final int skipped;
+    private final LocalDateTime lastSyncedAt;
     private final List<FailedItemDto> failedItems;
 
     public ProgressResponse(String jobType, int total, int pending, int running, int done,
-                             int failed, int skipped, List<FailedItemDto> failedItems) {
+                             int failed, int skipped, LocalDateTime lastSyncedAt,
+                             List<FailedItemDto> failedItems) {
         this.jobType = jobType;
         this.total = total;
         this.pending = pending;
@@ -22,6 +25,7 @@ public class ProgressResponse {
         this.done = done;
         this.failed = failed;
         this.skipped = skipped;
+        this.lastSyncedAt = lastSyncedAt;
         this.failedItems = failedItems;
     }
 
@@ -51,6 +55,10 @@ public class ProgressResponse {
 
     public int getSkipped() {
         return skipped;
+    }
+
+    public LocalDateTime getLastSyncedAt() {
+        return lastSyncedAt;
     }
 
     public List<FailedItemDto> getFailedItems() {

@@ -13,6 +13,7 @@ import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import com.stock.service.JobRunningRegistry;
+import com.stock.service.StockSyncService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,11 +27,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -64,6 +67,9 @@ class StockPriceIngestionIntegrationTest {
 
     @Autowired
     private JobRunningRegistry jobRunningRegistry;
+
+    @Autowired
+    private StockSyncService stockSyncService;
 
     @Autowired
     private DataSource dataSource;
@@ -498,6 +504,75 @@ class StockPriceIngestionIntegrationTest {
                 "SELECT status FROM stock_sync_progress WHERE stock_id='T242' AND job_type='PRICE_BACKFILL'",
                 String.class);
         assertEquals("SKIPPED", t242Status);
+    }
+
+    @Test
+    void progress_lastSyncedAt_equalsMaxFinishedAtAmongDoneRows() throws Exception {
+        seedStock("T243", "lastSyncedAt-最大值", true);
+        // Far in the future so it is guaranteed to be the max finished_at across every real
+        // PRICE_BACKFILL DONE row already in the live database, regardless of when this test runs.
+        LocalDateTime future = LocalDateTime.now().plusYears(50).withNano(0);
+        jdbc.update("INSERT INTO stock_sync_progress "
+                        + "(stock_id, job_type, status, target_start_date, target_end_date, last_synced_date, "
+                        + "attempt_count, last_error, started_at, finished_at) "
+                        + "VALUES ('T243', 'PRICE_BACKFILL', 'DONE', '2025-09-01', '2025-09-01', '2025-09-01', "
+                        + "0, NULL, ?, ?)",
+                future, future);
+
+        LocalDateTime expectedMax = jdbc.queryForObject(
+                "SELECT MAX(finished_at) FROM stock_sync_progress WHERE job_type = 'PRICE_BACKFILL' AND status = 'DONE'",
+                LocalDateTime.class);
+        assertEquals(future, expectedMax);
+
+        ResponseEntity<ProgressResponse> progress = rest.getForEntity(
+                "/api/stocks/sync/progress?jobType=PRICE_BACKFILL", ProgressResponse.class);
+        assertEquals(HttpStatus.OK, progress.getStatusCode());
+        assertEquals(expectedMax, progress.getBody().getLastSyncedAt());
+    }
+
+    @Test
+    @Transactional
+    void progress_lastSyncedAt_isNull_whenJobTypeHasNeverCompletedARun() {
+        // Rolled back automatically at the end of this test (see @Transactional): temporarily
+        // clears away every DONE row's completion for PRICE_BACKFILL so the "never successfully
+        // synced" branch can be observed without permanently touching the live DONE rows that
+        // exist outside this test.
+        jdbc.update("UPDATE stock_sync_progress SET status = 'FAILED', finished_at = NULL "
+                + "WHERE job_type = 'PRICE_BACKFILL' AND status = 'DONE'");
+
+        ProgressResponse progress = stockSyncService.getProgress("PRICE_BACKFILL");
+        assertNull(progress.getLastSyncedAt());
+    }
+
+    @Test
+    void progress_lastSyncedAt_unchanged_whenBackfillRunFailsCompletely() throws Exception {
+        ProgressResponse before = rest.getForEntity(
+                "/api/stocks/sync/progress?jobType=PRICE_BACKFILL", ProgressResponse.class).getBody();
+        LocalDateTime lastSyncedAtBefore = before.getLastSyncedAt();
+
+        seedStock("T244", "全部失敗不推進", true);
+        LocalDate start = LocalDate.of(2025, 9, 1);
+        LocalDate end = LocalDate.of(2025, 9, 1);
+        String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T244&start_date="
+                + start + "&end_date=" + end;
+        // max-retries=3 in test config -> 4 total attempts; queue 429 for every one so the
+        // stock ends up FAILED without ever reaching DONE.
+        for (int i = 0; i < 4; i++) {
+            mockServer.expect(requestTo(url)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        }
+
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T244"));
+        request.setStartDate(start);
+        request.setEndDate(end);
+        rest.postForEntity("/api/stocks/sync/backfill", request, BackfillResponse.class);
+
+        waitUntilStatus("T244", "PRICE_BACKFILL", "FAILED", 10_000);
+        mockServer.verify();
+
+        ProgressResponse after = rest.getForEntity(
+                "/api/stocks/sync/progress?jobType=PRICE_BACKFILL", ProgressResponse.class).getBody();
+        assertEquals(lastSyncedAtBefore, after.getLastSyncedAt());
     }
 
     // ---------- 8. catchUp mode ----------

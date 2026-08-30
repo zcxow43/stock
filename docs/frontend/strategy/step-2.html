@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>策略型態掃描</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-strategy">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,378</b> 檔</div>
+    </div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab on">策略</button>
+    </div>
+    <div class="syncbar">
+      <div class="last">最後同步：<b>尚未同步</b></div>
+      <div class="syncing" data-target><span>同步中 18 / 34</span>
+        <span class="bar"><i style="width:53%"></i></span>
+        <button class="btn" disabled>同步日 K 至今日</button></div>
+    </div>
+    <div class="cond">
+      <h2>掃描條件</h2>
+      <div class="cards">
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
+          <select><option>標準</option></select>
+          <div class="desc">左右各 3 根，需 2 段遞增，每段高過 1%</div></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
+          <select><option>標準</option></select>
+          <div class="desc">回看 20 根，箱高 &lt; 8%，突破 1.5% 且量增 1.5 倍</div></div>
+      </div>
+      <div class="condrow"><span class="lbl">股票範圍</span>
+        <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
+      <div class="condrow"><span class="lbl">區間</span>
+        <input class="date" value="2026-07-30"> <span>~</span> <input class="date" value="2026-08-30">
+        <div class="seg"><button class="on">近一個月</button><button>近三個月</button><button>近半年</button></div></div>
+      <div class="actions"><button class="btn primary" disabled>開始掃描</button>
+        <span class="hint">請至少勾選一個策略</span></div>
+    </div>
+    <div class="empty">選擇策略與區間後開始掃描<div class="sub">尚未執行任何掃描</div></div>
+  </div>
+</body>
+</html>

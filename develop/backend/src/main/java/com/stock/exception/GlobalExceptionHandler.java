@@ -60,6 +60,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.stockNotFound(e.getStockId()));
     }
 
+    @ExceptionHandler(StockAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleStockAlreadyExists(StockAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("STOCK_ALREADY_EXISTS"));
+    }
+
+    @ExceptionHandler(InvalidStockPayloadException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStockPayload(InvalidStockPayloadException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidStockPayload(e.getFields()));
+    }
+
     @ExceptionHandler(MissingTradeDateException.class)
     public ResponseEntity<ErrorResponse> handleMissingTradeDate(MissingTradeDateException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("MISSING_TRADE_DATE"));
@@ -88,6 +98,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SeriesNotAllowedForAllScopeException.class)
     public ResponseEntity<ErrorResponse> handleSeriesNotAllowedForAllScope(SeriesNotAllowedForAllScopeException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("SERIES_NOT_ALLOWED_FOR_ALL_SCOPE"));
+    }
+
+    @ExceptionHandler(NoStrategySelectedException.class)
+    public ResponseEntity<ErrorResponse> handleNoStrategySelected(NoStrategySelectedException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("NO_STRATEGY_SELECTED"));
+    }
+
+    @ExceptionHandler(UnknownStrategyException.class)
+    public ResponseEntity<ErrorResponse> handleUnknownStrategy(UnknownStrategyException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.unknownStrategy(e.getUnknown()));
+    }
+
+    @ExceptionHandler(DuplicateStrategyException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateStrategy(DuplicateStrategyException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.duplicateStrategy(e.getDuplicated()));
+    }
+
+    @ExceptionHandler(TooManyStocksException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyStocks(TooManyStocksException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.tooManyStocks());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

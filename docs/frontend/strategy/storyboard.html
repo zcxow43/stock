@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>strategy storyboard</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
+  .board { position:relative; width:2360px; height:1438px; }
+  .frame { position:absolute; }
+  .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
+
+  .caption { position:relative; z-index:6; margin-top:14px; font-size:19px; line-height:1.5; color:#33312d; }
+  .caption .num { display:inline-block; min-width:26px; height:26px; line-height:26px; text-align:center;
+                  background:#d6743a; color:#fff; border-radius:13px; font-size:15px; margin-right:9px; vertical-align:1px; }
+  .apis { position:relative; z-index:6; margin-top:9px; }
+  .api { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin-top:5px;
+         font-size:15px; line-height:1.45; }
+  .api .verb { flex:none; display:inline-block; min-width:44px; text-align:center; padding:1px 7px;
+               border-radius:4px; background:#5b6b7c; color:#fff; font-size:12px; letter-spacing:.4px; font-weight:600; }
+  .api .verb.v-get { background:#2f6f4f; }
+  .api .verb.v-post { background:#9a5a1e; }
+  /* path and its purpose note share one wrapping block, so the note always
+     stays right after the path it explains instead of drifting to the margin */
+  .api .sig { flex:1 1 0; min-width:0; }
+  .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
+              word-break:break-all; }
+  .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
+  svg.links { position:absolute; inset:0; width:2360px; height:1438px; pointer-events:none; z-index:5; }
+</style>
+</head>
+<body>
+<div class="board">
+  <svg class="links" viewBox="0 0 2360 1438">
+    <defs>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
+      </filter>
+    </defs>
+    <rect x="648.4" y="160.4" width="66.0" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1297.4" y="160.4" width="197.0" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1645.6" y="288.9" width="47.6" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1637.8" y="1030.8" width="644.3" height="93.5"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <polygon points="721.4,175.3 1270.4,175.3 1270.4,181.8 1290.4,172.8 1270.4,163.8 1270.4,170.3 721.4,170.3"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1510.0,279.0 1610.0,279.0 1610.0,285.5 1630.0,276.5 1610.0,267.5 1610.0,274.0 1510.0,274.0"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1674.1,321.1 1930.7,1006.4 1924.6,1008.7 1940.0,1024.3 1941.5,1002.4 1935.4,1004.7 1678.8,319.3"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+  </svg>
+  
+  <div class="frame" style="left:70px; top:70px; width:660px;">
+    <img src="step-1.png" width="660" height="413" alt="初始畫面：策略分頁尚未掃描，同步列顯示「尚未同步」，未勾選策略時「開始掃描」為 disabled。">
+    <div class="caption"><span class="num">1</span>初始畫面：策略分頁尚未掃描，同步列顯示「尚未同步」，未勾選策略時「開始掃描」為 disabled。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/strategies</code><span class="note">取策略清單與三段靈敏度的說明文字</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">取 lastSyncedAt 顯示最後同步時間</span></span></div></div>
+  </div>
+  <div class="frame" style="left:850px; top:70px; width:660px;">
+    <img src="step-2.png" width="660" height="413" alt="點擊「同步日 K 至今日」：轉為執行中並顯示 18 / 34 進度，畫面不被阻塞。">
+    <div class="caption"><span class="num">2</span>點擊「同步日 K 至今日」：轉為執行中並顯示 18 / 34 進度，畫面不被阻塞。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/stocks/sync/backfill</code><span class="note">body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">每 5 秒輪詢更新進度</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:70px; width:660px;">
+    <img src="step-3.png" width="660" height="413" alt="同步完成，最後同步時間更新為 2026-08-30 09:14；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。">
+    <div class="caption"><span class="num">3</span>同步完成，最後同步時間更新為 2026-08-30 09:14；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">同步完成後重取 lastSyncedAt</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:794px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="點擊「開始掃描」：兩個策略各自一個結果區塊，底底高命中 2 檔、箱型突破命中 1 檔；資料不足與待確認的標的以獨立提示呈現，不混入命中清單。">
+    <div class="caption"><span class="num">4</span>點擊「開始掃描」：兩個策略各自一個結果區塊，底底高命中 2 檔、箱型突破命中 1 檔；資料不足與待確認的標的以獨立提示呈現，不混入命中清單。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/strategies/scan</code><span class="note">body strategies=[底底高/STRICT, 箱型突破/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場</span></span></div></div>
+  </div>
+</div>
+</body>
+</html>

@@ -132,6 +132,11 @@
         GROUP BY status
     </select>
 
+    <select id="findLastSyncedAt" resultType="java.time.LocalDateTime">
+        SELECT MAX(finished_at) FROM stock_sync_progress
+        WHERE job_type = #{jobType} AND status = 'DONE'
+    </select>
+
     <select id="findFailedItems" resultMap="progressResultMap">
         SELECT * FROM stock_sync_progress
         WHERE job_type = #{jobType} AND status = 'FAILED'

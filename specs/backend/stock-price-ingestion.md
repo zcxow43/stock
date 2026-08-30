@@ -172,12 +172,15 @@ Response `200`：
   "done": 2050,
   "failed": 15,
   "skipped": 4,
+  "lastSyncedAt": "2026-08-30T00:07:12",
   "failedItems": [
     { "stockId": "1234", "attemptCount": 3, "lastError": "HTTP 429 rate limited" }
   ]
 }
 ```
 `failedItems` 最多回傳 50 筆。
+
+`lastSyncedAt` 是該 `jobType` **最近一次成功完成的時間**，取自進度紀錄中狀態為 `DONE` 的列的完成時間最大值；從未成功過時為 `null`。它回答的是使用者在畫面上問的「資料到底多新」，因此語意是「最後一次真的補完是什麼時候」，不是「最後一次按下按鈕是什麼時候」——一次全部失敗的同步不應該讓畫面上的時間往前跳。
 
 ### 處理流程
 
@@ -226,6 +229,8 @@ Response `200`：
 - [x] `resume` 與 `catchUp` 同時為 `true` 時回應 `400`，`{"code":"INVALID_SYNC_MODE"}`
 - [ ] 啟動補齊執行期間呼叫 `POST /api/stocks/sync/backfill` 回應 `409`，`{"code":"JOB_ALREADY_RUNNING"}`
       （未驗證：併發鎖本身已由既有的 `JobRunningRegistry` 與其既有測試涵蓋，但「啟動補齊執行中」這個特定時間窗未實測——補齊完成後的重啟會在數秒內跳過全部標的，沒有足以發出第二個請求的窗口。待下次從空資料庫啟動時補驗。）
+- [x] `GET /api/stocks/sync/progress` 回應含 `lastSyncedAt`，其值等於該 `jobType` 中 `DONE` 列的完成時間最大值
+- [x] 從未成功同步過時 `lastSyncedAt` 為 `null`；一次全部失敗的同步不會更新該值
 - [x] 啟動補齊寫入的資料中不存在任何價格為 0 的列，停牌／非交易日不產生列
 
 ---
@@ -294,3 +299,23 @@ Response `200`：
     - Confirmed via test log output that `StartupCatchUpRunner` fires on every test-suite boot but immediately no-ops: `Startup price catch-up disabled (app.backfill.startup-catch-up.enabled=false); skipping.` — proving the test profile's kill switch actually reaches the bean and that no real TWSE/FinMind call is attempted during tests.
     - Did **not** perform a live run against the real external APIs (explicitly out of scope per instructions); all new behavior is covered by `MockRestServiceServer`-backed integration tests against the live MySQL DB.
   - Not implemented (explicitly out of scope for this increment, belongs to `specs/backend/stock-indicator-statistics.md`): any chaining from price catch-up completion into an indicator rebuild.
+
+### Increment 3 — 2026-08-30
+- Status: DONE (pending checkbox sign-off by the requester)
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/mapper/StockSyncProgressMapper.java` — added `findLastSyncedAt(jobType)` returning `LocalDateTime`
+  - `develop/backend/src/main/resources/mapper/StockSyncProgressMapper.xml` — `findLastSyncedAt`: `SELECT MAX(finished_at) FROM stock_sync_progress WHERE job_type = ? AND status = 'DONE'` (uses the existing `idx_job_status (job_type, status)` index; returns SQL `NULL` → mapped to a `null` `LocalDateTime` when no row has ever completed)
+  - `develop/backend/src/main/java/com/stock/dto/ProgressResponse.java` — added nullable `lastSyncedAt` (`LocalDateTime`) field, constructor parameter, and getter
+  - `develop/backend/src/main/java/com/stock/service/StockSyncService.java` — `getProgress` now calls `progressMapper.findLastSyncedAt(jobType)` and passes it into the `ProgressResponse`
+  - `develop/backend/src/test/java/com/stock/StockPriceIngestionIntegrationTest.java` — added three tests (see Notes)
+- Notes:
+  - **Semantics implemented exactly per spec**: `lastSyncedAt` = `MAX(finished_at)` among rows with `status = 'DONE'` for the given `jobType`, `null` when no row has ever reached `DONE`. `markFailed`/`markSkipped` also set `finished_at`, but since the query filters on `status = 'DONE'`, a FAILED or SKIPPED completion never contributes — a wholly-failed sync run cannot advance the value, and a stock later reopened by `catchUp` (status flips back to `PENDING`, `finished_at` from its prior `DONE` run left in place) is likewise excluded until it reaches `DONE` again, matching "最後一次真的補完是什麼時候" rather than "最後一次按下按鈕".
+  - **New tests** (all in `StockPriceIngestionIntegrationTest`, live MySQL DB):
+    - `progress_lastSyncedAt_equalsMaxFinishedAtAmongDoneRows` — seeds one `DONE` row with `finished_at` 50 years in the future (guaranteed max regardless of the real 34 pre-existing `DONE` rows), independently computes `MAX(finished_at)` via a raw `jdbc` query, and asserts the HTTP `GET /api/stocks/sync/progress` response's `lastSyncedAt` equals that independently-computed value — proving the wiring end-to-end through JSON (de)serialization, not just the mapper in isolation.
+    - `progress_lastSyncedAt_isNull_whenJobTypeHasNeverCompletedARun` — since the live DB always carries real `DONE` rows for both existing `job_type`s (34 each, per the seed data this task must preserve), this test is annotated `@Transactional` so Spring's test-transaction rollback undoes its changes automatically at test end: within the transaction it flips every real `PRICE_BACKFILL` `DONE` row to `FAILED` with `finished_at = NULL`, calls `stockSyncService.getProgress("PRICE_BACKFILL")` **in-process on the same thread/connection** (an HTTP call via `TestRestTemplate` would run on a different connection under MySQL's default isolation and would not see the uncommitted change), and asserts `getLastSyncedAt()` is `null`. Nothing persists past the test — verified by direct `mysql` CLI counts after the full suite run (see below).
+    - `progress_lastSyncedAt_unchanged_whenBackfillRunFailsCompletely` — captures `lastSyncedAt` before, runs a real backfill for a new `T244` stock that receives HTTP 429 on all 4 attempts (`max-retries: 3` in the test profile ⇒ 1 initial + 3 retries) so it ends `FAILED` without ever reaching `DONE`, then asserts `lastSyncedAt` afterward is byte-for-byte the same value as before — proving a fully-failed run never moves the displayed time forward, using the ordinary live-HTTP/live-DB test style (no transaction trick needed here since no real `DONE` row is touched).
+  - Verification performed:
+    - `mvn -f develop/backend/pom.xml compile` and `test-compile` — clean.
+    - `mvn -f develop/backend/pom.xml test` — **87/87 passing** (84 pre-existing + 3 new), run twice consecutively with no flakiness.
+    - Direct `mysql` CLI check before and after the full suite run: `stock` = 34, `stock_daily_price` = 5372, `stock_daily_indicator` = 5372, `stock_sync_progress` DONE counts = 34 `PRICE_BACKFILL` / 34 `INDICATOR_REBUILD` — all **identical** before and after; zero leftover rows anywhere matching `stock_id LIKE 'T%'` after the run, confirming the `@Transactional` rollback left no residue and the ordinary `T2%` teardown cleaned up the other two new tests' rows.
+  - No blockers. The two in-scope Acceptance Criteria items are covered by both a direct mapper/SQL-level assertion and a full HTTP round-trip test; no schema change was made (reused the existing `finished_at`/`status` columns and `idx_job_status` index exactly as instructed).

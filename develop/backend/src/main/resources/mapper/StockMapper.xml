@@ -11,6 +11,19 @@
             is_active = VALUES(is_active)
     </insert>
 
+    <insert id="insert" parameterType="com.stock.domain.Stock">
+        INSERT INTO stock (stock_id, stock_name, market, is_active)
+        VALUES (#{stockId}, #{stockName}, #{market}, #{active})
+    </insert>
+
+    <update id="update" parameterType="com.stock.domain.Stock">
+        UPDATE stock
+        SET stock_name = #{stockName},
+            market = #{market},
+            is_active = #{active}
+        WHERE stock_id = #{stockId}
+    </update>
+
     <select id="findActiveStockIds" resultType="string">
         SELECT stock_id FROM stock WHERE is_active = 1
     </select>

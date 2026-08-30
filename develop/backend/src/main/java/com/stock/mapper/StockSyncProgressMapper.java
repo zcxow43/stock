@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -78,6 +79,13 @@ public interface StockSyncProgressMapper {
     int countTotal(@Param("jobType") String jobType);
 
     List<StatusCount> countByStatus(@Param("jobType") String jobType);
+
+    /**
+     * Latest completion time across this jobType's DONE rows (MAX(finished_at) WHERE status =
+     * 'DONE'), or null when none have ever completed. FAILED/SKIPPED rows also set finished_at
+     * but are excluded, so a run where every stock fails never advances this value.
+     */
+    LocalDateTime findLastSyncedAt(@Param("jobType") String jobType);
 
     List<StockSyncProgress> findFailedItems(@Param("jobType") String jobType, @Param("limit") int limit);
 }

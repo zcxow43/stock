@@ -77,4 +77,24 @@ public interface StockDailyPriceMapper {
      */
     LocalDate findFirstTradeDateOnOrAfterByStockIds(@Param("stockIds") List<String> stockIds,
                                                      @Param("candidateStart") LocalDate candidateStart);
+
+    /**
+     * Full OHLCV rows for the given stock ids within [startDate, endDate] — one batched range query
+     * over the (stock_id, trade_date) composite primary key, not one query per stock. Ordered by
+     * stock_id then trade_date ascending so callers can group in memory. See
+     * specs/backend/strategy-scan.md, "行情讀取必須批次進行".
+     */
+    List<StockDailyPrice> findByStockIdsAndDateRange(@Param("stockIds") List<String> stockIds,
+                                                      @Param("startDate") LocalDate startDate,
+                                                      @Param("endDate") LocalDate endDate);
+
+    /**
+     * Up to `limit` most recent trading days strictly before beforeDate, per stock id — one batched
+     * window-function query (ROW_NUMBER() PARTITION BY stock_id), not one query per stock. Supplies
+     * the pattern-detection lookback bars that precede a strategy scan's startDate. Ordered by
+     * stock_id then trade_date ascending.
+     */
+    List<StockDailyPrice> findRecentBeforeDateByStockIds(@Param("stockIds") List<String> stockIds,
+                                                          @Param("beforeDate") LocalDate beforeDate,
+                                                          @Param("limit") int limit);
 }

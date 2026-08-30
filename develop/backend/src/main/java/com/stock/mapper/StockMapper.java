@@ -12,6 +12,12 @@ public interface StockMapper {
     /** Insert-or-update by stock_id; stock_name/market are refreshed to latest value. */
     int upsert(Stock stock);
 
+    /** Plain insert; caller (StockCatalogService) must check for an existing row first — duplicates must 409, never silently overwrite. */
+    int insert(Stock stock);
+
+    /** Full update of stock_name/market/is_active by stock_id. stock_id itself is never updated — it is the key other tables hang off. */
+    int update(Stock stock);
+
     /** All active (is_active = 1) stock ids, used as the "ALL" backfill target set. */
     List<String> findActiveStockIds();
 

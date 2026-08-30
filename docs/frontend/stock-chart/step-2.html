@@ -13,6 +13,10 @@
       <h1>股票總覽</h1>
       <div class="count">共 <b>1</b> 檔</div>
     </div>
+    <div class="tabs">
+      <button class="tab on">總覽</button>
+      <button class="tab">策略</button>
+    </div>
     <div class="filters">
       <label class="search">
         <span class="ico">⌕</span>
@@ -33,6 +37,7 @@
           <th class="r">漲跌幅</th>
           <th class="r">成交量</th>
           <th>狀態</th>
+          <th class="ops-th">操作</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -63,7 +68,7 @@ document.getElementById("rows").innerHTML = data.map(([c,nm,mk,close,chg,pct,vol
     <td class="r ${cls(chg)}">${sgn(chg)}</td>
     <td class="r ${cls(chg)}">${(chg>0?"+":"")+pct.toFixed(2)}%</td>
     <td class="r">${vol.toLocaleString()}</td>
-    <td></td>
+    <td class="ops"><button class="btn xs">編輯</button><button class="btn xs danger">下市</button></td>
   </tr>`).join("");
 </script>
 </body>

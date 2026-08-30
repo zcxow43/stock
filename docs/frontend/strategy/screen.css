@@ -1,0 +1,50 @@
+/* 策略型態掃描分頁。Scoped by <body class="page-strategy">. */
+
+.tabs { display:flex; gap:24px; border-bottom:1px solid #26333F; margin-bottom:18px; }
+.tab { background:none; border:0; padding:10px 2px; font-family:inherit; font-size:14px;
+       color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
+
+.page-strategy .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:20px; }
+
+.syncbar { display:flex; align-items:center; justify-content:space-between;
+           background:#16202C; border:1px solid #26333F; border-radius:8px;
+           padding:10px 16px; margin-bottom:12px; }
+.syncbar .last { font-size:13px; color:#93A4B8; }
+.syncbar .last b { color:#E6EDF5; font-weight:600; }
+.syncing { display:flex; align-items:center; gap:12px; font-size:13px; color:#93A4B8; }
+.bar { width:180px; height:6px; background:#1B2836; border-radius:3px; overflow:hidden; }
+.bar i { display:block; height:100%; background:#3E8FD8; }
+
+.cond { background:#16202C; border:1px solid #26333F; border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+.cond h2 { font-size:13px; color:#93A4B8; font-weight:500; margin:0 0 12px; }
+.cards { display:flex; gap:12px; margin-bottom:10px; }
+.card { flex:1; background:#16202C; border:1px solid #26333F; border-radius:8px; padding:10px 14px; }
+.card.on { border-color:#3E8FD8; }
+.card .top { display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+.card .box { width:16px; height:16px; border:1px solid #26333F; border-radius:3px; background:#0F1620; }
+.card.on .box { background:#3E8FD8; border-color:#3E8FD8; position:relative; }
+.card.on .box::after { content:"✓"; color:#fff; font-size:12px; position:absolute; left:3px; top:-1px; }
+.card .nm { font-size:14px; color:#E6EDF5; font-weight:600; }
+.card select { height:28px; font-size:13px; margin-bottom:0; }
+.card .desc { font-size:12px; color:#6B7C90; line-height:1.5; }
+
+.condrow { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; color:#93A4B8; }
+.condrow .lbl { width:72px; }
+.seg { display:flex; gap:6px; }
+.seg button { height:30px; padding:0 12px; font-size:13px; font-family:inherit; cursor:pointer;
+              background:#1B2836; color:#93A4B8; border:1px solid #26333F; border-radius:6px; }
+.seg button.on { background:#26333F; color:#E6EDF5; }
+.date { height:30px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+        color:#E6EDF5; padding:0 10px; font-size:13px; font-family:inherit; }
+.actions { display:flex; align-items:center; gap:12px; }
+.hint { font-size:12px; color:#6B7C90; }
+
+.res { margin-bottom:12px; }
+.res h3 { font-size:14px; color:#E6EDF5; margin:0 0 7px; font-weight:600; }
+.res h3 span { color:#93A4B8; font-weight:400; font-size:13px; }
+.note { font-size:12px; color:#D9A441; margin-top:6px; }
+.empty { background:#16202C; border:1px solid #26333F; border-radius:8px;
+         padding:34px; text-align:center; color:#6B7C90; font-size:14px; }
+.empty .sub { font-size:12px; margin-top:8px; color:#4A5866; }
+.lows { color:#93A4B8; font-size:13px; }

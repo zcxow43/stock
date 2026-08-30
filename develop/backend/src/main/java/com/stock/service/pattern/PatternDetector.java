@@ -1,0 +1,43 @@
+package com.stock.service.pattern;
+
+import com.stock.domain.StockDailyPrice;
+import com.stock.dto.PresetDto;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * One pattern (BOX_BREAKOUT / HIGHER_LOWS). Each implementation owns its own STRICT/STANDARD/LOOSE
+ * parameter table and the catalogue description text for each preset — see
+ * specs/backend/strategy-scan.md, "型態定義". Presets change thresholds only, never the algorithm.
+ */
+public interface PatternDetector {
+
+    /** Wire code, e.g. "BOX_BREAKOUT". */
+    String getCode();
+
+    /** Human-readable name for the catalogue, e.g. "箱型突破". */
+    String getName();
+
+    /** Whether presetCode names one of this detector's three sensitivity presets. */
+    boolean supportsPreset(String presetCode);
+
+    /** The three presets (code/name/description) for GET /api/strategies. */
+    List<PresetDto> getPresets();
+
+    /**
+     * Trading days of history required strictly before the scan's startDate for this preset —
+     * drives how far back the batched lookback pre-fetch must reach (specs/backend/strategy-scan.md,
+     * "區間與資料前置需求").
+     */
+    int requiredLookbackTradingDays(String presetCode);
+
+    /**
+     * Detects this pattern for a single stock. `bars` is one stock's full OHLCV series, ascending by
+     * trade_date, containing the lookback bars strictly before startDate plus every bar within
+     * [startDate, endDate] — never bars beyond endDate. Adjacent list entries are adjacent *trading*
+     * days; calendar gaps from suspensions are never interpolated.
+     */
+    PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
+                                    String presetCode);
+}

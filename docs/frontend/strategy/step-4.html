@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>策略型態掃描</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-strategy">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,378</b> 檔</div>
+    </div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab on">策略</button>
+    </div>
+    <div class="syncbar">
+      <div class="last">最後同步：<b>2026-08-30 09:14</b>　<span style="color:#6B7C90">完成 34 ・ 失敗 0 ・ 略過 0</span></div>
+      <button class="btn">同步日 K 至今日</button>
+    </div>
+    <div class="cond">
+      <h2>掃描條件</h2>
+      <div class="cards">
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
+          <select><option>嚴格</option></select><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div></div>
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
+          <select><option>標準</option></select></div>
+      </div>
+      <div class="condrow"><span class="lbl">股票範圍</span>
+        <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
+      <div class="condrow"><span class="lbl">區間</span>
+        <input class="date" value="2026-07-30"> <span>~</span> <input class="date" value="2026-08-30">
+        <div class="seg"><button class="on">近一個月</button><button>近三個月</button><button>近半年</button></div></div>
+      <div class="actions"><button class="btn primary">開始掃描</button>
+        <span class="hint">已勾選 2 個策略</span></div>
+    </div>
+    <div class="res" data-target>
+      <h3>底底高（嚴格）<span> — 命中 2 檔</span></h3>
+      <table>
+        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th>低點序列</th><th class="r">累計漲幅</th></tr></thead>
+        <tbody>
+          <tr class="hover"><td class="code">2317</td><td>鴻海</td><td>2026-08-25</td>
+            <td class="lows">07-08 240.00 → 07-29 248.50 → 08-13 256.00 → 08-25 262.50</td>
+            <td class="r up">+9.38%</td></tr>
+          <tr><td class="code">2303</td><td>聯電</td><td>2026-08-19</td>
+            <td class="lows">07-06 52.10 → 07-24 54.30 → 08-07 56.80 → 08-19 58.20</td>
+            <td class="r up">+11.71%</td></tr>
+        </tbody>
+      </table>
+      <div class="note">另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>
+    </div>
+    <div class="res">
+      <h3>箱型突破（標準）<span> — 命中 1 檔</span></h3>
+      <table>
+        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th class="r">箱型區間</th><th class="r">突破收盤</th><th class="r">突破幅度</th><th class="r">量能倍數</th></tr></thead>
+        <tbody>
+          <tr><td class="code">2330</td><td>台積電</td><td>2026-08-27</td>
+            <td class="r">2250.00 ~ 2380.00</td><td class="r">2420.00</td>
+            <td class="r up">+1.68%</td><td class="r">1.82×</td></tr>
+        </tbody>
+      </table>
+      <div class="note">另有 1 檔已突破，但確認日尚未到 ▸</div>
+    </div>
+  </div>
+</body>
+</html>

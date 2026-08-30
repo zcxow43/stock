@@ -1,0 +1,51 @@
+/* Fixed dark palette per specs/frontend/stock-list.md — Visual Style.
+   Literal hex only; must never shift with prefers-color-scheme. */
+
+.cfd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 22, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.cfd-dialog {
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 10px;
+  padding: 24px;
+  font-family:
+    'Noto Sans TC',
+    'Microsoft JhengHei',
+    'PingFang TC',
+    system-ui,
+    sans-serif;
+}
+
+.cfd-title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #e6edf5;
+}
+
+.cfd-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #93a4b8;
+}
+
+.cfd-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+/* .sl-btn / .sl-btn-primary / .sl-btn-danger come from StockListPage.css,
+   already loaded by StockOverviewTab.tsx wherever this dialog is used. */

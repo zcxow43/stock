@@ -51,6 +51,15 @@ function renderPage() {
   )
 }
 
+// The 策略 tab (StrategyTab) is always mounted alongside 總覽 (see StockListPage's
+// "both tabs stay mounted" comment) and fires its own GET /api/strategies and
+// GET /api/stocks/sync/progress calls on mount. These helpers isolate the 總覽 tab's
+// own `/api/stocks?...` list requests so call-count assertions below aren't coupled
+// to however many background calls the 策略 tab happens to make.
+function overviewCalls(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter((c: unknown[]) => /^\/api\/stocks\?/.test(String(c[0])))
+}
+
 describe('StockListPage', () => {
   let fetchMock: ReturnType<typeof vi.fn>
 
@@ -71,7 +80,7 @@ describe('StockListPage', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
     expect(screen.getByText('2')).toBeInTheDocument()
-    const url = new URL(fetchMock.mock.calls[0][0], 'http://x')
+    const url = new URL(overviewCalls(fetchMock)[0][0], 'http://x')
     expect(url.searchParams.get('page')).toBe('1')
     expect(url.searchParams.get('size')).toBe('50')
   })
@@ -118,7 +127,7 @@ describe('StockListPage', () => {
   it('debounces search input into a single request after typing stops', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     renderPage()
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(overviewCalls(fetchMock)).toHaveLength(1))
 
     const input = screen.getByPlaceholderText('輸入股票代號或名稱')
     fireEvent.change(input, { target: { value: '2' } })
@@ -127,12 +136,12 @@ describe('StockListPage', () => {
     fireEvent.change(input, { target: { value: '2330' } })
 
     // still just the initial mount request — debounce window hasn't elapsed
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(overviewCalls(fetchMock)).toHaveLength(1)
 
     await vi.advanceTimersByTimeAsync(300)
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(overviewCalls(fetchMock)).toHaveLength(2))
 
-    const lastUrl = new URL(fetchMock.mock.calls[1][0], 'http://x')
+    const lastUrl = new URL(overviewCalls(fetchMock)[1][0], 'http://x')
     expect(lastUrl.searchParams.get('keyword')).toBe('2330')
     vi.useRealTimers()
   })

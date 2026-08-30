@@ -126,4 +126,34 @@
         AND trade_date &gt;= #{candidateStart}
     </select>
 
+    <select id="findByStockIdsAndDateRange" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+               volume, turnover, transaction_count, source
+        FROM stock_daily_price
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY stock_id, trade_date ASC
+    </select>
+
+    <select id="findRecentBeforeDateByStockIds" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+               volume, turnover, transaction_count, source
+        FROM (
+            SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+                   volume, turnover, transaction_count, source,
+                   ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date DESC) AS rn
+            FROM stock_daily_price
+            WHERE stock_id IN
+            <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            AND trade_date &lt; #{beforeDate}
+        ) ranked
+        WHERE rn &lt;= #{limit}
+        ORDER BY stock_id, trade_date ASC
+    </select>
+
 </mapper>

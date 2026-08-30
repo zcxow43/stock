@@ -19,6 +19,7 @@ import com.stock.service.external.dto.TwseSnapshotResult;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -176,6 +177,8 @@ public class StockSyncService {
             failedItems.add(new FailedItemDto(p.getStockId(), p.getAttemptCount(), p.getLastError()));
         }
 
-        return new ProgressResponse(jobType, total, pending, running, done, failed, skipped, failedItems);
+        LocalDateTime lastSyncedAt = progressMapper.findLastSyncedAt(jobType);
+
+        return new ProgressResponse(jobType, total, pending, running, done, failed, skipped, lastSyncedAt, failedItems);
     }
 }

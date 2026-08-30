@@ -38,11 +38,67 @@
   font-weight: 600;
 }
 
+/* ---------- tab bar ---------- */
+
+.sl-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #26333f;
+  margin-bottom: 18px;
+}
+
+.sl-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #93a4b8;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.sl-tab:hover {
+  color: #e6edf5;
+}
+
+.sl-tab.sl-tab-active {
+  color: #e6edf5;
+  border-bottom-color: #3e8fd8;
+}
+
+/* ---------- toast (success / not-found) messages ---------- */
+
+.sl-toast {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.sl-toast-success {
+  color: #7ed9a6;
+  background: #12301f;
+  border: 1px solid #2c5c40;
+}
+
+.sl-toast-error {
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+}
+
 .sl-filters {
   display: flex;
   gap: 12px;
   align-items: center;
   margin-bottom: 18px;
+}
+
+.sl-filters-spacer {
+  flex: 1;
 }
 
 .sl-search {
@@ -296,6 +352,454 @@
 
 .sl-btn-primary:hover:not(:disabled) {
   background: #58a3e8;
+}
+
+.sl-btn-danger {
+  background: #8a3a34;
+  color: #ffffff;
+  border-color: #8a3a34;
+}
+
+.sl-btn-danger:hover:not(:disabled) {
+  background: #a6453e;
+}
+
+.sl-actions {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.sl-btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* ---------- 策略 tab (specs/frontend/strategy.md) — fixed dark palette, same table
+   as this file's header comment; never shifts with prefers-color-scheme. ---------- */
+
+.strategy-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.st-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93a4b8;
+  margin: 4px 0 -6px;
+}
+
+/* sync row */
+
+.st-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.st-last-sync {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-sync-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.st-sync-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #1b2836;
+  overflow: hidden;
+}
+
+.st-progress-fill {
+  height: 100%;
+  background: #3e8fd8;
+  transition: width 0.3s ease;
+}
+
+.st-sync-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-failed-list {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #d9a441;
+  font-size: 13px;
+}
+
+/* condition area */
+
+.st-condition {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.st-strategy-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.st-strategy-cards-loading {
+  color: #6b7c90;
+  font-size: 14px;
+}
+
+.st-strategy-card {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-strategy-card-selected {
+  border-color: #3e8fd8;
+}
+
+.st-strategy-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.st-strategy-card-head input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
+.st-strategy-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6edf5;
+}
+
+.st-strategy-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #93a4b8;
+}
+
+.st-scope {
+  display: flex;
+  gap: 20px;
+}
+
+.st-radio {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: #93a4b8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.st-radio input {
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
+.st-stock-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.st-stock-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-stock-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #1b2836;
+  color: #e6edf5;
+  border-radius: 14px;
+  padding: 4px 8px 4px 12px;
+  font-size: 13px;
+}
+
+.st-stock-tag button {
+  appearance: none;
+  background: none;
+  border: none;
+  color: #93a4b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.st-stock-search {
+  width: 320px;
+  max-width: 100%;
+  height: 38px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.st-stock-search::placeholder {
+  color: #6b7c90;
+}
+
+.st-stock-search:focus {
+  border-color: #3e8fd8;
+}
+
+.st-stock-search:disabled {
+  color: #4a5866;
+}
+
+.st-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  width: 320px;
+  max-width: 100%;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.st-suggestion-item {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #e6edf5;
+  cursor: pointer;
+}
+
+.st-suggestion-item:hover {
+  background: #1d2a38;
+}
+
+.st-date-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.st-date-range input[type='date'] {
+  height: 38px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.st-date-range input[type='date']:focus {
+  border-color: #3e8fd8;
+}
+
+.st-date-sep {
+  color: #93a4b8;
+  font-size: 13px;
+}
+
+.st-shortcut {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  background: #1b2836;
+  color: #93a4b8;
+}
+
+.st-shortcut-active {
+  background: #26333f;
+  color: #e6edf5;
+}
+
+.st-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.st-inline-hint {
+  font-size: 13px;
+  color: #6b7c90;
+}
+
+.st-inline-error {
+  font-size: 13px;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: inline-block;
+}
+
+/* results area */
+
+.st-results-placeholder {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.st-results-placeholder p {
+  margin: 0;
+  color: #6b7c90;
+  font-size: 14px;
+}
+
+.st-results-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 64px 24px;
+  text-align: center;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 8px;
+}
+
+.st-results-error p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.st-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.st-results-dimmed {
+  opacity: 0.6;
+}
+
+.st-result-block {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.st-result-title {
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e6edf5;
+  border-bottom: 1px solid #26333f;
+}
+
+.st-result-zero {
+  padding: 40px 18px;
+  text-align: center;
+}
+
+.st-result-zero p {
+  margin: 0 0 6px;
+  color: #6b7c90;
+  font-size: 14px;
+}
+
+.st-last-sync-hint {
+  color: #93a4b8 !important;
+  font-size: 13px !important;
+}
+
+.st-result-table {
+  border: none;
+  border-radius: 0;
+}
+
+.st-note {
+  padding: 10px 18px;
+  border-top: 1px solid #26333f;
+}
+
+.st-note-toggle {
+  appearance: none;
+  background: none;
+  border: none;
+  color: #d9a441;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.st-note-caret {
+  margin-left: 4px;
+}
+
+.st-note-ids {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #93a4b8;
 }
 
 .sl-empty,
