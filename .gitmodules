@@ -1,0 +1,4 @@
+[submodule ".claude"]
+	path = .claude
+	url = git@github.com:zcxow43/claude-config.git
+	branch = stock
