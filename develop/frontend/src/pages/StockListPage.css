@@ -448,6 +448,10 @@
   color: #93a4b8;
 }
 
+.st-caught-up-note {
+  color: #d9a441;
+}
+
 .st-failed-list {
   flex-basis: 100%;
   margin: 6px 0 0;

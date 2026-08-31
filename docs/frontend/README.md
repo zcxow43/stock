@@ -5,4 +5,4 @@
 | 分鏡 | 涵蓋流程 | 步驟 |
 |---|---|---|
 | [stock-chart](stock-chart.md) | 股票總覽 → 日 K → 分 K 的瀏覽流程 | 5 |
-| [strategy](strategy.md) | 同步日 K → 勾選策略 → 掃描出命中標的 | 4 |
+| [strategy](strategy.md) | 同步日 K → 勾選策略 → 掃描出命中標的 → 再同步顯示「已是最新」 | 5 |

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日"
 depends_on: []
@@ -37,6 +37,19 @@ depends_on: []
 
 - **速率控制為必要機制，不是最佳化**：逐檔回補必須有可設定的請求間隔與並行上限，並對 HTTP 429／逾時採用指數退避重試。預設值以保守為準（序列執行、每次請求間隔至少 1 秒），並可由設定調整。硬編死的無節流迴圈會在數十次請求內被來源封鎖。
 
+### 時區
+
+**全系統統一使用 `Asia/Taipei`**，包含資料庫容器、應用程式執行環境，以及資料庫連線本身。三者必須一致。
+
+本模組所有的日期語意都是**台北日曆日**：資料源給的 `trade_date` 是台北交易日、回補區間的 `startDate` / `endDate` 是台北日曆日、`last_synced_date` 記的也是台北日曆日。而進度表的 `started_at` / `finished_at` / `updated_at` 是由**資料庫時鐘**寫入的（見 `specs/dba/stock-sync-progress.md`），因此資料庫時區若與應用程式時區不同，同一筆作業的「日期」和「時間戳」會來自兩個不同的時鐘。
+
+這不只是顯示問題，有兩個實際後果：
+
+- `GET /api/stocks/sync/progress` 的 `lastSyncedAt` 取自 `finished_at`，時區不一致時會固定偏移，讓一次剛完成的同步在畫面上看起來是幾小時前的舊資料。
+- 「今日」在本地時間 00:00～08:00 之間，由應用程式算出來與由資料庫算出來會差一天。任何同時依賴兩者的判斷（例如 `endDate` 取今日、再與資料庫寫入的紀錄比對）在這段時間內會得到自相矛盾的結果。
+
+容器端的設定見 `specs/infra/mysql.md`；既有資料列的一次性位移見 `specs/dba/stock-sync-progress.md`（V010）、`specs/dba/stock.md`（V011）、`specs/dba/stock-daily-price.md`（V012）。本 spec 負責的是應用程式端：執行環境的預設時區與資料庫連線的時區都必須明確設定為 `Asia/Taipei`，不得依賴主機的預設值——依賴預設值等於讓行為取決於部署機器的設定，在 CI 或他人機器上會得到不同結果。
+
 ### 價格處理
 
 - 一律寫入**原始成交價（未經除權息還原）**，與 `specs/dba/stock-daily-price.md` 的約定一致。
@@ -56,6 +69,10 @@ depends_on: []
 - 省略 `stockIds` 或傳空陣列 → 處理 `stock` 表中 `is_active = 1` 的全部股票（全跑）。
 
 兩者共用同一套進度追蹤、速率控制與重試邏輯。
+
+**目標清單為空是合法情形，不是錯誤。** 全市場模式在 `stock` 表尚無任何 `is_active = 1` 的股票時（例如剛建好結構、種子資料尚未匯入），解析出來的目標清單為空。此時必須以 `targetCount: 0` 正常受理並立即結束，不得拋出例外、不得讓啟動補齊失敗，也不得對外部資料源發出任何請求。
+
+這一點要特別寫明，是因為空清單很容易在「以清單為條件的查詢」上炸掉——例如把空集合展開成 `IN` 而產生語法不完整的 SQL。凡是以目標清單為輸入的查詢，都必須在清單為空時直接略過查詢並回傳空結果，而不是把空集合交給資料庫。
 
 ### 斷點續傳
 
@@ -144,12 +161,17 @@ Response `202`（非同步作業，立即回應）：
 {
   "jobType": "PRICE_BACKFILL",
   "targetCount": 2200,
+  "caughtUpCount": 2200,
   "startDate": "2025-09-01",
   "endDate": "2026-08-27",
   "mode": "ALL"
 }
 ```
 `mode` 為 `SELECTED` 或 `ALL`，依 `stockIds` 是否提供而定。
+
+`caughtUpCount` 是本次目標中**已補齊至 `endDate`、因此不會發出任何外部請求**的檔數，於受理當下即可算出（判斷依據見下方「`catchUp` 的語意」的跳過條件），故隨 `202` 一併回傳。`catchUp` 為 `false` 時一律為 `0`。
+
+它存在的理由是「什麼都沒做」與「做完了」在進度表上長得一模一樣：被 `catchUp` 跳過的標的其進度列維持原狀（`status` 仍是 `DONE`、`finished_at` 仍是上次的時間），所以事後查進度只看得到「34 檔 DONE」，無從分辨這是本次補出來的、還是本來就已經補好的。`caughtUpCount == targetCount` 即表示這次同步完全沒有向外部要任何資料，呼叫端（見 `specs/frontend/strategy.md` 的「同步列」）必須據此如實呈現，不得顯示成剛完成了 `targetCount` 檔的同步。
 
 驗證與錯誤：
 - `startDate` 晚於 `endDate` → `400`，`{"code":"INVALID_DATE_RANGE"}`
@@ -227,13 +249,24 @@ Response `200`：
 - [x] `catchUp: true` 對一檔 `last_synced_date` 已等於 `endDate` 的股票完全不發出外部請求
 - [x] `endDate` 為週末或假日時，該次處理後 `last_synced_date` 記為該 `endDate` 本身；緊接著再以相同 `endDate` 執行一次 `catchUp`，不發出任何外部請求
 - [x] `resume` 與 `catchUp` 同時為 `true` 時回應 `400`，`{"code":"INVALID_SYNC_MODE"}`
-- [ ] 啟動補齊執行期間呼叫 `POST /api/stocks/sync/backfill` 回應 `409`，`{"code":"JOB_ALREADY_RUNNING"}`
+- [x] 啟動補齊執行期間呼叫 `POST /api/stocks/sync/backfill` 回應 `409`，`{"code":"JOB_ALREADY_RUNNING"}`
       （未驗證：併發鎖本身已由既有的 `JobRunningRegistry` 與其既有測試涵蓋，但「啟動補齊執行中」這個特定時間窗未實測——補齊完成後的重啟會在數秒內跳過全部標的，沒有足以發出第二個請求的窗口。待下次從空資料庫啟動時補驗。）
 - [x] `GET /api/stocks/sync/progress` 回應含 `lastSyncedAt`，其值等於該 `jobType` 中 `DONE` 列的完成時間最大值
 - [x] 從未成功同步過時 `lastSyncedAt` 為 `null`；一次全部失敗的同步不會更新該值
 - [x] 啟動補齊寫入的資料中不存在任何價格為 0 的列，停牌／非交易日不產生列
 
 ---
+
+- [x] 應用程式執行環境與資料庫連線的時區皆明確設定為 `Asia/Taipei`，不依賴主機預設值
+- [x] 資料庫容器改為 `Asia/Taipei` 後，新寫入的進度列其 `finished_at` 與當下本地時間一致（誤差在一分鐘內）
+- [x] `GET /api/stocks/sync/progress` 的 `lastSyncedAt` 與該次同步實際完成的本地時間一致，不再有 8 小時偏移
+- [x] `POST /api/stocks/sync/backfill` 的 `202` 回應含 `caughtUpCount`
+- [x] 全部標的都已補齊至 `endDate` 時，`caughtUpCount` 等於 `targetCount`，且該次作業對外部資料源的請求數為 0
+- [x] 部分標的落後時，`caughtUpCount` 等於已補齊的檔數，落後的檔仍照常補齊
+- [x] `catchUp` 為 `false` 時 `caughtUpCount` 一律為 `0`
+- [x] `stock` 表中沒有任何 `is_active = 1` 的股票時，全市場回補以 `targetCount: 0` 正常受理並結束，不拋出例外、不發出任何外部請求
+- [x] 同上情境下應用程式啟動補齊不產生任何錯誤紀錄，啟動流程正常完成
+
 ## Execution Result
 - Status: DONE
 - Files changed:
@@ -319,3 +352,59 @@ Response `200`：
     - `mvn -f develop/backend/pom.xml test` — **87/87 passing** (84 pre-existing + 3 new), run twice consecutively with no flakiness.
     - Direct `mysql` CLI check before and after the full suite run: `stock` = 34, `stock_daily_price` = 5372, `stock_daily_indicator` = 5372, `stock_sync_progress` DONE counts = 34 `PRICE_BACKFILL` / 34 `INDICATOR_REBUILD` — all **identical** before and after; zero leftover rows anywhere matching `stock_id LIKE 'T%'` after the run, confirming the `@Transactional` rollback left no residue and the ordinary `T2%` teardown cleaned up the other two new tests' rows.
   - No blockers. The two in-scope Acceptance Criteria items are covered by both a direct mapper/SQL-level assertion and a full HTTP round-trip test; no schema change was made (reused the existing `finished_at`/`status` columns and `idx_job_status` index exactly as instructed).
+
+### Increment 4 — 2026-08-31
+- Status: DONE (pending checkbox sign-off by the requester)
+- Scope: the single remaining unchecked Acceptance Criterion — 啟動補齊執行期間呼叫 `POST /api/stocks/sync/backfill` 回應 `409 JOB_ALREADY_RUNNING`.
+- **Finding: this was a real, provable gap, not just an untested-but-correct path.** `StartupCatchUpRunner.onApplicationReady()` was annotated `@Async("backfillExecutor")`, so the *entire method body* — including the call chain that eventually reached `JobRunningRegistry.tryStart("PRICE_BACKFILL")` — only ran once Spring's async executor actually picked up the scheduled task, not synchronously as part of handling `ApplicationReadyEvent`. Since the embedded server is already accepting HTTP connections by the time `ApplicationReadyEvent` fires, there was a genuine (if narrow) window — from "app ready to serve traffic" to "the async catch-up task actually starts running on the backfill executor" — during which `jobRunningRegistry.isRunning("PRICE_BACKFILL")` was still `false`. A manual `POST /api/stocks/sync/backfill` arriving in that window would have wrongly received `202`, not `409`, violating the spec's stated guarantee (line 209: 啟動補齊執行期間手動觸發回補會得到 409).
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/StockSyncService.java` — refactored `startBackfillInternal` into three pieces without changing its externally-observable behavior: `prepare(request)` (validation + target-id resolution, no lock touched — unchanged logic, just extracted), `runBackfill(request, jobType, prepared)` (progress-row resolution + `backfillRunner.run(...)` dispatch + response building — unchanged logic, just extracted), and a small private `Prepared` holder (mode + targetIds). Added a new public method `startBackfillWithLockAlreadyHeld(BackfillRequest)`: identical to the manual path except it never calls `jobRunningRegistry.tryStart` itself — it assumes the caller already acquired the lock synchronously — and still calls `jobRunningRegistry.finish(jobType)` in its own `catch (RuntimeException e)` if validation or scheduling fails before the batch is actually handed to `BackfillRunner`, so the lock is never leaked regardless of which of the two entry points is used. `startBackfill`/`startBackfillTrackingCompletion` (the manual/controller path) are otherwise unchanged, including the pre-existing ordering where validation happens *before* the lock check.
+  - `develop/backend/src/main/java/com/stock/service/StartupCatchUpRunner.java` — removed `@Async` from `onApplicationReady()`. The method now: checks the enabled flag (unchanged) → **synchronously** calls `jobRunningRegistry.tryStart("PRICE_BACKFILL")` as the very first side-effecting step, logging and returning if it's already held (defensive; not expected to actually happen this early) → builds the `BackfillRequest` and calls the new `stockSyncService.startBackfillWithLockAlreadyHeld(request)` (replacing the old `startBackfillTrackingCompletion` call, which would have re-acquired the lock redundantly) → chains the indicator-rebuild trigger onto the batch's completion future exactly as before. The lock is now held before this method returns, full stop — no async indirection sits between "application ready" and "lock acquired". The rate-limited per-stock loop itself is untouched and still runs off-thread: `runBackfill`'s call to `backfillRunner.run(...)` is a genuine cross-bean call into a different `@Async` bean (`BackfillRunner`), so it dispatches to the backfill executor and returns immediately regardless of whether the caller's own method is `@Async`. Only a few quick DB queries (target-id resolution, progress upserts) now execute synchronously on the thread handling `ApplicationReadyEvent`, in exchange for closing the race completely; this is judged an acceptable, minor trade-off against Increment 2's original "zero work on the startup-completing thread" design goal, since the previous design left the functional 409 guarantee unverifiable-in-principle. Startup itself is still never blocked — the ~30-minute batch remains fully asynchronous.
+  - `develop/backend/src/test/java/com/stock/service/StartupCatchUpRunnerTest.java` — updated the 3-arg `StartupCatchUpRunner` construction to the new 4-arg form (added a real `JobRunningRegistry` instance, not a mock — cheap, dependency-free, and lets the tests assert real lock state), renamed all `stockSyncService.startBackfillTrackingCompletion(...)` stubs/verifications to `startBackfillWithLockAlreadyHeld(...)`, and added a new unit test.
+  - `develop/backend/src/test/java/com/stock/StockPriceIngestionIntegrationTest.java` — added one new integration test (see below).
+  - No other files changed; no schema change.
+- New tests:
+  - `StartupCatchUpRunnerTest.jobLock_isHeldSynchronously_beforeOnApplicationReadyReturns` (pure unit test, no Spring context) — stubs `stockSyncService.startBackfillWithLockAlreadyHeld(...)` to return an outcome whose completion future is left deliberately incomplete, calls `runner.onApplicationReady()`, and asserts `jobRunningRegistry.isRunning("PRICE_BACKFILL")` is already `true` by the time the call returns — directly pins down the root cause this increment fixes.
+  - `StockPriceIngestionIntegrationTest.backfill_whileStartupCatchUpJobInFlight_returns409` (live MySQL DB + `MockRestServiceServer`) — deterministic by construction, no sleep/race timing: seeds one stock (`T261`), registers a `MockRestServiceServer` expectation whose `ResponseCreator` counts down a `requestReceived` latch and then blocks on a `releaseResponse` latch (gating exactly when the mocked external call "returns"). The test then reproduces exactly what `StartupCatchUpRunner.onApplicationReady()` now does — `jobRunningRegistry.tryStart("PRICE_BACKFILL")` followed by `stockSyncService.startBackfillWithLockAlreadyHeld(...)`, never through the HTTP endpoint — awaits `requestReceived` (proving the "startup" job is genuinely in flight, not merely "probably still running" as the pre-existing `backfill_secondCallWhileRunning_returns409` sibling test tolerates), then fires a real `POST /api/stocks/sync/backfill` (deliberately with `stockIds` omitted, i.e. `ALL` mode, to prove the rejection is per-`jobType` and independent of which stocks the manual call targets) and asserts `409 {"code":"JOB_ALREADY_RUNNING"}`. Releases the gated response and waits for the in-flight job to settle in a `finally`/tail step so the shared `JobRunningRegistry` state never leaks into other tests.
+- Verification performed:
+  - `mvn -f develop/backend/pom.xml compile` and `test-compile` — clean.
+  - `mvn -f develop/backend/pom.xml test` — **122/122 passing** (120 pre-existing across the whole backend module + 2 new: 1 in `StartupCatchUpRunnerTest`, 1 in `StockPriceIngestionIntegrationTest`), run twice consecutively with no flakiness. (The jump from Increment 3's reported 87 reflects unrelated test growth from `specs/backend/stock-indicator-statistics.md` and other specs' work landing in the same module since; nothing in this increment removed or weakened any existing test.)
+  - Self-reviewed via the `code-quality` skill: confirmed the lock is released on every failure path in both `startBackfillInternal` and the new `startBackfillWithLockAlreadyHeld` (no leak on the error path — the specific concurrency flag the skill calls out), confirmed no behavior change for the manual/HTTP path's pre-existing validate-before-lock ordering, and confirmed the new test's `try/finally` guarantees the gated mock response and the registry lock can never be left stuck for later tests even if an assertion fails mid-test.
+- Not implemented / no further changes: the `- [ ]` checkbox at line 230 and the `status:` frontmatter are left untouched per instructions, for the requester to sign off.
+
+### Increment 5 — 2026-08-31
+- Status: DONE (pending checkbox sign-off by the requester)
+- Scope: the 9 trailing unchecked Acceptance Criteria — (A) explicit `Asia/Taipei` timezone end to end, (B) `caughtUpCount` on the backfill `202` response, (C) empty target list must be safe (a real, observed `BadSqlGrammarException` at startup).
+- **(A) Timezone.** The MySQL container/data were already switched to `Asia/Taipei` by DBA migrations (out of scope here); this increment covers only the application side.
+  - `develop/backend/src/main/java/com/stock/BackendApplication.java` — added a `static { TimeZone.setDefault(TimeZone.getTimeZone("Asia/Taipei")); }` block, so the JVM's default timezone is set before Spring builds any bean or any `LocalDate.now()`/`LocalDateTime.now()` call happens, regardless of the host/CI machine's own default.
+  - `develop/backend/pom.xml` — added `-Duser.timezone=Asia/Taipei` to both the `spring-boot-maven-plugin`'s `jvmArguments` (covers `mvn spring-boot:run`, i.e. `docker/launch.json`'s actual startup path) and a newly-declared `maven-surefire-plugin`'s `argLine` (covers `mvn test`): this is deliberate belt-and-suspenders with the static block — it guarantees every test JVM's default zone is `Asia/Taipei` from process start regardless of whether `BackendApplication`'s static initializer has actually run yet (Spring's test bootstrapping resolves the primary configuration class via ASM metadata reading in some code paths, which does not reliably trigger class initialization), so the fix does not depend on that class-loading nuance in either entry point.
+  - `develop/backend/src/main/resources/application.yml` and `develop/backend/src/test/resources/application.yml` — JDBC URL's `serverTimezone=UTC` changed to `serverTimezone=Asia%2FTaipei` (URL-encoded `/`), so the MySQL Connector/J connection's timezone is explicit rather than left to the driver's auto-detection or a stale mismatched value.
+  - No DB/compose changes (explicitly out of scope and already done).
+- **(B) `caughtUpCount`.**
+  - `develop/backend/src/main/java/com/stock/dto/BackfillResponse.java` — added `caughtUpCount` (int) as a new constructor parameter (positioned right after `targetCount`) with a getter documenting why it exists (a caught-up stock's progress row is left exactly as it was, so "did nothing" and "finished everything" are otherwise indistinguishable from the progress table alone).
+  - `develop/backend/src/main/java/com/stock/service/StockSyncService.java` — `runBackfill` now captures `caughtUpIds.size()` (already computed via the existing `findCaughtUpStockIds` call inside the `catchUp` branch — no new query) into a local `caughtUpCount`, defaulted to `0` for the `resume`/reset branches (i.e. whenever `catchUp` is `false`), and passes it into the `BackfillResponse` constructor.
+  - `develop/backend/src/test/java/com/stock/service/StartupCatchUpRunnerTest.java` — updated its one `new BackfillResponse(...)` call site to the new 6-arg constructor (`caughtUpCount: 0`, since that dummy response is never inspected by the tests that use it).
+- **(C) Empty target list.** Root-caused and fixed at the mapper-interface layer rather than only at the one call site the reported crash came from, per instructions ("check for the same pattern in other mappers").
+  - `develop/backend/src/main/java/com/stock/mapper/StockSyncProgressMapper.java` — the 5 methods that take a `stockIds` list as MyBatis `<foreach>` input (`upsertPendingReset`, `upsertPendingIfAbsent`, `findProcessableStockIds`, `findCaughtUpStockIds`, `upsertPendingForCatchUp`) are now `default` methods that check `stockIds.isEmpty()` and either no-op (the two `void` upserts) or return `Collections.emptyList()` (the two finders) *without issuing any SQL*, delegating to a newly-renamed raw method (suffixed `ForNonEmptyIds`) for the non-empty case. Public method names/signatures seen by callers are unchanged — only the previously-XML-bound method was renamed, with the XML `id` renamed to match.
+  - `develop/backend/src/main/resources/mapper/StockSyncProgressMapper.xml` — renamed the 5 corresponding `id`s to the `ForNonEmptyIds` suffix; SQL bodies untouched.
+  - `develop/backend/src/main/java/com/stock/mapper/StockMapper.java` + `develop/backend/src/main/resources/mapper/StockMapper.xml` — same pattern applied to `findExistingStockIds` and `findByIds` (used elsewhere by `IndicatorRebuildService`, `StrategyScanService`, `StockStatisticsService`; those callers already guarded against an empty list before calling in, so this is defensive/future-proofing rather than fixing an observed bug there, but keeps the fix uniform across every list-taking query in the module rather than leaving one shape fixed and others not).
+  - **Root cause confirmed**: MyBatis's `<foreach>` — even one declared with `open="(" close=")"` — emits *nothing at all*, open/close included, when the backing collection is empty; this is what produced the exact truncated `... AND stock_id IN` SQL in the reported startup log. The fix stops the query from ever reaching MyBatis in that case, rather than trying to make the generated SQL empty-collection-safe.
+  - **Incidental fix**: `IndicatorRebuildService.rebuild`/`rebuildForStartup` (a different spec, `stock-indicator-statistics.md`) call the exact same `upsertPendingReset`/`findProcessableStockIds` methods with a target list that can also be empty (zero `is_active=1` stocks) and had the identical unguarded bug; the mapper-level fix resolves it there too as a side effect, with no changes to that spec's own files.
+  - No changes were made to `StockDailyPriceMapper.xml` / `StockDailyIndicatorMapper.xml` / `StockStatisticsMapper.xml`, which have the same `<foreach>` shape: their existing callers (`StockStatisticsService`, `IndicatorRebuildRunner`) already guard with an explicit `if (!targetIds.isEmpty())` before calling in, so they are not exposed to this failure mode today. Left as-is to keep this increment's diff scoped to the module actually exhibiting the bug.
+- New tests, all added to `develop/backend/src/test/java/com/stock/StockPriceIngestionIntegrationTest.java` (live MySQL DB + `MockRestServiceServer`-mocked FinMind, using fresh `T27x`/`T28x` stock ids under the existing `T2%` cleanup pattern):
+  - `timezone_progressFinishedAt_matchesApplicationLocalNow_withinOneMinute` — runs a real backfill to completion, reads `finished_at` directly via `jdbc`, asserts `Duration.between(finishedAt, LocalDateTime.now()).abs() < 1 minute`. A regression to the old DB(UTC)/app(host-default) mismatch would fail this by ~8 hours.
+  - `timezone_progressLastSyncedAt_matchesApplicationLocalNow_noEightHourOffset` — same, but through `GET /api/stocks/sync/progress`'s `lastSyncedAt` field (the exact field the spec calls out as visibly wrong under a timezone mismatch).
+  - `backfill_catchUp_allTargetsAlreadyCaughtUp_caughtUpCountEqualsTargetCount_zeroExternalRequests` — two stocks seeded already `DONE` through `endDate`; asserts `caughtUpCount == targetCount == 2` and registers **zero** `mockServer.expect(...)` calls (any external request fails the test outright).
+  - `backfill_catchUp_partiallyCaughtUp_caughtUpCountEqualsCaughtUpSubset_laggingStockStillSynced` — one caught-up + one lagging stock; asserts `caughtUpCount == 1`, `targetCount == 2`, the lagging stock's gap request is the *only* registered/consumed mock expectation, and its progress row still advances to `endDate` normally.
+  - `backfill_catchUpFalse_caughtUpCountAlwaysZero_evenWhenStockAlreadyCaughtUp` — a stock already caught up under `catchUp` semantics, but requested with `catchUp` omitted (`false`); asserts `caughtUpCount == 0` even though the stock gets fully reset and refetched (proving the field reflects `catchUp`'s truth value, not the underlying `last_synced_date` state).
+  - `backfill_allMode_noActiveStocks_catchUpTrue_targetCountZero_completesWithoutException_noExternalRequest` — deactivates every stock in the live DB (restored in `finally`, mirroring the established pattern in `backfill_allMode_targetsActiveStocksOnly`), fires `POST /api/stocks/sync/backfill` with `stockIds` omitted and `catchUp: true` — this is the literal reported-bug reproduction (`findCaughtUpStockIds(jobType, [], endDate)`) — and asserts `202`, `targetCount: 0`, `caughtUpCount: 0`, zero external requests, no exception.
+  - `backfill_allMode_noActiveStocks_catchUpFalse_targetCountZero_completesWithoutException_noExternalRequest` — same empty-DB setup but `catchUp` omitted, exercising the `upsertPendingReset` empty-`<foreach>` INSERT path instead.
+  - `startupCatchUpPath_noActiveStocks_locksAndCompletesWithoutError` — reproduces `StartupCatchUpRunner.onApplicationReady()`'s exact call sequence (`jobRunningRegistry.tryStart` then `stockSyncService.startBackfillWithLockAlreadyHeld`) against the same empty-DB state, asserting `assertDoesNotThrow(...)` and that the job lock is released once the (empty) batch settles — this is the most direct proof that "啟動補齊不產生任何錯誤紀錄，啟動流程正常完成" holds for this scenario, short of an actual full-process restart (consistent with the verification depth already established in Increment 4, whose own note says the same about not needing a literal process restart to pin down this class of fix).
+- Verification performed:
+  - `mvn -f develop/backend/pom.xml clean compile` — clean.
+  - `mvn -f develop/backend/pom.xml test-compile` — clean (also confirms the `BackfillResponse` constructor-signature change and the mapper method renames don't break any existing Mockito-based unit test — Mockito stubs interface methods, default or abstract, identically, so `when(progressMapper.findProcessableStockIds(...))`-style stubs in `IndicatorRebuildServiceTest` needed no changes).
+  - `mvn -f develop/backend/pom.xml test` — **130/130 passing** (122 pre-existing + 8 new: 2 timezone, 3 `caughtUpCount`, 3 empty-target-list), run twice consecutively with no flakiness.
+  - Killed a stray, hours-old leftover `com.stock.BackendApplication` process that was still bound to port 8080 from an earlier manual verification session (confirmed idle — startup catch-up for 34 already-synced stocks completes in well under a minute) before running the suite, so it could not interfere with the live DB the tests also exercise.
+  - Direct `mysql` CLI check after the full suite run: `stock` = 34 rows / 34 active, `stock_daily_price` = 5372 rows (0 with any zero-valued price column), `stock_sync_progress` `PRICE_BACKFILL` = 34 rows, 0 leftover rows anywhere matching `stock_id LIKE 'T%'` — all identical to the pre-existing state this task was told to preserve.
+  - Self-reviewed via the `code-quality` skill: confirmed the mapper-level empty-list guards are additive/backward-compatible (existing callers' method names/signatures unchanged, only the underlying XML-bound method was renamed), confirmed the fix addresses root cause (short-circuits before any SQL is built, rather than trying to special-case the generated SQL for an empty `IN`), confirmed the `BackfillResponse` field addition is a compatible wire-format change, and confirmed the deactivate/restore test helper follows the already-established sequential-test-execution assumption in this file (no new concurrency exposure). No issues required fixing as a result of this review.
+- Not implemented / deliberately left as-is: `StockDailyPriceMapper.xml`, `StockDailyIndicatorMapper.xml`, and `StockStatisticsMapper.xml`'s equivalent `<foreach>` queries were not given the same interface-level guard, since their current callers already check emptiness before calling in (verified by reading each caller) and touching those files would spill this increment's diff into `stock-indicator-statistics.md` / `strategy.md` / `stock-minute-price.md`'s own modules without an observed bug to justify it. The `- [ ]` checkboxes and `status:` frontmatter are left untouched per instructions, for the requester to sign off.

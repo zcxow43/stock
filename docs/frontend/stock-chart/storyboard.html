@@ -6,7 +6,7 @@
 <style>
   :root { color-scheme: light; }
   body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
-  .board { position:relative; width:2360px; height:1484px; }
+  .board { position:relative; width:2360px; height:1542px; }
   .frame { position:absolute; }
   .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
 
@@ -26,38 +26,38 @@
   .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
               word-break:break-all; }
   .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
-  svg.links { position:absolute; inset:0; width:2360px; height:1484px; pointer-events:none; z-index:5; }
+  svg.links { position:absolute; inset:0; width:2360px; height:1542px; pointer-events:none; z-index:5; }
 </style>
 </head>
 <body>
 <div class="board">
-  <svg class="links" viewBox="0 0 2360 1484">
+  <svg class="links" viewBox="0 0 2360 1542">
     <defs>
       <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
         <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
       </filter>
     </defs>
-    <rect x="77.8" y="155.4" width="165.8" height="27.4"
+    <rect x="77.8" y="154.5" width="165.8" height="27.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="858.1" y="201.5" width="643.9" height="42.6"
+    <rect x="858.1" y="200.1" width="643.9" height="42.6"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1637.8" y="165.0" width="644.3" height="297.7"
+    <rect x="1637.8" y="164.1" width="644.3" height="297.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="2226.1" y="209.3" width="16.3" height="32.8"
+    <rect x="2226.1" y="208.4" width="16.3" height="32.8"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1637.8" y="904.7" width="644.3" height="290.4"
+    <rect x="1637.8" y="933.2" width="644.3" height="290.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="2150.2" y="847.3" width="35.3" height="24.7"
+    <rect x="2146.9" y="876.3" width="36.2" height="24.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="857.8" y="904.7" width="644.3" height="290.4"
+    <rect x="857.8" y="933.2" width="644.3" height="290.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <polygon points="250.5,176.4 831.0,206.9 830.6,213.4 851.1,205.5 831.6,195.4 831.2,201.9 250.8,171.4"
+    <polygon points="250.5,175.4 831.0,205.7 830.6,212.2 851.1,204.3 831.6,194.2 831.2,200.7 250.8,170.4"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1369.0,247.4 1610.7,275.6 1610.0,282.1 1630.9,275.5 1612.1,264.2 1611.3,270.7 1369.6,242.4"
+    <polygon points="1368.1,246.0 1610.7,274.5 1610.0,281.0 1630.9,274.4 1612.1,263.1 1611.3,269.5 1368.6,241.1"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="2224.2,248.0 2014.5,878.3 2008.3,876.2 2010.5,898.1 2025.4,881.9 2019.2,879.9 2229.0,249.6"
+    <polygon points="2224.5,247.1 2012.5,906.8 2006.3,904.8 2008.8,926.6 2023.5,910.3 2017.3,908.3 2229.2,248.7"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="2142.8,861.9 1528.2,980.3 1527.0,973.9 1509.0,986.5 1530.4,991.6 1529.2,985.2 2143.8,866.9"
+    <polygon points="2139.5,891.0 1528.2,1008.8 1527.0,1002.4 1509.0,1015.0 1530.4,1020.1 1529.2,1013.7 2140.5,895.9"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
   </svg>
   
@@ -73,13 +73,13 @@
     <img src="step-3.png" width="660" height="413" alt="點擊 2330 該列：進入日 K 線圖，主圖為蠟燭圖，下方為成交量、MACD、KD 三個副圖；單擊 08/25 那根 K 棒已將十字準星與 tooltip 釘選在該日。">
     <div class="caption"><span class="num">3</span>點擊 2330 該列：進入日 K 線圖，主圖為蠟燭圖，下方為成交量、MACD、KD 三個副圖；單擊 08/25 那根 K 棒已將十字準星與 tooltip 釘選在該日。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330</code><span class="note">取頁首名稱、市場、最新收盤與漲跌</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/statistics?stockIds=2330&amp;includeSeries=true&amp;startDate=&amp;endDate=</code><span class="note">取日 K 序列與 MACD／KD</span></span></div></div>
   </div>
-  <div class="frame" style="left:1630px; top:817px; width:660px;">
-    <img src="step-4.png" width="660" height="413" alt="連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。">
-    <div class="caption"><span class="num">4</span>連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=1</code><span class="note">首次呼叫即向外部來源抓取該日分 K</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/statistics?stockIds=2330&amp;includeSeries=true&amp;startDate=&amp;endDate=</code><span class="note">僅為取得相鄰交易日</span></span></div></div>
+  <div class="frame" style="left:1630px; top:846px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="連點兩下 08/25 那根 K 棒：進入該交易日的 1 分走勢，主圖為單一藍色的現價流線圖（非蠟燭），虛線為當日開盤價基準；量柱統一中性色，逐分鐘的開高低收仍可由 tooltip 查閱。">
+    <div class="caption"><span class="num">4</span>連點兩下 08/25 那根 K 棒：進入該交易日的 1 分走勢，主圖為單一藍色的現價流線圖（非蠟燭），虛線為當日開盤價基準；量柱統一中性色，逐分鐘的開高低收仍可由 tooltip 查閱。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=1</code><span class="note">首次呼叫即向外部來源抓取該日分 K</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/statistics?stockIds=2330&amp;includeSeries=true&amp;startDate=&amp;endDate=</code><span class="note">僅為取得相鄰交易日</span></span></div></div>
   </div>
-  <div class="frame" style="left:850px; top:817px; width:660px;">
-    <img src="step-5.png" width="660" height="413" alt="點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。">
-    <div class="caption"><span class="num">5</span>點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=5</code><span class="note">已抓過的日期直接讀庫，不再外抓</span></span></div></div>
+  <div class="frame" style="left:850px; top:846px; width:660px;">
+    <img src="step-5.png" width="660" height="413" alt="點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪，流線變得較平滑。">
+    <div class="caption"><span class="num">5</span>點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪，流線變得較平滑。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/2330/minute-bars?tradeDate=2025-08-25&amp;interval=5</code><span class="note">已抓過的日期直接讀庫，不再外抓</span></span></div></div>
   </div>
 </div>
 </body>

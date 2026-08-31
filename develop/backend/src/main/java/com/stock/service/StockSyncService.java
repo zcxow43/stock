@@ -73,6 +73,47 @@ public class StockSyncService {
     }
 
     private BackfillOutcome startBackfillInternal(BackfillRequest request) {
+        Prepared prepared = prepare(request);
+
+        String jobType = StockSyncProgress.JOB_PRICE_BACKFILL;
+        if (!jobRunningRegistry.tryStart(jobType)) {
+            throw new JobAlreadyRunningException(jobType);
+        }
+        try {
+            return runBackfill(request, jobType, prepared);
+        } catch (RuntimeException e) {
+            jobRunningRegistry.finish(jobType);
+            throw e;
+        }
+    }
+
+    /**
+     * Variant for callers that must guarantee mutual exclusion with the manual endpoint before
+     * this method is even invoked, rather than acquiring the lock inside it — the startup
+     * catch-up runner acquires {@link JobRunningRegistry#tryStart} synchronously, on the same
+     * thread that handles {@code ApplicationReadyEvent}, *before* dispatching any work. If the
+     * lock were instead acquired only once inside this (or an {@code @Async}) method, there would
+     * be a real window between the application becoming ready to serve HTTP traffic and that
+     * async work actually starting, during which a manual {@code POST /api/stocks/sync/backfill}
+     * could slip in and wrongly receive {@code 202} instead of {@code 409} (spec:
+     * 啟動補齊執行期間手動觸發回補會得到 409 JOB_ALREADY_RUNNING). This method must never call
+     * {@link JobRunningRegistry#tryStart} itself; it only releases the lock (via
+     * {@link JobRunningRegistry#finish}) if something fails before the batch is actually handed
+     * off to {@link BackfillRunner} — the batch itself releases the lock in its own
+     * {@code finally} once every stock has been processed.
+     */
+    public BackfillOutcome startBackfillWithLockAlreadyHeld(BackfillRequest request) {
+        String jobType = StockSyncProgress.JOB_PRICE_BACKFILL;
+        try {
+            return runBackfill(request, jobType, prepare(request));
+        } catch (RuntimeException e) {
+            jobRunningRegistry.finish(jobType);
+            throw e;
+        }
+    }
+
+    /** Validates the request and resolves its target stock ids/mode; touches no job lock. */
+    private Prepared prepare(BackfillRequest request) {
         if (request.isResume() && request.isCatchUp()) {
             throw new InvalidSyncModeException();
         }
@@ -101,44 +142,54 @@ public class StockSyncService {
             targetIds = stockMapper.findActiveStockIds();
         }
 
-        String jobType = StockSyncProgress.JOB_PRICE_BACKFILL;
-        if (!jobRunningRegistry.tryStart(jobType)) {
-            throw new JobAlreadyRunningException(jobType);
-        }
+        return new Prepared(mode, targetIds);
+    }
 
-        CompletableFuture<Void> completion;
-        try {
-            List<String> processableIds;
-            if (request.isCatchUp()) {
-                // Per-stock decision by last_synced_date vs endDate (spec: catchUp 的語意):
-                // already-caught-up stocks are skipped entirely, left untouched, no request at all.
-                List<String> caughtUpIds = progressMapper.findCaughtUpStockIds(
-                        jobType, targetIds, request.getEndDate());
-                processableIds = new ArrayList<>(targetIds);
-                processableIds.removeAll(caughtUpIds);
-                if (!processableIds.isEmpty()) {
-                    progressMapper.upsertPendingForCatchUp(
-                            processableIds, jobType, request.getStartDate(), request.getEndDate());
-                }
-            } else if (request.isResume()) {
-                progressMapper.upsertPendingIfAbsent(targetIds, jobType, request.getStartDate(), request.getEndDate());
-                processableIds = progressMapper.findProcessableStockIds(
-                        jobType, targetIds, backfillProperties.getMaxAttemptCount());
-            } else {
-                progressMapper.upsertPendingReset(targetIds, jobType, request.getStartDate(), request.getEndDate());
-                processableIds = progressMapper.findProcessableStockIds(
-                        jobType, targetIds, backfillProperties.getMaxAttemptCount());
+    /** Resolves per-stock progress rows for the already-validated target list, then hands the
+     * processable ids off to {@link BackfillRunner}. Assumes the jobType lock is already held. */
+    private BackfillOutcome runBackfill(BackfillRequest request, String jobType, Prepared prepared) {
+        List<String> targetIds = prepared.targetIds;
+
+        List<String> processableIds;
+        int caughtUpCount = 0;
+        if (request.isCatchUp()) {
+            // Per-stock decision by last_synced_date vs endDate (spec: catchUp 的語意):
+            // already-caught-up stocks are skipped entirely, left untouched, no request at all.
+            List<String> caughtUpIds = progressMapper.findCaughtUpStockIds(
+                    jobType, targetIds, request.getEndDate());
+            caughtUpCount = caughtUpIds.size();
+            processableIds = new ArrayList<>(targetIds);
+            processableIds.removeAll(caughtUpIds);
+            if (!processableIds.isEmpty()) {
+                progressMapper.upsertPendingForCatchUp(
+                        processableIds, jobType, request.getStartDate(), request.getEndDate());
             }
-
-            completion = backfillRunner.run(jobType, processableIds, request.isResume());
-        } catch (RuntimeException e) {
-            jobRunningRegistry.finish(jobType);
-            throw e;
+        } else if (request.isResume()) {
+            progressMapper.upsertPendingIfAbsent(targetIds, jobType, request.getStartDate(), request.getEndDate());
+            processableIds = progressMapper.findProcessableStockIds(
+                    jobType, targetIds, backfillProperties.getMaxAttemptCount());
+        } else {
+            progressMapper.upsertPendingReset(targetIds, jobType, request.getStartDate(), request.getEndDate());
+            processableIds = progressMapper.findProcessableStockIds(
+                    jobType, targetIds, backfillProperties.getMaxAttemptCount());
         }
 
-        BackfillResponse response = new BackfillResponse(
-                jobType, targetIds.size(), request.getStartDate(), request.getEndDate(), mode);
+        CompletableFuture<Void> completion = backfillRunner.run(jobType, processableIds, request.isResume());
+
+        BackfillResponse response = new BackfillResponse(jobType, targetIds.size(), caughtUpCount,
+                request.getStartDate(), request.getEndDate(), prepared.mode);
         return new BackfillOutcome(response, completion);
+    }
+
+    /** Immutable holder for a backfill request's validated mode + resolved target stock ids. */
+    private static final class Prepared {
+        private final String mode;
+        private final List<String> targetIds;
+
+        private Prepared(String mode, List<String> targetIds) {
+            this.mode = mode;
+            this.targetIds = targetIds;
+        }
     }
 
     public ProgressResponse getProgress(String jobType) {

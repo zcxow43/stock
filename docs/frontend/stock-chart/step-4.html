@@ -30,7 +30,7 @@
       <div class="nb">← 前一交易日</div>
       <div class="nb">後一交易日 →</div>
     </div>
-    <div class="meta">資料來源 YAHOO ・ 抓取時間 2026-08-27 09:12:33 ・ 共 271 根 K 棒</div>
+    <div class="meta">資料來源 YAHOO ・ 抓取時間 2026-08-27 09:12:33 ・ 共 271 個資料點</div>
   </div>
 <script>
 const INTERVAL = 1;   /* step-5 renders the same page with INTERVAL = 5 */
@@ -90,26 +90,24 @@ function frame(p, label){
   if (label) s += `<text x="${L+8}" y="${p.t+15}" fill="${AX}" font-size="12">${label}</text>`;
 }
 const yScale = (p,lo,hi) => v => p.t + p.h - (v-lo)/(hi-lo)*p.h;
-const pLo=Math.min(...bars.map(b=>b.l)), pHi=Math.max(...bars.map(b=>b.h)), pad=(pHi-pLo)*0.05;
+/* 折線只用 close；Y 軸範圍必須同時涵蓋開盤基準線，否則基準線會被裁到圖外 */
+const cLo=Math.min(...bars.map(b=>b.c)), cHi=Math.max(...bars.map(b=>b.c));
+const pLo=Math.min(cLo, DAY.o), pHi=Math.max(cHi, DAY.o), pad=(pHi-pLo)*0.05;
 const yP = yScale(P.price, pLo-pad, pHi+pad);
-frame(P.price, `${INTERVAL} 分 K`);
+frame(P.price, `${INTERVAL} 分現價走勢`);
 for (let g=0; g<=4; g++){
   const v = pLo-pad + (pHi+pad-(pLo-pad))*g/4;
   s += `<text x="${R+8}" y="${yP(v)+4}" fill="${AX}" font-size="11">${v.toFixed(2)}</text>`;
 }
-s += `<line x1="${L}" y1="${yP(DAY.o)}" x2="${R}" y2="${yP(DAY.o)}" stroke="#3A4757" stroke-dasharray="5 4"/>`;
-s += `<text x="${L+6}" y="${yP(DAY.o)-5}" fill="#6B7C90" font-size="11">開盤 ${f2(DAY.o)}</text>`;
-bars.forEach((b,i)=>{
-  const col = b.c>=b.o ? UP : DN;
-  const yo=yP(b.o), yc=yP(b.c);
-  s += `<line x1="${x(i)}" y1="${yP(b.h)}" x2="${x(i)}" y2="${yP(b.l)}" stroke="${col}" stroke-width="1"/>`;
-  s += `<rect x="${x(i)-bw/2}" y="${Math.min(yo,yc)}" width="${bw}" height="${Math.max(1.2,Math.abs(yc-yo))}" fill="${col}"/>`;
-});
+s += `<line x1="${L}" y1="${yP(DAY.o)}" x2="${R}" y2="${yP(DAY.o)}" stroke="#4A5866" stroke-dasharray="5 4"/>`;
+s += `<text x="${R-8}" y="${yP(DAY.o)-6}" fill="#6B7C90" font-size="11" text-anchor="end">開盤 ${f2(DAY.o)}</text>`;
+/* 現價流線：單一色 #3E8FD8，不隨漲跌變色，線下不填色 */
+s += `<polyline points="${bars.map((b,i)=>x(i)+","+yP(b.c)).join(" ")}" fill="none" stroke="#3E8FD8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`;
 const vHi = Math.max(...bars.map(b=>b.v));
 const yV = yScale(P.vol, 0, vHi*1.1);
 frame(P.vol, "成交量（張）");
 bars.forEach((b,i)=>{
-  s += `<rect x="${x(i)-bw/2}" y="${yV(b.v)}" width="${bw}" height="${P.vol.t+P.vol.h-yV(b.v)}" fill="${b.c>=b.o?'#9A3B37':'#12784A'}"/>`;
+  s += `<rect x="${x(i)-bw/2}" y="${yV(b.v)}" width="${bw}" height="${P.vol.t+P.vol.h-yV(b.v)}" fill="#3A4757"/>`;
 });
 const tickEvery = INTERVAL === 1 ? 30 : Math.max(1, Math.round(30/INTERVAL));
 bars.forEach((b,i)=>{
@@ -121,6 +119,7 @@ bars.forEach((b,i)=>{
 const tIdx = Math.round(n*0.42), tb = bars[tIdx], tx = x(tIdx);
 s += `<line x1="${tx}" y1="${P.price.t}" x2="${tx}" y2="${P.vol.t+P.vol.h}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
 s += `<line x1="${L}" y1="${yP(tb.c)}" x2="${R}" y2="${yP(tb.c)}" stroke="#6B7C90" stroke-dasharray="4 4"/>`;
+s += `<circle cx="${tx}" cy="${yP(tb.c)}" r="3.5" fill="#E6EDF5"/>`;
 s += `<rect x="${tx-26}" y="${P.vol.t+P.vol.h+4}" width="52" height="18" fill="#3A4757" rx="3"/>`;
 s += `<text x="${tx}" y="${P.vol.t+P.vol.h+17}" fill="#E6EDF5" font-size="11" text-anchor="middle">${tb.t}</text>`;
 const pctFromOpen = (tb.c-DAY.o)/DAY.o*100;

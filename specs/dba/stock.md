@@ -107,6 +107,22 @@ ON DUPLICATE KEY UPDATE
 
 種子清單是開發樣本，不是完整上市清單。全市場 universe 一律由行情抓取流程以 UPSERT 補齊——兩者寫入同一張表、同一種語意，所以先跑哪個都不會衝突。
 
+### Migration SQL — V011__shift_stock_timestamps_to_taipei.sql
+
+一次性資料位移，不改結構。接在 `V009` 之後，理由與 `specs/dba/stock-sync-progress.md` 的 V009 完全相同：`created_at` / `updated_at` 由資料庫時鐘寫入，容器時區從 `UTC` 改為 `Asia/Taipei` 之前寫入的列比台北時間早 8 小時。
+
+```sql
+UPDATE stock t
+JOIN (SELECT COUNT(*) AS c FROM schema_migration WHERE version = 'V011') g
+SET t.created_at = t.created_at + INTERVAL 8 HOUR,
+    t.updated_at = t.updated_at + INTERVAL 8 HOUR
+WHERE g.c = 0;
+
+INSERT IGNORE INTO schema_migration (version) VALUES ('V011');
+```
+
+守門走 `schema_migration`（見 `specs/dba/schema-migration.md`），理由與 V010 相同：位移後的值仍滿足任何以資料為準的條件，只有記錄「跑過了」才擋得住重跑。本表的兩個欄位皆為稽核用途、目前沒有任何 API 對外回傳，位移是為了避免同一欄位在同一張表裡同時存在兩種時區語意——那是日後查問題時最難察覺的一類陷阱。
+
 ## Acceptance Criteria
 - [x] `stock` 表建立成功，欄位、型別、註解與上述 DDL 一致
 - [x] `market` 欄位寫入 `'TSE'`/`'OTC'` 以外的值時被 CHECK 約束拒絕
@@ -120,6 +136,10 @@ ON DUPLICATE KEY UPDATE
 - [x] V007 的 SQL 完整存在於本 spec 內，專案中不存在對應的獨立 `.sql` 檔
 
 ---
+
+- [x] V011 執行後，既有列的 `created_at` / `updated_at` 與執行前相比正好增加 8 小時
+- [x] V011 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V011` 仍只有一列（位移為冪等）
+
 ## Execution Result
 - Status: DONE
 - Files changed: `specs/dba/stock.md` (this spec — SQL applied live, no standalone .sql file created)
@@ -140,3 +160,14 @@ ON DUPLICATE KEY UPDATE
 - 驗證（皆為實際查詢結果，非代理回報）：`COUNT(*) = 34`，34 檔全為 `market='TSE'`、`is_active=1`；`HEX(stock_name)` 對 `2330` 為 `E58FB0E7A98DE99BBB`，與 `台積電` 的 UTF-8 位元組完全相符，確認非亂碼；`台積`／`鴻海`／`聯發科`／`中華電` 皆可由名稱命中。
 - 冪等性：自 spec 抽出 V007 的 SQL 再套用一次，列數仍為 34、名稱不變——同時也證明 spec 內嵌的 SQL 可直接執行。
 - 本次未寫入任何行情：`stock_daily_price` 為 0 列。日 K 需先由 `specs/backend/stock-price-ingestion.md` 的回補流程取得真實 OHLC。
+
+### Increment 3 — 2026-08-31
+
+套用 V011（時間戳由 UTC 位移為 Asia/Taipei），以 `schema_migration` 守門。
+
+| | `created_at` / `updated_at`（stock_id 1101） | 列數 |
+|---|---|---|
+| 位移前 | `2026-08-31 02:36:42` | 34 |
+| 位移後 | `2026-08-31 10:36:42` | 34 |
+
+第一次執行影響 34 列，正好 +8 小時，列數不變。第二次執行影響 **0** 列，時間戳維持 `10:36:42` 未再位移。

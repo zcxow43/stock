@@ -39,9 +39,16 @@ function toIsoDate(d: Date): string {
 }
 
 function monthsAgo(months: number, from: Date): Date {
-  const d = new Date(from)
-  d.setMonth(d.getMonth() - months)
-  return d
+  // Plain `d.setMonth(d.getMonth() - months)` silently overflows when the source day
+  // doesn't exist in the target month (e.g. Aug 30 minus 6 months lands on "Feb 30",
+  // which JS Date normalizes into March 2 instead of clamping) — a real, user-visible
+  // date-range bug for the 近半年/近三個月 shortcuts around month-end dates. Clamp the
+  // day to the last day of the target month instead, matching calendar-correct
+  // "N months ago" semantics.
+  const targetMonthIndex = from.getMonth() - months
+  const lastDayOfTargetMonth = new Date(from.getFullYear(), targetMonthIndex + 1, 0).getDate()
+  const day = Math.min(from.getDate(), lastDayOfTargetMonth)
+  return new Date(from.getFullYear(), targetMonthIndex, day)
 }
 
 function defaultDateRange(): { startDate: string; endDate: string } {
@@ -132,6 +139,14 @@ export default function StrategyTab() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
   const [syncProgress, setSyncProgress] = useState<ProgressResponse | null>(null)
   const [syncSummary, setSyncSummary] = useState<ProgressResponse | null>(null)
+  // `targetCount`/`caughtUpCount` from the *this-run's* `202` accept response — kept
+  // separate from `syncSummary` (which comes from the progress poll) because the two
+  // requests race independently; combining them at render time (rather than baking one
+  // into the other at whichever moment happens to resolve first) means whichever arrives
+  // second still triggers a correct re-render instead of freezing in a half-known state.
+  // Reset to `null` on every new click so a slow-to-arrive previous job's numbers can
+  // never be attributed to the next job's completion.
+  const [syncMeta, setSyncMeta] = useState<{ targetCount: number; caughtUpCount: number } | null>(null)
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null)
   const [showFailedList, setShowFailedList] = useState(false)
 
@@ -306,18 +321,24 @@ export default function StrategyTab() {
 
   const handleSyncClick = () => {
     setSyncErrorMessage(null)
+    setSyncMeta(null)
     setSyncStatus('running')
-    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(new Date()), catchUp: true }).catch(
-      (err: unknown) => {
+    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(new Date()), catchUp: true })
+      .then((resp) => {
+        setSyncMeta({ targetCount: resp.targetCount, caughtUpCount: resp.caughtUpCount })
+      })
+      .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'JOB_ALREADY_RUNNING') {
           // Not an error — someone else's sync is already running; stay in the
-          // running state and let the polling effect pick up its progress.
+          // running state and let the polling effect pick up its progress. We never
+          // started that job ourselves, so its caughtUpCount/targetCount stay unknown
+          // (syncMeta stays null) — the completion summary falls back to the plain
+          // done/failed/skipped counts rather than guessing.
           return
         }
         setSyncStatus('idle')
         setSyncErrorMessage('同步啟動失敗，請稍後再試')
-      },
-    )
+      })
   }
 
   const completedCount = (p: ProgressResponse) => p.done + p.failed + p.skipped
@@ -448,9 +469,16 @@ export default function StrategyTab() {
       ) : null}
       {syncStatus === 'idle' && syncSummary ? (
         <div className="st-sync-summary">
-          <span>
-            完成 {syncSummary.done} 檔／失敗 {syncSummary.failed} 檔／略過 {syncSummary.skipped} 檔
-          </span>
+          {syncMeta && syncMeta.targetCount > 0 && syncMeta.caughtUpCount === syncMeta.targetCount ? (
+            <span className="st-caught-up-note">已是最新，無需更新（{syncMeta.targetCount} 檔）</span>
+          ) : (
+            <span>
+              完成 {syncSummary.done} 檔／失敗 {syncSummary.failed} 檔／略過 {syncSummary.skipped} 檔
+              {syncMeta && syncMeta.caughtUpCount > 0 ? (
+                <span className="st-caught-up-note">，另 {syncMeta.caughtUpCount} 檔已是最新</span>
+              ) : null}
+            </span>
+          )}
           {syncSummary.failed > 0 ? (
             <button type="button" className="st-note-toggle" onClick={() => setShowFailedList((v) => !v)}>
               查看失敗清單<span className="st-note-caret">{showFailedList ? ' ▲' : ' ▼'}</span>

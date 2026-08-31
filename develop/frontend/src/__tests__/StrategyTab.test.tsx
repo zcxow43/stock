@@ -143,7 +143,10 @@ describe('StrategyTab', () => {
   beforeEach(() => {
     scanResponder = () => boxScanResponse()
     progressResponder = () => progressResponse()
-    backfillResponder = () => ({ status: 202, body: { jobType: 'PRICE_BACKFILL', targetCount: 34, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' } })
+    backfillResponder = () => ({
+      status: 202,
+      body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 0, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
+    })
 
     fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       const u = String(url)
@@ -208,7 +211,7 @@ describe('StrategyTab', () => {
   it('disables the preset dropdown for an unchecked strategy card and enables it once checked', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    const card = screen.getByText('箱型突破').closest('.st-strategy-card')!
+    const card = screen.getByText('箱型突破').closest('.st-strategy-card') as HTMLElement
     const select = within(card).getByRole('combobox') as HTMLSelectElement
     expect(select.disabled).toBe(true)
 
@@ -243,6 +246,40 @@ describe('StrategyTab', () => {
     expect(screen.getByRole('button', { name: '近三個月' }).className).toContain('st-shortcut-active')
   })
 
+  it('applies each of the three date-range shortcuts to the exact expected calendar dates', async () => {
+    // Pinned "today" so every expected date below is a literal, independently
+    // verified constant — not a re-derivation of the component's own monthsAgo()
+    // formula, which would pass even if that formula were wrong.
+    vi.setSystemTime(new Date('2026-08-30T00:00:00'))
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+
+    const dateInputs = () => screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/) as HTMLInputElement[]
+
+    // 近一個月: 2026-08-30 minus 1 calendar month = 2026-07-30 (July has 30 days, no overflow).
+    fireEvent.click(screen.getByRole('button', { name: '近一個月' }))
+    let [startInput, endInput] = dateInputs()
+    expect(startInput.value).toBe('2026-07-30')
+    expect(endInput.value).toBe('2026-08-30')
+    expect(screen.getByRole('button', { name: '近一個月' }).className).toContain('st-shortcut-active')
+
+    // 近三個月: 2026-08-30 minus 3 calendar months = 2026-05-30 (May has 31 days, no overflow).
+    fireEvent.click(screen.getByRole('button', { name: '近三個月' }))
+    ;[startInput, endInput] = dateInputs()
+    expect(startInput.value).toBe('2026-05-30')
+    expect(endInput.value).toBe('2026-08-30')
+    expect(screen.getByRole('button', { name: '近三個月' }).className).toContain('st-shortcut-active')
+
+    // 近半年: 2026-08-30 minus 6 calendar months lands on "Feb 30", which doesn't
+    // exist — 2026 is not a leap year, so February has 28 days. The calendar-correct
+    // result clamps to the last day of February: 2026-02-28, not an overflow into March.
+    fireEvent.click(screen.getByRole('button', { name: '近半年' }))
+    ;[startInput, endInput] = dateInputs()
+    expect(startInput.value).toBe('2026-02-28')
+    expect(endInput.value).toBe('2026-08-30')
+    expect(screen.getByRole('button', { name: '近半年' }).className).toContain('st-shortcut-active')
+  })
+
   it('blocks the scan and shows an inline message when start date is after end date', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
@@ -265,7 +302,9 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    await waitFor(() => expect(screen.getByText('2330')).toBeInTheDocument())
+    // 代號 and 名稱 render as sibling text nodes inside one <td> ("2330 台積電"), so
+    // match the combined text rather than a bare "2330" substring (exact match by default).
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.stockIds).toBeUndefined()
@@ -289,6 +328,59 @@ describe('StrategyTab', () => {
     expect(screen.queryByLabelText('移除 2317')).not.toBeInTheDocument()
     vi.useRealTimers()
   })
+
+  it('disables the stock-search input and shows a hint once 200 stocks are selected', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, boxScanResponse()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      if (u.startsWith('/api/stocks?')) {
+        const keyword = new URL(u, 'http://localhost').searchParams.get('keyword') ?? ''
+        return Promise.resolve(
+          jsonResponse(200, {
+            page: 1,
+            size: 20,
+            total: 1,
+            totalPages: 1,
+            items: [
+              {
+                stockId: keyword,
+                stockName: `股票${keyword}`,
+                market: 'TSE',
+                isActive: true,
+                latestTradeDate: null,
+                latestClose: null,
+                previousClose: null,
+                changeAmount: null,
+                changePercent: null,
+                latestVolume: null,
+              },
+            ],
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('radio', { name: '指定股票' }))
+    const input = screen.getByPlaceholderText('輸入代號或名稱搜尋加入')
+
+    for (let i = 0; i < 200; i++) {
+      const code = String(1000 + i)
+      fireEvent.change(input, { target: { value: code } })
+      await vi.advanceTimersByTimeAsync(300)
+      await vi.waitFor(() => expect(screen.getByText(`${code} 股票${code}`)).toBeInTheDocument())
+      fireEvent.click(screen.getByText(`${code} 股票${code}`))
+    }
+
+    expect(screen.getByText('最多 200 檔')).toBeInTheDocument()
+    expect((screen.getByPlaceholderText('輸入代號或名稱搜尋加入') as HTMLInputElement).disabled).toBe(true)
+    vi.useRealTimers()
+  }, 20000)
 
   it('shows two result blocks in selection order when two strategies are scanned', async () => {
     scanResponder = () => bothStrategiesResponse()
@@ -374,7 +466,11 @@ describe('StrategyTab', () => {
     let pollCount = 0
     progressResponder = () => {
       pollCount += 1
-      return pollCount <= 1
+      // Call #1 is the on-mount fetch, before the user has clicked anything — it must
+      // report idle, or the tab's "already running?" auto-detect would flip the button
+      // to 同步中 before the click even happens.
+      if (pollCount === 1) return progressResponse({ total: 34, pending: 0, running: 0, done: 34 })
+      return pollCount === 2
         ? progressResponse({ total: 34, pending: 20, running: 1, done: 13 })
         : progressResponse({ total: 34, pending: 0, running: 0, done: 30, failed: 2, skipped: 2, lastSyncedAt: '2026-08-30T13:00:00' })
     }
@@ -398,13 +494,137 @@ describe('StrategyTab', () => {
 
   it('treats a 409 JOB_ALREADY_RUNNING response as "already running", not an error', async () => {
     backfillResponder = () => ({ status: 409, body: { code: 'JOB_ALREADY_RUNNING' } })
-    progressResponder = () => progressResponse({ pending: 5, running: 1 })
+    let progressCallCount = 0
+    progressResponder = () => {
+      progressCallCount += 1
+      // Call #1 is the on-mount fetch — idle, so the click below is what drives the
+      // running state, not a mount-time auto-detect racing ahead of it. Later polls
+      // (post-click) report an in-flight job, matching the 409's "someone else is
+      // already running it" semantics, and deliberately never report `failed > 0` so
+      // the "not an error" assertion below can't collide with a completion summary.
+      return progressCallCount === 1
+        ? progressResponse({ pending: 0, running: 0, done: 34 })
+        : progressResponse({ pending: 5, running: 1, done: 29 })
+    }
     renderTab()
     await waitFor(() => expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: '同步日 K 至今日' }))
     await waitFor(() => expect(screen.getByRole('button', { name: '同步中…' })).toBeInTheDocument())
     expect(screen.queryByText(/失敗/)).not.toBeInTheDocument()
+  })
+
+  it('shows lastSyncedAt exactly as returned with no timezone conversion (no 8-hour shift)', async () => {
+    // `lastSyncedAt` already arrives as Asia/Taipei local time from the backend
+    // (specs/backend/stock-price-ingestion.md 「時區」). A naive `new Date(str)` +
+    // locale-aware formatting would reinterpret this as UTC and shift it by the local
+    // runtime's offset — e.g. this exact value would render as `2026-08-31 07:15` under
+    // an implementation that mistakenly re-converts it. The frontend must do a plain
+    // string format only.
+    progressResponder = () => progressResponse({ lastSyncedAt: '2026-08-30T23:15:00' })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('最後同步：2026-08-30 23:15')).toBeInTheDocument())
+    expect(screen.queryByText(/最後同步：2026-08-31/)).not.toBeInTheDocument()
+  })
+
+  it('shows 已是最新，無需更新（N 檔） — not 完成 N 檔 — when caughtUpCount equals targetCount', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    backfillResponder = () => ({
+      status: 202,
+      body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 34, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
+    })
+    let pollCount = 0
+    progressResponder = () => {
+      pollCount += 1
+      // Call #1 is the on-mount fetch (idle). From call #2 (the poll right after the
+      // click) onward the job is already finished — catchUp skipped every target, so
+      // zero external requests were made and there is nothing to be "running" about.
+      if (pollCount === 1) return progressResponse({ total: 34, pending: 0, running: 0, done: 34 })
+      return progressResponse({
+        total: 34,
+        pending: 0,
+        running: 0,
+        done: 34,
+        failed: 0,
+        skipped: 0,
+        lastSyncedAt: '2026-08-30T13:05:00',
+      })
+    }
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '同步日 K 至今日' }))
+
+    await vi.waitFor(() => expect(screen.getByText('已是最新，無需更新（34 檔）')).toBeInTheDocument())
+    expect(screen.queryByText(/^完成 /)).not.toBeInTheDocument()
+    expect(screen.getByText('最後同步：2026-08-30 13:05')).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('shows 完成／失敗／略過 counts plus an 另 N 檔已是最新 note when only some targets were already caught up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    backfillResponder = () => ({
+      status: 202,
+      body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 10, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
+    })
+    let pollCount = 0
+    progressResponder = () => {
+      pollCount += 1
+      if (pollCount === 1) return progressResponse({ total: 34, pending: 0, running: 0, done: 34 })
+      if (pollCount === 2) return progressResponse({ total: 34, pending: 15, running: 1, done: 8, failed: 0, skipped: 0 })
+      return progressResponse({
+        total: 34,
+        pending: 0,
+        running: 0,
+        done: 20,
+        failed: 2,
+        skipped: 2,
+        lastSyncedAt: '2026-08-30T13:10:00',
+      })
+    }
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '同步日 K 至今日' }))
+    await vi.waitFor(() => expect(screen.getByText('已完成 8 / 34 檔')).toBeInTheDocument())
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await vi.waitFor(() => expect(document.body.textContent).toContain('完成 20 檔／失敗 2 檔／略過 2 檔'))
+    expect(document.body.textContent).toContain('另 10 檔已是最新')
+    vi.useRealTimers()
+  })
+
+  it('keeps the completion summary visible after a near-instant sync instead of reverting to an unchanged-looking screen', async () => {
+    // Reproduces the reported bug directly: every target already caught up means the
+    // whole job (accept -> catchUp-skip everything -> finish) can complete inside a
+    // single poll cycle. The running state is never observably "in progress" for more
+    // than an instant, so the completion summary is the only signal the user gets that
+    // anything happened at all — it must not disappear once the running flash passes.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    backfillResponder = () => ({
+      status: 202,
+      body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 34, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
+    })
+    let pollCount = 0
+    progressResponder = () => {
+      pollCount += 1
+      if (pollCount === 1) return progressResponse({ total: 34, pending: 0, running: 0, done: 34 })
+      return progressResponse({ total: 34, pending: 0, running: 0, done: 34, failed: 0, skipped: 0, lastSyncedAt: '2026-08-30T13:20:00' })
+    }
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '同步日 K 至今日' }))
+    await vi.waitFor(() => expect(screen.getByText('已是最新，無需更新（34 檔）')).toBeInTheDocument())
+
+    // Nothing else happens afterward (no further polling once idle) — the summary must
+    // still be there well after the fact, and the button must have reverted to its
+    // normal label rather than staying stuck showing "同步中…".
+    await vi.advanceTimersByTimeAsync(15000)
+    expect(screen.getByText('已是最新，無需更新（34 檔）')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '同步中…' })).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('shows an error message with a retry button on scan failure, never an empty table', async () => {

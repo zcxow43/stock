@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -27,6 +28,7 @@ class StartupCatchUpRunnerTest {
     private StockSyncService stockSyncService;
     private IndicatorRebuildService indicatorRebuildService;
     private BackfillProperties properties;
+    private JobRunningRegistry jobRunningRegistry;
     private StartupCatchUpRunner runner;
 
     @BeforeEach
@@ -36,20 +38,39 @@ class StartupCatchUpRunnerTest {
         properties = new BackfillProperties();
         properties.getStartupCatchUp().setEnabled(true);
         properties.getStartupCatchUp().setStartDate(LocalDate.of(2026, 1, 1));
-        runner = new StartupCatchUpRunner(stockSyncService, indicatorRebuildService, properties);
+        jobRunningRegistry = new JobRunningRegistry();
+        runner = new StartupCatchUpRunner(stockSyncService, indicatorRebuildService, properties, jobRunningRegistry);
+    }
+
+    @Test
+    void jobLock_isHeldSynchronously_beforeOnApplicationReadyReturns() {
+        // Root of the fix this test guards: the PRICE_BACKFILL job lock must already be held by
+        // the time this event listener returns control to its caller -- not merely by the time
+        // some later @Async task happens to start running -- otherwise a manual
+        // POST /api/stocks/sync/backfill arriving in that gap would wrongly see the registry as
+        // free and get 202 instead of 409 (spec: 啟動補齊執行期間手動觸發回補會得到 409).
+        CompletableFuture<Void> priceBatchCompletion = new CompletableFuture<>();
+        when(stockSyncService.startBackfillWithLockAlreadyHeld(any(BackfillRequest.class)))
+                .thenReturn(new BackfillOutcome(dummyBackfillResponse(), priceBatchCompletion));
+
+        runner.onApplicationReady();
+
+        assertTrue(jobRunningRegistry.isRunning("PRICE_BACKFILL"));
+
+        priceBatchCompletion.complete(null);
     }
 
     @Test
     void indicatorRebuild_firesOnlyAfterPriceBatchCompletes_notBeforeOrInParallel() {
         CompletableFuture<Void> priceBatchCompletion = new CompletableFuture<>();
-        when(stockSyncService.startBackfillTrackingCompletion(any(BackfillRequest.class)))
+        when(stockSyncService.startBackfillWithLockAlreadyHeld(any(BackfillRequest.class)))
                 .thenReturn(new BackfillOutcome(dummyBackfillResponse(), priceBatchCompletion));
 
         runner.onApplicationReady();
 
         // The price batch was scheduled, but has not finished yet: the rebuild must not have
         // fired in parallel with it.
-        verify(stockSyncService, times(1)).startBackfillTrackingCompletion(any(BackfillRequest.class));
+        verify(stockSyncService, times(1)).startBackfillWithLockAlreadyHeld(any(BackfillRequest.class));
         verifyNoInteractions(indicatorRebuildService);
 
         // Only once the price batch's own completion future actually completes does the rebuild fire.
@@ -67,7 +88,7 @@ class StartupCatchUpRunnerTest {
         // not something to skip. Model the rare case where the batch's future itself completes
         // exceptionally (e.g. an interrupted thread) the same way: still fire the rebuild.
         CompletableFuture<Void> priceBatchCompletion = new CompletableFuture<>();
-        when(stockSyncService.startBackfillTrackingCompletion(any(BackfillRequest.class)))
+        when(stockSyncService.startBackfillWithLockAlreadyHeld(any(BackfillRequest.class)))
                 .thenReturn(new BackfillOutcome(dummyBackfillResponse(), priceBatchCompletion));
 
         runner.onApplicationReady();
@@ -89,7 +110,7 @@ class StartupCatchUpRunnerTest {
     @Test
     void rebuildFailure_doesNotPropagate() {
         CompletableFuture<Void> priceBatchCompletion = new CompletableFuture<>();
-        when(stockSyncService.startBackfillTrackingCompletion(any(BackfillRequest.class)))
+        when(stockSyncService.startBackfillWithLockAlreadyHeld(any(BackfillRequest.class)))
                 .thenReturn(new BackfillOutcome(dummyBackfillResponse(), priceBatchCompletion));
         when(indicatorRebuildService.rebuildForStartup())
                 .thenThrow(new RuntimeException("JOB_ALREADY_RUNNING or similar"));
@@ -105,7 +126,7 @@ class StartupCatchUpRunnerTest {
 
     @Test
     void priceBatchSchedulingFailure_doesNotPropagate_andNeverTriggersRebuild() {
-        when(stockSyncService.startBackfillTrackingCompletion(any(BackfillRequest.class)))
+        when(stockSyncService.startBackfillWithLockAlreadyHeld(any(BackfillRequest.class)))
                 .thenThrow(new RuntimeException("e.g. JOB_ALREADY_RUNNING"));
 
         assertDoesNotThrow(() -> runner.onApplicationReady());
@@ -114,7 +135,7 @@ class StartupCatchUpRunnerTest {
     }
 
     private BackfillResponse dummyBackfillResponse() {
-        return new BackfillResponse("PRICE_BACKFILL", 34,
+        return new BackfillResponse("PRICE_BACKFILL", 34, 0,
                 LocalDate.of(2026, 1, 1), LocalDate.now(), "ALL");
     }
 }

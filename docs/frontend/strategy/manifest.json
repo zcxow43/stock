@@ -1,16 +1,40 @@
 [
-  { "file": "step-1.html",
+  {
+    "file": "step-1.html",
     "caption": "初始畫面：策略分頁尚未掃描，同步列顯示「尚未同步」，未勾選策略時「開始掃描」為 disabled。",
-    "api": ["GET /api/strategies — 取策略清單與三段靈敏度的說明文字",
-            "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt 顯示最後同步時間"] },
-  { "file": "step-2.html",
+    "api": [
+      "GET /api/strategies — 取策略清單與三段靈敏度的說明文字",
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt 顯示最後同步時間"
+    ]
+  },
+  {
+    "file": "step-2.html",
     "caption": "點擊「同步日 K 至今日」：轉為執行中並顯示 18 / 34 進度，畫面不被阻塞。",
-    "api": ["POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場",
-            "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 每 5 秒輪詢更新進度"] },
-  { "file": "step-3.html",
+    "api": [
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場",
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 每 5 秒輪詢更新進度"
+    ]
+  },
+  {
+    "file": "step-3.html",
     "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。",
-    "api": ["GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"] },
-  { "file": "step-4.html",
-    "caption": "點擊「開始掃描」：兩個策略各自一個結果區塊，底底高命中 2 檔、箱型突破命中 1 檔；資料不足與待確認的標的以獨立提示呈現，不混入命中清單。",
-    "api": ["POST /api/strategies/scan — body strategies=[底底高/STRICT, 箱型突破/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"] }
+    "api": [
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"
+    ]
+  },
+  {
+    "file": "step-4.html",
+    "caption": "點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 2 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是兩個策略各自的區塊，資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。",
+    "api": [
+      "POST /api/strategies/scan — body strategies=[底底高/STRICT, 箱型突破/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
+    ]
+  },
+  {
+    "file": "step-5.html",
+    "caption": "再次點擊「同步日 K 至今日」：34 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（34 檔）」而非「完成 34 檔」；掃描結果保留不受影響。",
+    "api": [
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=34、caughtUpCount=34，代表本次一檔都不需抓取",
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt，時間為 Asia/Taipei"
+    ]
+  }
 ]

@@ -15,7 +15,7 @@
         <result property="finishedAt" column="finished_at"/>
     </resultMap>
 
-    <insert id="upsertPendingReset">
+    <insert id="upsertPendingResetForNonEmptyIds">
         INSERT INTO stock_sync_progress
             (stock_id, job_type, status, target_start_date, target_end_date,
              last_synced_date, attempt_count, last_error, started_at, finished_at)
@@ -34,7 +34,7 @@
             finished_at = NULL
     </insert>
 
-    <insert id="upsertPendingIfAbsent">
+    <insert id="upsertPendingIfAbsentForNonEmptyIds">
         INSERT INTO stock_sync_progress
             (stock_id, job_type, status, target_start_date, target_end_date,
              last_synced_date, attempt_count, last_error, started_at, finished_at)
@@ -46,7 +46,7 @@
             stock_id = stock_id
     </insert>
 
-    <select id="findProcessableStockIds" resultType="string">
+    <select id="findProcessableStockIdsForNonEmptyIds" resultType="string">
         SELECT stock_id FROM stock_sync_progress
         WHERE job_type = #{jobType}
           AND status IN ('PENDING','FAILED')
@@ -58,7 +58,7 @@
         ORDER BY stock_id
     </select>
 
-    <select id="findCaughtUpStockIds" resultType="string">
+    <select id="findCaughtUpStockIdsForNonEmptyIds" resultType="string">
         SELECT stock_id FROM stock_sync_progress
         WHERE job_type = #{jobType}
           AND last_synced_date IS NOT NULL
@@ -69,7 +69,7 @@
         </foreach>
     </select>
 
-    <insert id="upsertPendingForCatchUp">
+    <insert id="upsertPendingForCatchUpForNonEmptyIds">
         INSERT INTO stock_sync_progress
             (stock_id, job_type, status, target_start_date, target_end_date,
              last_synced_date, attempt_count, last_error, started_at, finished_at)

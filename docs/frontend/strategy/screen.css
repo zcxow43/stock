@@ -48,3 +48,27 @@
          padding:34px; text-align:center; color:#6B7C90; font-size:14px; }
 .empty .sub { font-size:12px; margin-top:8px; color:#4A5866; }
 .lows { color:#93A4B8; font-size:13px; }
+
+/* 聯集（命中彙總）表格 */
+.union .hits { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.union .stag { background:#1B2836; color:#E6EDF5; border:1px solid #26333F; border-radius:3px; padding:1px 6px; font-size:12px; }
+.union .sdate { color:#93A4B8; font-size:12px; }
+.union .sep { color:#6B7C90; margin:0 2px; }
+
+/* 結果頁（含聯集表格）內容較多，收緊垂直節奏讓整頁仍在 1440x900 內完整呈現，
+   不靠裁切或省略內容達成。只作用於 body.page-strategy，不影響其他分鏡。 */
+.page-strategy .wrap { padding:18px 28px; }
+.page-strategy .head { margin-bottom:12px; }
+.page-strategy .tabs { margin-bottom:12px; }
+.page-strategy .syncbar { padding:8px 16px; margin-bottom:10px; }
+.page-strategy .cond { padding:10px 16px; margin-bottom:10px; }
+.page-strategy .cond h2 { margin:0 0 8px; }
+.page-strategy .cards { margin-bottom:8px; }
+.page-strategy .card { padding:8px 14px; }
+.page-strategy .card .top { margin-bottom:5px; }
+.page-strategy .condrow { margin-bottom:6px; }
+.page-strategy .res { margin-bottom:9px; }
+.page-strategy thead th { padding:6px 16px; }
+.page-strategy tbody td { padding:5px 16px; }
+.page-strategy .res h3 { margin:0 0 5px; }
+.page-strategy .note { margin-top:4px; }

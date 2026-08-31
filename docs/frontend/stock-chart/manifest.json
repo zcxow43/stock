@@ -23,7 +23,7 @@
   },
   {
     "file": "step-4.html",
-    "caption": "連點兩下 08/25 那根 K 棒：進入該交易日的 1 分 K，附當日開高低收概況。",
+    "caption": "連點兩下 08/25 那根 K 棒：進入該交易日的 1 分走勢，主圖為單一藍色的現價流線圖（非蠟燭），虛線為當日開盤價基準；量柱統一中性色，逐分鐘的開高低收仍可由 tooltip 查閱。",
     "api": [
       "GET /api/stocks/2330/minute-bars?tradeDate=2025-08-25&interval=1 — 首次呼叫即向外部來源抓取該日分 K",
       "GET /api/stocks/statistics?stockIds=2330&includeSeries=true&startDate=&endDate= — 僅為取得相鄰交易日"
@@ -31,7 +31,7 @@
   },
   {
     "file": "step-5.html",
-    "caption": "點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪。",
+    "caption": "點擊「5 分」：以 interval=5 重新請求該交易日分 K 並重繪，流線變得較平滑。",
     "api": [
       "GET /api/stocks/2330/minute-bars?tradeDate=2025-08-25&interval=5 — 已抓過的日期直接讀庫，不再外抓"
     ]

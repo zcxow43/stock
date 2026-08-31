@@ -4,6 +4,7 @@ import com.stock.domain.Stock;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Collections;
 import java.util.List;
 
 @Mapper
@@ -21,14 +22,36 @@ public interface StockMapper {
     /** All active (is_active = 1) stock ids, used as the "ALL" backfill target set. */
     List<String> findActiveStockIds();
 
-    /** Subset of the given ids that actually exist in the stock table. */
-    List<String> findExistingStockIds(@Param("stockIds") List<String> stockIds);
+    /**
+     * Subset of the given ids that actually exist in the stock table. Returns an empty list
+     * without querying when stockIds is empty (a bare IN () over an empty collection is not
+     * valid SQL — MyBatis's <foreach> emits nothing at all, open/close included, for an empty
+     * collection).
+     */
+    default List<String> findExistingStockIds(List<String> stockIds) {
+        if (stockIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return findExistingStockIdsForNonEmptyIds(stockIds);
+    }
+
+    List<String> findExistingStockIdsForNonEmptyIds(@Param("stockIds") List<String> stockIds);
 
     /** Single stock master row by id, or null if not found. */
     Stock findById(@Param("stockId") String stockId);
 
-    /** Full stock master rows for the given ids (subset of ids that actually exist). */
-    List<Stock> findByIds(@Param("stockIds") List<String> stockIds);
+    /**
+     * Full stock master rows for the given ids (subset of ids that actually exist). Returns an
+     * empty list without querying when stockIds is empty; see {@link #findExistingStockIds}.
+     */
+    default List<Stock> findByIds(List<String> stockIds) {
+        if (stockIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return findByIdsForNonEmptyIds(stockIds);
+    }
+
+    List<Stock> findByIdsForNonEmptyIds(@Param("stockIds") List<String> stockIds);
 
     /** Full stock master rows for every active (is_active = 1) stock. */
     List<Stock> findActiveStocks();

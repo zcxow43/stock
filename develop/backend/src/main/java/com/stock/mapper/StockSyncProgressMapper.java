@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Mapper
@@ -15,44 +16,98 @@ public interface StockSyncProgressMapper {
     /**
      * Batch-create/reset progress rows to PENDING for every id in stockIds
      * (full reset: attempt_count=0, last_synced_date=NULL). Used when resume=false.
+     *
+     * A no-op when stockIds is empty (spec: 目標清單為空是合法情形 — ALL mode with zero
+     * is_active=1 rows must complete without issuing any SQL against an empty id list; MyBatis's
+     * {@code <foreach>} silently emits nothing at all, open/close included, for an empty
+     * collection, which would otherwise produce a syntactically invalid "INSERT ... VALUES" with
+     * no rows).
      */
-    void upsertPendingReset(@Param("stockIds") List<String> stockIds,
-                             @Param("jobType") String jobType,
-                             @Param("startDate") LocalDate startDate,
-                             @Param("endDate") LocalDate endDate);
+    default void upsertPendingReset(List<String> stockIds, String jobType, LocalDate startDate, LocalDate endDate) {
+        if (stockIds.isEmpty()) {
+            return;
+        }
+        upsertPendingResetForNonEmptyIds(stockIds, jobType, startDate, endDate);
+    }
+
+    void upsertPendingResetForNonEmptyIds(@Param("stockIds") List<String> stockIds,
+                                           @Param("jobType") String jobType,
+                                           @Param("startDate") LocalDate startDate,
+                                           @Param("endDate") LocalDate endDate);
 
     /**
      * Batch-create progress rows only for ids that don't already have one; existing rows
      * (and their status/progress) are left untouched. Used when resume=true.
+     *
+     * No-op when stockIds is empty; see {@link #upsertPendingReset} for why this guard exists.
      */
-    void upsertPendingIfAbsent(@Param("stockIds") List<String> stockIds,
-                                @Param("jobType") String jobType,
-                                @Param("startDate") LocalDate startDate,
-                                @Param("endDate") LocalDate endDate);
+    default void upsertPendingIfAbsent(List<String> stockIds, String jobType, LocalDate startDate,
+                                        LocalDate endDate) {
+        if (stockIds.isEmpty()) {
+            return;
+        }
+        upsertPendingIfAbsentForNonEmptyIds(stockIds, jobType, startDate, endDate);
+    }
 
-    /** Ids within stockIds that are still processable: status PENDING/FAILED and under the retry cap. */
-    List<String> findProcessableStockIds(@Param("jobType") String jobType,
-                                          @Param("stockIds") List<String> stockIds,
-                                          @Param("maxAttempts") int maxAttempts);
+    void upsertPendingIfAbsentForNonEmptyIds(@Param("stockIds") List<String> stockIds,
+                                              @Param("jobType") String jobType,
+                                              @Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
+
+    /**
+     * Ids within stockIds that are still processable: status PENDING/FAILED and under the retry
+     * cap. Returns an empty list without querying when stockIds is empty; see
+     * {@link #upsertPendingReset} for why this guard exists.
+     */
+    default List<String> findProcessableStockIds(String jobType, List<String> stockIds, int maxAttempts) {
+        if (stockIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return findProcessableStockIdsForNonEmptyIds(jobType, stockIds, maxAttempts);
+    }
+
+    List<String> findProcessableStockIdsForNonEmptyIds(@Param("jobType") String jobType,
+                                                         @Param("stockIds") List<String> stockIds,
+                                                         @Param("maxAttempts") int maxAttempts);
 
     /**
      * Ids within stockIds already synced through (or past) endDate. Used by catchUp mode to
-     * decide which stocks to skip entirely (no external request at all).
+     * decide which stocks to skip entirely (no external request at all). Returns an empty list
+     * without querying when stockIds is empty (this is the exact query that, unguarded, throws
+     * BadSqlGrammarException from a truncated "... AND stock_id IN" when ALL mode resolves to zero
+     * active stocks — spec: 目標清單為空是合法情形).
      */
-    List<String> findCaughtUpStockIds(@Param("jobType") String jobType,
-                                       @Param("stockIds") List<String> stockIds,
-                                       @Param("endDate") LocalDate endDate);
+    default List<String> findCaughtUpStockIds(String jobType, List<String> stockIds, LocalDate endDate) {
+        if (stockIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return findCaughtUpStockIdsForNonEmptyIds(jobType, stockIds, endDate);
+    }
+
+    List<String> findCaughtUpStockIdsForNonEmptyIds(@Param("jobType") String jobType,
+                                                      @Param("stockIds") List<String> stockIds,
+                                                      @Param("endDate") LocalDate endDate);
 
     /**
      * Re-opens each id (in stockIds, which must exclude already-caught-up ids) as PENDING for a
      * catchUp run: continues from last_synced_date + 1 day when a prior progress row exists (or
      * from startDate for a brand-new/never-synced row), and resets attempt_count to 0 since
      * falling behind is due to time passing, not prior failures.
+     *
+     * No-op when stockIds is empty; see {@link #upsertPendingReset} for why this guard exists.
      */
-    void upsertPendingForCatchUp(@Param("stockIds") List<String> stockIds,
-                                  @Param("jobType") String jobType,
-                                  @Param("startDate") LocalDate startDate,
-                                  @Param("endDate") LocalDate endDate);
+    default void upsertPendingForCatchUp(List<String> stockIds, String jobType, LocalDate startDate,
+                                          LocalDate endDate) {
+        if (stockIds.isEmpty()) {
+            return;
+        }
+        upsertPendingForCatchUpForNonEmptyIds(stockIds, jobType, startDate, endDate);
+    }
+
+    void upsertPendingForCatchUpForNonEmptyIds(@Param("stockIds") List<String> stockIds,
+                                                @Param("jobType") String jobType,
+                                                @Param("startDate") LocalDate startDate,
+                                                @Param("endDate") LocalDate endDate);
 
     StockSyncProgress findOne(@Param("stockId") String stockId, @Param("jobType") String jobType);
 

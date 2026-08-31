@@ -1,12 +1,12 @@
 package com.stock.service;
 
 import com.stock.config.BackfillProperties;
+import com.stock.domain.StockSyncProgress;
 import com.stock.dto.BackfillRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -20,11 +20,17 @@ import java.time.LocalDate;
  * `is_active = 1`, startDate = configured catch-up start date, endDate = today, catchUp = true);
  * there is no parallel fetch/rate-limit/progress implementation here.
  *
- * Runs entirely on the same async backfill executor used by manual backfills, so it never
- * delays the application becoming ready to serve requests, and any failure (offline source,
- * timeout, DNS failure, response-format change, or even a manual backfill already running) is
- * only logged — it must never abort application startup. Affected stocks simply fall into the
- * existing FAILED retry flow.
+ * The per-jobType concurrency lock ({@link JobRunningRegistry}) is acquired synchronously, on the
+ * same thread that handles {@code ApplicationReadyEvent}, before any work is dispatched — not
+ * inside an {@code @Async} method — so a manual {@code POST /api/stocks/sync/backfill} arriving
+ * at any point while this catch-up is in flight reliably sees the lock held and gets {@code 409
+ * JOB_ALREADY_RUNNING} (spec: 啟動補齊執行期間手動觸發回補會得到 409). Only that lock check plus a
+ * few quick target-resolution queries run synchronously here; the actual rate-limited per-stock
+ * loop still runs on the same async backfill executor used by manual backfills (via
+ * {@link BackfillRunner}), so this never delays the application becoming ready to serve requests.
+ * Any failure (offline source, timeout, DNS failure, response-format change, or even a manual
+ * backfill already running) is only logged — it must never abort application startup. Affected
+ * stocks simply fall into the existing FAILED retry flow.
  *
  * Once the whole price batch has actually finished (observed via the batch's completion future,
  * not merely via the scheduling call returning), this also triggers a single whole-market
@@ -44,21 +50,32 @@ public class StartupCatchUpRunner {
     private final StockSyncService stockSyncService;
     private final IndicatorRebuildService indicatorRebuildService;
     private final BackfillProperties properties;
+    private final JobRunningRegistry jobRunningRegistry;
 
     public StartupCatchUpRunner(StockSyncService stockSyncService, IndicatorRebuildService indicatorRebuildService,
-                                 BackfillProperties properties) {
+                                 BackfillProperties properties, JobRunningRegistry jobRunningRegistry) {
         this.stockSyncService = stockSyncService;
         this.indicatorRebuildService = indicatorRebuildService;
         this.properties = properties;
+        this.jobRunningRegistry = jobRunningRegistry;
     }
 
-    @Async("backfillExecutor")
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         BackfillProperties.StartupCatchUp config = properties.getStartupCatchUp();
         if (!config.isEnabled()) {
             log.info("Startup price catch-up disabled (app.backfill.startup-catch-up.enabled=false); "
                     + "skipping price catch-up and the indicator rebuild that would follow it.");
+            return;
+        }
+
+        // Acquired synchronously, right here, before any work is dispatched — see the class
+        // Javadoc for why this must not be deferred into an @Async method.
+        String jobType = StockSyncProgress.JOB_PRICE_BACKFILL;
+        if (!jobRunningRegistry.tryStart(jobType)) {
+            // Not expected in practice (nothing else should be running this early), but stay
+            // consistent with the manual endpoint's behavior rather than assuming it can't happen.
+            log.info("Startup price catch-up skipped: a {} job is already running.", jobType);
             return;
         }
 
@@ -70,9 +87,9 @@ public class StartupCatchUpRunner {
             request.setStartDate(startDate);
             request.setEndDate(endDate);
             request.setCatchUp(true);
-            BackfillOutcome outcome = stockSyncService.startBackfillTrackingCompletion(request);
+            BackfillOutcome outcome = stockSyncService.startBackfillWithLockAlreadyHeld(request);
             // Chain off the batch's actual completion, not off this scheduling call returning —
-            // startBackfillTrackingCompletion only kicks the async batch off and returns immediately.
+            // startBackfillWithLockAlreadyHeld only kicks the async batch off and returns immediately.
             outcome.getCompletion().whenComplete((ignoredResult, ex) -> {
                 if (ex != null) {
                     // The batch itself already routes every per-stock failure into FAILED and never
@@ -86,8 +103,9 @@ public class StartupCatchUpRunner {
             });
         } catch (Exception e) {
             // Must never fail application startup (spec: 絕不因抓取失敗而讓啟動失敗). A stock left
-            // behind here (offline source, JOB_ALREADY_RUNNING because a manual backfill beat us
-            // to it, etc.) is simply picked up by a later manual/resume/catchUp call. Since the price
+            // behind here (offline source, DB issue, etc.) is simply picked up by a later
+            // manual/resume/catchUp call. startBackfillWithLockAlreadyHeld already released the
+            // job lock itself before rethrowing, so no cleanup is needed here. Since the price
             // batch never actually started in this case, no indicator rebuild is triggered either.
             log.warn("Startup price catch-up could not be started; it can be triggered manually later.", e);
         }

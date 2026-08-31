@@ -107,6 +107,64 @@ describe('StockListPage tabs', () => {
     expect(screen.getByText('股票總覽')).toBeInTheDocument()
   })
 
+  it('keeps the 策略 tab sync progress alive across a round-trip through 總覽 (state does not live only inside the unmounted tab)', async () => {
+    const CATALOG = {
+      strategies: [
+        { code: 'BOX_BREAKOUT', name: '箱型突破', presets: [{ code: 'STANDARD', name: '標準', description: '標準說明' }] },
+        { code: 'HIGHER_LOWS', name: '底底高', presets: [{ code: 'STANDARD', name: '標準', description: '標準說明' }] },
+      ],
+    }
+    let progressCallCount = 0
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies')) return Promise.resolve({ ok: true, json: async () => CATALOG })
+      if (u.startsWith('/api/stocks/sync/backfill')) {
+        return Promise.resolve({ ok: true, status: 202, json: async () => ({ jobType: 'PRICE_BACKFILL', targetCount: 34, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' }) })
+      }
+      if (u.startsWith('/api/stocks/sync/progress')) {
+        progressCallCount += 1
+        // Stays "running" for every poll in this test — we only care that the running
+        // state survives a tab round-trip, not that it eventually completes.
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            jobType: 'PRICE_BACKFILL',
+            total: 34,
+            pending: 10,
+            running: 1,
+            done: 23,
+            failed: 0,
+            skipped: 0,
+            lastSyncedAt: null,
+            failedItems: [],
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => makeResponse() })
+    })
+
+    renderAt('/stocks?tab=strategy')
+    // The mocked progress response is already "running" on the very first load (as it
+    // would be for the startup catch-up job), so the tab auto-detects it and starts
+    // polling without the user clicking the button.
+    await waitFor(() => expect(screen.getByRole('button', { name: '同步中…' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('已完成 23 / 34 檔')).toBeInTheDocument())
+    const callsBeforeSwitch = progressCallCount
+
+    // Switch to 總覽 and back — the strategy tab panel unmounts from view (display:none)
+    // but must not lose its in-flight sync state.
+    fireEvent.click(screen.getByRole('tab', { name: '總覽' }))
+    await waitFor(() => expect(screen.getByTestId('sl-tabpanel-overview')).toHaveStyle({ display: 'block' }))
+
+    fireEvent.click(screen.getByRole('tab', { name: '策略' }))
+    await waitFor(() => expect(screen.getByTestId('sl-tabpanel-strategy')).toHaveStyle({ display: 'block' }))
+
+    expect(screen.getByRole('button', { name: '同步中…' })).toBeInTheDocument()
+    expect(screen.getByText('已完成 23 / 34 檔')).toBeInTheDocument()
+    // Polling kept running the whole time it was hidden, rather than resetting on remount.
+    await waitFor(() => expect(progressCallCount).toBeGreaterThan(callsBeforeSwitch), { timeout: 7000 })
+  }, 10000)
+
   it('syncs the tab switch into the ?tab= URL param', async () => {
     render(
       <MemoryRouter initialEntries={['/stocks']}>

@@ -32,11 +32,15 @@ import org.springframework.web.client.RestTemplate;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -463,6 +467,68 @@ class StockPriceIngestionIntegrationTest {
         waitUntilProgressDone("PRICE_BACKFILL", Arrays.asList("T231", "T232"), 10_000);
     }
 
+    @Test
+    void backfill_whileStartupCatchUpJobInFlight_returns409() throws Exception {
+        // Startup catch-up (StartupCatchUpRunner) never goes through this HTTP endpoint; it calls
+        // StockSyncService directly. What it MUST share with this endpoint is the PRICE_BACKFILL
+        // job lock: acquire it synchronously via JobRunningRegistry.tryStart, exactly as
+        // StartupCatchUpRunner.onApplicationReady() now does, then start the batch through the
+        // same lock-already-held entry point it uses (StockSyncService#startBackfillWithLockAlreadyHeld) --
+        // never through startBackfill()/this controller. A CountDownLatch gates the mocked
+        // external call so the "startup" job is deterministically still in flight (not merely
+        // "probably still running", as the sibling manual-vs-manual test above tolerates) when the
+        // concurrent manual call fires, and reports back the moment it has actually started so
+        // this test never depends on sleep-based timing.
+        seedStock("T261", "啟動補齊併發測試", true);
+
+        LocalDate start = LocalDate.of(2025, 9, 1);
+        LocalDate end = LocalDate.of(2025, 9, 1);
+        String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T261&start_date=" + start + "&end_date=" + end;
+        String body = finmindFixture("T261", new String[]{"2025-09-01"},
+                new String[]{"1.00"}, new String[]{"1.10"}, new String[]{"0.90"}, new String[]{"1.05"});
+
+        CountDownLatch requestReceived = new CountDownLatch(1);
+        CountDownLatch releaseResponse = new CountDownLatch(1);
+        mockServer.expect(requestTo(url)).andRespond(request -> {
+            requestReceived.countDown();
+            try {
+                assertTrue(releaseResponse.await(10, TimeUnit.SECONDS),
+                        "test did not release the gated in-flight response in time");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new java.io.IOException("interrupted while gating the in-flight response", e);
+            }
+            return withSuccess(body, MediaType.APPLICATION_JSON).createResponse(request);
+        });
+
+        assertTrue(jobRunningRegistry.tryStart("PRICE_BACKFILL"), "test setup: registry should have been free");
+        try {
+            BackfillRequest startupLikeRequest = new BackfillRequest();
+            startupLikeRequest.setStockIds(Arrays.asList("T261"));
+            startupLikeRequest.setStartDate(start);
+            startupLikeRequest.setEndDate(end);
+            stockSyncService.startBackfillWithLockAlreadyHeld(startupLikeRequest);
+
+            assertTrue(requestReceived.await(10, TimeUnit.SECONDS),
+                    "in-flight startup-catch-up-like job never reached its external call");
+
+            // Any manual call -- regardless of which stocks it targets -- must be rejected while
+            // the PRICE_BACKFILL lock is held; omit stockIds (ALL mode) to prove that.
+            BackfillRequest manualRequest = new BackfillRequest();
+            manualRequest.setStartDate(start);
+            manualRequest.setEndDate(end);
+            ResponseEntity<ErrorResponse> manual = rest.postForEntity(
+                    "/api/stocks/sync/backfill", manualRequest, ErrorResponse.class);
+
+            assertEquals(HttpStatus.CONFLICT, manual.getStatusCode());
+            assertEquals("JOB_ALREADY_RUNNING", manual.getBody().getCode());
+        } finally {
+            releaseResponse.countDown();
+        }
+
+        waitUntilProgressDone("PRICE_BACKFILL", Arrays.asList("T261"), 10_000);
+    }
+
     // ---------- 7. Progress endpoint ----------
 
     @Test
@@ -706,11 +772,272 @@ class StockPriceIngestionIntegrationTest {
         assertEquals("INVALID_SYNC_MODE", response.getBody().getCode());
     }
 
+    // ---------- 9. Timezone alignment (Asia/Taipei end to end) ----------
+
+    @Test
+    void timezone_progressFinishedAt_matchesApplicationLocalNow_withinOneMinute() throws Exception {
+        seedStock("T271", "時區-finishedAt", true);
+        LocalDate start = LocalDate.of(2025, 9, 1);
+        LocalDate end = LocalDate.of(2025, 9, 1);
+        String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T271&start_date="
+                + start + "&end_date=" + end;
+        String body = finmindFixture("T271", new String[]{"2025-09-01"},
+                new String[]{"10.00"}, new String[]{"10.50"}, new String[]{"9.50"}, new String[]{"10.20"});
+        mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T271"));
+        request.setStartDate(start);
+        request.setEndDate(end);
+        rest.postForEntity("/api/stocks/sync/backfill", request, BackfillResponse.class);
+
+        waitUntilStatus("T271", "PRICE_BACKFILL", "DONE", 10_000);
+
+        LocalDateTime finishedAt = jdbc.queryForObject(
+                "SELECT finished_at FROM stock_sync_progress WHERE stock_id = 'T271' AND job_type = 'PRICE_BACKFILL'",
+                LocalDateTime.class);
+        LocalDateTime appNow = LocalDateTime.now();
+        // Regression guard for the historical DB(UTC)/app(host default) timezone mismatch: an
+        // 8-hour offset would fail this by ~8 hours, far outside the 1-minute tolerance.
+        Duration diff = Duration.between(finishedAt, appNow).abs();
+        assertTrue(diff.toMinutes() < 1, "finished_at (" + finishedAt + ") should be within one "
+                + "minute of the application's local clock (" + appNow + "); diff=" + diff);
+    }
+
+    @Test
+    void timezone_progressLastSyncedAt_matchesApplicationLocalNow_noEightHourOffset() throws Exception {
+        seedStock("T272", "時區-lastSyncedAt", true);
+        LocalDate start = LocalDate.of(2025, 9, 1);
+        LocalDate end = LocalDate.of(2025, 9, 1);
+        String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T272&start_date="
+                + start + "&end_date=" + end;
+        String body = finmindFixture("T272", new String[]{"2025-09-01"},
+                new String[]{"11.00"}, new String[]{"11.50"}, new String[]{"10.50"}, new String[]{"11.20"});
+        mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T272"));
+        request.setStartDate(start);
+        request.setEndDate(end);
+        rest.postForEntity("/api/stocks/sync/backfill", request, BackfillResponse.class);
+
+        waitUntilStatus("T272", "PRICE_BACKFILL", "DONE", 10_000);
+
+        ResponseEntity<ProgressResponse> progress = rest.getForEntity(
+                "/api/stocks/sync/progress?jobType=PRICE_BACKFILL", ProgressResponse.class);
+        LocalDateTime lastSyncedAt = progress.getBody().getLastSyncedAt();
+        LocalDateTime appNow = LocalDateTime.now();
+        Duration diff = Duration.between(lastSyncedAt, appNow).abs();
+        assertTrue(diff.toMinutes() < 1, "lastSyncedAt (" + lastSyncedAt + ") from a sync that just "
+                + "completed should read as the application's local now (" + appNow + "), not offset "
+                + "by 8 hours; diff=" + diff);
+    }
+
+    // ---------- 10. caughtUpCount on the 202 response ----------
+
+    @Test
+    void backfill_catchUp_allTargetsAlreadyCaughtUp_caughtUpCountEqualsTargetCount_zeroExternalRequests()
+            throws Exception {
+        seedStock("T281", "caughtUpCount-已補齊一", true);
+        seedStock("T282", "caughtUpCount-已補齊二", true);
+        LocalDate endDate = LocalDate.of(2025, 9, 10);
+        seedProgress("T281", "DONE", LocalDate.of(2025, 9, 1), endDate, endDate, 0, null);
+        seedProgress("T282", "DONE", LocalDate.of(2025, 9, 1), endDate, endDate, 0, null);
+
+        // No mockServer.expect(...) registered at all: any external request at all fails the test.
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T281", "T282"));
+        request.setStartDate(LocalDate.of(2025, 9, 1));
+        request.setEndDate(endDate);
+        request.setCatchUp(true);
+
+        ResponseEntity<BackfillResponse> response = rest.postForEntity(
+                "/api/stocks/sync/backfill", request, BackfillResponse.class);
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertEquals(2, response.getBody().getTargetCount());
+        assertEquals(2, response.getBody().getCaughtUpCount());
+
+        waitUntilNotRunning(5_000);
+        mockServer.verify();
+    }
+
+    @Test
+    void backfill_catchUp_partiallyCaughtUp_caughtUpCountEqualsCaughtUpSubset_laggingStockStillSynced()
+            throws Exception {
+        seedStock("T283", "caughtUpCount-已補齊", true);
+        seedStock("T284", "caughtUpCount-落後", true);
+        LocalDate endDate = LocalDate.of(2025, 9, 10);
+        seedProgress("T283", "DONE", LocalDate.of(2025, 9, 1), endDate, endDate, 0, null);
+        seedProgress("T284", "DONE", LocalDate.of(2025, 9, 1), LocalDate.of(2025, 9, 5),
+                LocalDate.of(2025, 9, 5), 1, null);
+
+        LocalDate gapStart = LocalDate.of(2025, 9, 6);
+        String gapUrl = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T284&start_date="
+                + gapStart + "&end_date=" + endDate;
+        String body = finmindFixture("T284", new String[]{"2025-09-08"},
+                new String[]{"20.00"}, new String[]{"21.00"}, new String[]{"19.50"}, new String[]{"20.50"});
+        mockServer.expect(requestTo(gapUrl)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T283", "T284"));
+        request.setStartDate(LocalDate.of(2025, 9, 1));
+        request.setEndDate(endDate);
+        request.setCatchUp(true);
+
+        ResponseEntity<BackfillResponse> response = rest.postForEntity(
+                "/api/stocks/sync/backfill", request, BackfillResponse.class);
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertEquals(2, response.getBody().getTargetCount());
+        assertEquals(1, response.getBody().getCaughtUpCount());
+
+        waitUntilStatus("T284", "PRICE_BACKFILL", "DONE", 10_000);
+        mockServer.verify(); // T283 never requested; T284's gap request was made exactly once
+
+        StockSyncProgress t283 = progressMapper.findOne("T283", "PRICE_BACKFILL");
+        assertEquals(endDate, t283.getLastSyncedDate());
+        assertEquals(0, t283.getAttemptCount());
+    }
+
+    @Test
+    void backfill_catchUpFalse_caughtUpCountAlwaysZero_evenWhenStockAlreadyCaughtUp() throws Exception {
+        seedStock("T285", "caughtUpCount-catchUp關閉", true);
+        LocalDate endDate = LocalDate.of(2025, 9, 1);
+        seedProgress("T285", "DONE", endDate, endDate, endDate, 0, null);
+
+        String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T285&start_date="
+                + endDate + "&end_date=" + endDate;
+        String body = finmindFixture("T285", new String[]{"2025-09-01"},
+                new String[]{"5.00"}, new String[]{"5.50"}, new String[]{"4.50"}, new String[]{"5.20"});
+        mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        BackfillRequest request = new BackfillRequest();
+        request.setStockIds(Arrays.asList("T285"));
+        request.setStartDate(endDate);
+        request.setEndDate(endDate);
+        // catchUp omitted -> defaults to false, so the stock is fully reset and refetched
+        // regardless of last_synced_date; caughtUpCount must still read 0.
+
+        ResponseEntity<BackfillResponse> response = rest.postForEntity(
+                "/api/stocks/sync/backfill", request, BackfillResponse.class);
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertEquals(0, response.getBody().getCaughtUpCount());
+
+        waitUntilStatus("T285", "PRICE_BACKFILL", "DONE", 10_000);
+        mockServer.verify();
+    }
+
+    // ---------- 11. Empty target list (ALL mode, zero is_active=1 stocks) ----------
+
+    @Test
+    void backfill_allMode_noActiveStocks_catchUpTrue_targetCountZero_completesWithoutException_noExternalRequest()
+            throws Exception {
+        List<String> previouslyActiveIds = deactivateAllStocks();
+        try {
+            // No mockServer.expect(...) registered at all: any external request fails the test.
+            // This is the exact reported bug reproduction: findCaughtUpStockIds(jobType, [], endDate)
+            // previously threw BadSqlGrammarException from a truncated "... AND stock_id IN" when
+            // ALL mode resolved to zero targets (spec: 目標清單為空是合法情形).
+            BackfillRequest request = new BackfillRequest();
+            request.setStartDate(LocalDate.of(2026, 1, 1));
+            request.setEndDate(LocalDate.of(2026, 8, 31));
+            request.setCatchUp(true);
+            // stockIds omitted -> ALL mode -> empty target list
+
+            ResponseEntity<BackfillResponse> response = rest.postForEntity(
+                    "/api/stocks/sync/backfill", request, BackfillResponse.class);
+
+            assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+            assertEquals("ALL", response.getBody().getMode());
+            assertEquals(0, response.getBody().getTargetCount());
+            assertEquals(0, response.getBody().getCaughtUpCount());
+
+            waitUntilNotRunning(5_000);
+            mockServer.verify();
+        } finally {
+            restoreActiveStocks(previouslyActiveIds);
+        }
+    }
+
+    @Test
+    void backfill_allMode_noActiveStocks_catchUpFalse_targetCountZero_completesWithoutException_noExternalRequest()
+            throws Exception {
+        List<String> previouslyActiveIds = deactivateAllStocks();
+        try {
+            // Reproduces the same empty-collection <foreach> hazard, but on the resume=false/
+            // catchUp=false reset path (upsertPendingReset's INSERT ... VALUES <foreach>, which -
+            // unguarded - would otherwise leave a dangling "VALUES" with zero tuples).
+            BackfillRequest request = new BackfillRequest();
+            request.setStartDate(LocalDate.of(2026, 1, 1));
+            request.setEndDate(LocalDate.of(2026, 8, 31));
+
+            ResponseEntity<BackfillResponse> response = rest.postForEntity(
+                    "/api/stocks/sync/backfill", request, BackfillResponse.class);
+
+            assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+            assertEquals(0, response.getBody().getTargetCount());
+            assertEquals(0, response.getBody().getCaughtUpCount());
+
+            waitUntilNotRunning(5_000);
+            mockServer.verify();
+        } finally {
+            restoreActiveStocks(previouslyActiveIds);
+        }
+    }
+
+    @Test
+    void startupCatchUpPath_noActiveStocks_locksAndCompletesWithoutError() throws Exception {
+        // Reproduces the exact call StartupCatchUpRunner.onApplicationReady() makes (lock acquired
+        // synchronously, then startBackfillWithLockAlreadyHeld) against a database with zero
+        // is_active=1 stocks -- e.g. a freshly /reset-env'd database whose seed data hasn't landed
+        // yet. Must not throw, and must release the lock once the (empty) batch settles.
+        List<String> previouslyActiveIds = deactivateAllStocks();
+        try {
+            String jobType = "PRICE_BACKFILL";
+            assertTrue(jobRunningRegistry.tryStart(jobType));
+
+            BackfillRequest request = new BackfillRequest();
+            request.setStartDate(LocalDate.of(2026, 1, 1));
+            request.setEndDate(LocalDate.now());
+            request.setCatchUp(true);
+
+            assertDoesNotThrow(() -> stockSyncService.startBackfillWithLockAlreadyHeld(request));
+
+            waitUntilNotRunning(5_000);
+            assertFalse(jobRunningRegistry.isRunning(jobType));
+            mockServer.verify();
+        } finally {
+            restoreActiveStocks(previouslyActiveIds);
+        }
+    }
+
     // ---------- helpers ----------
 
     private void seedStock(String stockId, String name, boolean active) {
         Stock s = new Stock(stockId, name, "TSE", active);
         stockMapper.upsert(s);
+    }
+
+    /**
+     * Deactivates every row currently in `stock` (test methods that seed T-prefixed stocks always
+     * clean them up beforehand via {@link #cleanupTestData()}, so in practice this only touches
+     * the live seed data) and returns the ids that were active beforehand, for
+     * {@link #restoreActiveStocks} to restore afterward. Used by the "ALL mode with zero
+     * is_active=1 stocks" tests, which must never leave the live database's real stocks
+     * permanently deactivated.
+     */
+    private List<String> deactivateAllStocks() {
+        List<String> previouslyActiveIds = jdbc.queryForList(
+                "SELECT stock_id FROM stock WHERE is_active = 1", String.class);
+        jdbc.update("UPDATE stock SET is_active = 0");
+        return previouslyActiveIds;
+    }
+
+    private void restoreActiveStocks(List<String> ids) {
+        if (!ids.isEmpty()) {
+            jdbc.update("UPDATE stock SET is_active = 1 WHERE stock_id IN ("
+                    + ids.stream().map(id -> "?").reduce((a, b) -> a + "," + b).orElse("")
+                    + ")", ids.toArray());
+        }
     }
 
     /** Directly seeds a stock_sync_progress row to simulate a pre-existing PRICE_BACKFILL state. */

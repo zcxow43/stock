@@ -65,6 +65,26 @@ CREATE TABLE stock_daily_price (
 ### 寫入語意
 抓取排程必須以 **UPSERT** 寫入（`INSERT ... ON DUPLICATE KEY UPDATE`），不可先刪後插。重跑同一天的抓取必須是冪等的——資料源事後修正（如成交筆數更正）時，重跑即修正，不產生重複列，也不留下空窗。
 
+### Migration SQL — V012__shift_daily_price_timestamps_to_taipei.sql
+
+一次性資料位移，不改結構。接在 `V010` 之後，理由與 V009／V010 相同。
+
+```sql
+UPDATE stock_daily_price t
+JOIN (SELECT COUNT(*) AS c FROM schema_migration WHERE version = 'V012') g
+SET t.created_at = t.created_at + INTERVAL 8 HOUR,
+    t.updated_at = t.updated_at + INTERVAL 8 HOUR
+WHERE g.c = 0;
+
+INSERT IGNORE INTO schema_migration (version) VALUES ('V012');
+```
+
+守門走 `schema_migration`（見 `specs/dba/schema-migration.md`），理由與 V010 相同。
+
+只動 `created_at` / `updated_at` 兩個稽核欄位。**`trade_date` 不在位移範圍內**——它是資料源給定的台北交易日曆日，本來就與資料庫時區無關，位移它會直接破壞行情資料的正確性。
+
+`stock_daily_indicator`、`stock_minute_price`、`stock_minute_fetch_status` 三張表目前沒有任何資料列，沒有需要位移的內容，因此不需要對應的 migration；它們在時區修正後才會第一次寫入，寫入的即是台北時間。
+
 ## Acceptance Criteria
 - [x] `stock_daily_price` 表建立成功，欄位、型別、註解與上述 DDL 完全一致
 - [x] 主鍵為 `(stock_id, trade_date)` 複合鍵，且表中**不存在** `AUTO_INCREMENT` 欄位
@@ -74,6 +94,11 @@ CREATE TABLE stock_daily_price (
 - [x] `EXPLAIN` 驗證「單檔股票 + 日期區間」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`），而非全表掃描
 
 ---
+
+- [x] V012 執行後，既有列的 `created_at` / `updated_at` 與執行前相比正好增加 8 小時
+- [x] V012 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V012` 仍只有一列（位移為冪等）
+- [x] V012 執行前後 `trade_date` 完全未變動，任一列的 `trade_date` 都沒有位移
+
 ## Execution Result
 - Status: DONE
 - Files changed: specs/dba/stock-daily-price.md (Migration SQL V001 applied to live database; no standalone .sql file created)
@@ -85,3 +110,14 @@ CREATE TABLE stock_daily_price (
   - Attempted to insert a row with `high_price(90.00) < low_price(95.00)`; MySQL rejected it with `ERROR 3819 (HY000): Check constraint 'chk_sdp_high_low' is violated.`
   - `EXPLAIN SELECT * FROM stock_daily_price WHERE stock_id='2330' AND trade_date BETWEEN ...` returned `type=range, key=PRIMARY` (not a full table scan).
   - All test rows were deleted afterward (`DELETE FROM stock_daily_price`); table confirmed empty (`COUNT(*) = 0`), left schema-only.
+
+### Increment 2 — 2026-08-31
+
+套用 V012（時間戳由 UTC 位移為 Asia/Taipei），以 `schema_migration` 守門。
+
+| | `created_at` / `updated_at`（1101 / 2026-01-02） | 列數 | `trade_date` 範圍 |
+|---|---|---|---|
+| 位移前 | `2026-08-31 03:07:19` | 5372 | `2026-01-02` ~ `2026-08-28` |
+| 位移後 | `2026-08-31 11:07:19` | 5372 | `2026-01-02` ~ `2026-08-28` |
+
+第一次執行影響 5372 列，正好 +8 小時。**`trade_date` 完全未動**——位移前後的列數與最早／最晚交易日三個值完全相同，確認位移只落在兩個稽核欄位上，行情資料的日期未受影響。第二次執行影響 **0** 列，`trade_date` 範圍仍相同。

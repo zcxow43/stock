@@ -28,7 +28,7 @@
         SELECT stock_id FROM stock WHERE is_active = 1
     </select>
 
-    <select id="findExistingStockIds" resultType="string">
+    <select id="findExistingStockIdsForNonEmptyIds" resultType="string">
         SELECT stock_id FROM stock
         WHERE stock_id IN
         <foreach collection="stockIds" item="id" open="(" separator="," close=")">
@@ -42,7 +42,7 @@
         WHERE stock_id = #{stockId}
     </select>
 
-    <select id="findByIds" resultType="com.stock.domain.Stock">
+    <select id="findByIdsForNonEmptyIds" resultType="com.stock.domain.Stock">
         SELECT stock_id, stock_name, market, is_active AS active
         FROM stock
         WHERE stock_id IN

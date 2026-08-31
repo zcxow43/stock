@@ -35,6 +35,10 @@ export interface BackfillRequest {
 export interface BackfillResponse {
   jobType: JobType
   targetCount: number
+  /** Count of targets already synced through `endDate` at accept time — these trigger no
+   * external request at all. Always `0` when `catchUp` is false. See
+   * specs/backend/stock-price-ingestion.md `#### 2. 回補`. */
+  caughtUpCount: number
   startDate: string
   endDate: string
   mode: 'SELECTED' | 'ALL'

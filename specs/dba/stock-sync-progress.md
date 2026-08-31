@@ -74,6 +74,31 @@ ALTER TABLE stock_sync_progress
 - **`last_synced_date` 記的是該次請求的迄日，不是實際寫入的最後一列的日期。** 兩者在迄日為交易日時相同，但迄日落在週末、假日或收盤前時，資料源不回傳該日、依「不得補零」也不寫入任何列——此時若改記最後一筆實際資料的日期，之後每次補齊都會把那段沒有資料的尾巴重抓一次，週末重啟等於固定重複請求外部 API。記為迄日表示「這個區間已經處理過了」。此語意是 `specs/backend/stock-price-ingestion.md` 啟動補齊之跳過條件能否生效的前提。
 - 補齊作業（該 backend spec 的 `catchUp`）會把 `status = 'DONE'` 但 `last_synced_date` 落後於目標迄日的列重新開啟為 `PENDING` 並將 `attempt_count` 歸零。落後是因為時間前進而非先前失敗，沿用舊的重試次數會讓這類列提早撞上重試上限。
 
+### Migration SQL — V010__shift_sync_progress_timestamps_to_taipei.sql
+
+一次性資料位移，不改結構。接在 `V008` 之後，且**必須在 `specs/infra/mysql.md` 把容器時區改為 `Asia/Taipei` 並重啟之後**才執行。
+
+本表的 `started_at` / `finished_at` / `updated_at` 都由 mapper 的 `NOW()` 或欄位預設寫入，也就是由**資料庫時鐘**產生。容器先前設為 `TZ: UTC`，因此既有列存的是 UTC 的裸 `DATETIME`，比台北時間早 8 小時。時區改為 `Asia/Taipei` 後，新寫入的列是台北時間，舊列仍是 UTC——同一個欄位會有兩種意義。這支 migration 把舊列一次補正。
+
+`finished_at` 是使用者實際看得到的值（`GET /api/stocks/sync/progress` 的 `lastSyncedAt` 取自它的最大值，前端顯示為「最後同步」），所以不補正就會讓畫面永遠顯示一個早 8 小時的時間，而且 `catchUp` 會跳過所有已補齊的標的、不再改寫 `finished_at`，這個錯誤時間不會自己消失。
+
+```sql
+UPDATE stock_sync_progress t
+JOIN (SELECT COUNT(*) AS c FROM schema_migration WHERE version = 'V010') g
+SET t.started_at  = t.started_at  + INTERVAL 8 HOUR,
+    t.finished_at = t.finished_at + INTERVAL 8 HOUR,
+    t.updated_at  = t.updated_at  + INTERVAL 8 HOUR
+WHERE g.c = 0;
+
+INSERT IGNORE INTO schema_migration (version) VALUES ('V010');
+```
+
+守門條件走 `schema_migration`（見 `specs/dba/schema-migration.md`，V009），**不是**以資料本身的條件判斷。這一點是刻意的：相對位移後的值依然滿足任何「位移前」的資料條件——把 `03:07` 推成 `11:07` 之後，`updated_at < '2026-09-01'` 仍然成立——所以用資料條件當守門的版本第二次執行照樣會再位移一次，資料變成錯 16 小時且毫無跡象。唯一可靠的依據是「這支 migration 跑過了」這件事本身。
+
+`started_at` 與 `finished_at` 可為 `NULL`，`NULL + INTERVAL` 仍為 `NULL`，不需另行處理。
+
+**注意 `updated_at` 帶有 `ON UPDATE CURRENT_TIMESTAMP`**：本 `UPDATE` 語句顯式指定了 `updated_at` 的值，MySQL 在這種情況下不會再套用自動更新，因此位移後的值即為上式算出的結果。
+
 ## Acceptance Criteria
 - [x] `stock_sync_progress` 表建立成功，欄位、型別、註解與上述 DDL 一致
 - [x] 主鍵為 `(stock_id, job_type)`
@@ -84,6 +109,11 @@ ALTER TABLE stock_sync_progress
 - [x] V008 於已套用 V004 的資料庫上執行成功，且不影響表中既有列的資料
 
 ---
+
+- [x] V010 執行後，既有列的 `finished_at` 與執行前相比正好增加 8 小時，`NULL` 值仍為 `NULL`
+- [x] V010 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V010` 仍只有一列（位移為冪等）
+- [x] 容器時區改為 `Asia/Taipei` 並套用 V010 後，`GET /api/stocks/sync/progress` 的 `lastSyncedAt` 與實際同步當下的本地時間一致（誤差在一分鐘內）
+
 ## Execution Result
 - Status: DONE
 - Files changed: `specs/dba/stock-sync-progress.md` (migration applied directly to live `stock` database; no standalone `.sql` file created)
@@ -104,3 +134,16 @@ ALTER TABLE stock_sync_progress
   - Row count before migration: `SELECT COUNT(*) FROM stock_sync_progress;` → `0`. Row count after migration: `0`. No data affected (table was already empty from Increment 1's cleanup, and this ALTER only touches column metadata).
   - Verified the new comment via `information_schema.columns`: `COLUMN_COMMENT` = `已成功處理到的區間迄日（未必是交易日）；NULL 表示尚未開始`; `HEX(COLUMN_COMMENT)` began `E5B7B2E68890E58A9F...` — genuine multi-byte UTF-8 sequences (`E5`/`E6`/`E7`/`E8`/`E9` lead bytes), with no `3F` (`?`) bytes, confirming no mojibake/corruption.
   - Verified via `SHOW CREATE TABLE stock_sync_progress`: `last_synced_date` is still `date DEFAULT NULL`, now carrying the corrected comment; no other column, index, or constraint changed.
+
+### Increment 2 — 2026-08-31
+
+套用 V010（時間戳由 UTC 位移為 Asia/Taipei）。前置條件已滿足：容器 `TZ` 先改為 `Asia/Taipei` 並重建，`SELECT NOW()` 與本地時鐘一致後才執行位移。
+
+| | `finished_at`（stock_id 1101） | 列數 |
+|---|---|---|
+| 位移前 | `2026-08-31 03:07:19` | 34 |
+| 位移後 | `2026-08-31 11:07:19` | 34 |
+
+第一次執行影響 34 列，正好 +8 小時，列數不變。
+
+**守門方式在本次執行中途改過。** 原本寫的是 `WHERE updated_at < '2026-09-01 00:00:00'`，實際套用後才驗證出它擋不住重跑：位移後的 `11:07` 仍然小於 `2026-09-01`，第二次執行會再推 8 小時。改為以 `schema_migration` 表守門（見 `specs/dba/schema-migration.md`，V009），並把本表已套用的事實補登為 `V010` 一列。改版後重跑驗證：`UPDATE` 影響 **0** 列，`finished_at` 維持 `11:07:19` 未再位移，`schema_migration` 中 `V010` 仍只有一列。
