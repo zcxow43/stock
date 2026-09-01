@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破）對股票掃描並列出命中標的，每個策略可選三種靈敏度，掃描區間預設近一個月且可自由指定"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐）對股票掃描並列出命中標的，每個策略可選三種靈敏度，掃描區間預設近一個月且可自由指定"
 depends_on: [stock-price-ingestion, stock-catalog]
 ---
 
@@ -9,7 +9,7 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 ## Overview
 
-在既有日線行情上做**型態偵測**，回報哪些股票在指定區間內出現了某個型態。目前支援兩個型態：底底高（`HIGHER_LOWS`）與箱型突破（`BOX_BREAKOUT`）。
+在既有日線行情上做**型態偵測**，回報哪些股票在指定區間內出現了某個型態。目前支援三個型態：底底高（`HIGHER_LOWS`）、箱型突破（`BOX_BREAKOUT`）與上漲支撐（`RISING_SUPPORT`）。
 
 此模組**只讀不寫**：輸入是 `stock_daily_price` 的 OHLCV，輸出是即時算出的命中清單，不落地任何結果表。理由是型態判定完全由參數決定，同一批行情換一組靈敏度就是另一組答案；把結果存起來會立刻面臨「這列是用哪組參數算的、參數改了要不要重算」的問題，而重算成本本來就低（單檔單區間只是一次順序掃描）。
 
@@ -19,7 +19,7 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 ### 型態定義
 
-兩個型態各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
+三個型態各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
 
 #### 箱型突破 `BOX_BREAKOUT`
 
@@ -56,6 +56,29 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 **容忍度不可省略的理由**：`risePercent` 為 0 時，高出 0.01 元也構成「底底高」，雜訊會全部變成訊號。`LOOSE` 刻意允許這件事，其餘兩段不允許。
 
+#### 上漲支撐 `RISING_SUPPORT`
+
+對區間內每個交易日 D 判定。**D 是上漲日，也是回報的 `signalDate`**：
+
+1. **突破近期區間**：D 的收盤價 > D **之前**（不含 D）連續 `lookback` 個交易日**收盤價**的最大值。
+2. **上漲幅度**：`D 收盤 ÷ D-1 收盤 − 1` ≥ `risePercent`。
+3. **支撐線**：即 D-1 的收盤價——這根上漲的起點。
+4. **支撐守住**：D+1 與 D+2 的收盤價**都**必須 > 支撐線。任一日收在支撐線之下（或等於）即不命中。
+5. **確認**：確認長度固定為 2 個交易日，**不隨靈敏度改變**。D+1 或 D+2 的資料尚未存在時（D 落在可用行情的尾端），該檔標記為 `PENDING_CONFIRM`，不計入命中。
+6. **不驗證量能。**
+
+| 參數 | `STRICT` | `STANDARD` | `LOOSE` |
+|---|---|---|---|
+| `lookback`（根） | 20 | 10 | 5 |
+| `risePercent` | 5% | 3% | 2% |
+| `confirmBars` | 2 | 2 | 2 |
+
+**支撐線取 D-1 收盤、而非前 `lookback` 日高點的理由**：本型態問的是「這根漲勢有沒有被守住」，而起漲點就是 D-1 的收盤——跌回它以下，代表這根上漲被完全吃掉。改用前段高點當支撐，判定會退化成箱型突破的變形，兩個策略的命中集合大量重疊，使用者同時勾選時看不出差別。
+
+**突破近期區間這道條件不可省略的理由**：只看單日漲幅的話，任何一根大漲都算「忽然間一個上漲」，包含一段已經連漲多日的趨勢中的又一根。加上「收盤需高於前 `lookback` 日的全部收盤」，才把型態限縮在「從一段相對平緩的行情中忽然跳出來」，這正是原始需求「忽然間」三個字要求的東西。
+
+**不驗證量能是有意的選擇**，不是遺漏：本型態只看價。日後若要求帶量確認，那是新增一個參數的增量，不是改寫既有判定。
+
 ### 掃描範圍
 
 - `stockIds` 省略或為空陣列 → 掃描 `stock` 表中 `is_active = 1` 的全部股票。
@@ -65,7 +88,8 @@ depends_on: [stock-price-ingestion, stock-catalog]
 ### 區間與資料前置需求
 
 - `startDate` / `endDate` 皆省略時，區間為 `endDate = 今日`、`startDate = 今日往前一個日曆月`。
-- **判定所需的前置資料取自 `startDate` 之前**：箱型突破需要 `lookback` 個交易日、底底高需要 `swingBars` 個交易日。這些資料只用於判定，不會被回報為命中。
+- **判定所需的前置資料取自 `startDate` 之前**：箱型突破需要 `lookback` 個交易日、底底高需要 `swingBars` 個交易日、上漲支撐需要 `lookback` 個交易日。這些資料只用於判定，不會被回報為命中。
+- **上漲支撐的確認資料取自 `endDate` 之後**：判定 D 是否命中需要 D+1 與 D+2 的收盤。掃描時應一併讀入 `endDate` 之後最多 2 個交易日的行情；若該資料尚未存在，D 落入 `pendingConfirm`。
 - 某檔的前置資料不足以完成判定時，該檔列入該策略的 `insufficientData`，**不視為未命中**。兩者必須分開：「掃過了沒有型態」與「資料不夠所以沒掃」對使用者是完全不同的訊息。
 - 型態判定一律以**相鄰交易日**比較，不因停牌造成的日曆間隔做任何插補。此規則與 `specs/backend/stock-indicator-statistics.md` 的交叉判定一致，不得各自為政。
 
@@ -100,6 +124,15 @@ Response `200`：
         { "code": "STANDARD", "name": "標準", "description": "左右各 3 根，需 2 段遞增，每段高過 1%" },
         { "code": "LOOSE",    "name": "寬鬆", "description": "左右各 2 根，需 2 段遞增，高過即計" }
       ]
+    },
+    {
+      "code": "RISING_SUPPORT",
+      "name": "上漲支撐",
+      "presets": [
+        { "code": "STRICT",   "name": "嚴格", "description": "收盤突破前 20 日收盤高點且單日漲幅 ≥ 5%，其後 2 日不跌破起漲收盤" },
+        { "code": "STANDARD", "name": "標準", "description": "收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤" },
+        { "code": "LOOSE",    "name": "寬鬆", "description": "收盤突破前 5 日收盤高點且單日漲幅 ≥ 2%，其後 2 日不跌破起漲收盤" }
+      ]
     }
   ]
 }
@@ -129,7 +162,7 @@ Request：
 | 欄位 | 型別 | 必填 | 說明 |
 |---|---|---|---|
 | `strategies` | array | 是 | 至少一個；同一 `code` 不得重複出現 |
-| `strategies[].code` | string | 是 | `BOX_BREAKOUT` / `HIGHER_LOWS` |
+| `strategies[].code` | string | 是 | `BOX_BREAKOUT` / `HIGHER_LOWS` / `RISING_SUPPORT` |
 | `strategies[].preset` | string | 是 | `STRICT` / `STANDARD` / `LOOSE` |
 | `stockIds` | string[] | 否 | 省略或空陣列 = 全部在市股票；上限 200 |
 | `startDate` | date | 否 | 預設為 `endDate` 往前一個日曆月 |
@@ -184,6 +217,30 @@ Response `200`：
       ],
       "insufficientData": [],
       "pendingConfirm": []
+    },
+    {
+      "strategy": "RISING_SUPPORT",
+      "preset": "STANDARD",
+      "matchedCount": 1,
+      "items": [
+        {
+          "stockId": "2454",
+          "stockName": "聯發科",
+          "signalDate": "2026-08-26",
+          "detail": {
+            "supportClose": 1200.00,
+            "riseClose": 1296.00,
+            "risePercent": 8.00,
+            "priorHighClose": 1236.00,
+            "confirmCloses": [
+              { "tradeDate": "2026-08-27", "close": 1272.00 },
+              { "tradeDate": "2026-08-28", "close": 1248.00 }
+            ]
+          }
+        }
+      ],
+      "insufficientData": [],
+      "pendingConfirm": ["3008"]
     }
   ]
 }
@@ -192,7 +249,7 @@ Response `200`：
 - `results` 依 `strategies` 送入的順序回傳，一個策略一筆。
 - `items` 依 `signalDate` 由新到舊排序；同日則依 `stockId` 升冪。
 - `signalDate` 為該檔在區間內**最近一次**命中的日期；同一檔在區間內多次命中只回報最近一次。
-- `pendingConfirm` 僅箱型突破且 `confirmBars = 2` 時可能非空，列出「已突破但確認日尚未到」的股票代號。
+- `pendingConfirm` 可能非空的情況有二：箱型突破且 `confirmBars = 2`（已突破但確認日尚未到），以及上漲支撐（已上漲但 D+1／D+2 尚未到齊）。兩者都列出該檔的股票代號，且不計入 `matchedCount`。
 - `insufficientData` 與 `matchedCount` 互斥：列在前者的股票不會出現在 `items` 中。
 
 驗證與錯誤：
@@ -227,6 +284,23 @@ Response `200`：
 - [x] 全市場掃描時對資料庫的行情查詢為批次查詢，不隨股票數線性增加查詢次數
 - [x] 六種錯誤各自回傳指定的 `code`：`NO_STRATEGY_SELECTED`／`UNKNOWN_STRATEGY`／`DUPLICATE_STRATEGY`／`UNKNOWN_STOCK_ID`／`TOO_MANY_STOCKS`／`INVALID_DATE_RANGE`
 - [x] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+
+---
+
+- [ ] `GET /api/strategies` 回傳三個策略，新增的 `RISING_SUPPORT` 名稱為「上漲支撐」，三段靈敏度說明文字與本 spec 的參數表一致
+- [ ] 上漲支撐 `STANDARD`：以構造資料驗證命中——前 10 日收盤最高 1236、D-1 收盤 1200、D 收盤 1296（漲幅 8%）、D+1 收盤 1272、D+2 收盤 1248，回應的 `supportClose`／`riseClose`／`risePercent`／`priorHighClose`／`confirmCloses` 與手算相符
+- [ ] 支撐線為 D-1 收盤：D+1 或 D+2 任一日收盤 ≤ D-1 收盤即不命中（以恰好等於 D-1 收盤的構造資料驗證不命中）
+- [ ] 突破近期區間條件生效：D 漲幅達門檻但收盤未高於前 `lookback` 日全部收盤時不命中（以連漲趨勢中的一根大漲驗證）
+- [ ] 漲幅門檻生效：漲幅 2.5% 的同一組資料在 `STANDARD`（3%）下不命中，在 `LOOSE`（2%）下命中
+- [ ] `lookback` 隨靈敏度改變：同一組資料在 `LOOSE`（前 5 日）下命中，在 `STRICT`（前 20 日）下因未突破更長區間的收盤高點而不命中
+- [ ] 確認長度固定為 2 日且不隨靈敏度改變：三段靈敏度都要求 D+1 與 D+2 皆守住
+- [ ] D+1 或 D+2 尚無資料時該檔列於 `pendingConfirm`，不出現在 `items`、不計入 `matchedCount`
+- [ ] 確認資料可取自 `endDate` 之後：D 為 `endDate` 當日且 D+1／D+2 已存在於資料庫時，該檔正常命中而非落入 `pendingConfirm`
+- [ ] 上漲支撐前置資料不足（`startDate` 前不足 `lookback` 個交易日）的股票列於 `insufficientData`
+- [ ] 上漲支撐不驗證量能：僅成交量不同、價格完全相同的兩組資料判定結果一致
+- [ ] 三個策略可於同一次 `POST /api/strategies/scan` 一併送入，`results` 依送入順序回傳三筆
+- [ ] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日 D+2
+- [ ] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
 
 ---
 ## Execution Result

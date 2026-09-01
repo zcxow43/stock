@@ -61,17 +61,17 @@
 .page-strategy .head { margin-bottom:12px; }
 .page-strategy .tabs { margin-bottom:12px; }
 .page-strategy .syncbar { padding:8px 16px; margin-bottom:10px; }
-.page-strategy .cond { padding:10px 16px; margin-bottom:10px; }
-.page-strategy .cond h2 { margin:0 0 8px; }
-.page-strategy .cards { margin-bottom:8px; }
-.page-strategy .card { padding:8px 14px; }
-.page-strategy .card .top { margin-bottom:5px; }
-.page-strategy .condrow { margin-bottom:6px; }
-.page-strategy .res { margin-bottom:9px; }
-.page-strategy thead th { padding:6px 16px; }
-.page-strategy tbody td { padding:5px 16px; }
-.page-strategy .res h3 { margin:0 0 5px; }
-.page-strategy .note { margin-top:4px; }
+.page-strategy .cond { padding:7px 16px; margin-bottom:7px; }
+.page-strategy .cond h2 { margin:0 0 5px; }
+.page-strategy .cards { margin-bottom:5px; }
+.page-strategy .card { padding:5px 14px; }
+.page-strategy .card .top { margin-bottom:3px; }
+.page-strategy .condrow { margin-bottom:4px; }
+.page-strategy .res { margin-bottom:4px; }
+.page-strategy thead th { padding:3px 16px; }
+.page-strategy tbody td { padding:2px 16px; font-size:13px; }
+.page-strategy .res h3 { margin:0 0 2px; }
+.page-strategy .note { margin-top:2px; }
 
 /* ---- 同步列：更新股票清單 + 同步日 K 兩顆按鈕 ---- */
 .syncbar .meta { display:flex; align-items:center; gap:14px; }

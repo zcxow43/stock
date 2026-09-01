@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破）並各自選靈敏度，掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐）並各自選靈敏度，掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
 depends_on: [stock-list]
 ---
 
@@ -97,11 +97,25 @@ depends_on: [stock-list]
 | 低點序列 | `detail.lows` 逐點以「MM-DD 價格」串接，以 `→` 分隔 |
 | 累計漲幅 | 由 `lows` 首末兩點計算，兩位小數加 `%` |
 
-兩張表都在最右保留一欄，點擊該列任一處導向 `/stocks/{stockId}/daily`。
+**上漲支撐**的表格欄位：
+
+| 欄位 | 來源 |
+|---|---|
+| 代號 / 名稱 | `stockId` / `stockName` |
+| 訊號日 | `signalDate`，即上漲當日 |
+| 上漲收盤 | `detail.riseClose` |
+| 單日漲幅 | `detail.risePercent`，兩位小數加 `%`，以上漲色 `#E04B45` 呈現 |
+| 支撐價 | `detail.supportClose`，即起漲前一日收盤 |
+| 前段收盤高點 | `detail.priorHighClose` |
+| 確認兩日收盤 | `detail.confirmCloses` 逐點以「MM-DD 價格」串接，以 `→` 分隔 |
+
+**「支撐價」必須顯示。** 這一欄是本型態的判定依據——沒有它，使用者只看得到「漲了多少」，看不出後兩天究竟守住了什麼價位，而「守住起漲點」正是這個策略與箱型突破的差別所在。
+
+三張表都在最右保留一欄，點擊該列任一處導向 `/stocks/{stockId}/daily`。
 
 **資料不足的標的必須單獨呈現**，不可混入「未命中」。在該策略區塊下方以一行摘要顯示：「另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。這是使用者判讀結果的關鍵資訊——把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
 
-箱型突破若 `pendingConfirm` 非空，同樣以一行顯示：「另有 N 檔已突破，但確認日尚未到」。
+箱型突破與上漲支撐都可能產生 `pendingConfirm`，同樣各以一行顯示，文案依型態而異：箱型突破為「另有 N 檔已突破，但確認日尚未到」，上漲支撐為「另有 N 檔已上漲，但後兩日的確認尚未完成」。兩者皆使用「資料不足／待確認提示文字」色 `#D9A441`。
 
 ### 同步列
 
@@ -283,6 +297,22 @@ depends_on: [stock-list]
 - [x] 後端回 `502 UPSTREAM_UNAVAILABLE` 或 `UPSTREAM_MALFORMED` 時顯示「無法取得交易所股票清單，請稍後再試」，且「共 N 檔」數值不變
 - [x] 同步進行中仍可按「更新股票清單」；更新清單進行中仍可按「同步日 K 至今日」，兩者互不 disable
 - [x] 更新股票清單相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+---
+
+- [ ] 策略勾選區出現第三張卡片「上漲支撐」，其名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
+- [ ] 勾選上漲支撐並掃描後出現該策略區塊，標題為「上漲支撐（{靈敏度}）— 命中 N 檔」，N 取自該策略的 `matchedCount`
+- [ ] 上漲支撐結果表顯示七個欄位：代號／名稱、訊號日、上漲收盤、單日漲幅、支撐價、前段收盤高點、確認兩日收盤
+- [ ] 「支撐價」欄顯示 `detail.supportClose`，「前段收盤高點」欄顯示 `detail.priorHighClose`，兩者皆不得省略
+- [ ] 「單日漲幅」為兩位小數加 `%`，並以 `#E04B45` 呈現
+- [ ] 「確認兩日收盤」逐點以「MM-DD 價格」串接、以 `→` 分隔，點數與 `detail.confirmCloses` 一致
+- [ ] 點擊上漲支撐結果表任一列導向 `/stocks/{stockId}/daily`
+- [ ] 上漲支撐的 `pendingConfirm` 非空時顯示「另有 N 檔已上漲，但後兩日的確認尚未完成」，文案與箱型突破的「確認日尚未到」不同
+- [ ] 上漲支撐的 `insufficientData` 非空時，沿用既有的「另有 N 檔因區間前的歷史資料不足而未納入判定」一行摘要
+- [ ] 上漲支撐與另一策略同時勾選並掃描時，聯集表格納入其命中標的，「命中策略與訊號日」欄出現「上漲支撐 {signalDate}」
+- [ ] 上漲支撐的 `pendingConfirm` 與 `insufficientData` 標的不出現在聯集表格中
+- [ ] 三個策略可同時勾選並掃描，結果區依勾選順序呈現三個策略區塊
+- [ ] 上漲支撐相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)

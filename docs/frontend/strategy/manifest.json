@@ -26,16 +26,16 @@
   },
   {
     "file": "step-4.html",
-    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。",
+    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選「底底高（嚴格）」「箱型突破（標準）」與「上漲支撐（標準）」三個策略，區間維持預設的近一個月。",
     "api": [
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"
     ]
   },
   {
     "file": "step-5.html",
-    "caption": "點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 2 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是兩個策略各自的區塊，資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。",
+    "caption": "點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 3 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是三個策略各自的區塊。上漲支撐的表格顯示支撐價（起漲前一日收盤）與確認兩日收盤，資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。",
     "api": [
-      "POST /api/strategies/scan — body strategies=[底底高/STRICT, 箱型突破/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
+      "POST /api/strategies/scan — body strategies=[底底高/STRICT, 箱型突破/STANDARD, 上漲支撐/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
     ]
   },
   {

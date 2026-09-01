@@ -35,6 +35,8 @@
           <select><option>嚴格</option></select><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
           <select><option>標準</option></select></div>
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">上漲支撐</span></div>
+          <select><option>標準</option></select></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
@@ -42,15 +44,17 @@
         <input class="date" value="2026-07-30"> <span>~</span> <input class="date" value="2026-08-30">
         <div class="seg"><button class="on">近一個月</button><button>近三個月</button><button>近半年</button></div></div>
       <div class="actions"><button class="btn primary">開始掃描</button>
-        <span class="hint">已勾選 2 個策略</span></div>
+        <span class="hint">已勾選 3 個策略</span></div>
     </div>
     <div class="res union" data-target>
-      <h3>命中彙總<span> — 共 2 檔</span></h3>
+      <h3>命中彙總<span> — 共 3 檔</span></h3>
       <table>
         <thead><tr><th>代號</th><th>名稱</th><th>命中策略與訊號日</th></tr></thead>
         <tbody>
           <tr class="hover"><td class="code">2330</td><td>台積電</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span><span class="sep">・</span><span class="stag">箱型突破</span><span class="sdate">2026-08-27</span></td></tr>
+          <tr><td class="code">2454</td><td>聯發科</td>
+            <td class="hits"><span class="stag">上漲支撐</span><span class="sdate">2026-08-26</span></td></tr>
           <tr><td class="code">2317</td><td>鴻海</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span></td></tr>
         </tbody>
@@ -82,6 +86,19 @@
         </tbody>
       </table>
       <div class="note">另有 1 檔已突破，但確認日尚未到 ▸</div>
+    </div>
+    <div class="res">
+      <h3>上漲支撐（標準）<span> — 命中 1 檔</span></h3>
+      <table>
+        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th class="r">上漲收盤</th><th class="r">單日漲幅</th><th class="r">支撐價</th><th class="r">前段收盤高點</th><th>確認兩日收盤</th></tr></thead>
+        <tbody>
+          <tr><td class="code">2454</td><td>聯發科</td><td>2026-08-26</td>
+            <td class="r">1296.00</td><td class="r up">+8.00%</td>
+            <td class="r">1200.00</td><td class="r">1236.00</td>
+            <td class="lows">08-27 1272.00 → 08-28 1248.00</td></tr>
+        </tbody>
+      </table>
+      <div class="note">另有 1 檔已上漲，但後兩日的確認尚未完成 ▸</div>
     </div>
   </div>
 </body>
