@@ -13,7 +13,13 @@ requirement: "統計兩個月股票資料含 MACD/KD 指標 — 全市場範圍�
 1. **回補排程的標的清單（universe）** — 逐檔回補需要知道「有哪些檔要補」，這份清單就是本表。
 2. **統計結果的名稱來源** — 行情表只存代號，API 回傳需要中文名稱時由本表取得。
 
-本表由每日行情抓取時順帶維護（資料源同時回傳代號與名稱），不需要獨立的維護介面。
+本表有三個維護來源，都寫同一組欄位、都用 UPSERT，因此彼此不衝突：
+
+1. **每日行情抓取順帶維護** — 資料源同時回傳代號與名稱（`specs/backend/stock-price-ingestion.md`）。
+2. **universe 匯入** — 一次外部請求批次補齊全體上市普通股的代號與名稱，不寫行情（`specs/backend/stock-universe-import.md`）。
+3. **人工維護** — 新增／修改／下市單一標的（`specs/backend/stock-catalog.md` 的 `POST` / `PUT` / `DELETE /api/stocks{,/{stockId}}`）。
+
+`is_active` 只由第 3 項改動。前兩項自動化來源一律不碰它——依「當日快照沒出現」反推下市會把停牌股票誤標為下市，理由詳見 `specs/backend/stock-universe-import.md` 的「寫入語意」。
 
 **本 migration 為 V002，在 V001（`stock_daily_price`）之後。**
 

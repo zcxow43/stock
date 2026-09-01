@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "個股分 K 線圖頁"
 requirement: "前端 K 線瀏覽 — 在日 K 圖上連點兩下某一天後，以現價流線圖展示該交易日的分 K 走勢"
 depends_on: [stock-daily-chart]
@@ -151,7 +151,7 @@ depends_on: [stock-daily-chart]
 
 ## Acceptance Criteria
 - [x] 由日 K 頁連點兩下某根 K 棒後，導向 `/stocks/{stockId}/minute/{該日期}` 並顯示該日分 K 圖
-- [ ] 主圖為單一顏色 `#3E8FD8` 的收盤價折線，畫面上不存在任何蠟燭實體或上下影線
+- [x] 主圖為單一顏色 `#3E8FD8` 的收盤價折線，畫面上不存在任何蠟燭實體或上下影線
 - [x] X 軸標籤為 `HH:mm`，首根為 `09:00`、末根不晚於 `13:30`
 - [x] 成交量副圖與主圖共用 X 軸，十字準星在兩張圖上同步移動
 - [x] Tooltip 顯示時間、開高低收、相對當日開盤的漲跌幅、成交量
@@ -170,14 +170,14 @@ depends_on: [stock-daily-chart]
 
 ---
 
-- [ ] 折線不隨漲跌變色：同一張圖在上漲日與下跌日的線色相同，皆為 `#3E8FD8`
-- [ ] 線下沒有漸層或面積填色
-- [ ] 圖上有一條值為 `dailySummary.open` 的水平虛線，色 `#4A5866`，且 Y 軸標注其價格
-- [ ] 當日所有 `close` 都高於（或都低於）開盤價時，開盤價基準線仍在可視範圍內，未被裁切到圖外
-- [ ] 成交量柱統一為 `#3A4757`，畫面上不存在紅色或綠色的量柱
-- [ ] Tooltip 仍顯示該點的時間、開、高、低、收、相對當日開盤的漲跌幅與成交量，逐分鐘的開高低收未因主圖改為折線而遺失
-- [ ] 十字準星移動時，折線上對應的資料點以 `#E6EDF5` 圓點標示
-- [ ] 日 K 頁（`/stocks/{stockId}/daily`）的主圖仍為蠟燭圖，未受本次變更影響
+- [x] 折線不隨漲跌變色：同一張圖在上漲日與下跌日的線色相同，皆為 `#3E8FD8`
+- [x] 線下沒有漸層或面積填色
+- [x] 圖上有一條值為 `dailySummary.open` 的水平虛線，色 `#4A5866`，且 Y 軸標注其價格
+- [x] 當日所有 `close` 都高於（或都低於）開盤價時，開盤價基準線仍在可視範圍內，未被裁切到圖外
+- [x] 成交量柱統一為 `#3A4757`，畫面上不存在紅色或綠色的量柱
+- [x] Tooltip 仍顯示該點的時間、開、高、低、收、相對當日開盤的漲跌幅與成交量，逐分鐘的開高低收未因主圖改為折線而遺失
+- [x] 十字準星移動時，折線上對應的資料點以 `#E6EDF5` 圓點標示
+- [x] 日 K 頁（`/stocks/{stockId}/daily`）的主圖仍為蠟燭圖，未受本次變更影響
 
 ## Execution Result
 - Status: DONE
@@ -196,3 +196,19 @@ depends_on: [stock-daily-chart]
   - Two real bugs found and fixed during this verification (not just from unit tests): (1) the adjacent-trading-day effect called `new Date(...)` on an unvalidated `tradeDate` and threw `RangeError: Invalid time value` for a malformed URL date, breaking the full-page "網址中的日期無效" state — fixed by guarding with `isValidISODate` before running that best-effort sibling request. (2) the footer's `fetchedAt` rendered the raw backend `LocalDateTime` JSON string (`2026-08-28T16:18:56.711257`) instead of the storyboard's `YYYY-MM-DD HH:mm:ss` — added `fmtFetchedAt` to trim/format it.
   - `boldXTick` was added to the shared `KLineChart` as an optional prop (defaults to no bold, so `StockDailyChartPage` is untouched); the minute page passes a `HH:mm` on-the-hour/half-hour predicate. Empirically, with the real 271-bar/1-min and 55-bar/5-min fixture data, the generic evenly-spaced tick picker happened to land exactly on `:00`/`:30` — matching `docs/frontend/stock-chart/step-4.png` and `step-5.png` pixel-for-pixel in layout.
   - Backend on port 8080 and frontend dev server were both stopped at the end of this session (`kill` confirmed, `curl` to both ports now returns no response).
+
+### Increment 2 — 2026-09-01
+
+Implemented the 8 previously-unchecked Acceptance Criteria: switched the main panel from candles to the single-color `#3E8FD8` close-price line with a dashed `#4A5866` open-price baseline, made volume bars a uniform neutral color, and added a crosshair dot on the line — reusing the shared `KLineChart` component's `mainType`/`lineColor`/`priceReferenceLines` props added under `specs/frontend/stock-daily-chart.md` Increment 2 (no forking, no second chart implementation). The daily-K page (`specs/frontend/stock-daily-chart.md`) was not touched.
+
+- Files changed:
+  - `develop/frontend/src/components/KLineChart.tsx` — added one further optional, backward-compatible prop: `lineDotColor?: string`. When `mainType === 'line'`, the existing crosshair rendering now also draws an `<circle>` at the active index's `(x, close→y)` position in `lineDotColor` (falls back to `axisLabelText` if omitted). Candle mode (`StockDailyChartPage`, which never passes `lineDotColor`) is unaffected — the circle is gated strictly on `mainType === 'line'`.
+  - `develop/frontend/src/pages/StockMinuteChartPage.tsx` — the `KLineChart` call now passes `mainType="line"`, `lineColor={COLOR.line}` (`#3E8FD8`), `lineDotColor={COLOR.lineDot}` (`#E6EDF5`), and `priceReferenceLines={dailySummary ? [{ value: dailySummary.open, color: COLOR.openBaseline, label: dailySummary.open.toFixed(2) }] : undefined}` (`#4A5866`, guarded against a null `dailySummary` — the `OUT_OF_WINDOW`/etc. states where the chart isn't rendered anyway, but keeps the expression total). The volume subplot's `colorFor` was changed from `close >= open ? volUp : volDown` to a constant `COLOR.volNeutral` (`#3A4757`); the now-unused `volUp`/`volDown` color constants were removed from the page's `COLOR` object (they remain in `StockDailyChartPage.tsx`'s own copy, untouched, since that page's volume bars still color by daily up/down per its own spec).
+  - `develop/frontend/src/__tests__/StockMinuteChartPage.test.tsx` — replaced the one test that asserted candle rects (`renders candles colored red/green...`) with a test asserting the line renders, no candle rects/wicks exist, and volume bars are all neutral; updated the locked-limit-day test to check for the line path instead of a candle rect; added 6 new tests: same-line-color on an up-trending vs down-trending day, no `<linearGradient>`/filled-area under the line, the dashed `#4A5866` open baseline with its Y-axis price label, the baseline staying within the SVG's `viewBox` height when every close sits above the open (non-clipping), and the `#E6EDF5` crosshair dot appearing on click.
+- Notes:
+  - `npm run build` (`tsc -b && vite build`) clean; `npx vitest run` 106/106 passing (94 pre-existing across this page + `KLineChart` + concurrently-touched `StockListPage`/`StrategyTab` files, + these changes' net new/updated tests); `npx oxlint .` shows only two pre-existing warnings in `StrategyTab.tsx`/`StrategyTab.test.tsx` from the concurrently-running strategy-page work, not touched by this increment.
+  - End-to-end verified against the real backend (`mvn -f develop/backend/pom.xml spring-boot:run`, port 8080) and the real MySQL data already in the database (no fixture insert/cleanup needed) — real stock `2330`/台積電, 159 daily rows through `2026-08-31`. Started the frontend dev server on port 5199 (not 5173, to avoid colliding with a concurrently-running agent's own dev server per the task's concurrency instructions) and drove it with a throwaway Playwright script (chromium already present in `node_modules` from a prior increment's verification, not re-added to `package.json`/`package-lock.json` — confirmed via `git diff --stat` on both files showing no change).
+  - Queried the real minute-bar API across several real trading days to find concrete cases for the two non-clipping directions required by the AC: `2026-08-31` (`open=2395`, every `close` in `[2375, 2395]`, i.e. all closes ≤ open) and `2026-08-26` (`open=2375`, every `close` in `[2375, 2425]`, i.e. all closes ≥ open — `min(close) == open` exactly, the tightest case). Screenshotted both: in the first, the dashed baseline sits at the very top of the visible price range; in the second, at the very bottom; in both, `getBoundingClientRect`-equivalent SVG `y1` stayed within `[0, viewBox height]` — not clipped off-canvas.
+  - Verified via direct SVG inspection (not just visual screenshot) in the same session: `svg path[stroke="#3E8FD8"]` count 1 with `fill="none"`; zero `rect[fill="#E04B45"|"#16A75C"]` (no candle bodies) and zero `line[stroke="#E04B45"|"#16A75C"]` (no wicks) anywhere on the minute page; zero `rect[fill="#9A3B37"|"#12784A"]` (no colored volume bars) and 262/265 `rect[fill="#3A4757"]` (all volume bars neutral, one per bar); zero `<linearGradient>`/`<radialGradient>` in the SVG (no area fill under the line); the open-price label text (`2395.00`) present among the SVG `<text>` nodes; clicking the chart produced exactly one `circle[fill="#E6EDF5"]` at the crosshair's active point, with the tooltip showing full `開/高/低/收/對開盤/成交量` for that minute.
+  - Loaded `/stocks/2330/daily` in the same session and confirmed by direct SVG inspection that it still renders 127 candle rects (`fill="#E04B45"`/`"#16A75C"`) and zero `path[stroke="#3E8FD8"]` — the daily page's main chart is unaffected by this increment, as required by the last AC.
+  - Backend and frontend dev processes were both stopped at the end of this session (`pkill` on `spring-boot:run` and `vite --port 5199`; confirmed with `ps aux`/`lsof` showing neither process nor either port listening). No fixture data was inserted or needed cleanup — all verification reused real data already present in the database.

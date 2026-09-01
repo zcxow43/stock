@@ -1,39 +1,48 @@
 [
   {
     "file": "step-1.html",
-    "caption": "初始畫面：策略分頁尚未掃描，同步列顯示「尚未同步」，未勾選策略時「開始掃描」為 disabled。",
+    "caption": "初始畫面：股票清單只有開發種子的 34 檔，尚未同步。此時直接按同步只會補這 34 檔的行情，掃描範圍也就只有 34 檔——所以第一步是先按「更新股票清單」。",
     "api": [
       "GET /api/strategies — 取策略清單與三段靈敏度的說明文字",
-      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt 顯示最後同步時間"
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt 顯示最後同步時間",
+      "GET /api/stocks?page=1&size=1 — 只取 total 顯示「共 34 檔」"
     ]
   },
   {
     "file": "step-2.html",
-    "caption": "點擊「同步日 K 至今日」：轉為執行中並顯示 18 / 34 進度，畫面不被阻塞。",
+    "caption": "點擊「更新股票清單」：一次外部請求即匯入全體上市普通股，摘要顯示「共 1,032 檔（新增 998、更新 34）」，常駐檔數同步更新。此步驟只寫股票主檔，完全不抓行情。",
     "api": [
-      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場",
-      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 每 5 秒輪詢更新進度"
+      "POST /api/stocks/universe/import — 無 body；此端點即是向交易所抓取上市股票清單的起點，回應的 totalActiveCount／insertedCount／updatedCount 組成摘要",
+      "GET /api/stocks?page=1&size=1 — 匯入完成後重取 total 更新「共 N 檔」"
     ]
   },
   {
     "file": "step-3.html",
-    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。",
+    "caption": "點擊「同步日 K 至今日」：母體已是 1,032 檔，同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。",
+    "api": [
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場（即匯入後的 1,032 檔）",
+      "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 每 5 秒輪詢更新進度"
+    ]
+  },
+  {
+    "file": "step-4.html",
+    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選「底底高（嚴格）」與「箱型突破（標準）」兩個策略，區間維持預設的近一個月。",
     "api": [
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"
     ]
   },
   {
-    "file": "step-4.html",
+    "file": "step-5.html",
     "caption": "點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 2 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是兩個策略各自的區塊，資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。",
     "api": [
       "POST /api/strategies/scan — body strategies=[底底高/STRICT, 箱型突破/STANDARD], startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
     ]
   },
   {
-    "file": "step-5.html",
-    "caption": "再次點擊「同步日 K 至今日」：34 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（34 檔）」而非「完成 34 檔」；掃描結果保留不受影響。",
+    "file": "step-6.html",
+    "caption": "再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。",
     "api": [
-      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=34、caughtUpCount=34，代表本次一檔都不需抓取",
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=1032、caughtUpCount=1032，代表本次一檔都不需抓取",
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt，時間為 Asia/Taipei"
     ]
   }

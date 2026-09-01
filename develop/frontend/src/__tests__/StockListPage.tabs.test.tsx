@@ -42,11 +42,15 @@ function renderAt(path: string) {
   )
 }
 
-// The 策略 tab stays mounted alongside 總覽 and fires its own GET /api/strategies and
-// GET /api/stocks/sync/progress calls on mount — isolate 總覽's `/api/stocks?...` list
-// calls so these assertions aren't coupled to that background traffic.
+// The 策略 tab stays mounted alongside 總覽 and fires its own GET /api/strategies,
+// GET /api/stocks/sync/progress, and GET /api/stocks?...&size=1 (常駐「共 N 檔」) calls
+// on mount — isolate 總覽's `/api/stocks?...` list calls (which never use `size=1`) so
+// these assertions aren't coupled to that background traffic.
 function overviewCalls(fetchMock: ReturnType<typeof vi.fn>) {
-  return fetchMock.mock.calls.filter((c: unknown[]) => /^\/api\/stocks\?/.test(String(c[0])))
+  return fetchMock.mock.calls.filter((c: unknown[]) => {
+    const url = String(c[0])
+    return /^\/api\/stocks\?/.test(url) && new URL(url, 'http://x').searchParams.get('size') !== '1'
+  })
 }
 
 describe('StockListPage tabs', () => {

@@ -120,6 +120,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.tooManyStocks());
     }
 
+    @ExceptionHandler(UpstreamEmptyException.class)
+    public ResponseEntity<ErrorResponse> handleUpstreamEmpty(UpstreamEmptyException e) {
+        log.warn("Upstream returned no usable data: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ErrorResponse("UPSTREAM_EMPTY"));
+    }
+
+    @ExceptionHandler(UpstreamUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleUpstreamUnavailable(UpstreamUnavailableException e) {
+        log.warn("Upstream could not be reached: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ErrorResponse("UPSTREAM_UNAVAILABLE"));
+    }
+
+    @ExceptionHandler(UpstreamMalformedException.class)
+    public ResponseEntity<ErrorResponse> handleUpstreamMalformed(UpstreamMalformedException e) {
+        log.warn("Upstream response could not be parsed: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ErrorResponse("UPSTREAM_MALFORMED"));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("VALIDATION_ERROR"));

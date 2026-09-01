@@ -150,14 +150,94 @@ describe('StockMinuteChartPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders candles colored red/green, the daily summary strip, and the trade date header', async () => {
+  it('renders a single-color #3E8FD8 close-price line with no candle bodies/wicks, the daily summary strip, and the trade date header', async () => {
     vi.stubGlobal('fetch', mockFetchRouter({}))
     const { container } = renderPage()
     await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
     expect(screen.getByText('2026-08-25')).toBeInTheDocument()
     expect(screen.getByText('2,380.00'.replace(',', ''))).toBeInTheDocument() // 最高 daily summary (2380.00 literal)
-    const bodies = container.querySelectorAll('svg rect[fill="#E04B45"], svg rect[fill="#16A75C"]')
-    expect(bodies.length).toBeGreaterThan(0)
+    // No candle bodies (rects colored by up/down) and no wicks (lines colored by up/down) exist
+    // on the main chart — only the single-color close-price line does.
+    const candleBodies = container.querySelectorAll('svg rect[fill="#E04B45"], svg rect[fill="#16A75C"]')
+    expect(candleBodies.length).toBe(0)
+    const wicks = container.querySelectorAll('svg line[stroke="#E04B45"], svg line[stroke="#16A75C"]')
+    expect(wicks.length).toBe(0)
+    const linePath = container.querySelector('svg path[stroke="#3E8FD8"]')
+    expect(linePath).toBeTruthy()
+    // No red/green volume bars either — uniform neutral color.
+    const coloredVolumeBars = container.querySelectorAll('svg rect[fill="#9A3B37"], svg rect[fill="#12784A"]')
+    expect(coloredVolumeBars.length).toBe(0)
+    const neutralVolumeBars = container.querySelectorAll('svg rect[fill="#3A4757"]')
+    expect(neutralVolumeBars.length).toBeGreaterThan(0)
+  })
+
+  it('the same #3E8FD8 line color is used regardless of whether the day trended up or down', async () => {
+    const upBars = makeBars(30) // makeBars alternates +1/-1 around a rising price walk
+    vi.stubGlobal('fetch', mockFetchRouter({ minute: makeMinuteResponse({ bars: upBars }) }))
+    const { container: upContainer } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    expect(upContainer.querySelector('svg path[stroke="#3E8FD8"]')).toBeTruthy()
+
+    const downBars = makeBars(30)
+      .slice()
+      .reverse()
+      .map((b) => ({ ...b, open: b.close, close: b.open })) // a falling-price variant
+    vi.stubGlobal('fetch', mockFetchRouter({ minute: makeMinuteResponse({ bars: downBars }) }))
+    const { container: downContainer } = renderPage()
+    await waitFor(() => expect(screen.getAllByText('台積電').length).toBeGreaterThan(0))
+    expect(downContainer.querySelector('svg path[stroke="#3E8FD8"]')).toBeTruthy()
+  })
+
+  it('draws no gradient/area fill under the line — the price panel contains no <linearGradient> or filled area path', async () => {
+    vi.stubGlobal('fetch', mockFetchRouter({}))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    expect(container.querySelectorAll('svg linearGradient, svg radialGradient').length).toBe(0)
+    const linePath = container.querySelector('svg path[stroke="#3E8FD8"]')!
+    expect(linePath.getAttribute('fill')).toBe('none')
+  })
+
+  it('draws the open-price baseline as a dashed line in #4A5866, labeled with its price on the Y axis', async () => {
+    vi.stubGlobal('fetch', mockFetchRouter({}))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    const baseline = container.querySelector('svg line[stroke="#4A5866"]')
+    expect(baseline).toBeTruthy()
+    expect(baseline!.getAttribute('stroke-dasharray')).toBeTruthy()
+    const texts = Array.from(container.querySelectorAll('svg text')).map((t) => t.textContent)
+    // dailySummary.open is 2355 in the fixture
+    expect(texts).toContain('2355.00')
+  })
+
+  it('open-price baseline stays within the visible Y range even when every close is above the open (no clipping)', async () => {
+    const allAboveOpenBars = makeBars(30).map((b, i) => ({
+      ...b,
+      open: 2355 + 20 + i,
+      high: 2355 + 21 + i,
+      low: 2355 + 19 + i,
+      close: 2355 + 20 + i,
+    }))
+    vi.stubGlobal('fetch', mockFetchRouter({ minute: makeMinuteResponse({ bars: allAboveOpenBars }) }))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    const baseline = container.querySelector('svg line[stroke="#4A5866"]')!
+    const svg = container.querySelector('svg')!
+    const viewBox = svg.getAttribute('viewBox')!.split(' ').map(Number)
+    const y1 = Number(baseline.getAttribute('y1'))
+    expect(y1).toBeGreaterThanOrEqual(0)
+    expect(y1).toBeLessThanOrEqual(viewBox[3])
+  })
+
+  it('the crosshair marks the active point on the line with an #E6EDF5 dot', async () => {
+    vi.stubGlobal('fetch', mockFetchRouter({}))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    const svg = container.querySelector('svg')!
+    fireEvent.click(svg, { clientX: clientXForBar(30, 2), clientY: 100 })
+    await waitFor(() => {
+      const dot = container.querySelector('svg circle[fill="#E6EDF5"]')
+      expect(dot).toBeTruthy()
+    })
   })
 
   it('X axis: first bar label is 09:00, and on-the-half-hour ticks render bold', async () => {
@@ -322,8 +402,8 @@ describe('StockMinuteChartPage', () => {
     const svg = container.querySelector('svg')!
     const viewBox = svg.getAttribute('viewBox')!.split(' ').map(Number)
     expect(viewBox[3]).toBeGreaterThan(0)
-    const rects = container.querySelectorAll('svg rect[fill="#E04B45"]')
-    expect(rects.length).toBeGreaterThan(0)
+    const linePath = container.querySelector('svg path[stroke="#3E8FD8"]')
+    expect(linePath).toBeTruthy()
   })
 
   it('shows "找不到此股票代號" for STOCK_NOT_FOUND', async () => {

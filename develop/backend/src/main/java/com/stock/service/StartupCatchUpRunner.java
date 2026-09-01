@@ -1,8 +1,10 @@
 package com.stock.service;
 
 import com.stock.config.BackfillProperties;
+import com.stock.config.MasterSyncProperties;
 import com.stock.domain.StockSyncProgress;
 import com.stock.dto.BackfillRequest;
+import com.stock.dto.DailySyncResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -12,9 +14,30 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 
 /**
- * Automatically catches every active stock's daily price up to today once the application has
- * finished starting, so a freshly reset database (only a stock master, no price history) becomes
- * usable on its own — no manual endpoint call required (spec: 啟動時自動補齊).
+ * Runs two independent startup steps, in a fixed order, once the application has finished
+ * starting:
+ *
+ * <ol>
+ *   <li><b>Stock master sync</b> (spec: 啟動時同步股票主檔): synchronously UPSERTs the `stock`
+ *       table from the exchange's single-request daily snapshot, so a freshly reset database
+ *       (only the 34-stock V007 dev seed) grows to the real listed universe on its own.</li>
+ *   <li><b>Price catch-up</b> (spec: 啟動時自動補齊): backfills every active stock's daily price
+ *       up to today, so a database with only a stock master (no price history) becomes usable on
+ *       its own — no manual endpoint call required.</li>
+ * </ol>
+ *
+ * <b>Ordering is deliberate and load-bearing:</b> master sync must complete before the price
+ * catch-up's target list (`stock.is_active = 1`) is resolved, otherwise a stock newly added by
+ * this very startup's master sync would not get its price backfilled until the *next* restart
+ * (spec: 主檔同步在日線補齊之前完成). Master sync is a single external request — seconds, not
+ * minutes — so running it synchronously here does not violate "絕不阻塞啟動"; only the
+ * long-running per-stock price loop that follows needs to stay asynchronous.
+ *
+ * Each step has its own independent enable switch ({@link MasterSyncProperties.Startup} /
+ * {@link BackfillProperties.StartupCatchUp}) and its own failure isolation: a step failing (source
+ * offline, timeout, malformed response) is only logged and never aborts application startup, and
+ * never prevents the *other* step from running (spec: 主檔同步失敗只代表 universe 沒更新，不代表既有
+ * 標的的行情不該補).
  *
  * Reuses the exact same backfill service path as the manual endpoint (stockIds omitted -> all
  * `is_active = 1`, startDate = configured catch-up start date, endDate = today, catchUp = true);
@@ -50,18 +73,27 @@ public class StartupCatchUpRunner {
     private final StockSyncService stockSyncService;
     private final IndicatorRebuildService indicatorRebuildService;
     private final BackfillProperties properties;
+    private final MasterSyncProperties masterSyncProperties;
     private final JobRunningRegistry jobRunningRegistry;
 
     public StartupCatchUpRunner(StockSyncService stockSyncService, IndicatorRebuildService indicatorRebuildService,
-                                 BackfillProperties properties, JobRunningRegistry jobRunningRegistry) {
+                                 BackfillProperties properties, MasterSyncProperties masterSyncProperties,
+                                 JobRunningRegistry jobRunningRegistry) {
         this.stockSyncService = stockSyncService;
         this.indicatorRebuildService = indicatorRebuildService;
         this.properties = properties;
+        this.masterSyncProperties = masterSyncProperties;
         this.jobRunningRegistry = jobRunningRegistry;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
+        // Step 1: stock master sync. Runs first and synchronously (see class Javadoc for why)
+        // so any stock it adds is already in `stock` by the time step 2 resolves its target list.
+        syncStockMaster();
+
+        // Step 2: price catch-up. Independent switch from step 1 — a stock master sync failure
+        // or being disabled must never affect this step running for the existing stocks.
         BackfillProperties.StartupCatchUp config = properties.getStartupCatchUp();
         if (!config.isEnabled()) {
             log.info("Startup price catch-up disabled (app.backfill.startup-catch-up.enabled=false); "
@@ -108,6 +140,34 @@ public class StartupCatchUpRunner {
             // job lock itself before rethrowing, so no cleanup is needed here. Since the price
             // batch never actually started in this case, no indicator rebuild is triggered either.
             log.warn("Startup price catch-up could not be started; it can be triggered manually later.", e);
+        }
+    }
+
+    /**
+     * Synchronously UPSERTs the stock master via the existing single-request daily-snapshot path
+     * (spec: 啟動時同步股票主檔). Reuses {@link StockSyncService#syncDaily()} exactly as-is — no
+     * separate fetch/parse/upsert logic is introduced here; {@code stockMasterUpserted} on its
+     * response *is* this step's result, per the spec's own wording ("等同於以 tradeDate 省略呼叫每日
+     * 增量同步服務"). That path only ever writes `market = 'TSE'` rows (its data source is the TWSE
+     * snapshot endpoint), so this step cannot produce any `OTC` row.
+     *
+     * Any failure (offline source, timeout, malformed response) is only logged — it must never
+     * abort application startup, and the price catch-up step that follows still runs normally
+     * for the stocks that already exist.
+     */
+    private void syncStockMaster() {
+        if (!masterSyncProperties.getStartup().isEnabled()) {
+            log.info("Startup stock master sync disabled (app.master-sync.startup.enabled=false); skipping.");
+            return;
+        }
+        log.info("Starting startup stock master sync (single-request TWSE daily snapshot).");
+        try {
+            DailySyncResponse response = stockSyncService.syncDaily();
+            log.info("Startup stock master sync finished: {} stocks upserted into the stock master.",
+                    response.getStockMasterUpserted());
+        } catch (Exception e) {
+            log.warn("Startup stock master sync failed; the stock master was not updated this run. "
+                    + "The price catch-up step still runs normally for existing stocks.", e);
         }
     }
 

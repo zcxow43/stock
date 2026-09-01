@@ -50,6 +50,19 @@ export interface SubplotSpec {
   unavailableMessage?: string
 }
 
+/**
+ * A horizontal reference line drawn across the main (price) panel, e.g. the minute chart's
+ * daily-open baseline (specs/frontend/stock-minute-chart.md). Its `value` is folded into the
+ * main panel's Y-axis domain calculation so the line is never clipped out of the visible range,
+ * even when every bar sits entirely above or below it.
+ */
+export interface PriceReferenceLine {
+  value: number
+  color: string
+  /** Optional price label rendered at the line's Y position on the right axis. */
+  label?: string
+}
+
 export interface KLineChartProps {
   bars: CandleBar[]
   priceHeight?: number
@@ -60,6 +73,20 @@ export interface KLineChartProps {
   /** Fired on native browser dblclick — never hand-rolled from two click events (see spec). */
   onBarDoubleClick: (index: number) => void
   renderTooltip: (index: number) => ReactNode
+  /**
+   * Main panel drawing style: `'candle'` (default) draws OHLC candlesticks with red-up/green-down
+   * coloring (the daily-K page). `'line'` draws a single-color line through each bar's `close`
+   * only — `open`/`high`/`low` are not read for drawing and no up/down coloring is applied (the
+   * minute-K page's "現價流線圖", specs/frontend/stock-minute-chart.md).
+   */
+  mainType?: 'candle' | 'line'
+  /** Line color used when `mainType === 'line'`. Ignored in candle mode. */
+  lineColor?: string
+  /** Horizontal reference lines drawn across the main panel; see `PriceReferenceLine`. */
+  priceReferenceLines?: PriceReferenceLine[]
+  /** Color of the dot marking the crosshair's current point on the line, when `mainType ===
+   * 'line'`. Ignored in candle mode (the pinned/hover outline already marks the candle there). */
+  lineDotColor?: string
   upColor: string
   downColor: string
   gridColor: string
@@ -138,6 +165,10 @@ export default function KLineChart({
   onBarClick,
   onBarDoubleClick,
   renderTooltip,
+  mainType = 'candle',
+  lineColor,
+  priceReferenceLines,
+  lineDotColor,
   upColor,
   downColor,
   gridColor,
@@ -180,9 +211,13 @@ export default function KLineChart({
   const priceTop = panelTops[0]
   const lastPanelBottom = bottom
 
+  const priceRefValues = useMemo(
+    () => priceReferenceLines?.map((r) => r.value) ?? [],
+    [priceReferenceLines],
+  )
   const [priceLo, priceHi] = useMemo(
-    () => computeDomain([bars.map((b) => b.high), bars.map((b) => b.low)], [], 0.05),
-    [bars],
+    () => computeDomain([bars.map((b) => b.high), bars.map((b) => b.low)], priceRefValues, 0.05),
+    [bars, priceRefValues],
   )
   const yForPrice = useCallback(
     (v: number) => priceTop + priceHeight - ((v - priceLo) / (priceHi - priceLo)) * priceHeight,
@@ -293,37 +328,67 @@ export default function KLineChart({
               </g>
             )
           })}
-          {bars.map((b, i) => {
-            const col = b.close >= b.open ? upColor : downColor
-            const yo = yForPrice(b.open)
-            const yc = yForPrice(b.close)
-            const yh = yForPrice(b.high)
-            const yl = yForPrice(b.low)
-            const isPinned = pinnedIndex === i
-            return (
-              <g key={i}>
-                <line x1={xFor(i)} y1={yh} x2={xFor(i)} y2={yl} stroke={col} strokeWidth={1.3} />
-                <rect
-                  x={xFor(i) - bw / 2}
-                  y={Math.min(yo, yc)}
-                  width={bw}
-                  height={Math.max(1.4, Math.abs(yc - yo))}
-                  fill={col}
-                />
-                {isPinned && (
+          {(priceReferenceLines ?? []).map((rl, i) => (
+            <g key={`price-ref-${i}`}>
+              <line
+                x1={LEFT_MARGIN}
+                y1={yForPrice(rl.value)}
+                x2={LEFT_MARGIN + chartWidth}
+                y2={yForPrice(rl.value)}
+                stroke={rl.color}
+                strokeDasharray="4 4"
+              />
+              {rl.label != null && (
+                <text x={LEFT_MARGIN + chartWidth + 8} y={yForPrice(rl.value) + 4} fill={rl.color} fontSize={11}>
+                  {rl.label}
+                </text>
+              )}
+            </g>
+          ))}
+          {mainType === 'candle' ? (
+            bars.map((b, i) => {
+              const col = b.close >= b.open ? upColor : downColor
+              const yo = yForPrice(b.open)
+              const yc = yForPrice(b.close)
+              const yh = yForPrice(b.high)
+              const yl = yForPrice(b.low)
+              const isPinned = pinnedIndex === i
+              return (
+                <g key={i}>
+                  <line x1={xFor(i)} y1={yh} x2={xFor(i)} y2={yl} stroke={col} strokeWidth={1.3} />
                   <rect
-                    x={xFor(i) - bw / 2 - 2}
-                    y={yh - 3}
-                    width={bw + 4}
-                    height={yl - yh + 6}
-                    fill="none"
-                    stroke={pinnedOutlineColor}
-                    strokeWidth={1.5}
+                    x={xFor(i) - bw / 2}
+                    y={Math.min(yo, yc)}
+                    width={bw}
+                    height={Math.max(1.4, Math.abs(yc - yo))}
+                    fill={col}
                   />
-                )}
-              </g>
-            )
-          })}
+                  {isPinned && (
+                    <rect
+                      x={xFor(i) - bw / 2 - 2}
+                      y={yh - 3}
+                      width={bw + 4}
+                      height={yl - yh + 6}
+                      fill="none"
+                      stroke={pinnedOutlineColor}
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </g>
+              )
+            })
+          ) : (
+            <path
+              d={buildLinePath(
+                bars.map((b) => b.close),
+                xFor,
+                yForPrice,
+              )}
+              fill="none"
+              stroke={lineColor ?? upColor}
+              strokeWidth={1.5}
+            />
+          )}
         </g>
 
         {/* ---------- subplots ---------- */}
@@ -467,6 +532,14 @@ export default function KLineChart({
             >
               {active.close.toFixed(2)}
             </text>
+            {mainType === 'line' && (
+              <circle
+                cx={xFor(activeIndex)}
+                cy={yForPrice(active.close)}
+                r={4}
+                fill={lineDotColor ?? axisLabelText}
+              />
+            )}
             <rect
               x={xFor(activeIndex) - 42}
               y={lastPanelBottom + 4}

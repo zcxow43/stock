@@ -5,7 +5,9 @@ import com.stock.dto.BackfillResponse;
 import com.stock.dto.DailySyncRequest;
 import com.stock.dto.DailySyncResponse;
 import com.stock.dto.ProgressResponse;
+import com.stock.dto.UniverseImportResponse;
 import com.stock.service.StockSyncService;
+import com.stock.service.StockUniverseImportService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +22,12 @@ import javax.validation.Valid;
 public class StockSyncController {
 
     private final StockSyncService stockSyncService;
+    private final StockUniverseImportService stockUniverseImportService;
 
-    public StockSyncController(StockSyncService stockSyncService) {
+    public StockSyncController(StockSyncService stockSyncService,
+                                StockUniverseImportService stockUniverseImportService) {
         this.stockSyncService = stockSyncService;
+        this.stockUniverseImportService = stockUniverseImportService;
     }
 
     @PostMapping("/api/stocks/sync/daily")
@@ -38,6 +43,11 @@ public class StockSyncController {
     public ResponseEntity<BackfillResponse> backfill(@Valid @RequestBody BackfillRequest request) {
         BackfillResponse response = stockSyncService.startBackfill(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    @PostMapping("/api/stocks/universe/import")
+    public ResponseEntity<UniverseImportResponse> importUniverse() {
+        return ResponseEntity.ok(stockUniverseImportService.importUniverse());
     }
 
     @GetMapping("/api/stocks/sync/progress")

@@ -123,6 +123,84 @@ function bothStrategiesResponse() {
   }
 }
 
+// Two strategies, one stock (2330) hit by both with different signalDates (matching the
+// spec's own worked example: 箱型突破 2026-08-28 / 底底高 2026-08-25), plus one stock unique
+// to each strategy — enough to exercise dedup, per-strategy signal dates, and the
+// newest-signalDate-desc / stockId-asc sort (2317 and 2330 tie on 2026-08-28).
+function unionScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 5,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 2,
+        items: [
+          {
+            stockId: '2330',
+            stockName: '台積電',
+            signalDate: '2026-08-28',
+            detail: { boxHigh: 2380.0, boxLow: 2250.0, breakoutClose: 2420.0, breakoutPercent: 1.68, volumeRatio: 1.82 },
+          },
+          {
+            stockId: '2454',
+            stockName: '聯發科',
+            signalDate: '2026-08-20',
+            detail: { boxHigh: 900.0, boxLow: 850.0, breakoutClose: 910.0, breakoutPercent: 1.11, volumeRatio: 1.5 },
+          },
+        ],
+        insufficientData: ['6669'],
+        pendingConfirm: ['1101'],
+      },
+      {
+        strategy: 'HIGHER_LOWS',
+        preset: 'STRICT',
+        matchedCount: 2,
+        items: [
+          {
+            stockId: '2330',
+            stockName: '台積電',
+            signalDate: '2026-08-25',
+            detail: {
+              lows: [
+                { tradeDate: '2026-07-08', low: 240.0 },
+                { tradeDate: '2026-08-25', low: 262.5 },
+              ],
+            },
+          },
+          {
+            stockId: '2317',
+            stockName: '鴻海',
+            signalDate: '2026-08-28',
+            detail: {
+              lows: [
+                { tradeDate: '2026-07-01', low: 200.0 },
+                { tradeDate: '2026-08-28', low: 220.0 },
+              ],
+            },
+          },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+function zeroHitBothResponse() {
+  return {
+    startDate: '2026-08-25',
+    endDate: '2026-08-27',
+    scannedStocks: 34,
+    results: [
+      { strategy: 'BOX_BREAKOUT', preset: 'STANDARD', matchedCount: 0, items: [], insufficientData: [], pendingConfirm: [] },
+      { strategy: 'HIGHER_LOWS', preset: 'STANDARD', matchedCount: 0, items: [], insufficientData: [], pendingConfirm: [] },
+    ],
+  }
+}
+
 function renderTab() {
   return render(
     <MemoryRouter initialEntries={['/stocks?tab=strategy']}>
@@ -139,6 +217,8 @@ describe('StrategyTab', () => {
   let scanResponder: () => unknown
   let progressResponder: () => unknown
   let backfillResponder: () => { status: number; body: unknown }
+  let stocksTotal: number
+  let universeImportResponder: () => { status: number; body: unknown }
 
   beforeEach(() => {
     scanResponder = () => boxScanResponse()
@@ -147,9 +227,15 @@ describe('StrategyTab', () => {
       status: 202,
       body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 0, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
     })
+    stocksTotal = 34
+    universeImportResponder = () => ({
+      status: 200,
+      body: { fetchedCount: 1377, eligibleCount: 1085, skippedCount: 292, insertedCount: 1, updatedCount: 1050, totalActiveCount: 1051 },
+    })
 
     fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       const u = String(url)
+      const method = init?.method ?? 'GET'
       if (u.startsWith('/api/strategies/scan')) {
         return Promise.resolve(jsonResponse(200, scanResponder()))
       }
@@ -163,7 +249,16 @@ describe('StrategyTab', () => {
         const { status, body } = backfillResponder()
         return Promise.resolve(jsonResponse(status, body))
       }
+      if (u.startsWith('/api/stocks/universe/import') && method === 'POST') {
+        const { status, body } = universeImportResponder()
+        return Promise.resolve(jsonResponse(status, body))
+      }
       if (u.startsWith('/api/stocks?')) {
+        const params = new URL(u, 'http://x').searchParams
+        if (params.get('size') === '1') {
+          // 常駐「共 N 檔」— GET /api/stocks?page=1&size=1, only `total` matters.
+          return Promise.resolve(jsonResponse(200, { page: 1, size: 1, total: stocksTotal, totalPages: stocksTotal, items: [] }))
+        }
         return Promise.resolve(
           jsonResponse(200, {
             page: 1,
@@ -395,6 +490,83 @@ describe('StrategyTab', () => {
     const titles = screen.getAllByText(/命中 1 檔/).map((el) => el.textContent)
     expect(titles[0]).toContain('箱型突破')
     expect(titles[1]).toContain('底底高')
+  })
+
+  it('does not show a union table when only one strategy is checked', async () => {
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    expect(screen.queryByText(/命中彙總/)).not.toBeInTheDocument()
+  })
+
+  it('shows a deduped union table above the strategy blocks, sorted by each stock\'s newest signalDate desc then stockId asc, once a second strategy is checked and scanned', async () => {
+    scanResponder = () => unionScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    // 3 distinct stocks (2330 hit by both), not 2+2=4 (the sum of matchedCount)
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+
+    const resultsList = screen.getByText('命中彙總 — 共 3 檔').closest('.st-results-list') as HTMLElement
+    const blockTitles = within(resultsList).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+    // positioned above all strategy blocks
+    expect(blockTitles).toEqual([
+      '命中彙總 — 共 3 檔',
+      '箱型突破（標準）— 命中 2 檔',
+      '底底高（嚴格）— 命中 2 檔',
+    ])
+
+    const unionTable = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
+    const dataRows = within(unionTable).getAllByRole('row').slice(1)
+    // 2317 and 2330 tie on the newest signalDate (2026-08-28) -> stockId asc; 2454 (2026-08-20) last
+    expect(dataRows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+      '2317 鴻海',
+      '2330 台積電',
+      '2454 聯發科',
+    ])
+
+    // 2330 is hit by both strategies — each strategy's own signalDate is listed, not merged
+    const stock2330Row = within(unionTable).getByText('2330 台積電').closest('tr')!
+    expect(within(stock2330Row).getByText('箱型突破')).toBeInTheDocument()
+    expect(within(stock2330Row).getByText('2026-08-28')).toBeInTheDocument()
+    expect(within(stock2330Row).getByText('底底高')).toBeInTheDocument()
+    expect(within(stock2330Row).getByText('2026-08-25')).toBeInTheDocument()
+
+    // insufficientData ('6669') / pendingConfirm ('1101') never appear in the union table
+    expect(within(unionTable).queryByText(/6669/)).not.toBeInTheDocument()
+    expect(within(unionTable).queryByText(/1101/)).not.toBeInTheDocument()
+  })
+
+  it('does not show a union table when 2+ strategies are scanned but none has any hits; each block still shows its own zero-hit message', async () => {
+    scanResponder = () => zeroHitBothResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getAllByText('此區間內沒有命中的股票')).toHaveLength(2))
+    expect(screen.queryByText(/命中彙總/)).not.toBeInTheDocument()
+  })
+
+  it('navigates to /stocks/{stockId}/daily when a union-table row is clicked', async () => {
+    scanResponder = () => unionScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+    const unionTable = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
+    fireEvent.click(within(unionTable).getByText('2454 聯發科'))
+    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
   })
 
   it('renders the box-breakout table with formatted range/percent/multiple, and insufficientData/pendingConfirm stay out of the hit table', async () => {
@@ -659,5 +831,178 @@ describe('StrategyTab', () => {
 
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/建議|推薦|可進場/)
+  })
+
+  // ---------- 更新股票清單 (POST /api/stocks/universe/import) ----------
+
+  it('shows both sync-row buttons as secondary style, in 更新股票清單 → 同步日 K 至今日 order, with 開始掃描 as the page\'s only primary button', async () => {
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '更新股票清單' })).toBeInTheDocument())
+    const importBtn = screen.getByRole('button', { name: '更新股票清單' })
+    const syncBtn = screen.getByRole('button', { name: '同步日 K 至今日' })
+    const scanBtn = screen.getByRole('button', { name: '開始掃描' })
+
+    expect(importBtn.className).not.toContain('sl-btn-primary')
+    expect(syncBtn.className).not.toContain('sl-btn-primary')
+    expect(scanBtn.className).toContain('sl-btn-primary')
+    // 更新股票清單 precedes 同步日 K 至今日 in document order (left-to-right in the row)
+    expect(importBtn.compareDocumentPosition(syncBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows the persistent 股票清單「共 N 檔」 from GET /api/stocks?page=1&size=1 on entry', async () => {
+    stocksTotal = 1234
+    renderTab()
+    await waitFor(() => expect(screen.getByText('股票清單：共 1234 檔')).toBeInTheDocument())
+  })
+
+  it('imports the stock universe: disabled running state, then a completion summary that updates the persistent count, without polling a progress endpoint or auto-triggering sync/scan', async () => {
+    stocksTotal = 34
+    let resolveImport!: (value: { status: number; body: unknown }) => void
+    const importPromise = new Promise<{ status: number; body: unknown }>((resolve) => {
+      resolveImport = resolve
+    })
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u.startsWith('/api/stocks/universe/import') && method === 'POST') {
+        return importPromise.then(({ status, body }) => jsonResponse(status, body))
+      }
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, scanResponder()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponder()))
+      if (u.startsWith('/api/stocks/sync/backfill')) {
+        const { status, body } = backfillResponder()
+        return Promise.resolve(jsonResponse(status, body))
+      }
+      if (u.startsWith('/api/stocks?')) {
+        const params = new URL(u, 'http://x').searchParams
+        if (params.get('size') === '1') {
+          return Promise.resolve(jsonResponse(200, { page: 1, size: 1, total: stocksTotal, totalPages: stocksTotal, items: [] }))
+        }
+        return Promise.resolve(jsonResponse(200, { page: 1, size: 20, total: 0, totalPages: 0, items: [] }))
+      }
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+
+    renderTab()
+    await waitFor(() => expect(screen.getByText('股票清單：共 34 檔')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    expect(screen.getByRole('button', { name: '更新中…' })).toBeDisabled()
+
+    const callsOf = (prefix: string) => fetchMock.mock.calls.filter((c: unknown[]) => String(c[0]).startsWith(prefix)).length
+    const progressCallsBefore = callsOf('/api/stocks/sync/progress')
+    const scanCallsBefore = callsOf('/api/strategies/scan')
+    const backfillCallsBefore = callsOf('/api/stocks/sync/backfill')
+
+    resolveImport({
+      status: 200,
+      body: { fetchedCount: 1377, eligibleCount: 1085, skippedCount: 292, insertedCount: 3, updatedCount: 1082, totalActiveCount: 1085 },
+    })
+
+    await waitFor(() => expect(screen.getByText('股票清單已更新：共 1085 檔（新增 3、更新 1082）')).toBeInTheDocument())
+    expect(screen.getByText('股票清單：共 1085 檔')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled()
+
+    // completion never polled a progress endpoint and never auto-started a sync or a scan
+    expect(callsOf('/api/stocks/sync/progress')).toBe(progressCallsBefore)
+    expect(callsOf('/api/strategies/scan')).toBe(scanCallsBefore)
+    expect(callsOf('/api/stocks/sync/backfill')).toBe(backfillCallsBefore)
+  })
+
+  it('keeps the 更新股票清單 completion summary visible across an unrelated 開始掃描, clearing only on the next 更新股票清單 click', async () => {
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    await waitFor(() => expect(screen.getByText(/股票清單已更新/)).toBeInTheDocument())
+
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    expect(screen.getByText(/股票清單已更新/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    expect(screen.queryByText(/股票清單已更新/)).not.toBeInTheDocument()
+  })
+
+  it('shows「交易所尚未發布今日清單，請稍後再試」on 502 UPSTREAM_EMPTY, leaving 共 N 檔 unchanged', async () => {
+    stocksTotal = 34
+    universeImportResponder = () => ({ status: 502, body: { code: 'UPSTREAM_EMPTY' } })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('股票清單：共 34 檔')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    await waitFor(() => expect(screen.getByText('交易所尚未發布今日清單，請稍後再試')).toBeInTheDocument())
+    expect(screen.getByText('股票清單：共 34 檔')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled()
+  })
+
+  it('shows「無法取得交易所股票清單，請稍後再試」on 502 UPSTREAM_UNAVAILABLE, leaving 共 N 檔 unchanged', async () => {
+    stocksTotal = 34
+    universeImportResponder = () => ({ status: 502, body: { code: 'UPSTREAM_UNAVAILABLE' } })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('股票清單：共 34 檔')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    await waitFor(() => expect(screen.getByText('無法取得交易所股票清單，請稍後再試')).toBeInTheDocument())
+    expect(screen.getByText('股票清單：共 34 檔')).toBeInTheDocument()
+  })
+
+  it('also shows「無法取得交易所股票清單，請稍後再試」on 502 UPSTREAM_MALFORMED', async () => {
+    universeImportResponder = () => ({ status: 502, body: { code: 'UPSTREAM_MALFORMED' } })
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '更新股票清單' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    await waitFor(() => expect(screen.getByText('無法取得交易所股票清單，請稍後再試')).toBeInTheDocument())
+  })
+
+  it('lets 更新股票清單 and 同步日 K 至今日 run concurrently — neither disables the other', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let progressCallCount = 0
+    progressResponder = () => {
+      progressCallCount += 1
+      return progressCallCount === 1
+        ? progressResponse({ pending: 0, running: 0, done: 34 })
+        : progressResponse({ pending: 10, running: 1, done: 24 })
+    }
+    let resolveImport!: (value: { status: number; body: unknown }) => void
+    const importPromise = new Promise<{ status: number; body: unknown }>((resolve) => {
+      resolveImport = resolve
+    })
+    const baseImpl = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u.startsWith('/api/stocks/universe/import') && method === 'POST') {
+        return importPromise.then(({ status, body }) => jsonResponse(status, body))
+      }
+      return baseImpl(url, init)
+    })
+
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '同步日 K 至今日' })).toBeInTheDocument())
+
+    // start the long-running sync first
+    fireEvent.click(screen.getByRole('button', { name: '同步日 K 至今日' }))
+    expect(screen.getByRole('button', { name: '同步中…' })).toBeDisabled()
+    // 更新股票清單 is unaffected by a running sync
+    expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled()
+
+    // start 更新股票清單 while the sync is still running
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    expect(screen.getByRole('button', { name: '更新中…' })).toBeDisabled()
+    // the still-running sync button is unaffected by the import starting
+    expect(screen.getByRole('button', { name: '同步中…' })).toBeDisabled()
+
+    resolveImport({
+      status: 200,
+      body: { fetchedCount: 1, eligibleCount: 1, skippedCount: 0, insertedCount: 0, updatedCount: 1, totalActiveCount: 34 },
+    })
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled())
+    // the sync (unrelated to the import) is still running afterwards
+    expect(screen.getByRole('button', { name: '同步中…' })).toBeDisabled()
+    vi.useRealTimers()
   })
 })

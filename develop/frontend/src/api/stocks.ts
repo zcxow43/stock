@@ -228,3 +228,21 @@ export async function deactivateStock(stockId: string, signal?: AbortSignal): Pr
     signal,
   )
 }
+
+// ---------- universe import — specs/backend/stock-universe-import.md, specs/frontend/strategy.md ----------
+
+export interface UniverseImportResponse {
+  fetchedCount: number
+  eligibleCount: number
+  skippedCount: number
+  insertedCount: number
+  updatedCount: number
+  totalActiveCount: number
+}
+
+/** POST /api/stocks/universe/import — no request body. A short synchronous action (single
+ * upstream request); never poll a progress endpoint for this. On failure the body carries
+ * `code` of `UPSTREAM_EMPTY` / `UPSTREAM_UNAVAILABLE` / `UPSTREAM_MALFORMED` with a `502` status. */
+export async function importStockUniverse(signal?: AbortSignal): Promise<UniverseImportResponse> {
+  return requestJson<UniverseImportResponse>('/api/stocks/universe/import', { method: 'POST' }, signal)
+}

@@ -3,6 +3,7 @@ package com.stock.service;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.DailySyncResponse;
+import com.stock.dto.UniverseUpsertCounts;
 import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -84,6 +86,39 @@ public class PriceIngestionService {
             priceMapper.upsert(toDomain(row, SOURCE_FINMIND));
         }
         progressMapper.markDone(stockId, jobType, requestedEndDate);
+    }
+
+    /**
+     * UPSERTs an already-filtered universe-import batch into `stock` only — no price row is ever
+     * written here (spec: stock-universe-import.md 寫入語意). On conflict, only `stock_name` is
+     * refreshed; `is_active`/`market` are left exactly as they are, so a stock a user has
+     * deliberately deactivated via {@code DELETE /api/stocks/{stockId}} is never silently
+     * reactivated, and a listed-but-not-traded-today stock is never mistaken for delisted.
+     *
+     * Existing ids are resolved up front via a single query rather than relying on MySQL's
+     * ON DUPLICATE KEY UPDATE affected-row count, which cannot distinguish "matched but the name
+     * happened not to change" (0 rows affected) from "no match" (1 row affected) the way a
+     * pre-computed existing-id set can.
+     */
+    @Transactional
+    public UniverseUpsertCounts applyUniverseImport(List<Stock> eligible) {
+        List<String> ids = new ArrayList<>(eligible.size());
+        for (Stock stock : eligible) {
+            ids.add(stock.getStockId());
+        }
+        Set<String> existingIds = new HashSet<>(stockMapper.findExistingStockIds(ids));
+
+        int inserted = 0;
+        int updated = 0;
+        for (Stock stock : eligible) {
+            stockMapper.upsertUniverse(stock);
+            if (existingIds.contains(stock.getStockId())) {
+                updated++;
+            } else {
+                inserted++;
+            }
+        }
+        return new UniverseUpsertCounts(inserted, updated);
     }
 
     private StockDailyPrice toDomain(NormalizedPriceRow row, String source) {

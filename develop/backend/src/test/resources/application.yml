@@ -39,5 +39,11 @@ app:
       # Set here too so the LocalDate binding is exercised by the context-load test;
       # without it the test config shadows main and a bad value ships undetected.
       start-date: "2026-01-01"
+  master-sync:
+    # Must stay disabled in tests for the same reason as startup-catch-up above: it would
+    # otherwise fire a real request against the live TWSE snapshot endpoint on every
+    # test-suite boot.
+    startup:
+      enabled: false
   minute-price:
     max-attempt-count: 3

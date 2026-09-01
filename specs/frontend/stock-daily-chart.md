@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "個股日 K 線圖頁"
 requirement: "前端 K 線瀏覽 — 從股票清單點選一檔後，以 K 線圖展示該檔的日 K；單擊 K 棒釘選該日資訊，連點兩下才進入該日分 K"
 depends_on: [stock-list]
@@ -226,9 +226,9 @@ depends_on: [stock-list]
 
 ---
 
-- [ ] 共用圖表元件的主圖型態為對外參數，可傳入蠟燭或折線；折線型態下只讀 `close`、以單一線色繪製，不套用紅漲綠跌
-- [ ] 共用圖表元件可接受水平參考線設定，並將其值納入 Y 軸範圍計算
-- [ ] 本頁（日 K）主圖仍為蠟燭圖，紅漲綠跌與既有行為完全不變
+- [x] 共用圖表元件的主圖型態為對外參數，可傳入蠟燭或折線；折線型態下只讀 `close`、以單一線色繪製，不套用紅漲綠跌
+- [x] 共用圖表元件可接受水平參考線設定，並將其值納入 Y 軸範圍計算
+- [x] 本頁（日 K）主圖仍為蠟燭圖，紅漲綠跌與既有行為完全不變
 
 ## Execution Result
 - Status: DONE
@@ -252,3 +252,20 @@ depends_on: [stock-list]
   - One fixture-authoring mistake surfaced and was corrected along the way, worth noting since it looked like an app bug at first: an initial `mysql -e "INSERT INTO stock ... VALUES ('2330','台積電',...)"` run through a non-UTF-8 shell produced double-encoded (mojibake) `stock_name` bytes in the database; the page correctly rendered whatever UTF-8 bytes the backend returned, so the garbled text was purely a fixture-insertion artifact (fixed with `--default-character-set=utf8mb4` and a corrective `UPDATE`), not a frontend rendering bug — all other CJK text on the page (labels, hints, tags) rendered correctly throughout, confirming the app's own text pipeline was never at fault.
   - Backend (`mvn spring-boot:run`, port 8080) and frontend (`npm run dev`, port 5173) dev processes were both stopped before finishing; all fixture rows (`2330`, `1101`, `2454` and their `stock_daily_price`/`stock_daily_indicator`/`stock_sync_progress` rows) were deleted afterward — `stock`, `stock_daily_price`, `stock_daily_indicator`, and `stock_sync_progress` all confirmed back at 0 rows.
   - `docker/launch.json` already contained a correct `frontend` entry (`npm --prefix develop/frontend run dev`, port 5173) alongside the existing `backend` entry from a concurrent scaffold — left untouched. `.claude/launch.json` symlink to `../docker/launch.json` was already present and valid.
+
+### Increment 2 — 2026-09-01
+
+Implemented the 3 previously-unchecked Acceptance Criteria (共用圖表元件的主圖型態外部化為蠟燭／折線參數，並支援水平參考線納入 Y 軸範圍；本頁行為不變). This is a pure refactor/generalization of the shared `KLineChart` component so `specs/frontend/stock-minute-chart.md` can reuse it for its close-price line + open-price baseline; no behavior of this page (`StockDailyChartPage`) changed.
+
+- Files changed:
+  - `develop/frontend/src/components/KLineChart.tsx` — added three new optional props, all additive with backward-compatible defaults:
+    - `mainType?: 'candle' | 'line'` (default `'candle'`) — selects the main-panel drawing style. `'candle'` renders exactly the pre-existing OHLC candlestick body/wick/pin-outline logic, untouched. `'line'` renders a single `<path>` built solely from each bar's `close` (via the existing `buildLinePath` helper, reused verbatim), stroked with `lineColor`, with no red/green up-down coloring and no reading of `open`/`high`/`low` for drawing.
+    - `lineColor?: string` — stroke color used only when `mainType === 'line'`; ignored in candle mode. Falls back to `upColor` if omitted (defensive default, not expected to be relied on by callers).
+    - `priceReferenceLines?: PriceReferenceLine[]` (new exported type `{ value: number; color: string; label?: string }`) — horizontal dashed reference lines drawn across the main price panel. Each line's `value` is folded into the main panel's Y-axis domain via the existing `computeDomain(valueArrays, refs, paddingRatio)` helper (previously called with an empty `refs` array for the price panel; now passed `priceRefValues = priceReferenceLines?.map(r => r.value) ?? []`), so a reference value outside the bars' high/low range still expands the visible Y range to include it (with the same padding ratio applied to the union), rather than being clipped off-canvas. Each line renders in its own `color` (not the shared `referenceLineColor` used by subplots, since the minute-chart's open baseline needs a distinct color `#4A5866` from the daily chart's shared `referenceLineColor` `#3A4757`), with an optional `label` text at its Y position on the right axis.
+  - `develop/frontend/src/__tests__/KLineChart.test.tsx` (new) — 6 unit tests exercising the two new capabilities directly against the component (not through a page): (1) default/candle-mode regression — red/green rects render, no line path; (2) line mode — mixed up/down closes produce zero candle rects and exactly one single-color path built from `close` only; (3) a `priceReferenceLines` entry renders a `<line>` in its given color; (4)/(5) a reference value far below/above every bar's close still lands within `[0, priceHeight]` in the rendered SVG's `y1` coordinate — i.e. it is not clipped out of the visible range — and its optional `label` renders; (6) explicit regression check that omitting all three new props reproduces the exact pre-refactor candle output with zero reference-line elements.
+  - No other file changed. `develop/frontend/src/pages/StockDailyChartPage.tsx` was not touched — it does not pass `mainType`, `lineColor`, or `priceReferenceLines`, so it continues to render through the `mainType = 'candle'` default path exactly as before.
+- Notes:
+  - **New component parameters for the next spec's consumer** (`specs/frontend/stock-minute-chart.md`): pass `mainType="line"` with `lineColor="#3E8FD8"` for the close-price line, and `priceReferenceLines={[{ value: dailySummary.open, color: '#4A5866' }]}` (optionally with a formatted `label`) for the open-price baseline — its value will automatically be included in the Y-axis domain calculation so it stays visible even when every close is above or below it.
+  - `npm run build` (`tsc -b && vite build`) and `npx vitest run` (89/89 passing — 83 pre-existing + 6 new) both green; `npx oxlint .` shows only two pre-existing, unrelated warnings in `StrategyTab.tsx`/`StrategyTab.test.tsx` (not touched by this increment).
+  - End-to-end verified against the real backend and real MySQL data already present in the database (no fixture insert/cleanup needed this run): started the backend (`mvn -f develop/backend/pom.xml spring-boot:run`, port 8080) and the frontend dev server (`npm run dev`, port 5173), then loaded `/stocks/2330/daily` in a headless Chromium (Playwright, installed with `npm install --no-save` so `package.json`/`package-lock.json` show no diff — verified via `git diff --stat`) against the real 2330 data (159 daily price rows, 158 indicator rows) already in the database. Screenshot confirms the page renders identically to its pre-refactor appearance: red-up/green-down candles, warmup banner, summary strip, volume/MACD/KD subplots, all colors matching. Both dev processes were stopped afterward (confirmed via `curl` timing out on both ports); no test data was inserted or needed cleanup since real data was reused as-is.
+  - Line-mode and reference-line correctness (the part not exercisable through the daily-K page, since it never passes those props) was verified via the new unit tests calling `KLineChart` directly with `mainType="line"` and `priceReferenceLines` — this was the "temporary harness" called for by the task; no scaffolding beyond the (kept) unit test file was needed, so nothing further required removal.

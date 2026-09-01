@@ -11,6 +11,13 @@
             is_active = VALUES(is_active)
     </insert>
 
+    <insert id="upsertUniverse" parameterType="com.stock.domain.Stock">
+        INSERT INTO stock (stock_id, stock_name, market, is_active)
+        VALUES (#{stockId}, #{stockName}, #{market}, #{active})
+        ON DUPLICATE KEY UPDATE
+            stock_name = VALUES(stock_name)
+    </insert>
+
     <insert id="insert" parameterType="com.stock.domain.Stock">
         INSERT INTO stock (stock_id, stock_name, market, is_active)
         VALUES (#{stockId}, #{stockName}, #{market}, #{active})
@@ -26,6 +33,10 @@
 
     <select id="findActiveStockIds" resultType="string">
         SELECT stock_id FROM stock WHERE is_active = 1
+    </select>
+
+    <select id="countActive" resultType="int">
+        SELECT COUNT(*) FROM stock WHERE is_active = 1
     </select>
 
     <select id="findExistingStockIdsForNonEmptyIds" resultType="string">

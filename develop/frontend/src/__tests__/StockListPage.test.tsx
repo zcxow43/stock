@@ -52,12 +52,17 @@ function renderPage() {
 }
 
 // The 策略 tab (StrategyTab) is always mounted alongside 總覽 (see StockListPage's
-// "both tabs stay mounted" comment) and fires its own GET /api/strategies and
-// GET /api/stocks/sync/progress calls on mount. These helpers isolate the 總覽 tab's
-// own `/api/stocks?...` list requests so call-count assertions below aren't coupled
-// to however many background calls the 策略 tab happens to make.
+// "both tabs stay mounted" comment) and fires its own GET /api/strategies,
+// GET /api/stocks/sync/progress, and (specs/frontend/strategy.md 常駐「共 N 檔」)
+// GET /api/stocks?...&size=1 calls on mount. These helpers isolate the 總覽 tab's
+// own `/api/stocks?...` list requests (which always use its own page size, never `size=1`)
+// so call-count assertions below aren't coupled to however many background calls the
+// 策略 tab happens to make.
 function overviewCalls(fetchMock: ReturnType<typeof vi.fn>) {
-  return fetchMock.mock.calls.filter((c: unknown[]) => /^\/api\/stocks\?/.test(String(c[0])))
+  return fetchMock.mock.calls.filter((c: unknown[]) => {
+    const url = String(c[0])
+    return /^\/api\/stocks\?/.test(url) && new URL(url, 'http://x').searchParams.get('size') !== '1'
+  })
 }
 
 describe('StockListPage', () => {

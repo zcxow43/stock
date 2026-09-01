@@ -404,7 +404,18 @@
   padding: 14px 18px;
 }
 
+.st-sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .st-last-sync {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-stock-total {
   font-size: 13px;
   color: #93a4b8;
 }
@@ -413,6 +424,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.st-universe-summary {
+  padding: 0 18px;
+  font-size: 13px;
+}
+
+.st-universe-summary-text {
+  color: #e6edf5;
 }
 
 .st-sync-progress {
@@ -803,6 +823,39 @@
 .st-note-ids {
   margin-top: 6px;
   font-size: 13px;
+  color: #93a4b8;
+}
+
+/* union table (聯集表格) */
+
+.st-union-hits {
+  white-space: normal;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-union-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #1b2836;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.st-union-tag-name {
+  color: #e6edf5;
+}
+
+.st-union-tag-date {
+  color: #93a4b8;
+}
+
+.st-union-sep {
   color: #93a4b8;
 }
 

@@ -36,6 +36,10 @@ app:
       # Quoted deliberately: unquoted YYYY-MM-DD is parsed by YAML as a timestamp,
       # which binds to LocalDate as "Thu Jan 01 ..." and fails at startup.
       start-date: "2026-01-01"
+  master-sync:
+    # Runs before startup-catch-up (see StartupCatchUpRunner), independent switch.
+    startup:
+      enabled: true
   indicator:
     executor-pool-size: 4
     max-attempt-count: 5

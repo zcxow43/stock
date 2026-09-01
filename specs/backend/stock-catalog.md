@@ -11,7 +11,9 @@ depends_on: [stock-price-ingestion]
 
 提供前端**讀取用**的股票清單與單檔基本資料。這是使用者進入系統看到的第一個畫面（`specs/frontend/stock-list.md`）的唯一資料來源。
 
-與既有兩支 backend spec 的分工：`stock-price-ingestion` 負責把外部資料寫進來、`stock-indicator-statistics` 負責運算與區間統計，本 spec 只負責**把已經在庫裡的東西列出來給人看**，不抓取、不運算、不寫入。
+與既有 backend spec 的分工：`stock-price-ingestion` 負責把行情從外部寫進來、`stock-universe-import` 負責從外部批次補齊股票主檔、`stock-indicator-statistics` 負責運算與區間統計。本 spec 負責**把已經在庫裡的東西列出來給人看**，外加**單一標的的人工維護**（`#### 3`～`#### 5` 的新增／修改／下市）——它不向任何外部資料源抓取、也不做運算。
+
+`is_active` 的改動只發生在本 spec 的 `DELETE` / `PUT` 端點；自動化的抓取與匯入路徑一律不碰這個欄位（見 `specs/dba/stock.md` 的「維護語意」）。
 
 清單除了代號與名稱外，必須附上該檔的最新收盤與漲跌——只列出代號名稱的清單無法讓使用者決定要點哪一檔。
 

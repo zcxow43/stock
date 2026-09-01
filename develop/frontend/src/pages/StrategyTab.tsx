@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiError, fetchStocks, type StockListItem } from '../api/stocks'
+import { ApiError, fetchStocks, importStockUniverse, type StockListItem, type UniverseImportResponse } from '../api/stocks'
 import {
   fetchStrategyCatalog,
   scanStrategies,
@@ -77,6 +77,44 @@ function isBoxDetail(detail: BoxBreakoutDetail | HigherLowsDetail): detail is Bo
   return 'boxHigh' in detail
 }
 
+interface UnionHit {
+  strategyCode: StrategyCode
+  signalDate: string
+}
+
+interface UnionRow {
+  stockId: string
+  stockName: string
+  hits: UnionHit[]
+}
+
+/** Union across every requested strategy's `items` (never `insufficientData`/`pendingConfirm` —
+ * those never appear in `items` per specs/backend/strategy-scan.md), deduped by `stockId`.
+ * Hits are appended in `result.results` array order, which the backend already returns in
+ * request order — so no dependency on the component's current (possibly since-changed)
+ * selection order is needed to keep "策略的排列順序與勾選順序一致". */
+function buildUnionRows(result: ScanResponse): UnionRow[] {
+  const map = new Map<string, UnionRow>()
+  for (const strategyResult of result.results) {
+    for (const item of strategyResult.items) {
+      let row = map.get(item.stockId)
+      if (!row) {
+        row = { stockId: item.stockId, stockName: item.stockName, hits: [] }
+        map.set(item.stockId, row)
+      }
+      row.hits.push({ strategyCode: strategyResult.strategy, signalDate: item.signalDate })
+    }
+  }
+  const latestSignalDate = (hits: UnionHit[]) =>
+    hits.reduce((max, h) => (h.signalDate > max ? h.signalDate : max), hits[0].signalDate)
+  return Array.from(map.values()).sort((a, b) => {
+    const latestA = latestSignalDate(a.hits)
+    const latestB = latestSignalDate(b.hits)
+    if (latestA !== latestB) return latestA < latestB ? 1 : -1
+    return a.stockId < b.stockId ? -1 : a.stockId > b.stockId ? 1 : 0
+  })
+}
+
 function formatLowsSequence(lows: HigherLowsDetail['lows']): string {
   return lows.map((p) => `${p.tradeDate.slice(5)} ${p.low.toFixed(2)}`).join('→')
 }
@@ -150,6 +188,12 @@ export default function StrategyTab() {
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null)
   const [showFailedList, setShowFailedList] = useState(false)
 
+  // ---------- stock universe (list) size + "更新股票清單" ----------
+  const [totalStockCount, setTotalStockCount] = useState<number | null>(null)
+  const [universeImportStatus, setUniverseImportStatus] = useState<SyncStatus>('idle')
+  const [universeImportSummary, setUniverseImportSummary] = useState<UniverseImportResponse | null>(null)
+  const [universeImportErrorMessage, setUniverseImportErrorMessage] = useState<string | null>(null)
+
   // Catalogue — the sole source of strategy names / preset names / description text.
   useEffect(() => {
     const controller = new AbortController()
@@ -180,6 +224,22 @@ export default function StrategyTab() {
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return
         // Non-fatal — the page just keeps whatever last-synced display it already has.
+      })
+    return () => controller.abort()
+  }, [])
+
+  // Stock universe size on entry — `GET /api/stocks?page=1&size=1`, `size=1` because only
+  // `total` is needed here, not the list content.
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchStocks(
+      { keyword: '', market: 'ALL', includeInactive: false, page: 1, size: 1, sort: 'stockId', order: 'asc' },
+      controller.signal,
+    )
+      .then((resp) => setTotalStockCount(resp.total))
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        // Non-fatal — the page just keeps whatever count is already shown.
       })
     return () => controller.abort()
   }, [])
@@ -341,12 +401,88 @@ export default function StrategyTab() {
       })
   }
 
+  // "更新股票清單" — a short synchronous action (single upstream request), deliberately
+  // independent of `syncStatus`: neither button disables the other (no shared concurrency
+  // lock on the backend either — see specs/backend/stock-universe-import.md 的「併發」).
+  // Never polls a progress endpoint and never auto-triggers a sync or a re-scan.
+  const handleImportUniverseClick = () => {
+    setUniverseImportErrorMessage(null)
+    setUniverseImportSummary(null)
+    setUniverseImportStatus('running')
+    importStockUniverse()
+      .then((resp) => {
+        setUniverseImportSummary(resp)
+        setTotalStockCount(resp.totalActiveCount)
+        setUniverseImportStatus('idle')
+      })
+      .catch((err: unknown) => {
+        setUniverseImportStatus('idle')
+        // All three failure paths leave `stock` completely unwritten — the displayed
+        // "共 N 檔" (`totalStockCount`) is deliberately left untouched here.
+        if (err instanceof ApiError && err.code === 'UPSTREAM_EMPTY') {
+          setUniverseImportErrorMessage('交易所尚未發布今日清單，請稍後再試')
+          return
+        }
+        if (err instanceof ApiError && (err.code === 'UPSTREAM_UNAVAILABLE' || err.code === 'UPSTREAM_MALFORMED')) {
+          setUniverseImportErrorMessage('無法取得交易所股票清單，請稍後再試')
+          return
+        }
+        setUniverseImportErrorMessage('更新股票清單失敗，請稍後再試')
+      })
+  }
+
   const completedCount = (p: ProgressResponse) => p.done + p.failed + p.skipped
   const progressPercent = (p: ProgressResponse) => (p.total > 0 ? Math.round((completedCount(p) / p.total) * 100) : 0)
 
   const strategyName = (code: StrategyCode) => catalog.find((s) => s.code === code)?.name ?? code
   const presetName = (code: StrategyCode, preset: PresetCode) =>
     catalog.find((s) => s.code === code)?.presets.find((p) => p.code === preset)?.name ?? preset
+
+  // Union table — only when 2+ strategies were requested and at least one stock was hit.
+  const unionRows = scanResult ? buildUnionRows(scanResult) : []
+  const showUnionTable = scanResult !== null && scanResult.results.length >= 2 && unionRows.length > 0
+
+  const renderUnionHits = (hits: UnionHit[]) => {
+    const nodes: ReactNode[] = []
+    hits.forEach((hit, idx) => {
+      if (idx > 0) nodes.push(
+        <span key={`sep-${hit.strategyCode}-${idx}`} className="st-union-sep">
+          ・
+        </span>,
+      )
+      nodes.push(
+        <span key={`${hit.strategyCode}-${idx}`} className="st-union-tag">
+          <span className="st-union-tag-name">{strategyName(hit.strategyCode)}</span>{' '}
+          <span className="st-union-tag-date">{hit.signalDate}</span>
+        </span>,
+      )
+    })
+    return nodes
+  }
+
+  const renderUnionTable = () => (
+    <div className="st-result-block st-union-block">
+      <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
+      <table className="sl-table st-result-table st-union-table">
+        <thead>
+          <tr>
+            <th>代號 / 名稱</th>
+            <th>命中策略與訊號日</th>
+          </tr>
+        </thead>
+        <tbody>
+          {unionRows.map((row) => (
+            <tr key={row.stockId} className="sl-row" onClick={() => navigate(`/stocks/${row.stockId}/daily`)}>
+              <td>
+                {row.stockId} {row.stockName}
+              </td>
+              <td className="st-union-hits">{renderUnionHits(row.hits)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 
   const renderBoxTable = (items: StrategyHit[]) => (
     <table className="sl-table st-result-table">
@@ -444,12 +580,27 @@ export default function StrategyTab() {
     <div className="strategy-tab">
       {/* ---------- sync row ---------- */}
       <div className="st-sync-row">
-        <div className="st-last-sync">最後同步：{formatSyncTime(lastSyncedAt)}</div>
+        <div className="st-sync-info">
+          <div className="st-last-sync">最後同步：{formatSyncTime(lastSyncedAt)}</div>
+          <div className="st-stock-total">股票清單：共 {totalStockCount ?? '—'} 檔</div>
+        </div>
         <div className="st-sync-actions">
+          {/* Both are secondary buttons — 開始掃描 is the page's only primary button.
+              Neither disables the other: no shared backend concurrency lock (see
+              specs/backend/stock-universe-import.md 的「併發」), so the frontend must not
+              invent a mutual-exclusion it doesn't need. */}
+          <button
+            type="button"
+            className="sl-btn"
+            disabled={universeImportStatus === 'running'}
+            onClick={handleImportUniverseClick}
+          >
+            {universeImportStatus === 'running' ? '更新中…' : '更新股票清單'}
+          </button>
           {syncErrorMessage ? <span className="st-inline-error">{syncErrorMessage}</span> : null}
           <button
             type="button"
-            className="sl-btn sl-btn-primary"
+            className="sl-btn"
             disabled={syncStatus === 'running'}
             onClick={handleSyncClick}
           >
@@ -457,6 +608,18 @@ export default function StrategyTab() {
           </button>
         </div>
       </div>
+      {universeImportErrorMessage ? (
+        <div className="st-universe-summary">
+          <span className="st-inline-error">{universeImportErrorMessage}</span>
+        </div>
+      ) : universeImportSummary ? (
+        <div className="st-universe-summary">
+          <span className="st-universe-summary-text">
+            股票清單已更新：共 {universeImportSummary.totalActiveCount} 檔（新增 {universeImportSummary.insertedCount}
+            、更新 {universeImportSummary.updatedCount}）
+          </span>
+        </div>
+      ) : null}
       {syncStatus === 'running' && syncProgress ? (
         <div className="st-sync-progress">
           <div className="st-progress-bar">
@@ -655,6 +818,7 @@ export default function StrategyTab() {
           </div>
         ) : (
           <div className={scanStatus === 'scanning' ? 'st-results-list st-results-dimmed' : 'st-results-list'}>
+            {showUnionTable ? renderUnionTable() : null}
             {scanResult.results.map(renderResultBlock)}
           </div>
         )}

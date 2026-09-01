@@ -13,6 +13,15 @@ public interface StockMapper {
     /** Insert-or-update by stock_id; stock_name/market are refreshed to latest value. */
     int upsert(Stock stock);
 
+    /**
+     * Insert-or-update by stock_id for the universe import (specs/backend/stock-universe-import.md)
+     * only: on conflict, only stock_name is refreshed — market and is_active are intentionally left
+     * untouched (a new row still gets the given market/is_active values on insert). Deliberately
+     * separate from {@link #upsert}, whose ON DUPLICATE KEY UPDATE also overwrites is_active/market,
+     * which this endpoint's write semantics forbid (it must never auto-delist or auto-relist).
+     */
+    int upsertUniverse(Stock stock);
+
     /** Plain insert; caller (StockCatalogService) must check for an existing row first — duplicates must 409, never silently overwrite. */
     int insert(Stock stock);
 
@@ -21,6 +30,9 @@ public interface StockMapper {
 
     /** All active (is_active = 1) stock ids, used as the "ALL" backfill target set. */
     List<String> findActiveStockIds();
+
+    /** Count of active (is_active = 1) stocks; used as `totalActiveCount` in the universe import response. */
+    int countActive();
 
     /**
      * Subset of the given ids that actually exist in the stock table. Returns an empty list

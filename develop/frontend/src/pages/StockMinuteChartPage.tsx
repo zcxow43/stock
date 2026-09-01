@@ -13,8 +13,10 @@ const COLOR = {
   up: '#E04B45',
   down: '#16A75C',
   flat: '#93A4B8',
-  volUp: '#9A3B37',
-  volDown: '#12784A',
+  line: '#3E8FD8',
+  openBaseline: '#4A5866',
+  lineDot: '#E6EDF5',
+  volNeutral: '#3A4757',
   grid: '#1F2C3A',
   crosshair: '#6B7C90',
   pinnedOutline: '#3E8FD8',
@@ -218,7 +220,10 @@ export default function StockMinuteChartPage() {
             kind: 'bars',
             key: 'volume',
             values: minuteRows.map((row) => lotsFromShares(row.volume)),
-            colorFor: (i) => (minuteRows[i].close >= minuteRows[i].open ? COLOR.volUp : COLOR.volDown),
+            // Volume bars are a uniform neutral color, not colored by up/down (spec §成交量副圖):
+            // the main line no longer encodes direction by color, so the volume bars must not
+            // reintroduce that same red/green noise.
+            colorFor: () => COLOR.volNeutral,
           },
         ],
       },
@@ -415,6 +420,14 @@ export default function StockMinuteChartPage() {
                 onBarClick={handleBarClick}
                 onBarDoubleClick={() => {}}
                 renderTooltip={renderTooltip}
+                mainType="line"
+                lineColor={COLOR.line}
+                lineDotColor={COLOR.lineDot}
+                priceReferenceLines={
+                  dailySummary
+                    ? [{ value: dailySummary.open, color: COLOR.openBaseline, label: dailySummary.open.toFixed(2) }]
+                    : undefined
+                }
                 upColor={COLOR.up}
                 downColor={COLOR.down}
                 gridColor={COLOR.grid}

@@ -7,7 +7,9 @@ import com.stock.service.external.dto.TwseSnapshotRow;
 import com.stock.util.NormalizeUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -58,6 +60,31 @@ public class TwseClient {
             throw new ExternalApiException("TWSE daily snapshot rows carry no Date field");
         }
         return new TwseSnapshotResult(tradeDate, rows);
+    }
+
+    /**
+     * Fetches the same whole-market daily snapshot as {@link #fetchDailyAll()}, but returns the
+     * raw, unfiltered rows exactly as the source sent them — no no-trade-row filtering, no trade
+     * date resolution. Used by the stock universe import (specs/backend/stock-universe-import.md),
+     * which only needs {@code Code}/{@code Name} and applies its own "ordinary share" eligibility
+     * rule; {@link #fetchDailyAll()}'s price-presence filtering exists for price ingestion and
+     * would wrongly drop listed-but-not-traded-today stocks from the universe.
+     *
+     * <p>Distinguishes connectivity failures from unparsable responses so the caller can map them
+     * to different error codes: {@link ExternalApiException} for connection failure/timeout/non-2xx,
+     * {@link ExternalApiMalformedException} for a response that could not be parsed into the
+     * expected shape. Does not throw on an empty/absent array — that is left to the caller, which
+     * has its own semantics for what "empty" means (spec: 空回應的處理).
+     */
+    public TwseDailyRow[] fetchDailyAllRaw() {
+        try {
+            return restTemplate.getForObject(dailyAllUrl, TwseDailyRow[].class);
+        } catch (ResourceAccessException | RestClientResponseException e) {
+            throw new ExternalApiException("Failed to fetch TWSE daily snapshot: " + e.getMessage(), e);
+        } catch (RestClientException e) {
+            throw new ExternalApiMalformedException(
+                    "TWSE daily snapshot response could not be parsed: " + e.getMessage(), e);
+        }
     }
 
     private Optional<NormalizedPriceRow> normalize(TwseDailyRow raw, LocalDate tradeDate) {

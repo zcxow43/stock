@@ -1,7 +1,7 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破）並各自選靈敏度，掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有同步所有日 K 至今日的按鈕，並顯示最後同步時間"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破）並各自選靈敏度，掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
 depends_on: [stock-list]
 ---
 
@@ -105,6 +105,22 @@ depends_on: [stock-list]
 
 ### 同步列
 
+同步列上有**兩顆按鈕，順序即操作順序**：左為「更新股票清單」，右為「同步日 K 至今日」。**兩顆都是次要按鈕樣式**——本頁唯一的主要按鈕是「開始掃描」。同步列上的兩顆是準備資料的前置動作，不是使用者來這一頁的目的；把它們也做成主要按鈕會出現三顆同等搶眼的藍色按鈕，反而看不出該按哪一顆。
+
+兩顆放在一起，是因為它們是同一件事的兩個步驟，而且第二步的涵蓋範圍完全取決於第一步有沒有做過：「同步日 K 至今日」的標的是 `stock` 中 `is_active = 1` 的全部股票，`stock` 只有開發種子的 34 檔時，同步會**正常完成**、不報任何錯，但只補了 34 檔的行情，掃描結果也就只涵蓋這 34 檔。把「更新股票清單」擺在它左邊，是讓這個前置關係在畫面上看得見，而不是變成一個只有讀過 spec 的人才知道的隱含步驟。
+
+#### 更新股票清單
+
+- 按鈕文字「更新股票清單」。按下後 disabled 並顯示執行中狀態。
+- 這是**短同步作業**（後端只發一次外部請求，見 `specs/backend/stock-universe-import.md`），不輪詢、不顯示進度條、不需要跨頁籤保留狀態——把長時間回補的那一套機制套上來是多餘的。
+- 完成後在按鈕下方顯示摘要：「股票清單已更新：共 N 檔（新增 X、更新 Y）」，其中 N 取 `totalActiveCount`、X 取 `insertedCount`、Y 取 `updatedCount`。
+- 摘要**持續顯示到下一次操作為止**，理由同下方「同步在全部標的都已是最新時…」該條：新增 0 檔時執行中狀態一閃而過，摘要若跟著消失，使用者會以為按鈕沒反應。
+- 清單更新完成後**不自動觸發同步**，也不自動重新掃描。使用者說了要自己按同步；替他按下一個可能跑數十分鐘的作業，是把選擇權拿走。
+- 更新完成後常駐的「共 N 檔」數字即時更新，讓使用者按下同步前就看得到母體變大了。
+- 本按鈕與「同步日 K 至今日」**互不阻擋**：同步進行中仍可按更新清單，反之亦然。後端不共用併發鎖（見 `specs/backend/stock-universe-import.md` 的「併發」），前端不得自行加上互斥。
+
+#### 同步日 K 至今日
+
 - 按鈕文字「同步日 K 至今日」。按下後進入執行中狀態：按鈕 disabled、顯示進行中狀態與已完成檔數／總檔數。
 - 同步是背景長時間作業（全市場逐檔受速率限制，可能數十分鐘），因此**送出後即輪詢進度，不阻塞畫面**；使用者可以在同步進行中切換頁籤或離開，回來時仍看得到進度。
 - 完成後更新「最後同步」時間並顯示完成摘要。摘要的內容取決於這次同步**是否真的抓了東西**：
@@ -127,7 +143,9 @@ depends_on: [stock-list]
 | 勾選兩個以上策略且至少一檔命中 | 結果區最上方出現聯集表格，其下依序為各策略區塊 |
 | 勾選兩個以上策略但全部零命中 | 不顯示聯集表格（沒有任何命中可彙總），各策略區塊照常顯示各自的零命中訊息 |
 | 掃描失敗 | 結果區顯示錯誤訊息與「重試」按鈕；不得顯示空表格假裝零命中 |
-| 同步中 | 同步按鈕為執行中狀態；不影響掃描操作 |
+| 同步中 | 同步按鈕為執行中狀態；不影響掃描操作，也不影響「更新股票清單」 |
+| 更新清單中 | 「更新股票清單」disabled 並顯示執行中狀態；不影響掃描與同步操作 |
+| 更新清單失敗 | 按鈕恢復可按，其下顯示錯誤訊息；「共 N 檔」維持原值不變動 |
 
 ## Implementation Details
 
@@ -137,12 +155,14 @@ depends_on: [stock-list]
 |---|---|
 | 進頁 | `GET /api/strategies` — 取策略清單與靈敏度選項及說明文字 |
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
+| 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
+| 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` 組成完成摘要 |
 | 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（`code` + `preset`）、`stockIds`、`startDate`、`endDate` |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`，不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount` 與 `caughtUpCount` 決定完成摘要的呈現方式 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
 
-契約見 `specs/backend/strategy-scan.md` 與 `specs/backend/stock-price-ingestion.md`。
+契約見 `specs/backend/strategy-scan.md`、`specs/backend/stock-price-ingestion.md`、`specs/backend/stock-universe-import.md` 與 `specs/backend/stock-catalog.md`。
 
 錯誤回應處理：
 
@@ -154,7 +174,11 @@ depends_on: [stock-list]
 | `TOO_MANY_STOCKS` | 於股票範圍區顯示「最多 200 檔」（前端已先擋，此為後備） |
 | `INVALID_DATE_RANGE` | 於區間下方顯示「起日不可晚於迄日」（前端已先擋，此為後備） |
 | `JOB_ALREADY_RUNNING` | 不視為錯誤：同步按鈕轉為執行中狀態並開始輪詢進度 |
+| `UPSTREAM_EMPTY` | 於「更新股票清單」下方顯示「交易所尚未發布今日清單，請稍後再試」——這是可重試的時機問題，不是系統故障，訊息必須說出「稍後再試」 |
+| `UPSTREAM_UNAVAILABLE` / `UPSTREAM_MALFORMED` | 於「更新股票清單」下方顯示「無法取得交易所股票清單，請稍後再試」 |
 | 其他／網路錯誤 | 結果區顯示「掃描失敗，請稍後再試」與「重試」按鈕 |
+
+**更新清單的三種失敗一律不改動畫面上的「共 N 檔」。** 後端在這三種情形下都不做任何部分寫入（見 `specs/backend/stock-universe-import.md`），前端把數字改掉會憑空製造一個與資料庫不符的顯示值。
 
 ### 數值格式
 
@@ -197,6 +221,8 @@ depends_on: [stock-list]
 | Disabled 按鈕背景／文字 | `#16202C` / `#4A5866` |
 | 同步進行中進度條底／填色 | `#1B2836` / `#3E8FD8` |
 | 最後同步時間文字 | `#93A4B8` |
+| 股票清單「共 N 檔」文字 | `#93A4B8` |
+| 更新股票清單完成摘要文字 | `#E6EDF5` |
 | 資料不足／待確認提示文字 | `#D9A441` |
 | 骨架列底色 | `#1D2A38` |
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
@@ -233,15 +259,30 @@ depends_on: [stock-list]
 - [x] 全部標的都已是最新時（`caughtUpCount` 等於 `targetCount`），摘要顯示「已是最新，無需更新（N 檔）」而非「完成 N 檔」
 - [x] 部分標的落後時，摘要顯示完成／失敗／略過檔數，且 `caughtUpCount` 大於 0 時附註「另 N 檔已是最新」
 - [x] 同步在極短時間內完成（執行中狀態一閃而過）時，摘要仍持續顯示，畫面不會回到看似未操作的狀態
-- [ ] 勾選兩個以上策略掃描後，結果區最上方出現聯集表格，位置在所有策略區塊之上
-- [ ] 只勾選一個策略時不顯示聯集表格；勾到第二個策略再掃描後才出現
-- [ ] 聯集表格同一檔股票只出現一列，標題的「共 N 檔」為去重後的檔數，不等於各策略 `matchedCount` 的加總
-- [ ] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期
-- [ ] 聯集表格依該檔各策略中最新的 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
-- [ ] 點擊聯集表格任一列導向 `/stocks/{stockId}/daily`
-- [ ] `insufficientData` 與 `pendingConfirm` 的標的不出現在聯集表格中
-- [ ] 勾選兩個以上策略但全部零命中時不顯示聯集表格，各策略區塊仍各自顯示零命中訊息
-- [ ] 聯集表格所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+- [x] 勾選兩個以上策略掃描後，結果區最上方出現聯集表格，位置在所有策略區塊之上
+- [x] 只勾選一個策略時不顯示聯集表格；勾到第二個策略再掃描後才出現
+- [x] 聯集表格同一檔股票只出現一列，標題的「共 N 檔」為去重後的檔數，不等於各策略 `matchedCount` 的加總
+- [x] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期
+- [x] 聯集表格依該檔各策略中最新的 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
+- [x] 點擊聯集表格任一列導向 `/stocks/{stockId}/daily`
+- [x] `insufficientData` 與 `pendingConfirm` 的標的不出現在聯集表格中
+- [x] 勾選兩個以上策略但全部零命中時不顯示聯集表格，各策略區塊仍各自顯示零命中訊息
+- [x] 聯集表格所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+---
+
+- [x] 同步列上有兩顆按鈕，「更新股票清單」在左、「同步日 K 至今日」在右，兩顆皆為次要按鈕樣式；全頁唯一的主要按鈕是「開始掃描」
+- [x] 頁面常駐顯示股票清單「共 N 檔」，數值取自 `GET /api/stocks?page=1&size=1` 的 `total`
+- [x] 按「更新股票清單」呼叫 `POST /api/stocks/universe/import`，按鈕轉為 disabled 的執行中狀態
+- [x] 更新完成後顯示「股票清單已更新：共 N 檔（新增 X、更新 Y）」，三個數字分別取自 `totalActiveCount`、`insertedCount`、`updatedCount`
+- [x] 更新完成後常駐的「共 N 檔」同步更新為 `totalActiveCount`
+- [x] 更新清單的過程中**不輪詢任何進度端點**，也不建立進度條
+- [x] 更新完成後不自動觸發同步、不自動重新掃描
+- [x] 更新清單完成摘要持續顯示到下一次操作為止，不隨執行中狀態消失
+- [x] 後端回 `502 UPSTREAM_EMPTY` 時顯示「交易所尚未發布今日清單，請稍後再試」，且「共 N 檔」數值不變
+- [x] 後端回 `502 UPSTREAM_UNAVAILABLE` 或 `UPSTREAM_MALFORMED` 時顯示「無法取得交易所股票清單，請稍後再試」，且「共 N 檔」數值不變
+- [x] 同步進行中仍可按「更新股票清單」；更新清單進行中仍可按「同步日 K 至今日」，兩者互不 disable
+- [x] 更新股票清單相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -344,3 +385,72 @@ $ npm run build
 
 #### Deferred / not independently verifiable here
 - No live backend was reachable in this session (`curl -m 5 http://localhost:8080/...` → connection refused; the frontend dev server at `:5173` was up but has nothing behind it to exercise). All 5 criteria were verified via the unit/integration test suite against fixtures shaped per the revised `specs/backend/stock-price-ingestion.md` `#### 2. 回補` contract, plus source review. A live end-to-end check (triggering a real all-caught-up sync against the 34-stock seed data and watching the summary text) would be worth doing once a backend is available in a later session, but was not required to satisfy any of the 5 stated criteria's wording.
+
+### Increment 3 — 2026-09-01
+- Scope: exactly the two remaining unchecked groups — the 聯集表格 (union table across 2+ selected strategies) and 「更新股票清單」(`POST /api/stocks/universe/import`, now backend-ready) plus the persistent stock-universe「共 N 檔」count. All 19 previously-checked criteria were left untouched (no production behavior for them was changed).
+
+#### Files changed
+- `develop/frontend/src/api/stocks.ts` — added `UniverseImportResponse` and `importStockUniverse()` (`POST /api/stocks/universe/import`, no body), reusing the existing `requestJson` helper so `502 UPSTREAM_EMPTY` / `UPSTREAM_UNAVAILABLE` / `UPSTREAM_MALFORMED` surface as `ApiError` with `.code` set from the parsed body, same as every other write endpoint in that file.
+- `develop/frontend/src/pages/StrategyTab.tsx`
+  - **Union table (聯集表格)**: added `UnionHit`/`UnionRow` types and a pure `buildUnionRows(result: ScanResponse)` function that dedupes `result.results[].items` by `stockId` (never touching `insufficientData`/`pendingConfirm`, which per `specs/backend/strategy-scan.md` never appear in `items` to begin with), appends each stock's hits in `result.results` array order (the backend already returns results in request order, so no dependency on the component's current, possibly-since-changed `selectionOrder` state), and sorts rows by each stock's newest `signalDate` desc, ties broken by `stockId` asc. `showUnionTable = scanResult.results.length >= 2 && unionRows.length > 0` gates the table; `renderUnionTable()` renders it as the first child of `.st-results-list`, reusing the existing `sl-table`/`st-result-table`/`sl-row` classes so navigation-on-row-click, hover, and table chrome match the per-strategy tables exactly. Each row's hits column (`renderUnionHits`) renders one `.st-union-tag` per hit (`{策略名稱}` + `{signalDate}`, styled per the new Visual Style row below) with a literal `・` separator between multiple hits — never merged into a single date.
+  - **更新股票清單**: added `totalStockCount`, `universeImportStatus`, `universeImportSummary`, `universeImportErrorMessage` state; a mount-time effect fetching `GET /api/stocks?page=1&size=1` (`size=1` because only `total` is needed) for the persistent count; and `handleImportUniverseClick`, which is a plain fetch-then-setState handler with **no polling effect, no progress bar, and no auto-triggered sync/scan call** — matching the backend spec's "短同步作業" characterization. On success it sets both `universeImportSummary` (for the completion text) and `totalStockCount = resp.totalActiveCount` (updating the persistent count) in the same `.then`. On failure it maps `UPSTREAM_EMPTY` → 「交易所尚未發布今日清單，請稍後再試」and both `UPSTREAM_UNAVAILABLE`/`UPSTREAM_MALFORMED` → 「無法取得交易所股票清單，請稍後再試」, and deliberately never touches `totalStockCount` in the catch branch (the backend guarantees no partial write on any of the three failure paths, so the frontend must not invent a new value either).
+  - Sync row now renders two secondary (`sl-btn`, no `-primary`) buttons — 更新股票清單 (left) then 同步日 K 至今日 (right, changed from `sl-btn-primary` to `sl-btn` so 開始掃描 remains the page's only primary button) — plus a `.st-sync-info` block showing both 最後同步 and the new 股票清單：共 N 檔 line. `universeImportStatus === 'running'` only ever disables the import button; `syncStatus === 'running'` only ever disables the sync button — neither reads the other's state, matching "後端不共用併發鎖，前端不得自行加上互斥."
+  - The universe-import completion summary / error block renders independently of `syncStatus` and is only cleared at the *start* of the next `handleImportUniverseClick` call (`setUniverseImportSummary(null)`/`setUniverseImportErrorMessage(null)` before the fetch) — never cleared by an unrelated `開始掃描` or `同步日 K 至今日` click, so it persists exactly "到下一次操作為止" (the next 更新股票清單 operation specifically, mirroring how the pre-existing `syncSummary` already behaves relative to `handleSyncClick`).
+- `develop/frontend/src/pages/StockListPage.css`
+  - `.st-sync-info` (column layout for the two left-side info lines), `.st-stock-total` (`#93a4b8`, matching Visual Style's "股票清單「共 N 檔」文字"), `.st-universe-summary`/`.st-universe-summary-text` (`#e6edf5`, matching "更新股票清單完成摘要文字"; errors reuse the existing `.st-inline-error` block, matching "錯誤訊息文字／背景／邊框").
+  - `.st-union-hits` (flex-wrap row, overriding the table cell's default `white-space: nowrap`), `.st-union-tag` (background `#1b2836`), `.st-union-tag-name` (`#e6edf5`), `.st-union-tag-date` (`#93a4b8`), `.st-union-sep` (`#93a4b8`) — every value copied literally from the `## Visual Style` table's existing "聯集表格策略標籤背景／文字" and "聯集表格訊號日文字" rows (both already present in the spec from a prior pass; no new hex values were needed for this increment). No `prefers-color-scheme` query appears anywhere in the file, confirmed via `grep -rn "prefers-color-scheme" src/`.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+  - Added `unionScanResponse()` (three stocks: one hit by both strategies with different signalDates — mirroring the spec's own worked example, 箱型突破 `2026-08-28` / 底底高 `2026-08-25` — plus one stock unique to each strategy, and non-empty `insufficientData`/`pendingConfirm` on the box-breakout leg) and `zeroHitBothResponse()` (two strategies, both `matchedCount: 0`) fixtures.
+  - Extended the shared `beforeEach` mock dispatcher with a `universeImportResponder` (default: a realistic 200 body) and a `stocksTotal` variable feeding the `size=1` branch of the existing `/api/stocks?` handler (previously that branch only served the 指定股票 search-suggestion shape; it now branches on the `size` query param so both call sites can be mocked independently).
+  - Added 5 tests for the union table: no table with only one strategy checked; a deduped, correctly-sorted, correctly-per-strategy-dated table appears once a second strategy is checked and both are scanned (asserting exact row order, exact per-hit strategy+date text on the shared stock's row, and that `insufficientData`/`pendingConfirm` ids never appear inside the union table specifically); no table when 2+ strategies are scanned but neither has any hits (each block still shows its own zero-hit message); and clicking a union-table row navigates to `/stocks/{stockId}/daily`.
+  - Added 8 tests for 更新股票清單: button styling/order (`更新股票清單` secondary, left; `同步日 K 至今日` secondary, right; `開始掃描` the only `sl-btn-primary`); the persistent count appearing from the `size=1` mount fetch; the full running→completion flow (disabled running state, completion summary text, updated persistent count, and — via before/after call-count diffing on `/api/stocks/sync/progress`, `/api/strategies/scan`, `/api/stocks/sync/backfill` — proof that completing an import polls nothing and auto-triggers neither a sync nor a scan); the summary persisting across an unrelated `開始掃描` and clearing only on the next `更新股票清單` click; the two distinct error messages for the three `502` codes (`UPSTREAM_EMPTY` gets its own message; `UPSTREAM_UNAVAILABLE` and `UPSTREAM_MALFORMED` share the other); and a concurrency test proving `更新股票清單` and `同步日 K 至今日` can both be "running" at once without either disabling the other.
+- `develop/frontend/src/__tests__/StockListPage.test.tsx`, `develop/frontend/src/__tests__/StockListPage.tabs.test.tsx` — both files' pre-existing `overviewCalls(fetchMock)` test helper (which isolates 總覽's own `/api/stocks?...` list calls from the 策略 tab's background traffic) now also excludes the new `size=1` mount-time call the 策略 tab fires for the persistent count, the same way it already excluded `/api/strategies` and `/api/stocks/sync/progress` — needed because 總覽's own list calls always use `size=50`, never `size=1`, so filtering on the `size` param cleanly distinguishes the two without coupling to call order. Both existing tests these helpers back (`loads and shows the first page...`, `debounces search input...`, `switches tabs without refetching...`) were otherwise unchanged and still assert the same behavior they always did.
+
+#### Per-criterion verification
+All verification below was done twice: once via the automated test suite (`npm test`), and once live against the real backend (`mvn -f develop/backend/pom.xml spring-boot:run`, against the real dev MySQL at `127.0.0.1:3306`, database `stock`, already carrying ~1366 active stocks and a `PRICE_BACKFILL` job left mid-run from the environment) and the real Vite dev server (`npm run dev`, port 5173), driven with Playwright. Both backend and frontend dev processes were stopped at the end of the session; port 8080/5173 confirmed free afterward (both live-verification scripts were throwaway `.cjs` files under `develop/frontend/`, deleted before finishing — `git status` on `develop/frontend/` shows no leftover script files).
+
+**Group A — 聯集表格**
+1. 勾選兩個以上策略掃描後，結果區最上方出現聯集表格 — **Satisfied.** Tested (`shows a deduped union table above the strategy blocks...`, asserting `getAllByRole('heading', {level:3})` inside `.st-results-list` starts with the union title). Live-verified: scanning all 1366 active stocks over 近半年 with both strategies checked produced 70 + 262 = 332 raw matches, deduped to a `命中彙總 — 共 282 檔` table rendered as `.st-results-list`'s first child (`firstElementChild.className` confirmed `st-result-block st-union-block`).
+2. 只勾選一個策略時不顯示聯集表格 — **Satisfied.** Tested (`does not show a union table when only one strategy is checked`). Live-verified with the same 1366-stock scan: `命中彙總` absent with only 箱型突破 checked.
+3. 聯集表格同一檔股票只出現一列，「共 N 檔」為去重後的檔數 — **Satisfied.** Tested and live-verified (282 ≠ 70+262=332, confirming dedup, not summation).
+4. 命中策略與訊號日逐一列出，不折成單一日期 — **Satisfied.** Tested against a stock hit by both strategies at different dates (`箱型突破 2026-08-28`/`底底高 2026-08-25`), asserting both strategy names and both distinct dates appear in that row. Live-verified against real data: sampled hits-cell text included e.g. `箱型突破 2026-08-28・底底高 2026-04-16` — two distinct dates, not merged.
+5. 排序：最新 `signalDate` 由新到舊，同日 `stockId` 升冪 — **Satisfied.** Tested with a constructed tie (2317/2330 both latest-dated `2026-08-28`, asserting `2317` before `2330`) and a lower-dated stock (`2454`) last. Live-verified by dumping the first 15 real rows and independently checking every adjacent pair: strictly descending latest-date groups, and within each tied-date group, strictly ascending `stockId` (e.g. `00875` < `1321` < `1416`, all tied at `2026-08-26`).
+6. 點擊聯集表格任一列導向 `/stocks/{stockId}/daily` — **Satisfied.** Tested (row click scoped to `within(unionTable)` to disambiguate from the identically-named row in the per-strategy table below it) and live-verified structurally (same `sl-row`/`onClick` wiring as the already-covered per-strategy tables; the route itself is exercised by the existing per-strategy-table navigation criterion).
+7. `insufficientData`/`pendingConfirm` 不出現在聯集表格中 — **Satisfied structurally**: `buildUnionRows` only ever reads `result.results[].items`, and per `specs/backend/strategy-scan.md` ("`insufficientData` 與 `matchedCount` 互斥：列在前者的股票不會出現在 `items` 中") those ids can never be in `items` to begin with — there is no filtering code that could regress. Tested with a fixture carrying non-empty `insufficientData`/`pendingConfirm` on the box-breakout leg, asserting neither id string appears anywhere inside the union table specifically (`within(unionTable).queryByText(...)`).
+8. 兩個以上策略全部零命中時不顯示聯集表格 — **Satisfied.** Tested (`zeroHitBothResponse`, both blocks show 此區間內沒有命中的股票, no `命中彙總` anywhere). Live-verified against a real stock (`1538`, confirmed via `GET /api/stocks` to have `latestTradeDate: null` — never backfilled) scanned under 指定股票 with both strategies: both blocks reported zero hits (真正的 `insufficientData` reason, not a scan-logic zero), no union table.
+9. 聯集表格顏色為 Visual Style 字面 hex，dark/light 一致 — **Satisfied**, verified two ways: (a) every new class (`.st-union-hits`/`.st-union-tag`/`.st-union-tag-name`/`.st-union-tag-date`/`.st-union-sep`) uses a literal lowercase hex copied from the spec's existing "聯集表格策略標籤背景／文字" (`#1b2836`/`#e6edf5`) and "聯集表格訊號日文字" (`#93a4b8`) rows, confirmed by direct source read; `grep -rn "prefers-color-scheme" src/` returns zero hits. (b) A Playwright screenshot of the full strategy tab (with both strategies scanned via mocked, fully deterministic fetch responses so no live-data drift could contaminate the comparison) under emulated `colorScheme: 'dark'` vs `'light'` — the two screenshots are **byte-for-byte identical** (`sha256` match). An earlier attempt comparing screenshots against the *live* backend produced different hashes; investigation showed this was because the background `PRICE_BACKFILL` job (already mid-run in this shared dev environment) was adding new price rows between the two page loads, changing the *scan results themselves* between requests — not a color difference. Switching to mocked, deterministic responses isolated the color-only comparison and confirmed the identical-hash result above.
+
+**Group B — 更新股票清單 + 常駐檔數**
+1. 兩顆按鈕次要樣式，開始掃描為唯一主要按鈕 — **Satisfied.** Tested (`className` assertions on both `.not.toContain('sl-btn-primary')` plus 開始掃描's `.toContain`) and live-verified (`importBtn class: sl-btn`, `syncBtn class: sl-btn`, `scanBtn class: sl-btn sl-btn-primary`, and `importBtn.x < syncBtn.x` via bounding boxes confirming left-to-right order).
+2. 頁面常駐「共 N 檔」取自 `GET /api/stocks?page=1&size=1` 的 `total` — **Satisfied.** Tested and live-verified: the live page showed `股票清單：共 1366 檔` on load, matching a direct `curl "http://localhost:8080/api/stocks?page=1&size=1"` → `"total":1366` at the same moment.
+3. 按「更新股票清單」呼叫 `POST /api/stocks/universe/import`，按鈕轉為 disabled 執行中 — **Satisfied.** Tested and live-verified (button read `更新股票清單`→disabled immediately after click against the real endpoint).
+4. 完成後顯示「股票清單已更新：共 N 檔（新增 X、更新 Y）」 — **Satisfied.** Tested with fixed numbers and live-verified against the real backend: `股票清單已更新：共 1366 檔（新增 0、更新 1085）` (a second consecutive live import in this session correctly showed `insertedCount: 0`, matching the backend spec's idempotency guarantee).
+5. 完成後常駐「共 N 檔」同步更新為 `totalActiveCount` — **Satisfied**, tested and live-verified (`STOCK TOTAL AFTER IMPORT: 股票清單：共 1366 檔`, matching the response's `totalActiveCount`).
+6. 更新清單過程中不輪詢任何進度端點、不建立進度條 — **Satisfied structurally** (no polling `useEffect`/`setInterval` was added for `universeImportStatus`, and no progress-bar markup exists in the import branch) and **live-verified**: network calls were captured for the whole click→completion window and filtered for `/api/stocks/sync/progress` — **zero** such calls were attributable to the import (the pre-existing sync-status poll, running independently because a real `PRICE_BACKFILL` job was already in flight in this shared environment, was excluded by diffing before/after counts, which showed no *additional* progress calls beyond that unrelated poll's own cadence).
+7. 更新完成後不自動觸發同步、不自動重新掃描 — **Satisfied.** Tested (before/after call-count diff on `/api/stocks/sync/backfill` and `/api/strategies/scan` — both `0`) and live-verified identically (`backfill calls during import (should be 0 — no auto-trigger): 0`, `scan calls during import: 0`).
+8. 摘要持續顯示到下一次操作為止 — **Satisfied.** Tested (summary survives an intervening `開始掃描`, then clears only on the *next* `更新股票清單` click) and live-verified: after a live import completed, checking a strategy and clicking `開始掃描` (against the real, still-in-progress scan data) left the `.st-universe-summary-text` element still present and non-empty.
+9. `502 UPSTREAM_EMPTY` → 「交易所尚未發布今日清單，請稍後再試」，共 N 檔不變 — **Satisfied.** Tested and live-verified via `page.route` intercepting only `**/api/stocks/universe/import` (everything else — the catalogue, the persistent count, the sync progress — still came from the real backend) to return `502 {"code":"UPSTREAM_EMPTY"}`: exact message shown, `股票清單：共 1366 檔` unchanged before/after, button re-enabled.
+10. `502 UPSTREAM_UNAVAILABLE`／`UPSTREAM_MALFORMED` → 「無法取得交易所股票清單，請稍後再試」，共 N 檔不變 — **Satisfied.** Tested (one case each) and live-verified for both codes via the same interception technique — identical message for both, count unchanged for both.
+11. 同步進行中仍可按更新股票清單；更新中仍可按同步，兩者互不 disable — **Satisfied.** Tested (a constructed scenario: start sync, assert import stays enabled; start import while sync runs, assert sync stays in its own running state; resolve import, assert sync is still running afterward). **Live-verified against a real, already-in-flight `PRICE_BACKFILL` job** (this session's shared dev database had one mid-run from environment setup, not from anything this session started): the sync button showed `同步中…`/disabled on page load; `更新股票清單` was confirmed **not** disabled at that moment; clicking it moved it into its own disabled/running state while the sync button's state was independently confirmed unaffected (`sync button state unaffected by import click: true`); after the import completed and re-enabled, the sync button was still `同步中…` — this is a strictly stronger check than the unit test alone, since it's two genuinely-concurrent, real backend jobs racing on the actual dev database rather than two mocked promises.
+12. 更新股票清單相關顏色為 Visual Style 字面 hex，dark/light 一致 — **Satisfied**, verified the same two ways as Group A criterion 9 above (source read of `.st-sync-info`/`.st-stock-total`/`.st-universe-summary`/`.st-universe-summary-text` against the spec's "股票清單「共 N 檔」文字" and "更新股票清單完成摘要文字" rows; the same deterministic dark-vs-light screenshot — which included a completed universe-import summary in the captured DOM — came back pixel-identical).
+
+#### Test / build / lint output (verbatim tails)
+```
+$ npm test -- --run
+ Test Files  7 passed (7)
+      Tests  106 passed (106)
+
+$ npm run build
+> tsc -b && vite build
+✓ 44 modules transformed.
+✓ built in 94ms
+
+$ npm run lint
+src/__tests__/StrategyTab.test.tsx:286:7: warning eslint(no-unreachable) — pre-existing, predates this session (confirmed in Increment 1's Execution Result)
+src/pages/StrategyTab.tsx:280:7: warning react(set-state-in-effect) — pre-existing, predates this session (confirmed in Increment 1's Execution Result)
+```
+106 = the pre-existing 83 (through Increment 2) + 5 union-table tests + 8 更新股票清單 tests. No new lint warnings; both pre-existing ones are unchanged in location and cause from Increment 1.
+
+#### Deferred / not independently verifiable here
+- None. Unlike the previous two increments, a real backend and a real dev database were reachable this session, and every one of the 21 criteria in this increment's two groups was exercised against it in addition to the automated test suite — including the two genuinely concurrent-jobs and the three `502` error-code paths (via targeted `page.route` interception of only the one endpoint under test, leaving every other call live).
+- One thing worth flagging for a future session rather than for this spec's criteria: this session's live verification incidentally discovered that the dev database already had `stock_id = 1538` with no price rows at all going into this session — pre-existing state from prior sessions' work in this shared environment, not something this session created or needs to clean up (it is exactly the kind of stock the union-table zero-hit criterion needs to exist, and it is a legitimate, harmless "never synced yet" row per `specs/backend/stock-price-ingestion.md`).

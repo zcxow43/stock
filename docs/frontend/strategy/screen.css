@@ -72,3 +72,13 @@
 .page-strategy tbody td { padding:5px 16px; }
 .page-strategy .res h3 { margin:0 0 5px; }
 .page-strategy .note { margin-top:4px; }
+
+/* ---- 同步列：更新股票清單 + 同步日 K 兩顆按鈕 ---- */
+.syncbar .meta { display:flex; align-items:center; gap:14px; }
+.syncbar .cnt { font-size:13px; color:#93A4B8; }
+.syncbar .cnt b { color:#E6EDF5; font-weight:600; }
+.syncbar .sep { color:#26333F; }
+.syncbar .btns { display:flex; align-items:center; gap:8px; }
+.impsum { background:#16202C; border:1px solid #26333F; border-radius:8px;
+          padding:8px 16px; margin-bottom:10px; font-size:13px; color:#E6EDF5; }
+.impsum.err { color:#F09A94; background:#3A1C1A; border-color:#8A3A34; }
