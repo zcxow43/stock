@@ -6,3 +6,4 @@ Real-looking screen storyboards inferred from `specs/frontend/` — every frame 
 |---|---|---|
 | [stock-chart](stock-chart.md) | 股票總覽 → 日 K → 分 K 的瀏覽流程 | 5 |
 | [strategy](strategy.md) | 更新股票清單 → 同步日 K → 勾選三個策略掃描 → 再同步顯示「已是最新」 | 6 |
+| [momentum](momentum.md) | 查漲幅平均 → 切漲幅加總 → 改用指定週挑週 → 再查一次，結果按產業別分組 | 5 |

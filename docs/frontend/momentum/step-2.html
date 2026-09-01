@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>動態分頁（產業別漲幅）</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-momentum">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,365</b> 檔</div>
+    </div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab">策略</button>
+      <button class="tab on">動態</button>
+    </div>
+
+    <div class="mtabs">
+      <button class="mtab on">漲幅平均</button>
+      <button class="mtab" data-trigger>漲幅加總</button>
+    </div>
+    <div class="mdesc">期間內每個交易日漲跌幅的平均</div>
+
+    <div class="cond">
+      <div class="condrow">
+        <span class="lbl">期間</span>
+        <div class="seg"><button class="on">近 N 交易日</button><button>指定週</button></div>
+        <span class="numf">近 <input type="text" value="20"> 個交易日</span>
+      </div>
+      <div class="condrow">
+        <span class="lbl">漲幅門檻</span>
+        <span class="numf">漲幅 ≥ <input type="text" value="5"> %</span>
+      </div>
+      <div class="actions">
+        <button class="btn primary">查詢</button>
+      </div>
+    </div>
+
+    <div class="summary">區間 <b>2026-08-04</b> ~ <b>2026-08-29</b>（20 個交易日）・命中 <b class="hl">37</b> 檔・<span class="warn">資料不足 12 檔</span></div>
+
+    <div data-target>
+      <div class="indblock">
+        <h3>半導體業<span>　12 檔</span></h3>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th class="r">漲幅</th><th class="r">交易日</th><th class="r">期初收盤</th><th class="r">期末收盤</th></tr></thead>
+          <tbody>
+            <tr class="hover"><td class="code">2330</td><td>台積電</td><td class="r up">+8.42%</td><td class="r">20</td><td class="r">850.00</td><td class="r">921.50</td></tr>
+            <tr><td class="code">3711</td><td>日月光投控</td><td class="r up">+6.15%</td><td class="r">18<span class="note-mark" title="期間內有停牌">＊</span></td><td class="r">118.50</td><td class="r">125.79</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="indblock">
+        <h3>電子零組件業<span>　9 檔</span></h3>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th class="r">漲幅</th><th class="r">交易日</th><th class="r">期初收盤</th><th class="r">期末收盤</th></tr></thead>
+          <tbody>
+            <tr class="hover"><td class="code">2308</td><td>台達電</td><td class="r up">+7.03%</td><td class="r">20</td><td class="r">412.00</td><td class="r">440.97</td></tr>
+            <tr><td class="code">3037</td><td>欣興</td><td class="r up">+5.28%</td><td class="r">20</td><td class="r">156.50</td><td class="r">164.76</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="indblock">
+        <h3>光電業<span>　6 檔</span></h3>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th class="r">漲幅</th><th class="r">交易日</th><th class="r">期初收盤</th><th class="r">期末收盤</th></tr></thead>
+          <tbody>
+            <tr class="hover"><td class="code">3481</td><td>群創</td><td class="r up">+9.71%</td><td class="r">20</td><td class="r">15.40</td><td class="r">16.90</td></tr>
+            <tr><td class="code">2409</td><td>友達</td><td class="r up">+5.55%</td><td class="r">20</td><td class="r">17.30</td><td class="r">18.26</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="indblock uncl">
+        <h3>未分類<span>　3 檔</span></h3>
+        <table>
+          <thead><tr><th>代號</th><th>名稱</th><th class="r">漲幅</th><th class="r">交易日</th><th class="r">期初收盤</th><th class="r">期末收盤</th></tr></thead>
+          <tbody>
+            <tr class="hover"><td class="code">1234</td><td>黑松</td><td class="r up">+5.02%</td><td class="r">20</td><td class="r">38.60</td><td class="r">40.54</td></tr>
+            <tr><td class="code">5678</td><td>友情</td><td class="r up">+6.88%</td><td class="r">20</td><td class="r">22.15</td><td class="r">23.67</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

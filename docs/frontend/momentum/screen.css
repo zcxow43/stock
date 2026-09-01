@@ -1,0 +1,88 @@
+/* 動態分頁（產業別漲幅）。Scoped by <body class="page-momentum">.
+ * Colors are literal hex from specs/frontend/momentum.md `## Visual Style` —
+ * never a token/var that shifts with prefers-color-scheme. */
+
+.page-momentum .wrap { padding:16px 28px; }
+.page-momentum .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
+.count { font-size:13px; color:#93A4B8; }
+.count b { color:#E6EDF5; font-weight:600; }
+
+/* ---- 外層頁籤（總覽／策略／動態） ---- */
+.tabs { display:flex; gap:24px; border-bottom:1px solid #26333F; margin-bottom:12px; }
+.tab { background:none; border:0; padding:9px 2px; font-family:inherit; font-size:14px;
+       color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
+.tab:hover:not(.on) { color:#E6EDF5; }
+
+/* ---- 頁內標籤（漲幅平均／漲幅加總） ---- */
+.mtabs { display:flex; gap:20px; border-bottom:1px solid #26333F; margin-bottom:6px; }
+.mtab { background:none; border:0; padding:8px 2px; font-family:inherit; font-size:14px;
+        color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.mtab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
+.mtab:hover:not(.on) { color:#E6EDF5; }
+.mdesc { font-size:12px; color:#93A4B8; margin:6px 0 10px; }
+
+/* ---- 條件區 ---- */
+.cond { background:#16202C; border:1px solid #26333F; border-radius:8px; padding:10px 16px; margin-bottom:10px; }
+.condrow { display:flex; align-items:center; gap:14px; margin-bottom:8px; font-size:13px; color:#93A4B8; }
+.condrow:last-of-type { margin-bottom:0; }
+.condrow .lbl { width:64px; flex:none; }
+.seg { display:flex; gap:6px; }
+.seg button { height:30px; padding:0 12px; font-size:13px; font-family:inherit; cursor:pointer;
+              background:#1B2836; color:#93A4B8; border:1px solid #26333F; border-radius:6px; }
+.seg button.on { background:#26333F; color:#E6EDF5; }
+.numf { display:flex; align-items:center; gap:6px; font-size:13px; color:#93A4B8; }
+.numf input { width:56px; height:30px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+              color:#E6EDF5; padding:0 8px; font-size:13px; font-family:inherit; text-align:center; }
+.numf input:focus { border-color:#3E8FD8; outline:none; }
+.actions { display:flex; align-items:center; gap:12px; margin-top:6px; }
+.btn.primary { background:#3E8FD8; color:#FFFFFF; border-color:#3E8FD8; }
+.btn.primary:hover { background:#58A3E8; }
+.btn.primary.dis, .btn.dis { background:#16202C; color:#4A5866; border-color:#26333F; }
+.hint { font-size:12px; color:#6B7C90; }
+
+/* ---- 指定週：週清單 ---- */
+.weeklist { display:grid; grid-template-rows:repeat(4,auto); grid-auto-flow:column; gap:6px 22px; margin:8px 0 2px; }
+.weekrow { display:flex; align-items:center; gap:7px; font-size:13px; color:#E6EDF5; }
+.chk { width:16px; height:16px; border:1px solid #26333F; border-radius:3px; background:#0F1620; flex:none; position:relative; }
+.chk.on { background:#3E8FD8; border-color:#3E8FD8; }
+.chk.on::after { content:"\2713"; color:#FFFFFF; font-size:11px; position:absolute; left:2px; top:-1px; }
+.wk-cur { color:#4B9FE8; border:1px solid #2C4A66; border-radius:9px; padding:0 7px; font-size:11px; margin-left:2px; }
+.gaphint { font-size:12px; color:#D9A441; margin-top:8px; }
+
+/* ---- 摘要列 ---- */
+.summary { font-size:13px; color:#93A4B8; margin-bottom:10px; }
+.summary .hl { color:#E6EDF5; font-weight:600; }
+.summary .warn { color:#D9A441; }
+
+/* ---- 結果區：產業別區塊 ---- */
+.indblock { margin-bottom:8px; }
+.indblock h3 { font-size:14px; color:#E6EDF5; margin:0 0 5px; font-weight:600; }
+.indblock h3 span { color:#93A4B8; font-weight:400; font-size:13px; }
+.indblock.uncl h3 { color:#93A4B8; }
+.note-mark { color:#D9A441; margin-left:3px; cursor:help; font-size:11px; }
+
+.empty { background:#16202C; border:1px solid #26333F; border-radius:8px;
+         padding:34px; text-align:center; color:#6B7C90; font-size:14px; }
+.empty .sub { font-size:12px; margin-top:8px; color:#4A5866; }
+
+/* 收緊表格垂直節奏，讓多個產業別區塊仍能在 1440x900 內完整呈現 */
+.page-momentum thead th { padding:6px 16px; }
+.page-momentum tbody td { padding:5px 16px; font-size:13px; }
+
+/* 內容較多的分鏡（結果區含 4 個產業別區塊、或條件區含週清單）進一步收緊
+   垂直節奏，讓整頁仍在 1440x900 內完整呈現，不靠裁切或省略內容達成。 */
+.page-momentum .wrap { padding:12px 28px; }
+.page-momentum .head { margin-bottom:6px; }
+.page-momentum .tabs { margin-bottom:6px; }
+.page-momentum .mtabs { margin-bottom:2px; }
+.page-momentum .mdesc { margin:4px 0 6px; }
+.page-momentum .cond { padding:6px 16px; margin-bottom:6px; }
+.page-momentum .condrow { margin-bottom:4px; }
+.page-momentum .weeklist { margin:3px 0 0; gap:3px 22px; }
+.page-momentum .gaphint { margin-top:5px; }
+.page-momentum .summary { margin-bottom:6px; }
+.page-momentum .indblock { margin-bottom:5px; }
+.page-momentum .indblock h3 { margin:0 0 3px; }
+.page-momentum thead th { padding:3px 16px; }
+.page-momentum tbody td { padding:2px 16px; }

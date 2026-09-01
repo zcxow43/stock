@@ -10,9 +10,9 @@
   },
   {
     "file": "step-2.html",
-    "caption": "點擊「更新股票清單」：一次外部請求即匯入全體上市普通股，摘要顯示「共 1,032 檔（新增 998、更新 34）」，常駐檔數同步更新。此步驟只寫股票主檔，完全不抓行情。",
+    "caption": "點擊「更新股票清單」：一次動作同時匯入全體上市普通股與交易所官方產業別，摘要顯示「共 1,032 檔（新增 998、更新 34）・產業別 29 類，未分類 17 檔」，常駐檔數同步更新。此步驟只寫股票主檔與產業別，完全不抓行情。",
     "api": [
-      "POST /api/stocks/universe/import — 無 body；此端點即是向交易所抓取上市股票清單的起點，回應的 totalActiveCount／insertedCount／updatedCount 組成摘要",
+      "POST /api/stocks/universe/import — 無 body；此端點即是向交易所抓取上市股票清單的起點，同時匯入官方產業別，回應的 totalActiveCount／insertedCount／updatedCount／industryCount／uncategorizedStockCount 組成摘要",
       "GET /api/stocks?page=1&size=1 — 匯入完成後重取 total 更新「共 N 檔」"
     ]
   },

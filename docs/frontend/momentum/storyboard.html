@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>momentum storyboard</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
+  .board { position:relative; width:2360px; height:1436px; }
+  .frame { position:absolute; }
+  .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
+
+  .caption { position:relative; z-index:6; margin-top:14px; font-size:19px; line-height:1.5; color:#33312d; }
+  .caption .num { display:inline-block; min-width:26px; height:26px; line-height:26px; text-align:center;
+                  background:#d6743a; color:#fff; border-radius:13px; font-size:15px; margin-right:9px; vertical-align:1px; }
+  .apis { position:relative; z-index:6; margin-top:9px; }
+  .api { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin-top:5px;
+         font-size:15px; line-height:1.45; }
+  .api .verb { flex:none; display:inline-block; min-width:44px; text-align:center; padding:1px 7px;
+               border-radius:4px; background:#5b6b7c; color:#fff; font-size:12px; letter-spacing:.4px; font-weight:600; }
+  .api .verb.v-get { background:#2f6f4f; }
+  .api .verb.v-post { background:#9a5a1e; }
+  /* path and its purpose note share one wrapping block, so the note always
+     stays right after the path it explains instead of drifting to the margin */
+  .api .sig { flex:1 1 0; min-width:0; }
+  .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
+              word-break:break-all; }
+  .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
+  svg.links { position:absolute; inset:0; width:2360px; height:1436px; pointer-events:none; z-index:5; }
+</style>
+</head>
+<body>
+<div class="board">
+  <svg class="links" viewBox="0 0 2360 1436">
+    <defs>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
+      </filter>
+    </defs>
+    <rect x="85.6" y="201.3" width="35.7" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="857.8" y="233.4" width="644.3" height="196.8"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="894.5" y="136.1" width="37.5" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1726.9" y="169.2" width="39.8" height="23.8"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1645.6" y="949.1" width="628.8" height="17.8"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1645.6" y="973.4" width="35.7" height="24.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="857.8" y="1005.5" width="644.3" height="196.8"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <polygon points="128.0,218.8 830.7,296.0 830.0,302.4 850.9,295.7 832.0,284.5 831.3,291.0 128.5,213.9"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="938.5,156.8 1609.9,275.5 1608.7,281.9 1630.0,276.5 1611.9,264.2 1610.7,270.6 939.3,151.9"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1749.5,200.3 1948.0,923.7 1941.7,925.4 1955.7,942.3 1959.1,920.7 1952.8,922.4 1754.3,199.0"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1638.2,989.3 1527.8,1016.3 1526.3,1010.0 1509.0,1023.5 1530.5,1027.5 1529.0,1021.2 1639.4,994.2"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+  </svg>
+  
+  <div class="frame" style="left:70px; top:70px; width:660px;">
+    <img src="step-1.png" width="660" height="413" alt="進入動態分頁的初始狀態：頁籤列停在「漲幅平均」，條件區為「近 20 個交易日」模式、門檻預設 5%，尚未查詢，結果區顯示提示文字。">
+    <div class="caption"><span class="num">1</span>進入動態分頁的初始狀態：頁籤列停在「漲幅平均」，條件區為「近 20 個交易日」模式、門檻預設 5%，尚未查詢，結果區顯示提示文字。</div>
+  </div>
+  <div class="frame" style="left:850px; top:70px; width:660px;">
+    <img src="step-2.png" width="660" height="413" alt="按下「查詢」：以近 20 個交易日、漲幅平均 ≥ 5% 查出結果，摘要列顯示實際區間與命中／資料不足檔數，結果區依產業別分組列出，最後是「未分類」。">
+    <div class="caption"><span class="num">2</span>按下「查詢」：以近 20 個交易日、漲幅平均 ≥ 5% 查出結果，摘要列顯示實際區間與命中／資料不足檔數，結果區依產業別分組列出，最後是「未分類」。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/momentum/gain?metric=AVERAGE&amp;mode=DAYS&amp;days=20&amp;minGain=5</code><span class="note">依「近 20 個交易日」查詢漲幅平均達 5% 以上的股票，按產業別分組列出</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:70px; width:660px;">
+    <img src="step-3.png" width="660" height="413" alt="切到「漲幅加總」標籤：門檻回到本標籤自己的預設值 5（不沿用剛才在「漲幅平均」的門檻），期間條件沿用近 20 個交易日；因改為衡量整段累計漲跌，漲幅數字量級明顯變大。">
+    <div class="caption"><span class="num">3</span>切到「漲幅加總」標籤：門檻回到本標籤自己的預設值 5（不沿用剛才在「漲幅平均」的門檻），期間條件沿用近 20 個交易日；因改為衡量整段累計漲跌，漲幅數字量級明顯變大。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/momentum/gain?metric=SUM&amp;mode=DAYS&amp;days=20&amp;minGain=5</code><span class="note">切換為「漲幅加總」重新查詢，期間沿用近 20 個交易日、門檻回到本標籤預設值 5</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:793px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="切到「指定週」模式：列出最近 12 個自然週，本週附「本週」標記；勾選不連續的 08/24–08/30 與 08/10–08/16 兩週，週清單下方以黃色文字提示實際計算區間含未勾選的 08/17 那一週。">
+    <div class="caption"><span class="num">4</span>切到「指定週」模式：列出最近 12 個自然週，本週附「本週」標記；勾選不連續的 08/24–08/30 與 08/10–08/16 兩週，週清單下方以黃色文字提示實際計算區間含未勾選的 08/17 那一週。</div>
+  </div>
+  <div class="frame" style="left:850px; top:793px; width:660px;">
+    <img src="step-5.png" width="660" height="413" alt="再次按下「查詢」：以勾選週折算出的 2026-08-10 ~ 2026-08-30 重新查詢漲幅加總，摘要列與各產業別區塊換成這段區間的新結果。">
+    <div class="caption"><span class="num">5</span>再次按下「查詢」：以勾選週折算出的 2026-08-10 ~ 2026-08-30 重新查詢漲幅加總，摘要列與各產業別區塊換成這段區間的新結果。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/momentum/gain?metric=SUM&amp;mode=WEEKS&amp;startDate=2026-08-10&amp;endDate=2026-08-30&amp;minGain=5</code><span class="note">依勾選週折算出的區間查詢漲幅加總達 5% 以上的股票，按產業別分組列出</span></span></div></div>
+  </div>
+</div>
+</body>
+</html>

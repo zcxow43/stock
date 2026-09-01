@@ -126,8 +126,10 @@ depends_on: [stock-list]
 #### 更新股票清單
 
 - 按鈕文字「更新股票清單」。按下後 disabled 並顯示執行中狀態。
-- 這是**短同步作業**（後端只發一次外部請求，見 `specs/backend/stock-universe-import.md`），不輪詢、不顯示進度條、不需要跨頁籤保留狀態——把長時間回補的那一套機制套上來是多餘的。
-- 完成後在按鈕下方顯示摘要：「股票清單已更新：共 N 檔（新增 X、更新 Y）」，其中 N 取 `totalActiveCount`、X 取 `insertedCount`、Y 取 `updatedCount`。
+- 這是**短同步作業**（後端只發兩次外部請求——股票清單一次、產業別一次，見 `specs/backend/stock-universe-import.md`），不輪詢、不顯示進度條、不需要跨頁籤保留狀態——把長時間回補的那一套機制套上來是多餘的。
+- **本按鈕同時帶入交易所官方產業別**，供動態分頁（`specs/frontend/momentum.md`）分組顯示。這是同一個動作的兩半，不另做一顆按鈕。
+- 完成後在按鈕下方顯示摘要：「股票清單已更新：共 N 檔（新增 X、更新 Y）・產業別 P 類，未分類 Q 檔」，其中 N 取 `totalActiveCount`、X 取 `insertedCount`、Y 取 `updatedCount`、P 取 `industryCount`、Q 取 `uncategorizedStockCount`。
+- **`industrySourceStatus` 不是 `OK` 時，摘要必須明說產業別沒更新到**：在同一則摘要後接上「產業別未更新（來源暫時無法取得），股票清單已更新」，並以警示色呈現該段。後端在這種情形下仍回 `200`（股票清單那一半確實成功了，見 `specs/backend/stock-universe-import.md` 的「產業別來源失敗的處理」），若前端照一般成功處理，使用者會以為產業別也是最新的，然後在動態分頁看到一堆未分類卻找不到原因。`industryCount` 與 `uncategorizedStockCount` 此時取的是既有值，仍照常顯示。
 - 摘要**持續顯示到下一次操作為止**，理由同下方「同步在全部標的都已是最新時…」該條：新增 0 檔時執行中狀態一閃而過，摘要若跟著消失，使用者會以為按鈕沒反應。
 - 清單更新完成後**不自動觸發同步**，也不自動重新掃描。使用者說了要自己按同步；替他按下一個可能跑數十分鐘的作業，是把選擇權拿走。
 - 更新完成後常駐的「共 N 檔」數字即時更新，讓使用者按下同步前就看得到母體變大了。
@@ -170,7 +172,7 @@ depends_on: [stock-list]
 | 進頁 | `GET /api/strategies` — 取策略清單與靈敏度選項及說明文字 |
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
-| 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` 組成完成摘要 |
+| 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
 | 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（`code` + `preset`）、`stockIds`、`startDate`、`endDate` |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`，不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount` 與 `caughtUpCount` 決定完成摘要的呈現方式 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
@@ -190,6 +192,7 @@ depends_on: [stock-list]
 | `JOB_ALREADY_RUNNING` | 不視為錯誤：同步按鈕轉為執行中狀態並開始輪詢進度 |
 | `UPSTREAM_EMPTY` | 於「更新股票清單」下方顯示「交易所尚未發布今日清單，請稍後再試」——這是可重試的時機問題，不是系統故障，訊息必須說出「稍後再試」 |
 | `UPSTREAM_UNAVAILABLE` / `UPSTREAM_MALFORMED` | 於「更新股票清單」下方顯示「無法取得交易所股票清單，請稍後再試」 |
+| `200` 但 `industrySourceStatus` 非 `OK` | **不是錯誤**：完成摘要照常顯示，後方以警示色附加「產業別未更新（來源暫時無法取得）」 |
 | 其他／網路錯誤 | 結果區顯示「掃描失敗，請稍後再試」與「重試」按鈕 |
 
 **更新清單的三種失敗一律不改動畫面上的「共 N 檔」。** 後端在這三種情形下都不做任何部分寫入（見 `specs/backend/stock-universe-import.md`），前端把數字改掉會憑空製造一個與資料庫不符的顯示值。
@@ -313,6 +316,13 @@ depends_on: [stock-list]
 - [ ] 上漲支撐的 `pendingConfirm` 與 `insufficientData` 標的不出現在聯集表格中
 - [ ] 三個策略可同時勾選並掃描，結果區依勾選順序呈現三個策略區塊
 - [ ] 上漲支撐相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+---
+
+- [ ] 「更新股票清單」的完成摘要含產業別段：「產業別 P 類，未分類 Q 檔」，P 取 `industryCount`、Q 取 `uncategorizedStockCount`
+- [ ] `industrySourceStatus` 非 `OK` 時，摘要以警示色附加「產業別未更新（來源暫時無法取得）」，且股票清單那一半的數字照常顯示、不視為錯誤
+- [ ] `industrySourceStatus` 為 `OK` 時，摘要不出現任何產業別未更新的警示文字
+- [ ] 「更新股票清單」仍是本頁唯一的產業別匯入入口，動態分頁上沒有相同功能的按鈕
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)

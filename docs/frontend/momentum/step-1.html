@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>動態分頁（產業別漲幅）</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-momentum">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,365</b> 檔</div>
+    </div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab">策略</button>
+      <button class="tab on">動態</button>
+    </div>
+
+    <div class="mtabs">
+      <button class="mtab on">漲幅平均</button>
+      <button class="mtab">漲幅加總</button>
+    </div>
+    <div class="mdesc">期間內每個交易日漲跌幅的平均</div>
+
+    <div class="cond">
+      <div class="condrow">
+        <span class="lbl">期間</span>
+        <div class="seg"><button class="on">近 N 交易日</button><button>指定週</button></div>
+        <span class="numf">近 <input type="text" value="20"> 個交易日</span>
+      </div>
+      <div class="condrow">
+        <span class="lbl">漲幅門檻</span>
+        <span class="numf">漲幅 ≥ <input type="text" value="5"> %</span>
+      </div>
+      <div class="actions">
+        <button class="btn primary" data-trigger>查詢</button>
+      </div>
+    </div>
+
+    <div class="empty">設定期間與門檻後按下查詢<div class="sub">尚未執行任何查詢</div></div>
+  </div>
+</body>
+</html>

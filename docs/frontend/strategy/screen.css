@@ -68,8 +68,8 @@
 .page-strategy .card .top { margin-bottom:3px; }
 .page-strategy .condrow { margin-bottom:4px; }
 .page-strategy .res { margin-bottom:4px; }
-.page-strategy thead th { padding:3px 16px; }
-.page-strategy tbody td { padding:2px 16px; font-size:13px; }
+.page-strategy thead th { padding:2px 16px; }
+.page-strategy tbody td { padding:1px 16px; font-size:13px; }
 .page-strategy .res h3 { margin:0 0 2px; }
 .page-strategy .note { margin-top:2px; }
 
