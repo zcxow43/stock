@@ -5,9 +5,9 @@ import java.time.LocalDate;
 /**
  * Result of running one {@link PatternDetector} over one stock's price series. Exactly one of
  * {@link #isInsufficientData()}, {@link #isPendingConfirm()}, or a real hit (non-null
- * {@link #getSignalDate()}) applies for BOX_BREAKOUT; HIGHER_LOWS never produces pendingConfirm.
- * insufficientData is evaluated before any per-day scan is attempted and is mutually exclusive with
- * a hit — see specs/backend/strategy-scan.md, "insufficientData 與 matchedCount 互斥".
+ * {@link #getSignalDate()}) applies for BOX_BREAKOUT and RISING_SUPPORT; HIGHER_LOWS never produces
+ * pendingConfirm. insufficientData is evaluated before any per-day scan is attempted and is
+ * mutually exclusive with a hit — see specs/backend/strategy-scan.md, "insufficientData 與 matchedCount 互斥".
  */
 public final class PatternDetectionOutcome {
 

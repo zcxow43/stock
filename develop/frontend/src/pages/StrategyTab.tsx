@@ -5,12 +5,15 @@ import {
   fetchStrategyCatalog,
   scanStrategies,
   type BoxBreakoutDetail,
+  type ConfirmClosePoint,
   type HigherLowsDetail,
   type PresetCode,
+  type RisingSupportDetail,
   type ScanRequest,
   type ScanResponse,
   type StrategyCatalogItem,
   type StrategyCode,
+  type StrategyDetail,
   type StrategyHit,
   type StrategyResult,
 } from '../api/strategies'
@@ -73,8 +76,16 @@ function formatSyncTime(value: string | null | undefined): string {
   return value.slice(0, 16).replace('T', ' ')
 }
 
-function isBoxDetail(detail: BoxBreakoutDetail | HigherLowsDetail): detail is BoxBreakoutDetail {
+function isBoxDetail(detail: StrategyDetail): detail is BoxBreakoutDetail {
   return 'boxHigh' in detail
+}
+
+function isHigherLowsDetail(detail: StrategyDetail): detail is HigherLowsDetail {
+  return 'lows' in detail
+}
+
+function isRisingSupportDetail(detail: StrategyDetail): detail is RisingSupportDetail {
+  return 'riseClose' in detail
 }
 
 interface UnionHit {
@@ -117,6 +128,10 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
 
 function formatLowsSequence(lows: HigherLowsDetail['lows']): string {
   return lows.map((p) => `${p.tradeDate.slice(5)} ${p.low.toFixed(2)}`).join('→')
+}
+
+function formatConfirmCloses(points: ConfirmClosePoint[]): string {
+  return points.map((p) => `${p.tradeDate.slice(5)} ${p.close.toFixed(2)}`).join('→')
 }
 
 function cumulativeRise(lows: HigherLowsDetail['lows']): number | null {
@@ -532,7 +547,7 @@ export default function StrategyTab() {
       <tbody>
         {items.map((item) => {
           const detail = item.detail
-          const lows = !isBoxDetail(detail) ? detail.lows : []
+          const lows = isHigherLowsDetail(detail) ? detail.lows : []
           return (
             <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
               <td>
@@ -541,6 +556,41 @@ export default function StrategyTab() {
               <td>{item.signalDate}</td>
               <td>{formatLowsSequence(lows)}</td>
               <td className="sl-r">{formatPercent2(cumulativeRise(lows))}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+
+  const renderRisingSupportTable = (items: StrategyHit[]) => (
+    <table className="sl-table st-result-table">
+      <thead>
+        <tr>
+          <th>代號 / 名稱</th>
+          <th>訊號日</th>
+          <th className="sl-r">上漲收盤</th>
+          <th className="sl-r">單日漲幅</th>
+          <th className="sl-r">支撐價</th>
+          <th className="sl-r">前段收盤高點</th>
+          <th>確認兩日收盤</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => {
+          const detail = item.detail
+          const rs = isRisingSupportDetail(detail) ? detail : null
+          return (
+            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
+              <td>
+                {item.stockId} {item.stockName}
+              </td>
+              <td>{item.signalDate}</td>
+              <td className="sl-r">{formatPrice2(rs?.riseClose)}</td>
+              <td className="sl-r sl-up">{formatPercent2(rs?.risePercent)}</td>
+              <td className="sl-r">{formatPrice2(rs?.supportClose)}</td>
+              <td className="sl-r">{formatPrice2(rs?.priorHighClose)}</td>
+              <td>{rs ? formatConfirmCloses(rs.confirmCloses) : '—'}</td>
             </tr>
           )
         })}
@@ -560,8 +610,10 @@ export default function StrategyTab() {
           </div>
         ) : result.strategy === 'BOX_BREAKOUT' ? (
           renderBoxTable(result.items)
-        ) : (
+        ) : result.strategy === 'HIGHER_LOWS' ? (
           renderHigherLowsTable(result.items)
+        ) : (
+          renderRisingSupportTable(result.items)
         )}
         {result.insufficientData.length > 0 ? (
           <ExpandableNote
@@ -571,6 +623,12 @@ export default function StrategyTab() {
         ) : null}
         {result.strategy === 'BOX_BREAKOUT' && result.pendingConfirm.length > 0 ? (
           <ExpandableNote label={`另有 ${result.pendingConfirm.length} 檔已突破，但確認日尚未到`} ids={result.pendingConfirm} />
+        ) : null}
+        {result.strategy === 'RISING_SUPPORT' && result.pendingConfirm.length > 0 ? (
+          <ExpandableNote
+            label={`另有 ${result.pendingConfirm.length} 檔已上漲，但後兩日的確認尚未完成`}
+            ids={result.pendingConfirm}
+          />
         ) : null}
       </div>
     )
@@ -616,8 +674,12 @@ export default function StrategyTab() {
         <div className="st-universe-summary">
           <span className="st-universe-summary-text">
             股票清單已更新：共 {universeImportSummary.totalActiveCount} 檔（新增 {universeImportSummary.insertedCount}
-            、更新 {universeImportSummary.updatedCount}）
+            、更新 {universeImportSummary.updatedCount}）・產業別 {universeImportSummary.industryCount} 類，未分類{' '}
+            {universeImportSummary.uncategorizedStockCount} 檔
           </span>
+          {universeImportSummary.industrySourceStatus !== 'OK' ? (
+            <span className="st-industry-warning">產業別未更新（來源暫時無法取得），股票清單已更新</span>
+          ) : null}
         </div>
       ) : null}
       {syncStatus === 'running' && syncProgress ? (

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票總覽清單頁"
 requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入該檔的日 K 圖；此頁改為分頁式，分頁一為總覽（可新增／修改／下市股票），分頁二為策略，分頁三為動態"
 depends_on: []
@@ -218,13 +218,13 @@ depends_on: []
 
 ---
 
-- [ ] 頁籤列有「總覽」「策略」「動態」三個頁籤，依此順序顯示
-- [ ] 點擊「動態」後網址的 `tab` 參數變為 `momentum`；直接以 `/stocks?tab=momentum` 進入會停在動態頁籤
-- [ ] `tab=momentum` 以外的無法辨識值（例如 `?tab=foo`）仍退回總覽，不顯示空白畫面
-- [ ] 切換到動態頁籤不重新載入整頁，頁首列與頁籤列不閃動
-- [ ] 在動態頁籤停留時，頁首列的「共 N 檔」維持分頁一最後一次的值，不被動態分頁的命中檔數覆蓋
-- [ ] 三個分頁互相切換後再切回總覽，分頁一既有的篩選條件、頁碼與清單資料完整保留，不重新請求
-- [ ] 「動態」頁籤的顏色取自 `## Visual Style` 既有的頁籤色值，與另外兩個頁籤完全一致
+- [x] 頁籤列有「總覽」「策略」「動態」三個頁籤，依此順序顯示
+- [x] 點擊「動態」後網址的 `tab` 參數變為 `momentum`；直接以 `/stocks?tab=momentum` 進入會停在動態頁籤
+- [x] `tab=momentum` 以外的無法辨識值（例如 `?tab=foo`）仍退回總覽，不顯示空白畫面
+- [x] 切換到動態頁籤不重新載入整頁，頁首列與頁籤列不閃動
+- [x] 在動態頁籤停留時，頁首列的「共 N 檔」維持分頁一最後一次的值，不被動態分頁的命中檔數覆蓋
+- [x] 三個分頁互相切換後再切回總覽，分頁一既有的篩選條件、頁碼與清單資料完整保留，不重新請求
+- [x] 「動態」頁籤的顏色取自 `## Visual Style` 既有的頁籤色值，與另外兩個頁籤完全一致
 
 ---
 ## Execution Result
@@ -273,3 +273,18 @@ Turns the page into a tabbed page (總覽／策略) and adds create/edit/delist 
   - Database left exactly as required: confirmed `stock` = 34/34 active before starting, deleted the one throwaway `ZP01` row created during live verification, and re-confirmed `stock` = 34 rows, all `is_active = 1` afterward.
   - `npm run build` (`tsc -b && vite build`) clean; `npm test` → 58/58 passing (44 pre-existing + 6 new tab tests + 8 new maintenance tests); `npx oxlint .` clean.
   - Left unfixed / deliberately out of scope: the 策略 tab itself is `StrategyTabPlaceholder.tsx`'s one line of static text — `specs/frontend/strategy.md` owns replacing it. Did not touch `docker/launch.json`/`.claude/launch.json` (already correct from prior increments; `.claude/launch.json` materializes as a plain-file copy rather than a symlink on this checkout, but its content is identical to `docker/launch.json` and unrelated to this increment's scope).
+
+### Increment 3 — 2026-09-02
+
+Adds the third 「動態」 tab to the tab container per the spec's 7 previously-unchecked Acceptance Criteria. This increment owns the tab shell only — the 動態 panel's actual content (period picker, threshold, 漲幅平均／漲幅加總, industry grouping) belongs to `specs/frontend/momentum.md`, out of scope here. Note: at the time this increment ran, `StrategyTabPlaceholder.tsx` had already been replaced by the real `StrategyTab.tsx` from a separately-completed `specs/frontend/strategy.md` increment — this spec's own scope boundary (tab container only) was unaffected and `StrategyTab.tsx` was not touched.
+
+- Files changed:
+  - `develop/frontend/src/pages/StockListPage.tsx` — `TabKey` widened to `'overview' | 'strategy' | 'momentum'`; `resolveTab` now accepts `momentum` too (anything else still falls back to `overview`); added the third `role="tab"` button labelled 「動態」 after 「策略」 so the tab bar order is 總覽／策略／動態; added a third permanently-mounted panel (`data-testid="sl-tabpanel-momentum"`) toggled via the same inline `display:none/block` pattern as the other two, so switching to/from 動態 never refetches or remounts anything and the header's 「共 N 檔」 (owned by `StockOverviewTab` via the existing `onTotalChange` lift) is untouched by this tab.
+  - `develop/frontend/src/pages/MomentumTabPlaceholder.tsx` (new) — minimal placeholder mounted in the 動態 tab panel, mirroring the role Increment 2's `StrategyTabPlaceholder.tsx` played for 策略: a concrete drop-in point for `specs/frontend/momentum.md`'s agent without that agent having to touch `StockListPage.tsx`'s tab-container structure.
+  - `develop/frontend/src/pages/StockListPage.css` — added `.sl-tab-placeholder` (reuses the existing `## Visual Style` 弱化文字 `#6b7c90`, no new colors introduced); the 動態 tab button itself reuses the pre-existing `.sl-tab`/`.sl-tab-active` classes verbatim, so its color is byte-identical to 總覽／策略 by construction, not by a second hand-copied value.
+  - `develop/frontend/src/__tests__/StockListPage.tabs.test.tsx` — added 7 tests: three-tabs-in-order, direct `?tab=momentum` navigation, fallback-to-總覽 for a bogus tab value with the momentum panel confirmed hidden, clicking 動態 syncs `?tab=momentum` into the URL, switching to 動態 doesn't refetch/remount 總覽 and leaves the header total unchanged, and a full 總覽→策略→動態→總覽 round trip that asserts zero additional `/api/stocks` list requests and that 總覽's data/state survived.
+- Notes:
+  - `npm test` → 112/112 passing (105 pre-existing, from this-spec's own 58 plus `strategy.md`'s and other concurrently-landed suites, + 7 new). `npm run build` (`tsc -b && vite build`) clean. `npx oxlint src/pages/StockListPage.tsx src/pages/MomentumTabPlaceholder.tsx src/__tests__/StockListPage.tabs.test.tsx` clean (two pre-existing warnings surfaced by a full-project `oxlint .` run live in `StrategyTab.tsx`/`StrategyTab.test.tsx`, untouched by this increment, out of scope).
+  - Live-verified against the already-running dev server (port 5173) and the already-running backend (port 8080, 1,374 real stocks) with a throwaway Playwright script (installed with `--no-save`, removed after use — `package.json`/`package-lock.json` untouched): tab bar reads 總覽／策略／動態 in order; clicking 動態 updates the URL to `?tab=momentum`, shows the momentum panel, hides the overview panel, and leaves 「共 1,374 檔」 in the header unchanged; direct navigation to `/stocks?tab=momentum` lands on 動態; `/stocks?tab=foo` falls back to 總覽 with a non-blank page; the 動態 tab's computed text color was identical under emulated `dark` and `light` `colorScheme`.
+  - No absence-safety, error-handling, resource-lifecycle, or performance concerns apply to this increment — it's pure presentational wiring (a widened union type, one more button, one more permanently-mounted `display`-toggled panel) with no new API calls, async work, subscriptions, or loops; reviewed against `code-quality` before reporting done.
+  - Left unfixed / deliberately out of scope: `MomentumTabPlaceholder.tsx`'s content — `specs/frontend/momentum.md` owns replacing it, per this spec's explicit scope boundary. Did not touch `StrategyTab.tsx` or its tests.

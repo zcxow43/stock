@@ -97,4 +97,33 @@ public interface StockDailyPriceMapper {
     List<StockDailyPrice> findRecentBeforeDateByStockIds(@Param("stockIds") List<String> stockIds,
                                                           @Param("beforeDate") LocalDate beforeDate,
                                                           @Param("limit") int limit);
+
+    /**
+     * Up to `limit` nearest trading days strictly after afterDate, per stock id — one batched
+     * window-function query (ROW_NUMBER() PARTITION BY stock_id), not one query per stock. Supplies
+     * RISING_SUPPORT's D+1/D+2 confirmation bars, which may fall after a scan's endDate — see
+     * specs/backend/strategy-scan.md, "上漲支撐的確認資料取自 endDate 之後". Ordered by stock_id then
+     * trade_date ascending.
+     */
+    List<StockDailyPrice> findRecentAfterDateByStockIds(@Param("stockIds") List<String> stockIds,
+                                                         @Param("afterDate") LocalDate afterDate,
+                                                         @Param("limit") int limit);
+
+    /**
+     * The `limit` most recent distinct trade dates across the whole {@code stock_daily_price} table
+     * (not scoped to any stock or population), ascending by trade_date. Used to anchor
+     * `mode=DAYS` on the database's own newest trade date rather than today's calendar date — see
+     * specs/backend/industry-gain-ranking.md, "DAYS 模式的區間錨點". Empty when the table has no
+     * rows at all.
+     */
+    List<LocalDate> findRecentDistinctTradeDates(@Param("limit") int limit);
+
+    /**
+     * COUNT(DISTINCT trade_date) across the whole {@code stock_daily_price} table within
+     * [startDate, endDate] — not scoped to any stock or population. Used as the response-level
+     * `tradingDays` for `mode=WEEKS`; see specs/backend/industry-gain-ranking.md, "產業別分組" /
+     * "處理流程".
+     */
+    int countDistinctTradeDatesInRange(@Param("startDate") LocalDate startDate,
+                                        @Param("endDate") LocalDate endDate);
 }

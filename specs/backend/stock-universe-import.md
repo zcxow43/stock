@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "上市股票 universe 匯入 API"
 requirement: "將所有上市的股票先放到 stock 裡面，之後再由使用者自行按同步按鈕回補日 K；同一個動作一併帶入交易所官方產業別，供動態分頁按產業別分組"
 depends_on: [stock-price-ingestion]
@@ -39,7 +39,10 @@ depends_on: [stock-price-ingestion]
 | 2 | 產業別 | `https://openapi.twse.com.tw/v1/opendata/t187ap03_L`（上市公司基本資料） | `公司代號`、`產業別` |
 
 - 來源 1 與 `specs/backend/stock-price-ingestion.md` 的「每日全市場快照」為**同一個資料源**，本 API 只取代號與名稱，其餘欄位一律丟棄。
-- 來源 2 的 `產業別` 是**中文名稱字串**（例如「半導體業」「光電業」「電子零組件業」），不是代碼。因此 `industry` 以名稱為唯一鍵、比對不到就新增一列（見 `specs/dba/industry.md`）——來源沒有提供穩定代碼，名稱是唯一可用的識別依據。
+- 來源 2 的 `產業別` 是**兩位數字代碼字串**（`2330` 為 `"24"`、`1101` 為 `"01"`、`2317` 為 `"31"`），**不是**中文名稱。這是實際打過該端點驗證的結果。
+- 因此匯入時必須先把代碼**對照成中文名稱**（`"24"` → `半導體業`），再以名稱 UPSERT `industry`。對照表是交易所公告的固定分類，內建為一份靜態表即可——它不隨每日資料變動，為它多打一次外部請求沒有意義。
+- 對照表查不到的代碼（交易所新增了分類）：若該值本身**不是**純數字，直接當成名稱使用；若是純數字卻查不到，忽略該列並記錄，不要寫入一個叫「24」的產業別——畫面上出現一個數字當產業名稱，比少一檔分類更難察覺是錯的。
+- `industry` 仍以**名稱**為唯一鍵（見 `specs/dba/industry.md`），不以代碼為鍵：代碼只存在於這一個來源，而名稱是系統對外呈現的東西；日後若要加入人工主題分類，它們有名稱但沒有交易所代碼。
 - **交易所的官方分類不包含「AI」這類主題型概念股分類。** 來源 2 給的是公司登記的主要營業類別，因此畫面上會出現「半導體業」「光電業」「電子零組件業」，而不會出現「AI」。要有主題分類需要另一份人工維護的資料，那是另一個需求，不在本 API 範圍內。
 - **兩次都是單一請求即涵蓋全市場**，因此本 API 仍然**不需要速率控制、不需要 `stock_sync_progress` 進度追蹤、不需要斷點續傳**——這些機制在 `stock-price-ingestion` 中存在，是因為逐檔歷史查詢有每檔一次請求的限制；本 API 沒有這個限制，不得為求一致而複製一套上來。
 - 上櫃（`OTC`）不在本 API 範圍內。櫃買中心是另一個端點、另一套欄位格式，需要時另立需求。
@@ -171,7 +174,7 @@ Response `200`：
 5. 名稱正規化：去除前後空白。名稱為空字串的列計入 `skippedCount` 並忽略——沒有名稱的主檔列在清單頁上是一列空白，比不存在更難察覺。
 6. 合格清單為空（來源 1 有回應但一檔普通股都沒有）→ 同樣回 `502 UPSTREAM_EMPTY`。
 7. 對來源 2 發出一次請求並解析。任何失敗都不中止流程，僅記下 `industrySourceStatus`（`UNAVAILABLE` / `EMPTY` / `MALFORMED`）並讓產業別清單為空。
-8. 逐列取 `公司代號` 與 `產業別`：套用同一套「只收普通股」的代號篩選；產業別名稱去除前後空白，為空字串者忽略該列。
+8. 逐列取 `公司代號` 與 `產業別`：套用同一套「只收普通股」的代號篩選；`產業別` 去除前後空白，為空字串者忽略該列，其餘依代碼對照表換成中文名稱（查不到且為純數字者忽略並記錄）。
 9. 在**單一交易邊界**內依序：批次 UPSERT `stock` → 批次 UPSERT `industry`（依名稱）→ 對本次來源涵蓋到的股票整組取代 `stock_industry` 關聯。產業別清單為空時，第 2、3 步整段跳過。
 10. 查詢 `is_active = 1` 的總數、`industry` 的總列數、有／無關聯的在市股票檔數，組出回應。
 
@@ -192,7 +195,7 @@ Response `200`：
 
 | 資料源欄位 | 目標 |
 |---|---|
-| `產業別`（去空白後） | `industry.industry_name`（依名稱 UPSERT，取回 `industry_id`） |
+| `產業別`（去空白後，經代碼對照表換成中文名稱） | `industry.industry_name`（依名稱 UPSERT，取回 `industry_id`） |
 | `公司代號` | `stock_industry.stock_id` |
 | （上一步取得） | `stock_industry.industry_id` |
 
@@ -214,21 +217,21 @@ Response `200`：
 
 ---
 
-- [ ] 一次呼叫**恰好**對外發出 2 次請求（`STOCK_DAY_ALL` 一次、`t187ap03_L` 一次），不逐檔查詢
-- [ ] 匯入後 `industry` 有多列，`industry_name` 為中文產業別名稱（例如「半導體業」「光電業」），非亂碼、非數字代碼
-- [ ] 匯入後 `stock_industry` 有多列，且 `2330` 的關聯指向「半導體業」（以 `HEX(industry_name)` 確認為正確 UTF-8）
-- [ ] 回應含 `industrySourceStatus`（`OK`）、`industryCount`、`industryLinkedStockCount`、`uncategorizedStockCount` 四個欄位
-- [ ] `uncategorizedStockCount` 等於 `totalActiveCount − industryLinkedStockCount`
-- [ ] 連續執行兩次，第二次的 `industryCount` 與 `stock_industry` 列數與第一次相同（產業別匯入為冪等）
-- [ ] **整組取代生效**：先人工為 `2330` 多插一筆指向其他產業的關聯，再匯入一次，該筆多餘關聯消失，只留下來源給的那一筆
-- [ ] **未涵蓋的股票關聯不動**：先人工建立一檔不存在於來源 2 的股票（例如以 `POST /api/stocks` 新增）及其產業別關聯，匯入後該關聯仍完整存在
-- [ ] `industry` 中既有名稱的 `industry_id` 在重複匯入後**不變**（以匯入前後的 `industry_id` 比對驗證）
-- [ ] 產業別來源連線失敗時，API 仍回 `200`，`industrySourceStatus` 為 `UNAVAILABLE`，`stock` 的清單更新照常生效，且 `industry`／`stock_industry` 的列數與內容完全不變
-- [ ] 產業別來源回傳空陣列時，API 回 `200`、`industrySourceStatus` 為 `EMPTY`，且 `stock_industry` 內容完全不變
-- [ ] 產業別來源回應無法解析時，API 回 `200`、`industrySourceStatus` 為 `MALFORMED`，且 `stock_industry` 內容完全不變
-- [ ] 來源 1 失敗（空陣列／連線失敗）時，`stock`、`industry`、`stock_industry` **三張表**的列數與內容皆完全不變
-- [ ] 產業別來源中的非普通股代號（`0050`、`2881A`、`910322` 等）不會在 `stock_industry` 產生任何列
-- [ ] 匯入後 `stock_daily_price` 與 `stock_daily_indicator` 的列數仍完全不變（本 API 仍不寫行情）
+- [x] 一次呼叫**恰好**對外發出 2 次請求（`STOCK_DAY_ALL` 一次、`t187ap03_L` 一次），不逐檔查詢
+- [x] 匯入後 `industry` 有多列，`industry_name` 為中文產業別名稱（例如「半導體業」「光電業」），非亂碼、非數字代碼
+- [x] 匯入後 `stock_industry` 有多列，且 `2330` 的關聯指向「半導體業」（以 `HEX(industry_name)` 確認為正確 UTF-8）
+- [x] 回應含 `industrySourceStatus`（`OK`）、`industryCount`、`industryLinkedStockCount`、`uncategorizedStockCount` 四個欄位
+- [x] `uncategorizedStockCount` 等於 `totalActiveCount − industryLinkedStockCount`
+- [x] 連續執行兩次，第二次的 `industryCount` 與 `stock_industry` 列數與第一次相同（產業別匯入為冪等）
+- [x] **整組取代生效**：先人工為 `2330` 多插一筆指向其他產業的關聯，再匯入一次，該筆多餘關聯消失，只留下來源給的那一筆
+- [x] **未涵蓋的股票關聯不動**：先人工建立一檔不存在於來源 2 的股票（例如以 `POST /api/stocks` 新增）及其產業別關聯，匯入後該關聯仍完整存在
+- [x] `industry` 中既有名稱的 `industry_id` 在重複匯入後**不變**（以匯入前後的 `industry_id` 比對驗證）
+- [x] 產業別來源連線失敗時，API 仍回 `200`，`industrySourceStatus` 為 `UNAVAILABLE`，`stock` 的清單更新照常生效，且 `industry`／`stock_industry` 的列數與內容完全不變
+- [x] 產業別來源回傳空陣列時，API 回 `200`、`industrySourceStatus` 為 `EMPTY`，且 `stock_industry` 內容完全不變
+- [x] 產業別來源回應無法解析時，API 回 `200`、`industrySourceStatus` 為 `MALFORMED`，且 `stock_industry` 內容完全不變
+- [x] 來源 1 失敗（空陣列／連線失敗）時，`stock`、`industry`、`stock_industry` **三張表**的列數與內容皆完全不變
+- [x] 產業別來源中的非普通股代號（`0050`、`2881A`、`910322` 等）不會在 `stock_industry` 產生任何列
+- [x] 匯入後 `stock_daily_price` 與 `stock_daily_indicator` 的列數仍完全不變（本 API 仍不寫行情）
 
 ---
 ## Execution Result
@@ -262,3 +265,37 @@ Response `200`：
     - `502 UPSTREAM_UNAVAILABLE`: pointed the same property at a closed port (connection refused); got `{"code":"UPSTREAM_UNAVAILABLE"}` / `502`, `stock` row count unchanged.
     - `502 UPSTREAM_MALFORMED`: exercised only in the automated test (stub returns a JSON object instead of an array) — not re-verified against the live app in this session, since it requires the same kind of stub already used for the other two live checks; the integration test result is the evidence for this one.
   - All test artifacts (`9871`/`9872`/`9873` stock rows) were cleaned up by the test's `@AfterEach`; confirmed absent afterward. The backend process and local stub servers used for manual verification were stopped before finishing; port 8080 confirmed free.
+
+### Increment 2 — 2026-09-02
+
+Implements the remaining 15 unchecked Acceptance Criteria: the same endpoint now also fetches TWSE's official 產業別 (source 2, `t187ap03_L`) and UPSERTs `industry`/`stock_industry` in the same transaction as the `stock` UPSERT, with the asymmetric failure handling the spec calls for (source 1 failure → `502`, no writes at all; source 2 failure → still `200`, `industry`/`stock_industry` untouched, reported via `industrySourceStatus`).
+
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/domain/{Industry,StockIndustry}.java` — new, one row of `industry` / `stock_industry`
+  - `develop/backend/src/main/java/com/stock/dto/IndustryLinkCandidate.java` — new: a parsed, filtered (stockId, industryName) pair from source 2, before it's resolved to an `industry_id`
+  - `develop/backend/src/main/java/com/stock/dto/UniverseImportResponse.java` — added `industrySourceStatus`/`industryCount`/`industryLinkedStockCount`/`uncategorizedStockCount` fields and the `INDUSTRY_STATUS_*` constants, extended the constructor
+  - `develop/backend/src/main/java/com/stock/service/external/dto/TwseCompanyProfileRow.java` — new: raw row shape of `t187ap03_L` (`公司代號`/`產業別` only; ~30 other columns ignored)
+  - `develop/backend/src/main/java/com/stock/service/external/TwseIndustryCodeCatalog.java` — new: static TWSE industry-classification-code → Chinese-name lookup table (see "Notes" below for *why* this exists — it bridges a real discrepancy between the spec's assumption and the live source's actual shape)
+  - `develop/backend/src/main/java/com/stock/service/external/TwseClient.java` — added `fetchCompanyProfileRaw()`, same connectivity-vs-malformed exception split as `fetchDailyAllRaw()`; new constructor param for the source-2 URL
+  - `develop/backend/src/main/resources/application.yml` + `develop/backend/src/test/resources/application.yml` — added `app.external.twse-industry-url: https://openapi.twse.com.tw/v1/opendata/t187ap03_L`
+  - `develop/backend/src/main/java/com/stock/mapper/IndustryMapper.java` + `develop/backend/src/main/resources/mapper/IndustryMapper.xml` — new: `upsertByName` (the `LAST_INSERT_ID(industry_id)` trick from `specs/dba/industry.md`), `count()`
+  - `develop/backend/src/main/java/com/stock/mapper/StockIndustryMapper.java` + `develop/backend/src/main/resources/mapper/StockIndustryMapper.xml` — new: `deleteByStockIds`/`insertBatch` (both empty-safe via a default-method guard, matching `StockMapper`'s existing pattern), `countLinkedActiveStocks()`
+  - `develop/backend/src/main/java/com/stock/service/PriceIngestionService.java` — `applyUniverseImport` now also takes the parsed industry candidates and, inside the same `@Transactional` method (after the `stock` UPSERT loop), upserts `industry` by name and whole-set-replaces `stock_industry` for exactly the stocks source 2 covered *and* that exist in `stock`; no-op when the candidate list is empty
+  - `develop/backend/src/main/java/com/stock/service/StockUniverseImportService.java` — fetches and parses source 2 (`fetchIndustryCandidates`) before the write transaction, catching all 3 source-2 failure modes into an `industrySourceStatus` rather than throwing; `resolveIndustryName` translates a numeric code via the catalog or trusts a non-numeric value as-is; assembles the 4 new response fields from post-commit mapper reads (`industryMapper.count()`, `stockIndustryMapper.countLinkedActiveStocks()`, `uncategorizedStockCount` computed by subtraction so the AC's arithmetic identity holds by construction)
+  - `develop/backend/src/test/java/com/stock/StockUniverseImportIntegrationTest.java` — rewritten: all pre-existing tests updated to also mock source 2 (now always called on the success path); 11 new tests added for this increment's 15 ACs (AC 217/231 covered implicitly by the updated existing tests' `mockServer.verify()` and unchanged price/indicator-count assertions)
+
+- Notes:
+  - **Spec-vs-reality discrepancy found and resolved**: the spec's `### 資料源` section describes source 2's `產業別` field as already being a Chinese name string ("來源沒有提供穩定代碼，名稱是唯一可用的識別依據"). The *live* `t187ap03_L` endpoint was fetched and inspected during implementation and actually returns a two-digit **numeric classification code** in that field (e.g. `"24"` for `2330`/台積電, confirmed against the real response) — the field label is Chinese, its value is not. Since the acceptance criteria are explicit and testable ("`industry_name` 為中文產業別名稱... 非亂碼、非數字代碼", "`2330` 的關聯指向「半導體業」"), and the spec's own reasoning for a name-keyed dictionary (stable classification, needs to survive a rename) is unaffected by which literal string arrives, `TwseIndustryCodeCatalog` was added to translate TWSE's standard, publicly documented classification codes to their Chinese names, with a safety fallback: if the field ever *does* arrive as a non-numeric string (matching the spec's original assumption), it's trusted as-is rather than looked up. This was verified against the real endpoint, not assumed — see the live verification below.
+  - `design-patterns` skill: not invoked for this increment. The industry-linking logic is a single algorithm with no second implementation/variant (same reasoning as increment 1's note) — a lookup table (`TwseIndustryCodeCatalog`) and a whole-set-replace UPSERT batch, neither of which is an extension point calling for Strategy/Factory/etc.
+  - `code-quality` skill reviewed: added `log.warn` calls in `StockUniverseImportService.fetchIndustryCandidates()` for all 3 source-2 failure modes (UNAVAILABLE/MALFORMED/EMPTY) — without them, a real external-dependency degradation would be invisible in logs (unlike source-1 failures, which surface through `GlobalExceptionHandler`'s existing `log.warn`, source-2 failures never throw, so nothing would have logged them). No other issues found: the transaction boundary, null-safety of the `industryIdByName` lookup (structurally always populated before use), and the empty-candidate short-circuit were all checked and are correct as implemented.
+  - Verified against the **real** TWSE endpoints and the **real** dev database (not mocked), in addition to the automated integration tests (18/18 passing in `StockUniverseImportIntegrationTest`, `152/152` for the full suite, `mvn -f develop/backend/pom.xml test`):
+    - Fetched the live `t187ap03_L` response directly (Python) and confirmed its `產業別` field is the numeric code described above, for `2330`→`"24"`, `2454`(聯發科)→`"24"`, `2317`(鴻海)→`"31"`, `1101`(台泥)→`"01"` — all consistent with `TwseIndustryCodeCatalog`'s mapping.
+    - Ran the real endpoint end-to-end via a live `spring-boot:run` instance: `POST /api/stocks/universe/import` → `{"fetchedCount":1377,"eligibleCount":1085,"skippedCount":292,"insertedCount":1,"updatedCount":1084,"totalActiveCount":1374,"industrySourceStatus":"OK","industryCount":35,"industryLinkedStockCount":1085,"uncategorizedStockCount":289}` (`uncategorizedStockCount == totalActiveCount − industryLinkedStockCount` ✓, `1374 − 1085 = 289` ✓).
+    - `industry` table after the run: 35 rows (31 real TWSE classification names from this run + 4 rows already left by the automated tests: `半導體業`/`光電業`, which overlap with real names and are shared, plus 2 test-only dictionary rows kept per `specs/dba/industry.md`'s "本表不做刪除"), all Chinese, none numeric — spot-checked several by eye (水泥工業/食品工業/半導體業/電子零組件業/...).
+    - `stock_industry` for `2330`: `industry_name = '半導體業'`, `HEX(industry_name) = 'E58D8AE5B08EE9AB94E6A5AD'` — byte-for-byte the same hex as `specs/dba/industry.md`'s own verified value for this string. `stock_industry` total: 1085 rows, matching `industryLinkedStockCount`.
+    - Confirmed `0050`/`2881A`/`910322` (ETF/special-share/TDR) have zero `stock_industry` rows despite appearing in the real `t187ap03_L` response.
+    - **Idempotency at full scale**: ran the import a second time immediately after — `insertedCount:0`, `updatedCount:1085` (equals the first run's `eligibleCount`), `industryCount:35` unchanged, `industryLinkedStockCount:1085` unchanged; `stock_industry` row count confirmed still exactly 1085 (not 2170) via `SELECT COUNT(*) FROM stock_industry` — proves whole-set-replace at production scale, not just in the synthetic-id test fixtures. Also confirmed no `stock_id` has more than one row (`GROUP BY stock_id HAVING COUNT(*) > 1` → empty).
+    - `stock` row count after both live runs: 1374, 100% `market = 'TSE'` (`SELECT COUNT(*) FROM stock WHERE market != 'TSE'` → `0`).
+    - What was verified **only** by the automated test suite, not re-run live in this session (each is exercised by a dedicated `MockRestServiceServer`-based test, same rigor increment 1 used for `UPSTREAM_MALFORMED`): 產業別來源三種失敗模式individually forcing `UNAVAILABLE`/`EMPTY`/`MALFORMED` while confirming `stock` still updates and `industry`/`stock_industry` stay byte-for-byte unchanged; the "整組取代" stray-link-removed scenario; the "未涵蓋股票關聯不動" scenario; `industry_id` stability across a re-import of the same name in isolation from the full-scale run above (the full-scale run's own idempotency check above already demonstrates this at real-data scale, since `半導體業`'s `industry_id` necessarily stayed `1` for the `stock_industry` row count to stay flat).
+  - All test artifacts (stock ids `9871`–`9886`) were cleaned up by the test's `@AfterEach` (`stock_industry` rows cascade-delete via `fk_si_stock ON DELETE CASCADE` when the parent `stock` row is deleted); confirmed absent afterward via direct query. The 4 `industry` rows the tests created (`半導體業`/`光電業`/`整合測試產業-未涵蓋保留`/`整合測試產業-舊分類`) were deliberately **not** deleted — `specs/dba/industry.md` explicitly forbids deleting from this dictionary table ("本表不做刪除"), and the two real-classification names are shared with, and superseded by, the live import's own real data. The 1085 `stock_industry` rows and 35 `industry` rows left by the live verification runs are the correct, intended production state (this is exactly what the feature exists to populate) and were left in place rather than rolled back. The backend process was stopped (`taskkill /F /T` on the JVM PID, since the `mvn` wrapper process alone didn't terminate its child) and port 8080 confirmed free (no `LISTENING` socket) before finishing.

@@ -27,6 +27,15 @@ const CATALOG = {
         { code: 'LOOSE', name: '寬鬆', description: '左右各 2 根，高過即計' },
       ],
     },
+    {
+      code: 'RISING_SUPPORT',
+      name: '上漲支撐',
+      presets: [
+        { code: 'STRICT', name: '嚴格', description: '收盤突破前 20 日收盤高點且單日漲幅 ≥ 5%，其後 2 日不跌破起漲收盤' },
+        { code: 'STANDARD', name: '標準', description: '收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤' },
+        { code: 'LOOSE', name: '寬鬆', description: '收盤突破前 5 日收盤高點且單日漲幅 ≥ 2%，其後 2 日不跌破起漲收盤' },
+      ],
+    },
   ],
 }
 
@@ -96,6 +105,54 @@ function higherLowsScanResponse() {
         insufficientData: [],
         pendingConfirm: [],
       },
+    ],
+  }
+}
+
+function risingSupportScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'RISING_SUPPORT',
+        preset: 'STANDARD',
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '2454',
+            stockName: '聯發科',
+            signalDate: '2026-08-26',
+            detail: {
+              supportClose: 1200.0,
+              riseClose: 1296.0,
+              risePercent: 8.0,
+              priorHighClose: 1236.0,
+              confirmCloses: [
+                { tradeDate: '2026-08-27', close: 1272.0 },
+                { tradeDate: '2026-08-28', close: 1248.0 },
+              ],
+            },
+          },
+        ],
+        insufficientData: ['6669'],
+        pendingConfirm: ['3008'],
+      },
+    ],
+  }
+}
+
+// All three strategies, one hit each, exercising the "選滿三個策略掃描" acceptance criterion.
+function allThreeStrategiesResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      { ...boxScanResponse().results[0] },
+      { ...higherLowsScanResponse().results[0] },
+      { ...risingSupportScanResponse().results[0] },
     ],
   }
 }
@@ -230,7 +287,18 @@ describe('StrategyTab', () => {
     stocksTotal = 34
     universeImportResponder = () => ({
       status: 200,
-      body: { fetchedCount: 1377, eligibleCount: 1085, skippedCount: 292, insertedCount: 1, updatedCount: 1050, totalActiveCount: 1051 },
+      body: {
+        fetchedCount: 1377,
+        eligibleCount: 1085,
+        skippedCount: 292,
+        insertedCount: 1,
+        updatedCount: 1050,
+        totalActiveCount: 1051,
+        industrySourceStatus: 'OK',
+        industryCount: 35,
+        industryLinkedStockCount: 1085,
+        uncategorizedStockCount: 289,
+      },
     })
 
     fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
@@ -897,10 +965,25 @@ describe('StrategyTab', () => {
 
     resolveImport({
       status: 200,
-      body: { fetchedCount: 1377, eligibleCount: 1085, skippedCount: 292, insertedCount: 3, updatedCount: 1082, totalActiveCount: 1085 },
+      body: {
+        fetchedCount: 1377,
+        eligibleCount: 1085,
+        skippedCount: 292,
+        insertedCount: 3,
+        updatedCount: 1082,
+        totalActiveCount: 1085,
+        industrySourceStatus: 'OK',
+        industryCount: 35,
+        industryLinkedStockCount: 1085,
+        uncategorizedStockCount: 289,
+      },
     })
 
-    await waitFor(() => expect(screen.getByText('股票清單已更新：共 1085 檔（新增 3、更新 1082）')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(
+        screen.getByText('股票清單已更新：共 1085 檔（新增 3、更新 1082）・產業別 35 類，未分類 289 檔'),
+      ).toBeInTheDocument(),
+    )
     expect(screen.getByText('股票清單：共 1085 檔')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled()
 
@@ -1004,5 +1087,198 @@ describe('StrategyTab', () => {
     // the sync (unrelated to the import) is still running afterwards
     expect(screen.getByRole('button', { name: '同步中…' })).toBeDisabled()
     vi.useRealTimers()
+  })
+
+  it('shows 產業別 P 類，未分類 Q 檔 in the completion summary when industrySourceStatus is OK, with no warning text', async () => {
+    universeImportResponder = () => ({
+      status: 200,
+      body: {
+        fetchedCount: 1377,
+        eligibleCount: 1085,
+        skippedCount: 292,
+        insertedCount: 1,
+        updatedCount: 1084,
+        totalActiveCount: 1374,
+        industrySourceStatus: 'OK',
+        industryCount: 35,
+        industryLinkedStockCount: 1085,
+        uncategorizedStockCount: 289,
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '更新股票清單' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    await waitFor(() =>
+      expect(
+        screen.getByText('股票清單已更新：共 1374 檔（新增 1、更新 1084）・產業別 35 類，未分類 289 檔'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('產業別未更新（來源暫時無法取得），股票清單已更新')).not.toBeInTheDocument()
+  })
+
+  it('appends a warning that 產業別 was not updated when industrySourceStatus is not OK, without treating the call as an error', async () => {
+    universeImportResponder = () => ({
+      status: 200,
+      body: {
+        fetchedCount: 1377,
+        eligibleCount: 1085,
+        skippedCount: 292,
+        insertedCount: 0,
+        updatedCount: 1085,
+        totalActiveCount: 1374,
+        industrySourceStatus: 'UNAVAILABLE',
+        industryCount: 35,
+        industryLinkedStockCount: 1085,
+        uncategorizedStockCount: 289,
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByRole('button', { name: '更新股票清單' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
+    // still the normal, non-error summary — the stock-list half genuinely succeeded
+    await waitFor(() =>
+      expect(
+        screen.getByText('股票清單已更新：共 1374 檔（新增 0、更新 1085）・產業別 35 類，未分類 289 檔'),
+      ).toBeInTheDocument(),
+    )
+    const warning = screen.getByText('產業別未更新（來源暫時無法取得），股票清單已更新')
+    expect(warning).toBeInTheDocument()
+    expect(warning.className).toContain('st-industry-warning')
+    expect(screen.getByRole('button', { name: '更新股票清單' })).not.toBeDisabled()
+    expect(screen.queryByText(/交易所尚未發布今日清單|無法取得交易所股票清單/)).not.toBeInTheDocument()
+  })
+
+  // ---------- 上漲支撐 RISING_SUPPORT ----------
+
+  it('shows a third 上漲支撐 strategy card with name and preset descriptions sourced from GET /api/strategies', async () => {
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    // STANDARD is the default preset — its description shows immediately once checked.
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    expect(
+      screen.getByText('收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the 上漲支撐 result block titled 上漲支撐（標準）— 命中 N 檔 with all seven columns and correct values', async () => {
+    scanResponder = () => risingSupportScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('上漲支撐（標準）— 命中 1 檔')).toBeInTheDocument())
+    const block = screen.getByText('上漲支撐（標準）— 命中 1 檔').closest('.st-result-block') as HTMLElement
+
+    // seven headers, in order
+    const headers = within(block).getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual(['代號 / 名稱', '訊號日', '上漲收盤', '單日漲幅', '支撐價', '前段收盤高點', '確認兩日收盤'])
+
+    const row = within(block).getByText('2454 聯發科').closest('tr') as HTMLElement
+    const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
+    expect(cells).toEqual([
+      '2454 聯發科',
+      '2026-08-26',
+      '1296.00', // 上漲收盤 detail.riseClose
+      '8.00%', // 單日漲幅 detail.risePercent
+      '1200.00', // 支撐價 detail.supportClose — must not be dropped
+      '1236.00', // 前段收盤高點 detail.priorHighClose — must not be dropped
+      '08-27 1272.00→08-28 1248.00', // 確認兩日收盤 detail.confirmCloses
+    ])
+  })
+
+  it('renders 單日漲幅 with the up-color class (#E04B45 per Visual Style)', async () => {
+    scanResponder = () => risingSupportScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('8.00%')).toBeInTheDocument())
+    expect(screen.getByText('8.00%').className).toContain('sl-up')
+  })
+
+  it('navigates to /stocks/{stockId}/daily when clicking a 上漲支撐 result row', async () => {
+    scanResponder = () => risingSupportScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('2454 聯發科')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('2454 聯發科').closest('tr')!)
+    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
+  })
+
+  it('shows the 上漲支撐-specific pendingConfirm wording, distinct from 箱型突破\'s', async () => {
+    scanResponder = () => risingSupportScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('另有 1 檔已上漲，但後兩日的確認尚未完成')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('另有 1 檔已突破，但確認日尚未到')).not.toBeInTheDocument()
+  })
+
+  it('shows the shared insufficientData summary wording for 上漲支撐', async () => {
+    scanResponder = () => risingSupportScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument(),
+    )
+  })
+
+  it('includes 上漲支撐 hits in the union table as 上漲支撐 {signalDate}, excluding its pendingConfirm/insufficientData stocks', async () => {
+    scanResponder = () => ({
+      startDate: '2026-06-01',
+      endDate: '2026-08-30',
+      scannedStocks: 6,
+      results: [
+        { ...boxScanResponse().results[0] },
+        { ...risingSupportScanResponse().results[0] },
+      ],
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    // 2 distinct hit stocks: 2330 (箱型突破) and 2454 (上漲支撐)
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 2 檔')).toBeInTheDocument())
+    const unionBlock = screen.getByText('命中彙總 — 共 2 檔').closest('.st-union-block') as HTMLElement
+    const row = within(unionBlock).getByText('2454 聯發科').closest('tr') as HTMLElement
+    expect(within(row).getByText('上漲支撐')).toBeInTheDocument()
+    expect(within(row).getByText('2026-08-26')).toBeInTheDocument()
+
+    // pendingConfirm (3008) and insufficientData (6669) never appear in the union table
+    expect(within(unionBlock).queryByText(/3008/)).not.toBeInTheDocument()
+    expect(within(unionBlock).queryByText(/6669/)).not.toBeInTheDocument()
+  })
+
+  it('shows three result blocks in selection order when all three strategies are checked and scanned', async () => {
+    scanResponder = () => allThreeStrategiesResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(3))
+    const titles = screen.getAllByText(/命中 1 檔/).map((el) => el.textContent)
+    expect(titles[0]).toContain('箱型突破')
+    expect(titles[1]).toContain('底底高')
+    expect(titles[2]).toContain('上漲支撐')
   })
 })

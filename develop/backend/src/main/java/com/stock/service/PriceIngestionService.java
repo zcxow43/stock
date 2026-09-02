@@ -1,10 +1,15 @@
 package com.stock.service;
 
+import com.stock.domain.Industry;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
+import com.stock.domain.StockIndustry;
 import com.stock.dto.DailySyncResponse;
+import com.stock.dto.IndustryLinkCandidate;
 import com.stock.dto.UniverseUpsertCounts;
+import com.stock.mapper.IndustryMapper;
 import com.stock.mapper.StockDailyPriceMapper;
+import com.stock.mapper.StockIndustryMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import com.stock.service.external.dto.NormalizedPriceRow;
@@ -16,7 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 /**
@@ -33,12 +41,17 @@ public class PriceIngestionService {
     private final StockMapper stockMapper;
     private final StockDailyPriceMapper priceMapper;
     private final StockSyncProgressMapper progressMapper;
+    private final IndustryMapper industryMapper;
+    private final StockIndustryMapper stockIndustryMapper;
 
     public PriceIngestionService(StockMapper stockMapper, StockDailyPriceMapper priceMapper,
-                                  StockSyncProgressMapper progressMapper) {
+                                  StockSyncProgressMapper progressMapper, IndustryMapper industryMapper,
+                                  StockIndustryMapper stockIndustryMapper) {
         this.stockMapper = stockMapper;
         this.priceMapper = priceMapper;
         this.progressMapper = progressMapper;
+        this.industryMapper = industryMapper;
+        this.stockIndustryMapper = stockIndustryMapper;
     }
 
     /**
@@ -101,7 +114,8 @@ public class PriceIngestionService {
      * pre-computed existing-id set can.
      */
     @Transactional
-    public UniverseUpsertCounts applyUniverseImport(List<Stock> eligible) {
+    public UniverseUpsertCounts applyUniverseImport(List<Stock> eligible,
+                                                      List<IndustryLinkCandidate> industryCandidates) {
         List<String> ids = new ArrayList<>(eligible.size());
         for (Stock stock : eligible) {
             ids.add(stock.getStockId());
@@ -118,7 +132,60 @@ public class PriceIngestionService {
                 inserted++;
             }
         }
+
+        // Runs after the stock UPSERT above, still inside this same transaction (spec: 產業別的
+        // 寫入語意 — "在 stock UPSERT 之後、同一個交易邊界內進行").
+        applyIndustryLinks(industryCandidates);
+
         return new UniverseUpsertCounts(inserted, updated);
+    }
+
+    /**
+     * Upserts `industry` by name, then whole-set-replaces `stock_industry` for exactly the stocks
+     * this run's industry source covers (and that exist in `stock`). A no-op when
+     * industryCandidates is empty — either the industry source failed/was empty this run, or its
+     * response yielded no usable candidates; either way `industry`/`stock_industry` are left
+     * completely untouched (spec: 服務流程 step 9's "產業別清單為空時，第 2、3 步整段跳過").
+     */
+    private void applyIndustryLinks(List<IndustryLinkCandidate> industryCandidates) {
+        if (industryCandidates.isEmpty()) {
+            return;
+        }
+
+        Set<String> distinctNames = new LinkedHashSet<>();
+        for (IndustryLinkCandidate candidate : industryCandidates) {
+            distinctNames.add(candidate.getIndustryName());
+        }
+        Map<String, Integer> industryIdByName = new HashMap<>();
+        for (String name : distinctNames) {
+            Industry industry = new Industry(name);
+            industryMapper.upsertByName(industry);
+            industryIdByName.put(name, industry.getIndustryId());
+        }
+
+        List<String> candidateStockIds = new ArrayList<>(industryCandidates.size());
+        for (IndustryLinkCandidate candidate : industryCandidates) {
+            candidateStockIds.add(candidate.getStockId());
+        }
+        // "存在於 stock 中" — resolved against this transaction's current state, so stocks the
+        // UPSERT above just inserted are already visible here.
+        Set<String> targetStockIds = new HashSet<>(stockMapper.findExistingStockIds(candidateStockIds));
+        if (targetStockIds.isEmpty()) {
+            return;
+        }
+
+        // "先刪除其在 stock_industry 的既有關聯，再寫入本次取得的關聯" — strictly limited to
+        // targetStockIds; a stock this run's source did not cover is never touched.
+        stockIndustryMapper.deleteByStockIds(new ArrayList<>(targetStockIds));
+
+        List<StockIndustry> links = new ArrayList<>();
+        for (IndustryLinkCandidate candidate : industryCandidates) {
+            if (!targetStockIds.contains(candidate.getStockId())) {
+                continue;
+            }
+            links.add(new StockIndustry(candidate.getStockId(), industryIdByName.get(candidate.getIndustryName())));
+        }
+        stockIndustryMapper.insertBatch(links);
     }
 
     private StockDailyPrice toDomain(NormalizedPriceRow row, String source) {

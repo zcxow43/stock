@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
 requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐）對股票掃描並列出命中標的，每個策略可選三種靈敏度，掃描區間預設近一個月且可自由指定"
 depends_on: [stock-price-ingestion, stock-catalog]
@@ -287,20 +287,20 @@ Response `200`：
 
 ---
 
-- [ ] `GET /api/strategies` 回傳三個策略，新增的 `RISING_SUPPORT` 名稱為「上漲支撐」，三段靈敏度說明文字與本 spec 的參數表一致
-- [ ] 上漲支撐 `STANDARD`：以構造資料驗證命中——前 10 日收盤最高 1236、D-1 收盤 1200、D 收盤 1296（漲幅 8%）、D+1 收盤 1272、D+2 收盤 1248，回應的 `supportClose`／`riseClose`／`risePercent`／`priorHighClose`／`confirmCloses` 與手算相符
-- [ ] 支撐線為 D-1 收盤：D+1 或 D+2 任一日收盤 ≤ D-1 收盤即不命中（以恰好等於 D-1 收盤的構造資料驗證不命中）
-- [ ] 突破近期區間條件生效：D 漲幅達門檻但收盤未高於前 `lookback` 日全部收盤時不命中（以連漲趨勢中的一根大漲驗證）
-- [ ] 漲幅門檻生效：漲幅 2.5% 的同一組資料在 `STANDARD`（3%）下不命中，在 `LOOSE`（2%）下命中
-- [ ] `lookback` 隨靈敏度改變：同一組資料在 `LOOSE`（前 5 日）下命中，在 `STRICT`（前 20 日）下因未突破更長區間的收盤高點而不命中
-- [ ] 確認長度固定為 2 日且不隨靈敏度改變：三段靈敏度都要求 D+1 與 D+2 皆守住
-- [ ] D+1 或 D+2 尚無資料時該檔列於 `pendingConfirm`，不出現在 `items`、不計入 `matchedCount`
-- [ ] 確認資料可取自 `endDate` 之後：D 為 `endDate` 當日且 D+1／D+2 已存在於資料庫時，該檔正常命中而非落入 `pendingConfirm`
-- [ ] 上漲支撐前置資料不足（`startDate` 前不足 `lookback` 個交易日）的股票列於 `insufficientData`
-- [ ] 上漲支撐不驗證量能：僅成交量不同、價格完全相同的兩組資料判定結果一致
-- [ ] 三個策略可於同一次 `POST /api/strategies/scan` 一併送入，`results` 依送入順序回傳三筆
-- [ ] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日 D+2
-- [ ] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+- [x] `GET /api/strategies` 回傳三個策略，新增的 `RISING_SUPPORT` 名稱為「上漲支撐」，三段靈敏度說明文字與本 spec 的參數表一致
+- [x] 上漲支撐 `STANDARD`：以構造資料驗證命中——前 10 日收盤最高 1236、D-1 收盤 1200、D 收盤 1296（漲幅 8%）、D+1 收盤 1272、D+2 收盤 1248，回應的 `supportClose`／`riseClose`／`risePercent`／`priorHighClose`／`confirmCloses` 與手算相符
+- [x] 支撐線為 D-1 收盤：D+1 或 D+2 任一日收盤 ≤ D-1 收盤即不命中（以恰好等於 D-1 收盤的構造資料驗證不命中）
+- [x] 突破近期區間條件生效：D 漲幅達門檻但收盤未高於前 `lookback` 日全部收盤時不命中（以連漲趨勢中的一根大漲驗證）
+- [x] 漲幅門檻生效：漲幅 2.5% 的同一組資料在 `STANDARD`（3%）下不命中，在 `LOOSE`（2%）下命中
+- [x] `lookback` 隨靈敏度改變：同一組資料在 `LOOSE`（前 5 日）下命中，在 `STRICT`（前 20 日）下因未突破更長區間的收盤高點而不命中
+- [x] 確認長度固定為 2 日且不隨靈敏度改變：三段靈敏度都要求 D+1 與 D+2 皆守住
+- [x] D+1 或 D+2 尚無資料時該檔列於 `pendingConfirm`，不出現在 `items`、不計入 `matchedCount`
+- [x] 確認資料可取自 `endDate` 之後：D 為 `endDate` 當日且 D+1／D+2 已存在於資料庫時，該檔正常命中而非落入 `pendingConfirm`
+- [x] 上漲支撐前置資料不足（`startDate` 前不足 `lookback` 個交易日）的股票列於 `insufficientData`
+- [x] 上漲支撐不驗證量能：僅成交量不同、價格完全相同的兩組資料判定結果一致
+- [x] 三個策略可於同一次 `POST /api/strategies/scan` 一併送入，`results` 依送入順序回傳三筆
+- [x] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日 D+2
+- [x] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
 
 ---
 ## Execution Result
@@ -340,4 +340,36 @@ Response `200`：
   - Adjacency (box breakout's confirm-day check, the 5-day volume average, and swing-low neighbor checks) is always done by list position, never by calendar-date arithmetic, so a suspension gap is skipped rather than interpolated — verified by a fixture with a deliberate 1-day calendar gap between the breakout day and its confirming day.
   - `insufficientData` is computed once per stock from the count of bars strictly before `startDate` (bounded by each detector's own required lookback), independent from and prior to any per-day pattern evaluation, keeping it strictly separate from "scanned but no match."
   - Full suite: `mvn -f develop/backend/pom.xml test` → 120 tests, 0 failures, 0 errors (98 pre-existing + 22 new). Live DB verified unchanged after the run: `stock`=34 (all `is_active=1`), `stock_daily_price`=5372, `stock_daily_indicator`=5372, `stock_sync_progress`=68.
+  - Nothing deliberately left unfixed.
+
+### Increment 2 — 2026-09-02
+
+Implements the remaining 14 unchecked Acceptance Criteria: a third pattern, `RISING_SUPPORT` (上漲支撐), added as a third `PatternDetector` implementation alongside the existing two, with no structural change to the scan pipeline other than optionally fetching a small confirmation window *after* `endDate`.
+
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/pattern/RisingSupportDetector.java` (new) — the third `PatternDetector`. For each trading day D in range: D's close must exceed the highest close of the `lookback` trading days strictly before D; the rise from D-1's close must meet `risePercent`; D-1's close is the support line; D+1 and D+2 (fixed at 2 trading days, never varying by preset) must both close strictly above it. No volume check.
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetector.java` — added a `default int requiredConfirmTradingDaysAfterEndDate(String presetCode)` method (default `0`, overridden only by `RisingSupportDetector` to return the fixed confirm length) so the scan pipeline knows to fetch confirmation bars after `endDate`; existing implementations (`BoxBreakoutDetector`, `HigherLowsDetector`) needed no changes
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetectionOutcome.java` — javadoc updated to note RISING_SUPPORT also produces `pendingConfirm`
+  - `develop/backend/src/main/java/com/stock/service/StrategyScanService.java` — `loadSeries` now also computes `maxConfirmAfter` across the selected strategies and, only when non-zero, issues one additional batched window-function query for the nearest trading days strictly after `endDate` (appended to each stock's series so index-adjacency still holds); query count stays at 2 for scans that don't include `RISING_SUPPORT`, unchanged from increment 1
+  - `develop/backend/src/main/java/com/stock/mapper/StockDailyPriceMapper.java` + `develop/backend/src/main/resources/mapper/StockDailyPriceMapper.xml` — added `findRecentAfterDateByStockIds`, the mirror-image of the existing `findRecentBeforeDateByStockIds` (`ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date ASC)`, batched across all target stock ids)
+  - `develop/backend/src/main/java/com/stock/dto/RisingSupportDetailDto.java` (new) — `supportClose`/`riseClose`/`risePercent`/`priorHighClose`/`confirmCloses`
+  - `develop/backend/src/main/java/com/stock/dto/ConfirmCloseDto.java` (new) — one `{tradeDate, close}` entry of `confirmCloses`
+  - `develop/backend/src/main/java/com/stock/dto/StrategyDto.java`, `develop/backend/src/main/java/com/stock/dto/StrategyHitDto.java` — javadoc updated for the third strategy/detail type
+  - `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java` — added 14 tests for RISING_SUPPORT (catalogue wording, hand-calculated hit, support-line-equality rejection, breakout-above-lookback-high condition, risePercent/lookback varying by preset, confirmation fixed at 2 days, pendingConfirm when confirm data is missing vs. available after `endDate`, insufficientData, no-volume-check, three-strategies-together ordering, signalDate-is-D-not-D+2, no advice wording); also corrected the pre-existing catalogue test's now-stale `assertEquals(2, ...)` strategy count to `3` (renamed to `catalog_containsBoxBreakoutAndHigherLowsWithThreePresetsEachMatchingSpecWording`) since the catalogue legitimately grew — its BOX_BREAKOUT/HIGHER_LOWS wording assertions were left untouched
+
+- Notes:
+  - `design-patterns` skill reviewed before starting: `RISING_SUPPORT` is a third implementation of the existing `PatternDetector` Strategy interface — no new abstraction was introduced, matching the skill's guidance to extend an established seam rather than invent a parallel one.
+  - Followed the increment-1 convention exactly: `RisingSupportDetector` owns both its STRICT/STANDARD/LOOSE parameter table *and* the literal catalogue description text per preset in one `Params` record, so `GET /api/strategies` and the scan can never drift apart. `confirmBars` is stored in `Params` too even though it is the same value (2) for every preset — the fact that it does *not* vary by sensitivity is itself part of the parameter table, not an implicit assumption.
+  - The support line is deliberately D-1's close (the rise's own launch point), never the lookback high — implemented as `bars.get(i - 1).getClosePrice()`, read fresh per D rather than reusing the lookback-window max computed for the breakout check.
+  - `D+1`/`D+2` must close *strictly* above the support line — implemented with `compareTo(supportClose) <= 0` failing the check, so an exact match does not count as holding; covered by a dedicated test constructing D+1's close exactly equal to D-1's close.
+  - Confirmation data may come from after `endDate`: the batched read fetches up to 2 trading days after `endDate` only when a selected detector declares `requiredConfirmTradingDaysAfterEndDate() > 0`, keeping the box-breakout/higher-lows-only path's query count at 2 (verified: the pre-existing AC15 query-count test, which only selects `HIGHER_LOWS`, still passes unchanged). D itself is still only ever evaluated within `[startDate, endDate]` — the detector's per-day loop `break`s the moment a bar's `tradeDate` is after `endDate`, so a post-`endDate` bar is used only to confirm an earlier D and is never itself treated as a candidate D.
+  - Every trading day in range is evaluated as a candidate D independently (matching increment 1's `BoxBreakoutDetector` design) — a stock can have several candidate D's within one scanned range, some of which might independently be `pendingConfirm` while an earlier D in the same range already completed as a real hit. Per the existing `PatternDetectionOutcome` contract (unchanged from increment 1), a real hit always wins: the final outcome only reports `pendingConfirm` when *no* D in the whole range produced a hit. This surfaced during test-writing (`risingSupport_confirmEqualToSupportClose_doesNotCount` initially failed because its own D+2 accidentally formed a second, pending-confirm candidate) and was fixed by adjusting the *test fixture*, not the detection logic, since the behavior matches the spec and increment 1's precedent.
+  - No volume field is read or compared anywhere in `RisingSupportDetector` — verified with a dedicated test running two otherwise-identical fixtures differing only in `volume` (100 vs. 999999) and asserting identical `matchedCount`.
+  - Full suite: `mvn -f develop/backend/pom.xml test` → **166 tests, 0 failures, 0 errors** (152 pre-existing + 14 new).
+  - Live-verified against the real dev DB and a real `mvn spring-boot:run` on port 8080 (stopped before finishing, confirmed via `netstat`):
+    - `GET /api/strategies` → 3 strategies, `RISING_SUPPORT` named "上漲支撐" with the exact 3 preset descriptions from the spec.
+    - `POST /api/strategies/scan` with `{"strategies":[{"code":"RISING_SUPPORT","preset":"LOOSE"},{"code":"BOX_BREAKOUT","preset":"STANDARD"},{"code":"HIGHER_LOWS","preset":"LOOSE"}],"stockIds":["2330"],"startDate":"2026-06-01","endDate":"2026-08-30"}` against real TSMC price history returned a genuine `RISING_SUPPORT` hit (`signalDate: 2026-07-31`, `supportClose: 2205.00`, `riseClose: 2425.00`, `risePercent: 9.98`, `priorHighClose: 2350.00`, `confirmCloses` on 2026-08-03/08-04) computed entirely from real data, plus results for all three strategies in submitted order.
+    - Error paths re-verified live: unknown preset (`RISING_SUPPORT:BOGUS`) → `400 UNKNOWN_STRATEGY`; duplicate `RISING_SUPPORT` selections → `400 DUPLICATE_STRATEGY`.
+    - DB left unchanged: no `SS`-prefixed test rows remain (`SELECT COUNT(*) FROM stock WHERE stock_id LIKE 'SS%'` → `0`); `stock`/`stock_daily_price` row counts grew only from the app's own pre-existing startup master-sync job (unrelated to this change, confirmed present before this session per the git log), not from anything this increment wrote.
   - Nothing deliberately left unfixed.

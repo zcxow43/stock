@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.IndustryMapper">
+
+    <insert id="upsertByName" parameterType="com.stock.domain.Industry"
+            useGeneratedKeys="true" keyProperty="industryId">
+        INSERT INTO industry (industry_name)
+        VALUES (#{industryName})
+        ON DUPLICATE KEY UPDATE industry_id = LAST_INSERT_ID(industry_id)
+    </insert>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM industry
+    </select>
+
+</mapper>

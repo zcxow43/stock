@@ -69,6 +69,12 @@
   border-bottom-color: #3e8fd8;
 }
 
+.sl-tab-placeholder {
+  padding: 40px 0;
+  color: #6b7c90;
+  font-size: 14px;
+}
+
 /* ---------- toast (success / not-found) messages ---------- */
 
 .sl-toast {
@@ -433,6 +439,12 @@
 
 .st-universe-summary-text {
   color: #e6edf5;
+}
+
+.st-industry-warning {
+  display: block;
+  margin-top: 4px;
+  color: #d9a441;
 }
 
 .st-sync-progress {

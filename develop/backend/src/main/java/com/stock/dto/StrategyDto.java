@@ -2,7 +2,7 @@ package com.stock.dto;
 
 import java.util.List;
 
-/** One pattern (BOX_BREAKOUT / HIGHER_LOWS) in the GET /api/strategies catalogue. */
+/** One pattern (BOX_BREAKOUT / HIGHER_LOWS / RISING_SUPPORT) in the GET /api/strategies catalogue. */
 public class StrategyDto {
 
     private String code;

@@ -1,6 +1,7 @@
 package com.stock.service.external;
 
 import com.stock.service.external.dto.NormalizedPriceRow;
+import com.stock.service.external.dto.TwseCompanyProfileRow;
 import com.stock.service.external.dto.TwseDailyRow;
 import com.stock.service.external.dto.TwseSnapshotResult;
 import com.stock.service.external.dto.TwseSnapshotRow;
@@ -27,11 +28,14 @@ public class TwseClient {
 
     private final RestTemplate restTemplate;
     private final String dailyAllUrl;
+    private final String industryProfileUrl;
 
     public TwseClient(RestTemplate externalApiRestTemplate,
-                       @Value("${app.external.twse-daily-all-url}") String dailyAllUrl) {
+                       @Value("${app.external.twse-daily-all-url}") String dailyAllUrl,
+                       @Value("${app.external.twse-industry-url}") String industryProfileUrl) {
         this.restTemplate = externalApiRestTemplate;
         this.dailyAllUrl = dailyAllUrl;
+        this.industryProfileUrl = industryProfileUrl;
     }
 
     /** Fetches the current whole-market snapshot. Rows without a trade (no price data) are skipped. */
@@ -84,6 +88,31 @@ public class TwseClient {
         } catch (RestClientException e) {
             throw new ExternalApiMalformedException(
                     "TWSE daily snapshot response could not be parsed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Fetches the whole-market listed-company industry profile ({@code t187ap03_L}) in a single
+     * request — the second, independent source used by the universe import (source 2 in
+     * specs/backend/stock-universe-import.md 資料源). Returns the raw rows exactly as sent, with no
+     * filtering. Does not throw on an empty/absent array; that is left to the caller, which treats
+     * an empty response as one of three non-fatal industry-source outcomes (spec: 產業別來源失敗的
+     * 處理), unlike source 1 where an empty response fails the whole request.
+     *
+     * <p>Distinguishes connectivity failures from unparsable responses exactly as
+     * {@link #fetchDailyAllRaw()} does: {@link ExternalApiException} for connection
+     * failure/timeout/non-2xx, {@link ExternalApiMalformedException} for a response that could not
+     * be parsed into the expected shape.
+     */
+    public TwseCompanyProfileRow[] fetchCompanyProfileRaw() {
+        try {
+            return restTemplate.getForObject(industryProfileUrl, TwseCompanyProfileRow[].class);
+        } catch (ResourceAccessException | RestClientResponseException e) {
+            throw new ExternalApiException(
+                    "Failed to fetch TWSE listed-company industry profile: " + e.getMessage(), e);
+        } catch (RestClientException e) {
+            throw new ExternalApiMalformedException(
+                    "TWSE listed-company industry profile response could not be parsed: " + e.getMessage(), e);
         }
     }
 

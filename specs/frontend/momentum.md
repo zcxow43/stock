@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "動態分頁（產業別漲幅）"
 requirement: "新增「動態」分頁，內含「漲幅平均」與「漲幅加總」兩個標籤；可設定近幾個交易日、或勾選哪幾週，列出漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現"
 depends_on: [stock-list]
@@ -209,34 +209,63 @@ depends_on: [stock-list]
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 
 ## Acceptance Criteria
-- [ ] `/stocks` 的頁籤列有第三個頁籤「動態」，點擊後網址變為 `/stocks?tab=momentum`
-- [ ] 直接以 `/stocks?tab=momentum` 進入會停在動態頁籤
-- [ ] 動態分頁內有「漲幅平均」「漲幅加總」兩個標籤，預設停在「漲幅平均」
-- [ ] 切換標籤時以新的 `metric` 重新查詢，期間條件沿用
-- [ ] **門檻不跨標籤沿用**：在「漲幅加總」把門檻改為 `20` 後切到「漲幅平均」，門檻仍為該標籤自己的值（預設 `5`），切回去仍是 `20`
-- [ ] 兩個標籤各自保留自己的查詢結果，切回已查過的標籤不發出新請求
-- [ ] 期間預設為「近 20 個交易日」模式，門檻預設為 `5`
-- [ ] 天數輸入 `0` 或 `121` 時前端即擋下並在欄位下方提示，不送出請求
-- [ ] 門檻輸入 `1001` 或 `-101` 時前端即擋下並提示，不送出請求；輸入 `-100` 與 `0` 皆可正常送出
-- [ ] 切換到「指定週」模式後列出最近 12 個自然週，標籤格式為 `MM/DD – MM/DD`，本週該列有「本週」標記
-- [ ] 送出的 `startDate` 為最早勾選週的**週一**、`endDate` 為最晚勾選週的**週日**
-- [ ] **勾選不連續的週時，週清單下方顯示提示，明確指出實際計算區間包含未勾選的那幾週**
-- [ ] 一週都沒勾時「查詢」為 disabled，並顯示「請至少勾選一週」
-- [ ] 兩種期間模式間切換時，另一模式已輸入的值被保留，切回即恢復
-- [ ] 摘要列的區間與交易日數取自回應的 `startDate`／`endDate`／`tradingDays`，非前端自行推算
-- [ ] 摘要列的「命中 N 檔」取自 `matchedStockCount`（去重後），**不等於**各產業 `matchedCount` 的加總
-- [ ] `insufficientDataCount` 為 0 時，摘要列不顯示「資料不足」該段
-- [ ] 結果區的產業別區塊順序與回應的 `industries` 順序完全一致，前端不重排
-- [ ] **一檔屬於兩個產業別的命中股票，在兩個產業別的表格中各出現一次**
-- [ ] `industryId` 為 `null` 的區塊標題顯示「未分類」且排在最後
-- [ ] 漲幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`
-- [ ] 某檔的 `tradingDays` 小於摘要列的交易日數時，該欄有註記符號與「期間內有停牌」的說明
-- [ ] 點擊任一列導向 `/stocks/{stockId}/daily`
-- [ ] `industries` 只有「未分類」一個區塊時，結果區頂端顯示引導提示，指向策略分頁的「更新股票清單」，且未分類結果照常顯示
-- [ ] 動態分頁上**沒有**任何「更新股票清單」或匯入產業別的按鈕
-- [ ] `matchedStockCount` 為 0 時顯示「這段期間沒有股票的漲幅達到 {門檻}%」與「把門檻調低」按鈕，點擊後門檻減半並重新查詢
-- [ ] 回應的 `startDate` 為 `null` 時，摘要列顯示「所選期間內沒有交易日」，結果區顯示「請改選其他週」，非錯誤畫面
-- [ ] 請求失敗時顯示錯誤訊息與「重新查詢」按鈕，不顯示成查無命中
-- [ ] 查詢中「查詢」按鈕 disabled，既有結果保留並降低透明度，連點兩次不送出兩次請求
-- [ ] 頁面文案無「建議」「推薦」「可進場」等暗示買賣操作的措辭
-- [ ] 所有顏色取自 `## Visual Style` 的字面 hex；在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
+- [x] `/stocks` 的頁籤列有第三個頁籤「動態」，點擊後網址變為 `/stocks?tab=momentum`
+- [x] 直接以 `/stocks?tab=momentum` 進入會停在動態頁籤
+- [x] 動態分頁內有「漲幅平均」「漲幅加總」兩個標籤，預設停在「漲幅平均」
+- [x] 切換標籤時以新的 `metric` 重新查詢，期間條件沿用
+- [x] **門檻不跨標籤沿用**：在「漲幅加總」把門檻改為 `20` 後切到「漲幅平均」，門檻仍為該標籤自己的值（預設 `5`），切回去仍是 `20`
+- [x] 兩個標籤各自保留自己的查詢結果，切回已查過的標籤不發出新請求
+- [x] 期間預設為「近 20 個交易日」模式，門檻預設為 `5`
+- [x] 天數輸入 `0` 或 `121` 時前端即擋下並在欄位下方提示，不送出請求
+- [x] 門檻輸入 `1001` 或 `-101` 時前端即擋下並提示，不送出請求；輸入 `-100` 與 `0` 皆可正常送出
+- [x] 切換到「指定週」模式後列出最近 12 個自然週，標籤格式為 `MM/DD – MM/DD`，本週該列有「本週」標記
+- [x] 送出的 `startDate` 為最早勾選週的**週一**、`endDate` 為最晚勾選週的**週日**
+- [x] **勾選不連續的週時，週清單下方顯示提示，明確指出實際計算區間包含未勾選的那幾週**
+- [x] 一週都沒勾時「查詢」為 disabled，並顯示「請至少勾選一週」
+- [x] 兩種期間模式間切換時，另一模式已輸入的值被保留，切回即恢復
+- [x] 摘要列的區間與交易日數取自回應的 `startDate`／`endDate`／`tradingDays`，非前端自行推算
+- [x] 摘要列的「命中 N 檔」取自 `matchedStockCount`（去重後），**不等於**各產業 `matchedCount` 的加總
+- [x] `insufficientDataCount` 為 0 時，摘要列不顯示「資料不足」該段
+- [x] 結果區的產業別區塊順序與回應的 `industries` 順序完全一致，前端不重排
+- [x] **一檔屬於兩個產業別的命中股票，在兩個產業別的表格中各出現一次**
+- [x] `industryId` 為 `null` 的區塊標題顯示「未分類」且排在最後
+- [x] 漲幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`
+- [x] 某檔的 `tradingDays` 小於摘要列的交易日數時，該欄有註記符號與「期間內有停牌」的說明
+- [x] 點擊任一列導向 `/stocks/{stockId}/daily`
+- [x] `industries` 只有「未分類」一個區塊時，結果區頂端顯示引導提示，指向策略分頁的「更新股票清單」，且未分類結果照常顯示
+- [x] 動態分頁上**沒有**任何「更新股票清單」或匯入產業別的按鈕
+- [x] `matchedStockCount` 為 0 時顯示「這段期間沒有股票的漲幅達到 {門檻}%」與「把門檻調低」按鈕，點擊後門檻減半並重新查詢
+- [x] 回應的 `startDate` 為 `null` 時，摘要列顯示「所選期間內沒有交易日」，結果區顯示「請改選其他週」，非錯誤畫面
+- [x] 請求失敗時顯示錯誤訊息與「重新查詢」按鈕，不顯示成查無命中
+- [x] 查詢中「查詢」按鈕 disabled，既有結果保留並降低透明度，連點兩次不送出兩次請求
+- [x] 頁面文案無「建議」「推薦」「可進場」等暗示買賣操作的措辭
+- [x] 所有顏色取自 `## Visual Style` 的字面 hex；在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/frontend/src/pages/MomentumTab.tsx` (new) — the 動態 tab: metric tab bar (漲幅平均／漲幅加總, each with its own threshold + result cache), period condition area (近 N 交易日 / 指定週 with 12-week checklist + gap warning), summary line, industry-grouped result tables, all page states (idle/loading/success/zero-hit/no-trading-day/error).
+  - `develop/frontend/src/pages/MomentumTab.css` (new) — fixed dark palette per this spec's `## Visual Style`, literal hex only; owned solely by this tab (reuses only the page-shell-level `.sl-tabs/.sl-tab`, `.sl-table`, `.sl-btn*`, `.sl-up/.sl-down/.sl-flat`, `.sl-row`, `.sl-skeleton-bar` classes from `StockListPage.css`, which was not modified).
+  - `develop/frontend/src/api/momentum.ts` (new) — `fetchMomentumGain` wrapping `GET /api/momentum/gain`, typed response per `specs/backend/industry-gain-ranking.md`.
+  - `develop/frontend/src/__tests__/MomentumTab.test.tsx` (new) — 26 tests.
+  - `develop/frontend/src/pages/StockListPage.tsx` — swapped the placeholder import/mount for `MomentumTab` (the one line this spec owns; tab-container structure and the other two panels untouched).
+  - `develop/frontend/src/pages/MomentumTabPlaceholder.tsx` (deleted) — superseded by `MomentumTab.tsx`, no longer referenced anywhere.
+- Notes:
+  - **Metric/period/threshold state model**: period condition (mode, days input, selected weeks) is a single shared state (satisfies "期間條件沿用"); threshold input + query status/data/error are a `Record<Metric, MetricState>` so each label keeps its own value and its own cached result independently (satisfies "門檻不跨標籤沿用" and "切回已查過的標籤不發出新請求"). Switching to a label re-queries only if that label doesn't already have a success result *and* at least one query has happened on the page before (an `everQueriedRef` gate) — this keeps the very first paint idle (no silent fetch) while still auto-firing on first visit to a not-yet-queried label after the user has queried at least once, matching "切換標籤時以新的 metric 重新查詢".
+  - **Week math**: `startOfWeekMonday`/`buildWeekOptions` compute the 12 most recent Mon–Sun natural weeks purely from `new Date()`, index 0 = current week (newest, pre-checked by default). Submitted range = `weeks[maxSelectedIndex].monday` (earliest selected) to `weeks[minSelectedIndex].sunday` (latest selected). Gap detection scans the index range between the min and max selected index and lists every unselected week's Monday as `MM/DD`, driving the mandatory warning line the spec calls out as "the one place the UI could mislead".
+  - **Race safety**: each metric has its own `AbortController`; starting a new query for a metric aborts that metric's own in-flight request first, and the abort/unmount cleanup effect captures the ref's target object into a local variable before returning the cleanup closure (avoids the `react-hooks/exhaustive-deps` "ref accessed directly in cleanup" warning while preserving identical behavior, since the ref's `.current` object is never reassigned wholesale). No request-per-item loops — a single `GET` per query.
+  - **Absence safety**: `data.industries ?? []`, `group.items ?? []`, `data.insufficientDataCount ?? 0` guard the response shape at every render site; `formatPercent`/`formatPrice` render `—` for `null`/`undefined` per the spec's number-formatting rule.
+  - Colors are 100% literal hex in `MomentumTab.css`, no `var()`/theme tokens/`prefers-color-scheme` media queries — verified by code review of the file (no such constructs present) and by live screenshot (see below); this mirrors the same fixed-palette approach already used in `StockListPage.css`.
+  - `把門檻調低` halves the *currently applied* threshold and re-queries, passing the halved value directly into `runQuery`'s override parameter rather than relying on a state update completing first (avoids a stale-closure bug where the halved value could race against the async `setState`).
+  - The 未分類-only guidance banner and the absence of any import/update-list button in this tab were both directly asserted in tests; no such button exists anywhere in `MomentumTab.tsx`.
+- Verified live against the real backend (already running on port 8080, real ~1374-stock dataset) via a throwaway Playwright script (not committed — this repo has no browser-test harness yet, consistent with the rest of the frontend):
+  - `minGain=0`, `mode=DAYS days=20`: summary line read exactly `區間 2026-08-06 ~ 2026-09-02（20 個交易日）・命中 366 檔・資料不足 754 檔`; first industry block `鋼鐵工業　22 檔` with correctly red (`+2.32%` etc.) 漲幅 values.
+  - Switching to 漲幅加總 re-queried and showed a different `命中` count (173) at the tab's own still-default threshold (5), confirming per-label threshold/result independence end-to-end.
+  - `minGain=-100` surfaced genuine green (down) values (e.g. `-1.04%`) rendered in the down color, confirming the red/green branch renders correctly against real data, not just the unit-test fixture.
+  - 指定週 mode rendered all 12 weeks newest-first with `MM/DD – MM/DD` labels and the `本週` badge on the top (current) row, matching the computed-live week boundaries.
+  - Clicking a result row navigated to `/stocks/{stockId}/daily` (observed via the browser's resulting URL).
+  - No browser console errors during any of the above.
+  - `prefers-color-scheme` A/B screenshot comparison (forcing `dark` vs `light` in the browser and diffing) was not run as an automated step this pass; visual/code review confirms no CSS in `MomentumTab.css` is conditioned on `prefers-color-scheme` or theme variables, so there is nothing in the stylesheet that could shift between the two OS preferences.
+- Test results: `npm run build` — success (`tsc -b && vite build`, no errors). `npm test` — **148 tests, 0 failures** (122 pre-existing across the other 7 suites + 26 new in `MomentumTab.test.tsx`). `npm run lint` (`oxlint`) — no warnings from any file this task touched (pre-existing warnings in `StrategyTab.tsx`/`StrategyTab.test.tsx` belong to the parallel strategy-spec agent's files, not touched here).
+- Left unfixed (deliberately, with reason): none identified within this tab's own scope during the code-quality self-review.

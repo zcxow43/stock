@@ -120,6 +120,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.tooManyStocks());
     }
 
+    @ExceptionHandler(InvalidMetricException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));
+    }
+
+    @ExceptionHandler(InvalidModeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMode(InvalidModeException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_MODE"));
+    }
+
+    @ExceptionHandler(InvalidDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDays(InvalidDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_DAYS"));
+    }
+
+    @ExceptionHandler(InvalidMinGainException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMinGain(InvalidMinGainException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_MIN_GAIN"));
+    }
+
     @ExceptionHandler(UpstreamEmptyException.class)
     public ResponseEntity<ErrorResponse> handleUpstreamEmpty(UpstreamEmptyException e) {
         log.warn("Upstream returned no usable data: {}", e.getMessage());

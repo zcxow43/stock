@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "產業別漲幅排行 API"
 requirement: "動態分頁 — 以「漲幅平均」與「漲幅加總」兩種度量，列出指定期間內（近 N 交易日，或勾選的數個自然週）漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現"
 depends_on: [stock-price-ingestion, stock-catalog, stock-universe-import]
@@ -58,6 +58,9 @@ depends_on: [stock-price-ingestion, stock-catalog, stock-universe-import]
 
 - 母體固定為 `stock` 中 `is_active = 1` 的全部股票，**沒有指定股票的參數**。本 API 回答的是「這段期間哪些股票漲得多」，先挑好股票再問這個問題沒有意義。
 - 期間前置資料不足（`startDate` 之前沒有任何一根收盤價）或期間內完全無行情的股票，計入 `insufficientDataCount`，**不列入結果、也不視為未達門檻**。兩者對使用者是不同的訊息：「算過了沒到門檻」與「資料不夠所以沒算」。
+- **收盤價為 `0` 的列同樣視為資料不足**，該檔計入 `insufficientDataCount`。單日漲跌幅的分母是前一個交易日的收盤價，為 `0` 時這個比值沒有定義——不是「漲了無限多」，而是「這一天沒有可用的價格」。
+  - 這不是假設性的邊界情況：實際資料中有 876 列、涵蓋 49 檔標的（ETN、權證類）的 `close_price` 為 `0.00`。母體是全市場在市股票，因此**任何一次全市場查詢都必然掃到它們**。若不處理，整支 API 會在遇到第一檔時以除以零中止，使用者看到的是整個查詢失敗，而不是少了幾檔。
+  - 一律以「該檔資料不足」處理，不要改用前一個非零收盤價去頂替——那等於憑空發明一個沒發生過的價格，而且會讓那一天的漲跌幅算成 0%，看起來像是平盤而不是無資料。
 
 ### 產業別分組
 
@@ -172,25 +175,60 @@ Response `200`：
 **行情與關聯的讀取必須批次進行**，不得逐檔查詢：母體是全市場 1300 檔以上，逐檔即 1300 次往返。整支 API 對資料庫的查詢次數為固定值（區間交易日、母體、區間行情、前置行情、產業別關聯），**不隨股票檔數增加**。此為 `specs/backend/strategy-scan.md` 已建立的作法，沿用不另立一套。
 
 ## Acceptance Criteria
-- [ ] `GET /api/momentum/gain?metric=SUM&mode=DAYS&days=20` 回傳 `200`，`startDate`／`endDate` 為資料庫中最新 20 個相異交易日的兩端，且 `tradingDays` 為 20
-- [ ] `DAYS` 模式的區間錨點為資料庫中最新的 `trade_date`，不是今日：在最新交易日早於今日的資料上驗證 `endDate` 等於該最新交易日
-- [ ] `SUM` 的值等於期間內每日漲跌幅的相加：以構造資料（前置日收盤 100，區間內連續 4 個交易日收盤 100→105→105→110.25）驗證 `gain` 為 `0.00 + 5.00 + 0.00 + 5.00 = 10.00`
-- [ ] `AVERAGE` 對同一組構造資料為 `10.00 ÷ 4 = 2.50`，且 `SUM` 與 `AVERAGE` 兩種度量下的股票排名順序一致
-- [ ] 期間第一天的漲跌幅以 `startDate` 之前最近的交易日收盤價計算，該前置日不計入 `tradingDays`、不出現在 `firstTradeDate`
-- [ ] `startDate` 之前無任何收盤價的股票計入 `insufficientDataCount`，且不出現在任何產業別的 `items` 中
-- [ ] 相鄰交易日規則：區間內含停牌造成的日曆間隔時，結果與無間隔的同價格序列完全一致（不插補）
-- [ ] `minGain` 省略時預設為 `5`；`minGain=-100` 時全部有足夠資料的股票皆列出
-- [ ] 門檻比較以四捨五入至 2 位小數後的值進行：`gain` 原始值為 `4.996` 的股票在 `minGain=5` 時**會**被列出，且回傳的 `gain` 為 `5.00`
-- [ ] **一檔股票屬於兩個產業別且達標時，在兩個產業別的 `items` 中各出現一次**
-- [ ] 承上，`matchedStockCount` 為去重後的檔數，**小於**各產業 `matchedCount` 的加總
-- [ ] 命中但在 `stock_industry` 中無任何關聯的股票，出現在 `industryId` 為 `null`、`industryName` 為「未分類」的區塊中
-- [ ] 「未分類」區塊排在所有產業別之後，即使其 `matchedCount` 最大
-- [ ] 產業別區塊依 `matchedCount` 由多到少排序，同數依 `industryName` 升冪
-- [ ] `items` 依 `gain` 由大到小排序，同值依 `stockId` 升冪
-- [ ] 沒有命中股票的產業別不出現在 `industries` 中
-- [ ] `mode=WEEKS` 且 `startDate`／`endDate` 之間無任何交易日時，回傳 `200`、`industries` 為空陣列、`startDate`／`endDate` 為 `null`，而非錯誤
-- [ ] `mode=DAYS` 時帶入的 `startDate`／`endDate` 被忽略而不報錯；`mode=WEEKS` 時帶入的 `days` 同樣被忽略
-- [ ] `items[].tradingDays` 反映**該檔**實際有行情的日數：對區間內停牌數日的股票，其值小於回應層級的 `tradingDays`
-- [ ] 五種錯誤各自回傳指定的 `code`：`INVALID_METRIC`／`INVALID_MODE`／`INVALID_DAYS`／`INVALID_DATE_RANGE`／`INVALID_MIN_GAIN`
-- [ ] 全市場查詢時對資料庫的查詢次數為固定值，3 檔與 300 檔母體的查詢次數相同（不隨股票數線性增加）
-- [ ] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+- [x] `GET /api/momentum/gain?metric=SUM&mode=DAYS&days=20` 回傳 `200`，`startDate`／`endDate` 為資料庫中最新 20 個相異交易日的兩端，且 `tradingDays` 為 20
+- [x] `DAYS` 模式的區間錨點為資料庫中最新的 `trade_date`，不是今日：在最新交易日早於今日的資料上驗證 `endDate` 等於該最新交易日
+- [x] `SUM` 的值等於期間內每日漲跌幅的相加：以構造資料（前置日收盤 100，區間內連續 4 個交易日收盤 100→105→105→110.25）驗證 `gain` 為 `0.00 + 5.00 + 0.00 + 5.00 = 10.00`
+- [x] `AVERAGE` 對同一組構造資料為 `10.00 ÷ 4 = 2.50`，且 `SUM` 與 `AVERAGE` 兩種度量下的股票排名順序一致
+- [x] 期間第一天的漲跌幅以 `startDate` 之前最近的交易日收盤價計算，該前置日不計入 `tradingDays`、不出現在 `firstTradeDate`
+- [x] `startDate` 之前無任何收盤價的股票計入 `insufficientDataCount`，且不出現在任何產業別的 `items` 中
+- [x] 相鄰交易日規則：區間內含停牌造成的日曆間隔時，結果與無間隔的同價格序列完全一致（不插補）
+- [x] `minGain` 省略時預設為 `5`；`minGain=-100` 時全部有足夠資料的股票皆列出
+- [x] 門檻比較以四捨五入至 2 位小數後的值進行：`gain` 原始值為 `4.996` 的股票在 `minGain=5` 時**會**被列出，且回傳的 `gain` 為 `5.00`
+- [x] **一檔股票屬於兩個產業別且達標時，在兩個產業別的 `items` 中各出現一次**
+- [x] 承上，`matchedStockCount` 為去重後的檔數，**小於**各產業 `matchedCount` 的加總
+- [x] 命中但在 `stock_industry` 中無任何關聯的股票，出現在 `industryId` 為 `null`、`industryName` 為「未分類」的區塊中
+- [x] 「未分類」區塊排在所有產業別之後，即使其 `matchedCount` 最大
+- [x] 產業別區塊依 `matchedCount` 由多到少排序，同數依 `industryName` 升冪
+- [x] `items` 依 `gain` 由大到小排序，同值依 `stockId` 升冪
+- [x] 沒有命中股票的產業別不出現在 `industries` 中
+- [x] `mode=WEEKS` 且 `startDate`／`endDate` 之間無任何交易日時，回傳 `200`、`industries` 為空陣列、`startDate`／`endDate` 為 `null`，而非錯誤
+- [x] `mode=DAYS` 時帶入的 `startDate`／`endDate` 被忽略而不報錯；`mode=WEEKS` 時帶入的 `days` 同樣被忽略
+- [x] `items[].tradingDays` 反映**該檔**實際有行情的日數：對區間內停牌數日的股票，其值小於回應層級的 `tradingDays`
+- [x] 五種錯誤各自回傳指定的 `code`：`INVALID_METRIC`／`INVALID_MODE`／`INVALID_DAYS`／`INVALID_DATE_RANGE`／`INVALID_MIN_GAIN`
+- [x] 全市場查詢時對資料庫的查詢次數為固定值，3 檔與 300 檔母體的查詢次數相同（不隨股票數線性增加）
+- [x] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+
+---
+## Execution Result
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/controller/MomentumController.java` (new) — `GET /api/momentum/gain`
+  - `develop/backend/src/main/java/com/stock/service/MomentumGainService.java` (new) — validation, range resolution, batched reads, per-stock gain math, industry grouping/sorting
+  - `develop/backend/src/main/java/com/stock/dto/MomentumGainResponseDto.java`, `IndustryGainGroupDto.java`, `StockGainItemDto.java` (new)
+  - `develop/backend/src/main/java/com/stock/domain/StockIndustryLink.java` (new) — `stock_industry` JOIN `industry` row
+  - `develop/backend/src/main/java/com/stock/exception/InvalidMetricException.java`, `InvalidModeException.java`, `InvalidDaysException.java`, `InvalidMinGainException.java` (new); reused existing `InvalidDateRangeException` for `INVALID_DATE_RANGE`
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` — added handlers for the 4 new exceptions
+  - `develop/backend/src/main/java/com/stock/mapper/StockDailyPriceMapper.java` + `develop/backend/src/main/resources/mapper/StockDailyPriceMapper.xml` — added `findRecentDistinctTradeDates` (DAYS-mode anchor) and `countDistinctTradeDatesInRange` (WEEKS-mode market-wide `tradingDays`)
+  - `develop/backend/src/main/java/com/stock/mapper/StockIndustryMapper.java` + `develop/backend/src/main/resources/mapper/StockIndustryMapper.xml` — added `findLinksByStockIds` (batched `stock_industry` JOIN `industry`)
+  - `develop/backend/src/test/java/com/stock/MomentumGainIntegrationTest.java` (new) — 22 tests, one per AC
+- Notes:
+  - Followed the `StrategyScanService` batched-query convention exactly: population, window, and lookback reads are each a single query regardless of population size; the industry-link query only fires when at least one stock matched (its mapper method no-ops on an empty id list). Query count is fixed per mode (4 for WEEKS / DAYS with no hits, 5 with hits) — verified both by the `QueryCountInterceptor`-based test (3 vs 300 stocks) and by re-reading the SQL plan in the mapper XML.
+  - **Found and fixed a real bug during live verification, not just automated tests**: production `stock_daily_price` contains rows with `close_price = 0.00` for certain ETN/warrant-type instruments (e.g. `020037`, `1312A`) on days they didn't trade. The original daily-percent-change formula divided by the previous close unconditionally, so any request touching one of these stocks threw `ArithmeticException: / by zero` and the *entire* endpoint 500'd (this is a whole-market scan, so one bad stock broke everyone). Fixed by detecting a zero close (either the lookback close or a mid-sequence bar) and folding that stock into `insufficientDataCount` instead of computing an undefined gain for it. This was invisible to the integration tests (which use synthetic non-zero prices) and only surfaced when hitting the live endpoint against real data — a good example of why the spec's live-verification step matters.
+  - `tradingDays` is deliberately market-wide (not scoped to the active population) in both modes, per the spec's literal "全市場相異交易日數": `DAYS` mode gets it for free from the anchor query (`findRecentDistinctTradeDates`); `WEEKS` mode uses a dedicated `COUNT(DISTINCT trade_date)` query so a WEEKS-mode window's trading-day count doesn't depend on which stocks happen to be active — this costs one extra query per WEEKS-mode call but keeps the count fixed and mode-symmetric.
+  - Rounding: per-day percentage changes are computed at `RoundingMode.HALF_UP`/scale 10 and summed (or summed-then-divided for `AVERAGE`) before the single final `setScale(2, HALF_UP)` — matching the spec's requirement that the threshold comparison and the displayed value are the same already-rounded number (verified live+test with the `4.996 → 5.00` boundary case).
+  - `未分類` (unclassified) block: only emitted when at least one matched stock has no `stock_industry` link, consistent with "沒有命中股票的產業別不出現在回應中" — an all-classified result correctly omits the block rather than emitting an empty one.
+
+### Verified live (real DB, `mvn spring-boot:run` on port 8080, then stopped)
+- `GET /api/momentum/gain?metric=SUM&mode=DAYS&days=10&minGain=3` against the live 1374-active-stock / 35-industry / 1085-link dataset — 200, correct grouping/sorting/未分類-last, 140 matched stocks, 963 insufficient (this run is where the zero-close-price bug above was caught and fixed).
+- `GET ...&mode=WEEKS&startDate=2026-09-01&endDate=2026-09-02&metric=AVERAGE` — 200, correct.
+- All 5 error codes (`INVALID_METRIC`, `INVALID_MODE`, `INVALID_DAYS`, `INVALID_DATE_RANGE`, `INVALID_MIN_GAIN`) reproduced live with the exact JSON bodies specified.
+- DB left exactly as found after both the live run and the automated test run: `stock` active count 1374 (unchanged), `industry` 35 rows (unchanged), `stock_industry` 1085 rows (unchanged), zero leftover `MG%` test rows.
+
+### Verified by automated test only
+- The full 22-case `MomentumGainIntegrationTest` suite (adjacency/no-interpolation, lookback-day exclusion, multi-industry membership, `matchedStockCount` dedup vs. per-industry sum, sort tie-breaks, `WEEKS`-mode zero-trading-day empty result, `DAYS`/`WEEKS` param-ignoring, per-stock `tradingDays` vs. response-level `tradingDays`, fixed query count) — these construct synthetic data (isolating the real ~1374-stock population per test, same technique as `StrategyScanIntegrationTest`'s AC3) and were not separately re-clicked through the live server one by one.
+
+### Test results
+- `mvn -f develop/backend/pom.xml test`: **188 tests, 0 failures, 0 errors, 0 skipped** (166 pre-existing + 22 new), BUILD SUCCESS.
+
+### Left unfixed (deliberately, with reason)
+- Malformed (non-numeric) `minGain` or malformed date strings fall through to Spring's default `MethodArgumentTypeMismatchException` handling rather than a custom `INVALID_MIN_GAIN`/`INVALID_DATE_RANGE` body — this is a pre-existing gap shared by every other numeric/date query param in the codebase (`StockStatisticsController`'s `startDate`/`endDate`, `MinuteBarController`'s `interval`), not something introduced here, and the spec's error table only covers missing/out-of-range values, not type-malformed ones. Left consistent with the rest of the codebase rather than fixing it ad hoc for one endpoint.

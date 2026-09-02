@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockIndustryMapper">
+
+    <delete id="deleteByStockIdsForNonEmpty">
+        DELETE FROM stock_industry
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <insert id="insertBatchForNonEmpty">
+        INSERT INTO stock_industry (stock_id, industry_id)
+        VALUES
+        <foreach collection="links" item="link" separator=",">
+            (#{link.stockId}, #{link.industryId})
+        </foreach>
+        ON DUPLICATE KEY UPDATE industry_id = industry_id
+    </insert>
+
+    <select id="countLinkedActiveStocks" resultType="int">
+        SELECT COUNT(DISTINCT si.stock_id)
+        FROM stock_industry si
+        JOIN stock s ON s.stock_id = si.stock_id
+        WHERE s.is_active = 1
+    </select>
+
+    <select id="findLinksByStockIdsForNonEmpty" resultType="com.stock.domain.StockIndustryLink">
+        SELECT si.stock_id AS stock_id, i.industry_id AS industry_id, i.industry_name AS industry_name
+        FROM stock_industry si
+        JOIN industry i ON i.industry_id = si.industry_id
+        WHERE si.stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+</mapper>

@@ -87,6 +87,82 @@ describe('StockListPage tabs', () => {
     expect(screen.getByRole('tab', { name: '總覽' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('shows three tabs in order 總覽／策略／動態', async () => {
+    renderAt('/stocks')
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((t) => t.textContent)).toEqual(['總覽', '策略', '動態'])
+  })
+
+  it('lands on 動態 when the URL already has ?tab=momentum', async () => {
+    renderAt('/stocks?tab=momentum')
+    await waitFor(() => expect(screen.getByTestId('sl-tabpanel-momentum')).toHaveStyle({ display: 'block' }))
+    expect(screen.getByRole('tab', { name: '動態' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('sl-tabpanel-overview')).toHaveStyle({ display: 'none' })
+  })
+
+  it('falls back to 總覽 for a value other than momentum/strategy instead of a blank screen', async () => {
+    renderAt('/stocks?tab=foo')
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    expect(screen.getByRole('tab', { name: '總覽' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('sl-tabpanel-momentum')).toHaveStyle({ display: 'none' })
+  })
+
+  it('clicking 動態 updates the ?tab= URL param to momentum', async () => {
+    render(
+      <MemoryRouter initialEntries={['/stocks']}>
+        <Routes>
+          <Route
+            path="/stocks"
+            element={
+              <>
+                <StockListPage />
+                <TabParamProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('tab', { name: '動態' }))
+    expect(screen.getByTestId('tab-param').textContent).toBe('momentum')
+  })
+
+  it('switches to 動態 without refetching or unmounting the overview content, and header total is unchanged', async () => {
+    renderAt('/stocks')
+    await waitFor(() => expect(overviewCalls(fetchMock)).toHaveLength(1))
+    await waitFor(() => expect(screen.getAllByText('1').length).toBeGreaterThan(0))
+
+    fireEvent.click(screen.getByRole('tab', { name: '動態' }))
+    expect(screen.getByTestId('sl-tabpanel-momentum')).toHaveStyle({ display: 'block' })
+    expect(screen.getByTestId('sl-tabpanel-overview')).toHaveStyle({ display: 'none' })
+    // header total stays the overview tab's last value while parked on 動態
+    expect(screen.getByText('股票總覽')).toBeInTheDocument()
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0)
+    // still there, just hidden — proves it wasn't unmounted/reloaded
+    expect(screen.getByText('台積電')).toBeInTheDocument()
+    expect(overviewCalls(fetchMock)).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('tab', { name: '總覽' }))
+    expect(screen.getByTestId('sl-tabpanel-overview')).toHaveStyle({ display: 'block' })
+    expect(overviewCalls(fetchMock)).toHaveLength(1)
+  })
+
+  it('round-trips through all three tabs and back to 總覽 without refetching or losing filters/page', async () => {
+    renderAt('/stocks')
+    await waitFor(() => expect(overviewCalls(fetchMock)).toHaveLength(1))
+
+    fireEvent.click(screen.getByRole('tab', { name: '策略' }))
+    fireEvent.click(screen.getByRole('tab', { name: '動態' }))
+    fireEvent.click(screen.getByRole('tab', { name: '總覽' }))
+
+    expect(screen.getByTestId('sl-tabpanel-overview')).toHaveStyle({ display: 'block' })
+    expect(screen.getByText('台積電')).toBeInTheDocument()
+    // no additional /api/stocks list requests were made by the round trip
+    expect(overviewCalls(fetchMock)).toHaveLength(1)
+  })
+
   it('switches tabs without refetching or unmounting the overview content', async () => {
     renderAt('/stocks')
     await waitFor(() => expect(overviewCalls(fetchMock)).toHaveLength(1))

@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -69,13 +70,15 @@ class StrategyScanIntegrationTest {
     // ==================== AC1: catalogue ====================
 
     @Test
-    void catalog_returnsTwoStrategiesWithThreePresetsEachMatchingSpecWording() throws Exception {
+    void catalog_containsBoxBreakoutAndHigherLowsWithThreePresetsEachMatchingSpecWording() throws Exception {
         ResponseEntity<String> response = rest.getForEntity("/api/strategies", String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        assertEquals(2, strategies.size());
+        // 3 total since increment 2 added RISING_SUPPORT — see
+        // catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording below for its wording.
+        assertEquals(3, strategies.size());
 
         JsonNode box = findByCode(strategies, "BOX_BREAKOUT");
         assertEquals("箱型突破", box.get("name").asText());
@@ -582,6 +585,391 @@ class StrategyScanIntegrationTest {
         assertEquals("INVALID_DATE_RANGE", response.getBody().getCode());
     }
 
+    // ==================== Increment 2 (RISING_SUPPORT) — AC1: catalogue now has 3 strategies ====================
+
+    @Test
+    void catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording() throws Exception {
+        ResponseEntity<String> response = rest.getForEntity("/api/strategies", String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        JsonNode root = objectMapper.readTree(response.getBody());
+        JsonNode strategies = root.get("strategies");
+        assertEquals(3, strategies.size());
+
+        JsonNode risingSupport = findByCode(strategies, "RISING_SUPPORT");
+        assertEquals("上漲支撐", risingSupport.get("name").asText());
+        assertEquals(3, risingSupport.get("presets").size());
+        assertEquals("收盤突破前 20 日收盤高點且單日漲幅 ≥ 5%，其後 2 日不跌破起漲收盤",
+                findPresetByCode(risingSupport.get("presets"), "STRICT").get("description").asText());
+        assertEquals("收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤",
+                findPresetByCode(risingSupport.get("presets"), "STANDARD").get("description").asText());
+        assertEquals("收盤突破前 5 日收盤高點且單日漲幅 ≥ 2%，其後 2 日不跌破起漲收盤",
+                findPresetByCode(risingSupport.get("presets"), "LOOSE").get("description").asText());
+    }
+
+    // ==================== AC2: STANDARD hand-calculated hit ====================
+
+    @Test
+    void risingSupport_standard_matchesHandCalculatedSupportRiseAndConfirm() throws Exception {
+        String stockId = "SS501";
+        seedStock(stockId, "上漲支撐手算測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 1, 1);
+        String[] lookbackCloses = {
+                "1100.00", "1100.00", "1100.00", "1100.00", "1100.00",
+                "1236.00", "1100.00", "1100.00", "1100.00", "1200.00"
+        };
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1296.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1272.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1248.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(stockId, item.get("stockId").asText());
+        assertEquals(d.toString(), item.get("signalDate").asText());
+        JsonNode detail = item.get("detail");
+        assertBigDecimalEquals("1200.00", detail.get("supportClose"));
+        assertBigDecimalEquals("1296.00", detail.get("riseClose"));
+        assertBigDecimalEquals("8.00", detail.get("risePercent"));
+        assertBigDecimalEquals("1236.00", detail.get("priorHighClose"));
+        JsonNode confirmCloses = detail.get("confirmCloses");
+        assertEquals(2, confirmCloses.size());
+        assertEquals(d1.toString(), confirmCloses.get(0).get("tradeDate").asText());
+        assertBigDecimalEquals("1272.00", confirmCloses.get(0).get("close"));
+        assertEquals(d2.toString(), confirmCloses.get(1).get("tradeDate").asText());
+        assertBigDecimalEquals("1248.00", confirmCloses.get(1).get("close"));
+        assertTrue(result.get("insufficientData").isEmpty());
+        assertTrue(result.get("pendingConfirm").isEmpty());
+    }
+
+    // ==================== AC3: support line is D-1 close; equal does not count ====================
+
+    @Test
+    void risingSupport_confirmEqualToSupportClose_doesNotCount() throws Exception {
+        String stockId = "SS502";
+        seedStock(stockId, "支撐相等不命中測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 2, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000); // 5% rise, breaks the flat 1000 high
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1000.00", 1000); // exactly == support close -> must not count as holding
+        LocalDate d2 = d1.plusDays(1);
+        // Kept below D's own close (1050, the recomputed lookback high as of d2) so d2 itself does not
+        // become a second RISING_SUPPORT candidate day.
+        insertCloseOnlyRow(stockId, d2, "1010.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt(),
+                "D+1 closing exactly at the support line must not count as holding it");
+        assertTrue(result.get("items").isEmpty());
+        assertTrue(result.get("pendingConfirm").isEmpty());
+    }
+
+    // ==================== AC4: breakout-above-lookback-high condition ====================
+
+    @Test
+    void risingSupport_riseMeetsThresholdButNotAboveLookbackHigh_doesNotMatch() throws Exception {
+        String stockId = "SS503";
+        seedStock(stockId, "未突破前高測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 3, 1);
+        String[] lookbackCloses = new String[10];
+        lookbackCloses[0] = "1300.00"; // peak within the lookback window
+        for (int i = 1; i < 10; i++) {
+            lookbackCloses[i] = "1000.00";
+        }
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        // D-1 close = 1000.00; D close = 1000*1.05 = 1050.00 (5% rise, above STANDARD's 3% floor) but
+        // still below the lookback window's own peak of 1300 -> must not count as a breakout.
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt(),
+                "close must exceed the entire prior lookback window's closes, not just rise day-over-day");
+        assertTrue(result.get("pendingConfirm").isEmpty(),
+                "must fail on the breakout check, before confirmation is even considered");
+    }
+
+    // ==================== AC5: risePercent threshold varies by preset ====================
+
+    @Test
+    void risingSupport_risePercentThreshold_standardRejectsButLooseAccepts2point5Percent() throws Exception {
+        String stockId = "SS504";
+        seedStock(stockId, "漲幅門檻測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 4, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 20), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1025.00", 1000); // 2.5% rise over support 1000
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1010.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1010.00", 1000);
+
+        ScanRequestDto standardRequest = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode standardResult = postScan(standardRequest).get("results").get(0);
+        assertEquals(0, standardResult.get("matchedCount").asInt(), "2.5% rise must fail STANDARD's 3% floor");
+
+        ScanRequestDto looseRequest = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "LOOSE"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode looseResult = postScan(looseRequest).get("results").get(0);
+        assertEquals(1, looseResult.get("matchedCount").asInt(), "2.5% rise must pass LOOSE's 2% floor");
+        assertEquals(d.toString(), looseResult.get("items").get(0).get("signalDate").asText());
+    }
+
+    // ==================== AC6: lookback length varies by preset ====================
+
+    @Test
+    void risingSupport_lookback_looseMatchesButStrictRejectsDueToLongerLookbackHigh() throws Exception {
+        String stockId = "SS505";
+        seedStock(stockId, "回看區間測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 5, 1);
+        String[] lookbackCloses = new String[20];
+        for (int i = 0; i < 20; i++) {
+            lookbackCloses[i] = "1000.00";
+        }
+        // Spike 10 trading days before D: inside STRICT's 20-day lookback, outside LOOSE's 5-day one.
+        lookbackCloses[9] = "2000.00";
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1100.00", 1000); // 10% rise over support 1000
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1150.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1150.00", 1000);
+
+        ScanRequestDto looseRequest = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "LOOSE"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode looseResult = postScan(looseRequest).get("results").get(0);
+        assertEquals(1, looseResult.get("matchedCount").asInt(), "LOOSE's 5-day lookback does not reach the earlier spike");
+        assertEquals(d.toString(), looseResult.get("items").get(0).get("signalDate").asText());
+
+        ScanRequestDto strictRequest = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STRICT"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode strictResult = postScan(strictRequest).get("results").get(0);
+        assertEquals(0, strictResult.get("matchedCount").asInt(),
+                "STRICT's 20-day lookback reaches the 2000 spike, blocking the breakout");
+        assertTrue(strictResult.get("insufficientData").isEmpty(),
+                "exactly 20 lookback bars were seeded, satisfying STRICT's requirement");
+    }
+
+    // ==================== AC7: confirmation length fixed at 2, never shrinks with sensitivity ====================
+
+    @Test
+    void risingSupport_confirmLength_fixedAtTwoRegardlessOfPreset() throws Exception {
+        String stockId = "SS506";
+        seedStock(stockId, "確認固定兩日測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 6, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 20), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1060.00", 1000); // 6% rise, clears all three presets' thresholds
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "990.00", 1000); // D+1 fails to hold the support line
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1100.00", 1000); // D+2 holds fine on its own
+
+        for (String preset : new String[]{"STRICT", "STANDARD", "LOOSE"}) {
+            ScanRequestDto request = scanRequest(
+                    Collections.singletonList(new String[]{"RISING_SUPPORT", preset}),
+                    Collections.singletonList(stockId), d, d2);
+            JsonNode result = postScan(request).get("results").get(0);
+            assertEquals(0, result.get("matchedCount").asInt(),
+                    preset + " must still require BOTH D+1 and D+2 above the support line");
+        }
+    }
+
+    // ==================== AC8: missing confirm data -> pendingConfirm ====================
+
+    @Test
+    void risingSupport_missingConfirmData_isPendingConfirmNotItem() throws Exception {
+        String stockId = "SS507";
+        seedStock(stockId, "待確認測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 7, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000); // 5% rise, breaks out; STANDARD only needs 3%
+        // deliberately no rows after d at all -> "D 落在可用行情的尾端"
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt());
+        assertTrue(result.get("items").isEmpty());
+        List<String> pendingConfirm = toStringList(result.get("pendingConfirm"));
+        assertTrue(pendingConfirm.contains(stockId));
+    }
+
+    // ==================== AC9: confirmation data may come from after endDate ====================
+
+    @Test
+    void risingSupport_confirmDataAfterEndDate_matchesNormallyNotPendingConfirm() throws Exception {
+        String stockId = "SS508";
+        seedStock(stockId, "確認取自endDate之後測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 8, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000); // stored in the DB after endDate
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000); // stored in the DB after endDate
+
+        // endDate = d itself: D+1/D+2 already exist in the DB even though they fall after endDate.
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "D+1/D+2 already exist in the DB after endDate, so this must be a normal hit, not pendingConfirm");
+        assertEquals(d.toString(), result.get("items").get(0).get("signalDate").asText());
+        assertTrue(result.get("pendingConfirm").isEmpty());
+    }
+
+    // ==================== AC10: insufficient lookback -> insufficientData ====================
+
+    @Test
+    void risingSupport_insufficientLookback_isReportedSeparatelyFromNoMatch() throws Exception {
+        String stockId = "SS509";
+        seedStock(stockId, "回看資料不足測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 9, 1);
+        // STANDARD requires 10 lookback days; only 5 are seeded.
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 5), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt());
+        assertTrue(result.get("items").isEmpty());
+        List<String> insufficientData = toStringList(result.get("insufficientData"));
+        assertTrue(insufficientData.contains(stockId));
+    }
+
+    // ==================== AC11: no volume check at all ====================
+
+    @Test
+    void risingSupport_noVolumeCheck_resultsIdenticalRegardlessOfVolume() throws Exception {
+        String lowVolStock = "SS510";
+        String highVolStock = "SS511";
+        seedStock(lowVolStock, "量能不驗證-低量", true);
+        seedStock(highVolStock, "量能不驗證-高量", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 10, 1);
+        List<LocalDate> lowLookback = seedCloseSeries(lowVolStock, lookbackStart, repeat("1000.00", 10), 100);
+        seedCloseSeries(highVolStock, lookbackStart, repeat("1000.00", 10), 999999);
+        LocalDate d = lowLookback.get(lowLookback.size() - 1).plusDays(1);
+        insertCloseOnlyRow(lowVolStock, d, "1050.00", 100);
+        insertCloseOnlyRow(highVolStock, d, "1050.00", 999999);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(lowVolStock, d1, "1060.00", 100);
+        insertCloseOnlyRow(highVolStock, d1, "1060.00", 999999);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(lowVolStock, d2, "1070.00", 100);
+        insertCloseOnlyRow(highVolStock, d2, "1070.00", 999999);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Arrays.asList(lowVolStock, highVolStock), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(2, result.get("matchedCount").asInt(), "volume must not affect the RISING_SUPPORT outcome at all");
+    }
+
+    // ==================== AC12: three strategies together, results in submitted order ====================
+
+    @Test
+    void scan_threeStrategiesTogether_resultsReturnedInSubmittedOrder() throws Exception {
+        String stockId = "SS512";
+        seedStock(stockId, "三策略合併測試", true);
+        LocalDate start = LocalDate.of(2026, 11, 1);
+        LocalDate end = LocalDate.of(2026, 11, 10);
+        // Ample flat lookback/window bars so every detector runs without hitting insufficientData.
+        seedCloseSeries(stockId, start.minusDays(60), repeat("100.00", 80), 1000);
+
+        ScanRequestDto request = scanRequest(
+                Arrays.asList(
+                        new String[]{"RISING_SUPPORT", "STANDARD"},
+                        new String[]{"BOX_BREAKOUT", "LOOSE"},
+                        new String[]{"HIGHER_LOWS", "LOOSE"}),
+                Collections.singletonList(stockId), start, end);
+        JsonNode results = postScan(request).get("results");
+        assertEquals(3, results.size());
+        assertEquals("RISING_SUPPORT", results.get(0).get("strategy").asText());
+        assertEquals("BOX_BREAKOUT", results.get(1).get("strategy").asText());
+        assertEquals("HIGHER_LOWS", results.get(2).get("strategy").asText());
+    }
+
+    // ==================== AC13: signalDate is the rise day D itself, not D+2 ====================
+
+    @Test
+    void risingSupport_signalDateIsRiseDayItselfNotConfirmationCompletionDay() throws Exception {
+        String stockId = "SS513";
+        seedStock(stockId, "訊號日期測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 12, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(d.toString(), item.get("signalDate").asText(), "signalDate must be the rise day D, not D+2");
+        assertNotEquals(d2.toString(), item.get("signalDate").asText());
+    }
+
+    // ==================== AC14: no advice/recommendation wording for RISING_SUPPORT ====================
+
+    @Test
+    void risingSupportScanResponse_containsNoAdviceWording() throws Exception {
+        String stockId = "SS514";
+        seedStock(stockId, "上漲支撐文案測試", true);
+        LocalDate lookbackStart = LocalDate.of(2027, 1, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/scan", request, String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNoAdviceWording(response.getBody());
+    }
+
     // ==================== helpers ====================
 
     private JsonNode findByCode(JsonNode array, String code) {
@@ -649,6 +1037,30 @@ class StrategyScanIntegrationTest {
                         + "turnover, transaction_count, source) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 'TEST')",
                 stockId, date, new BigDecimal(open), new BigDecimal(high), new BigDecimal(low),
                 new BigDecimal(close), volume);
+    }
+
+    /** Flat OHLC bar: open = high = low = close = the given value. Used for RISING_SUPPORT fixtures,
+     *  which only look at close prices. */
+    private void insertCloseOnlyRow(String stockId, LocalDate date, String close, long volume) {
+        insertPriceRow(stockId, date, close, close, close, close, volume);
+    }
+
+    /** One close-only bar per element of `closes`, consecutive calendar days ascending from start. */
+    private List<LocalDate> seedCloseSeries(String stockId, LocalDate start, String[] closes, long volume) {
+        List<LocalDate> dates = new ArrayList<>(closes.length);
+        LocalDate d = start;
+        for (String close : closes) {
+            insertCloseOnlyRow(stockId, d, close, volume);
+            dates.add(d);
+            d = d.plusDays(1);
+        }
+        return dates;
+    }
+
+    private String[] repeat(String value, int count) {
+        String[] result = new String[count];
+        java.util.Arrays.fill(result, value);
+        return result;
     }
 
     /** `count` consecutive calendar-day bars, each with the given open/high/low, ascending from start. */

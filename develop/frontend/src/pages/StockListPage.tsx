@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import StockOverviewTab from './StockOverviewTab'
 import StrategyTab from './StrategyTab'
+import MomentumTab from './MomentumTab'
 import './StockListPage.css'
 
-type TabKey = 'overview' | 'strategy'
+type TabKey = 'overview' | 'strategy' | 'momentum'
 
 /** Unrecognised or missing `tab` falls back to 總覽 — spec explicitly forbids a blank screen. */
 function resolveTab(raw: string | null): TabKey {
-  return raw === 'strategy' ? 'strategy' : 'overview'
+  return raw === 'strategy' || raw === 'momentum' ? raw : 'overview'
 }
 
 export default function StockListPage() {
@@ -49,15 +50,27 @@ export default function StockListPage() {
         >
           策略
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'momentum'}
+          className={`sl-tab${tab === 'momentum' ? ' sl-tab-active' : ''}`}
+          onClick={() => selectTab('momentum')}
+        >
+          動態
+        </button>
       </div>
 
-      {/* Both tabs stay mounted and are toggled with display:none so switching never
+      {/* All three tabs stay mounted and are toggled with display:none so switching never
           re-fetches, remounts, or flickers the header/tab bar above. */}
       <div data-testid="sl-tabpanel-overview" style={{ display: tab === 'overview' ? 'block' : 'none' }}>
         <StockOverviewTab onTotalChange={setTotal} />
       </div>
       <div data-testid="sl-tabpanel-strategy" style={{ display: tab === 'strategy' ? 'block' : 'none' }}>
         <StrategyTab />
+      </div>
+      <div data-testid="sl-tabpanel-momentum" style={{ display: tab === 'momentum' ? 'block' : 'none' }}>
+        <MomentumTab />
       </div>
     </div>
   )

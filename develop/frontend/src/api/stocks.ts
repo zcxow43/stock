@@ -231,6 +231,10 @@ export async function deactivateStock(stockId: string, signal?: AbortSignal): Pr
 
 // ---------- universe import — specs/backend/stock-universe-import.md, specs/frontend/strategy.md ----------
 
+/** `OK` = 產業別本次正常寫入；其餘三種代表產業別來源失敗，本次完全跳過產業別寫入，
+ * `industryCount`/`uncategorizedStockCount` 回傳的是寫入前的既有值（見 stock-universe-import.md）。 */
+export type IndustrySourceStatus = 'OK' | 'UNAVAILABLE' | 'EMPTY' | 'MALFORMED'
+
 export interface UniverseImportResponse {
   fetchedCount: number
   eligibleCount: number
@@ -238,6 +242,10 @@ export interface UniverseImportResponse {
   insertedCount: number
   updatedCount: number
   totalActiveCount: number
+  industrySourceStatus: IndustrySourceStatus
+  industryCount: number
+  industryLinkedStockCount: number
+  uncategorizedStockCount: number
 }
 
 /** POST /api/stocks/universe/import — no request body. A short synchronous action (single

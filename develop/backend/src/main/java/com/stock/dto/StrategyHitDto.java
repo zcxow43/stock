@@ -4,9 +4,9 @@ import java.time.LocalDate;
 
 /**
  * One matched stock within a strategy's result — the most recent hit for that stock inside the
- * scanned range. `detail` is either a {@link BoxBreakoutDetailDto} or a {@link HigherLowsDetailDto}
- * depending on the strategy; declared as Object here purely for serialization (this DTO is never
- * deserialized from a request).
+ * scanned range. `detail` is a {@link BoxBreakoutDetailDto}, {@link HigherLowsDetailDto}, or
+ * {@link RisingSupportDetailDto} depending on the strategy; declared as Object here purely for
+ * serialization (this DTO is never deserialized from a request).
  */
 public class StrategyHitDto {
 

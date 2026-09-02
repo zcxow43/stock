@@ -156,4 +156,36 @@
         ORDER BY stock_id, trade_date ASC
     </select>
 
+    <select id="findRecentAfterDateByStockIds" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+               volume, turnover, transaction_count, source
+        FROM (
+            SELECT stock_id, trade_date, open_price, high_price, low_price, close_price,
+                   volume, turnover, transaction_count, source,
+                   ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date ASC) AS rn
+            FROM stock_daily_price
+            WHERE stock_id IN
+            <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            AND trade_date &gt; #{afterDate}
+        ) ranked
+        WHERE rn &lt;= #{limit}
+        ORDER BY stock_id, trade_date ASC
+    </select>
+
+    <select id="findRecentDistinctTradeDates" resultType="java.time.LocalDate">
+        SELECT trade_date FROM (
+            SELECT DISTINCT trade_date FROM stock_daily_price
+            ORDER BY trade_date DESC
+            LIMIT #{limit}
+        ) recent
+        ORDER BY trade_date ASC
+    </select>
+
+    <select id="countDistinctTradeDatesInRange" resultType="int">
+        SELECT COUNT(DISTINCT trade_date) FROM stock_daily_price
+        WHERE trade_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
 </mapper>

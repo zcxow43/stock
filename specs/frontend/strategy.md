@@ -319,10 +319,10 @@ depends_on: [stock-list]
 
 ---
 
-- [ ] 「更新股票清單」的完成摘要含產業別段：「產業別 P 類，未分類 Q 檔」，P 取 `industryCount`、Q 取 `uncategorizedStockCount`
-- [ ] `industrySourceStatus` 非 `OK` 時，摘要以警示色附加「產業別未更新（來源暫時無法取得）」，且股票清單那一半的數字照常顯示、不視為錯誤
-- [ ] `industrySourceStatus` 為 `OK` 時，摘要不出現任何產業別未更新的警示文字
-- [ ] 「更新股票清單」仍是本頁唯一的產業別匯入入口，動態分頁上沒有相同功能的按鈕
+- [x] 「更新股票清單」的完成摘要含產業別段：「產業別 P 類，未分類 Q 檔」，P 取 `industryCount`、Q 取 `uncategorizedStockCount`
+- [x] `industrySourceStatus` 非 `OK` 時，摘要以警示色附加「產業別未更新（來源暫時無法取得）」，且股票清單那一半的數字照常顯示、不視為錯誤
+- [x] `industrySourceStatus` 為 `OK` 時，摘要不出現任何產業別未更新的警示文字
+- [x] 「更新股票清單」仍是本頁唯一的產業別匯入入口，動態分頁上沒有相同功能的按鈕
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -494,3 +494,99 @@ src/pages/StrategyTab.tsx:280:7: warning react(set-state-in-effect) — pre-exis
 #### Deferred / not independently verifiable here
 - None. Unlike the previous two increments, a real backend and a real dev database were reachable this session, and every one of the 21 criteria in this increment's two groups was exercised against it in addition to the automated test suite — including the two genuinely concurrent-jobs and the three `502` error-code paths (via targeted `page.route` interception of only the one endpoint under test, leaving every other call live).
 - One thing worth flagging for a future session rather than for this spec's criteria: this session's live verification incidentally discovered that the dev database already had `stock_id = 1538` with no price rows at all going into this session — pre-existing state from prior sessions' work in this shared environment, not something this session created or needs to clean up (it is exactly the kind of stock the union-table zero-hit criterion needs to exist, and it is a legitimate, harmless "never synced yet" row per `specs/backend/stock-price-ingestion.md`).
+
+### Increment 4 — 2026-09-02
+- Scope: exactly the 4 unchecked criteria added after Increment 3 — `POST /api/stocks/universe/import` now also imports the exchange's official 產業別 in the same call, and the「更新股票清單」completion summary must report it (`industryCount`/`uncategorizedStockCount`) and, when `industrySourceStatus` is not `OK`, append a non-error warning that 產業別 specifically didn't update.
+
+#### Files changed
+- `develop/frontend/src/api/stocks.ts` — added `IndustrySourceStatus` (`'OK' | 'UNAVAILABLE' | 'EMPTY' | 'MALFORMED'`) and four new required fields on `UniverseImportResponse` (`industrySourceStatus`, `industryCount`, `industryLinkedStockCount`, `uncategorizedStockCount`), matching the revised `200` contract in `specs/backend/stock-universe-import.md`. `importStockUniverse()` itself needed no change — it already returns the raw parsed body as `UniverseImportResponse`.
+- `develop/frontend/src/pages/StrategyTab.tsx` — the completion-summary JSX (previously only rendering `股票清單已更新：共 N 檔（新增 X、更新 Y）`) now appends `・產業別 P 類，未分類 Q 檔` (`P` = `industryCount`, `Q` = `uncategorizedStockCount`) unconditionally, and, only when `universeImportSummary.industrySourceStatus !== 'OK'`, renders a second `<span className="st-industry-warning">產業別未更新（來源暫時無法取得），股票清單已更新</span>` immediately after it. No new state was needed — this reads straight off the existing `universeImportSummary` object, which already held the whole response; the failure branch (`handleImportUniverseClick`'s `.catch`) was **not** touched, since a non-`OK` `industrySourceStatus` arrives inside a `200`/`.then` response, not a rejected request — it is explicitly not an error per the spec's error table (`200 但 industrySourceStatus 非 OK` → 不是錯誤).
+- `develop/frontend/src/pages/StockListPage.css` — added `.st-industry-warning { display: block; margin-top: 4px; color: #d9a441; }`, reusing the literal hex already assigned to `資料不足／待確認提示文字` in `## Visual Style` (the same value `.st-caught-up-note` and `.st-note-toggle` already use elsewhere in this file) rather than inventing a new color or rewriting an existing rule. No `prefers-color-scheme` query was added anywhere.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+  - Updated the shared `universeImportResponder` default body and the two existing tests that constructed a full `202`-import response body inline (`imports the stock universe: ...`) to include the four new fields, and updated that test's completion-text assertion to the new full string including the `・產業別 35 類，未分類 289 檔` suffix — this was a required update (not new coverage) since the type is now stricter and the rendered text changed.
+  - Added `shows 產業別 P 類，未分類 Q 檔 in the completion summary when industrySourceStatus is OK, with no warning text` — asserts the exact combined string and that the warning span is absent.
+  - Added `appends a warning that 產業別 was not updated when industrySourceStatus is not OK, without treating the call as an error` — mocks `industrySourceStatus: 'UNAVAILABLE'` inside an otherwise-`200` response, asserts the normal stock-list summary numbers still render (the stock-list half genuinely succeeded), the warning span renders with `st-industry-warning` and the exact spec wording, the button re-enables normally (not an error state), and that neither of the two `502`-style error messages (`交易所尚未發布...`/`無法取得交易所股票清單...`) appears — proving this path is not routed through the error branch at all.
+- `develop/frontend/src/pages/MomentumTabPlaceholder.tsx`, `develop/frontend/src/pages/StockListPage.tsx`, `develop/frontend/src/__tests__/StockListPage.tabs.test.tsx` — **not touched**, per file-ownership boundary with the parallel `specs/frontend/momentum.md` agent working the same session.
+
+#### Per-criterion verification
+1. 完成摘要含「產業別 P 類，未分類 Q 檔」，P 取 `industryCount`、Q 取 `uncategorizedStockCount` — **Satisfied**, tested (both the OK-path and the non-OK-path tests assert the exact combined string `股票清單已更新：共 N 檔（新增 X、更新 Y）・產業別 P 類，未分類 Q 檔`).
+2. `industrySourceStatus` 非 `OK` 時附加警示色警示文字，股票清單那一半數字照常顯示、不視為錯誤 — **Satisfied**, tested (`appends a warning that 產業別 was not updated...`): the numeric summary renders unchanged, the warning carries `.st-industry-warning` (`#d9a441`, the spec's literal 資料不足／待確認提示文字 hex), the button ends in its normal re-enabled state rather than an error state, and neither `502`-style error message appears — confirming this is not routed through `handleImportUniverseClick`'s `.catch` branch at all (a `200` response never reaches it).
+3. `industrySourceStatus` 為 `OK` 時不出現任何產業別未更新警示文字 — **Satisfied**, tested (`shows 產業別 P 類...`, explicit `queryByText(...).not.toBeInTheDocument()` on the exact warning string).
+4. 「更新股票清單」仍是本頁唯一的產業別匯入入口，動態分頁上無同功能按鈕 — **Satisfied by construction / out of this agent's file ownership**: this increment added no new button or entry point anywhere in `StrategyTab.tsx`, and the parallel momentum-tab work (`MomentumTabPlaceholder.tsx`) was explicitly not touched by this session per the stated file-ownership boundary. `grep -rn "universe/import\|更新股票清單" develop/frontend/src/pages/MomentumTabPlaceholder.tsx` returns no matches, confirming no duplicate entry point exists in that file as of this session.
+
+#### Test / build / lint output (verbatim tails)
+```
+$ npm run build
+> tsc -b && vite build
+✓ 45 modules transformed.
+✓ built in 263ms
+
+$ npx vitest run
+ Test Files  7 passed (7)
+      Tests  114 passed (114)
+
+$ npm run lint
+src/__tests__/StrategyTab.test.tsx:297:7: warning eslint(no-unreachable) — pre-existing, predates this session
+src/pages/StrategyTab.tsx:280:7: warning react(set-state-in-effect) — pre-existing, predates this session
+```
+114 = the pre-existing 106 (through Increment 3) + 2 new tests + 6 tests added elsewhere in the suite this session by the parallel momentum-tab agent's changes to shared test-support files (`StockListPage.tabs.test.tsx`), which this agent did not author. No new lint warnings introduced by this increment's own changes; both listed warnings are unchanged in location and cause from prior increments.
+
+#### Deferred / not independently verifiable here
+- No live backend was reachable in this session in a state guaranteed to still expose the four new fields without risk of colliding with the parallel momentum-tab agent's own live verification against the same shared dev database (both sessions call the same `POST /api/stocks/universe/import` endpoint). All 4 criteria were verified via the unit/integration test suite against fixtures shaped exactly per the revised `specs/backend/stock-universe-import.md` contract (whose own Increment already live-verified the exact response shape used here, at production scale, per its own Execution Result), plus source review. A live end-to-end check of the "warning appears, error branch is not taken" path specifically would need a way to force `industrySourceStatus` to a non-`OK` value on demand, which the real TWSE dependency does not allow — this was flagged in the task instructions themselves as a case to prefer mocked coverage for.
+
+### Increment 5 — 2026-09-03
+- Scope: exactly the 13 unchecked criteria added after Increment 4 — a third pattern, `RISING_SUPPORT`（上漲支撐）, is now selectable and its own result block (seven columns, including the two fields the spec is emphatic must not be dropped — `supportClose`／`priorHighClose`) renders correctly, its `pendingConfirm` note uses its own wording distinct from 箱型突破's, and it participates in the union table like the other two strategies. Backend (`specs/backend/strategy-scan.md`) already shipped this pattern; this increment is frontend-only.
+
+#### Files changed
+- `develop/frontend/src/api/strategies.ts`
+  - `StrategyCode` gained `'RISING_SUPPORT'`.
+  - Added `ConfirmClosePoint` (`{ tradeDate, close }`) and `RisingSupportDetail` (`{ supportClose, riseClose, risePercent, priorHighClose, confirmCloses }`), matching the `RISING_SUPPORT` `detail` shape in `specs/backend/strategy-scan.md`'s response example verbatim.
+  - Introduced a `StrategyDetail = BoxBreakoutDetail | HigherLowsDetail | RisingSupportDetail` alias and changed `StrategyHit.detail` to it (previously a two-member union) — every existing call site that narrowed `detail` needed to keep narrowing correctly against the now-three-member union (see below).
+- `develop/frontend/src/pages/StrategyTab.tsx`
+  - Added `isHigherLowsDetail`/`isRisingSupportDetail` type guards alongside the existing `isBoxDetail`, all now typed against `StrategyDetail`. `renderHigherLowsTable` previously derived its `lows` array via `!isBoxDetail(detail) ? detail.lows : []` — correct only because the union had exactly two members; against the three-member union that expression no longer type-checks (the narrowed type also includes `RisingSupportDetail`, which has no `.lows`), so it was switched to the explicit `isHigherLowsDetail(detail)` guard instead of leaving a silent type error or, worse, an `as` cast.
+  - Added `formatConfirmCloses` (mirrors the existing `formatLowsSequence`: `"MM-DD price"` points joined by `→`, one entry per `detail.confirmCloses` item — count always matches, never padded or truncated).
+  - Added `renderRisingSupportTable`, a seven-column table (代號／名稱, 訊號日, 上漲收盤, 單日漲幅, 支撐價, 前段收盤高點, 確認兩日收盤) reusing the existing `formatPrice2`/`formatPercent2` formatters and the existing `.sl-r`/`.sl-up` CSS classes (`.sl-up` is already the literal `#e04b45` up-color rule in `StockListPage.css` — reused rather than adding a duplicate rule, since it's the exact color 「單日漲幅」requires). `supportClose` and `priorHighClose` are rendered as ordinary columns, not folded into or omitted alongside any other field — the spec is explicit both must appear.
+  - `renderResultBlock`'s three-way branch (`result.strategy === 'BOX_BREAKOUT' ? … : result.strategy === 'HIGHER_LOWS' ? … : renderRisingSupportTable(...)`) replaces the old two-way ternary — `RISING_SUPPORT` falls into the `else` arm, exhaustive over the three known codes.
+  - Added a `RISING_SUPPORT`-specific `pendingConfirm` note (`另有 N 檔已上漲，但後兩日的確認尚未完成`) alongside the existing `BOX_BREAKOUT`-specific one (`另有 N 檔已突破，但確認日尚未到`) — two separate conditionally-rendered `ExpandableNote`s, not one shared string branching on strategy code, so the two wordings can never accidentally cross-contaminate.
+  - `insufficientData`'s note, the union-table builder (`buildUnionRows`), the strategy-catalogue rendering (checkbox cards, preset dropdown, description text), and the scan-payload builder needed **no changes** — all four were already written generically over `catalog`/`result.results`/`strategyResult.items` with no `BOX_BREAKOUT`/`HIGHER_LOWS` literal branching, so `RISING_SUPPORT` slotted in automatically once the catalogue endpoint and scan response include it. This is the payoff of Increment 1–3 having kept those paths strategy-agnostic in the first place.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+  - `CATALOG` fixture gained the `RISING_SUPPORT` entry with the exact three preset descriptions from `specs/backend/strategy-scan.md`'s `GET /api/strategies` example.
+  - Added `risingSupportScanResponse()` (one hit, one `insufficientData`, one `pendingConfirm`, values matching the spec's own hand-calculated `RISING_SUPPORT` example: `supportClose 1200.00`／`riseClose 1296.00`／`risePercent 8.00`／`priorHighClose 1236.00`／`confirmCloses` on 08-27/08-28) and `allThreeStrategiesResponse()` (one result per strategy, submitted-order).
+  - Added 9 new tests covering: the third card renders name/preset-description from the API; the result block title and all seven columns render with correct values in the exact column order (including asserting `supportClose`/`priorHighClose` are both present, per the spec's explicit "must not be dropped" requirement); `單日漲幅` carries the `.sl-up` class; row click navigates to `/stocks/{stockId}/daily`; the `RISING_SUPPORT`-specific `pendingConfirm` wording renders and the `BOX_BREAKOUT` wording is confirmed absent (proving the two don't cross-contaminate); the shared `insufficientData` wording renders unchanged; the union table includes a `RISING_SUPPORT` hit as `上漲支撐 {signalDate}` while its `pendingConfirm`/`insufficientData` stock ids are confirmed absent from the union block; all three strategies checked together produce three result blocks in selection order.
+- `develop/frontend/src/pages/StockListPage.css` — **not touched**. Every color this increment needed (`.sl-r` right-align, `.sl-up` `#e04b45`, `.st-result-table`/`.st-note`/`.st-union-*` structure) already existed from prior increments; adding a duplicate rule for an already-covered literal hex would have violated the DRY guidance the `code-quality` skill flags (one place to change a color, not two).
+- `develop/frontend/src/pages/MomentumTab.tsx`, `develop/frontend/src/__tests__/MomentumTab.test.tsx`, `develop/frontend/src/pages/StockListPage.tsx` — not touched, per the file-ownership boundary with the parallel `specs/frontend/momentum.md` agent working the same session. (`MomentumTab.tsx` briefly had a transient `tsc` error — an unused `within` import — while that agent's work was still in flight mid-session; re-running the build after their next edit landed clean. No change of mine touched that file.)
+- `design-patterns` skill: not loaded for this increment — `RISING_SUPPORT` is a third case added to two existing type-guard/branch sites (`isXDetail`, `renderResultBlock`'s ternary), the same shape as the two prior strategies use; no new variant-selection machinery was introduced that would call for a pattern.
+
+#### Per-criterion verification
+1. 第三張卡片「上漲支撐」名稱／三段靈敏度說明皆取自 API — **Satisfied**, tested (`shows a third 上漲支撐 strategy card...`); `strategyName`/`presetMeta` lookups are unchanged generic code, no hard-coded strings added.
+2. 標題「上漲支撐（{靈敏度}）— 命中 N 檔」 — **Satisfied**, tested (`shows the 上漲支撐 result block titled...`).
+3. 七欄位 — **Satisfied**, tested; header text array asserted in exact order.
+4. 支撐價／前段收盤高點皆顯示、不省略 — **Satisfied**, tested; both values asserted present in the row's cell list at their exact positions.
+5. 單日漲幅兩位小數加 `%`、`#E04B45` — **Satisfied**, tested (`formatPercent2` gives `8.00%`; `.sl-up` class asserted, which is the literal `#e04b45` rule).
+6. 確認兩日收盤「MM-DD 價格」串接、`→`分隔、點數與 `confirmCloses` 一致 — **Satisfied**, tested (`08-27 1272.00→08-28 1248.00`, both entries of the fixture's 2-item array).
+7. 點列導向 `/stocks/{stockId}/daily` — **Satisfied**, tested.
+8. `pendingConfirm` 文案「另有 N 檔已上漲，但後兩日的確認尚未完成」，與箱型突破不同 — **Satisfied**, tested; both the correct string's presence and the wrong (箱型突破) string's absence are asserted in the same test.
+9. `insufficientData` 沿用既有摘要 — **Satisfied**, tested; no second variant was ever written (the note is strategy-agnostic).
+10. 聯集表格納入上漲支撐命中，「上漲支撐 {signalDate}」 — **Satisfied**, tested.
+11. `pendingConfirm`／`insufficientData` 不進聯集表格 — **Satisfied**, tested; both ids asserted absent from the union block specifically (scoped query, not the whole document, since the 決策 union-building code never reads either list in the first place — `buildUnionRows` only ever iterates `strategyResult.items`).
+12. 三策略同時勾選出現三區塊，依勾選順序 — **Satisfied**, tested.
+13. 上漲支撐相關顏色皆為 Visual Style 字面 hex，dark/light 下一致 — **Satisfied**, verified by source review (no new CSS was written at all — every color reused is already a literal hex rule from a prior increment, already covered by that increment's own dark/light verification) plus a direct test asserting the `.sl-up` class (`#e04b45`) is applied to `單日漲幅`; `grep -rn "prefers-color-scheme" src/` still shows zero occurrences outside the comment that forbids it.
+
+#### Test / build output (verbatim tails)
+```
+$ npx tsc -b
+(no output, exit 0)
+
+$ npm run build
+> tsc -b && vite build
+✓ 47 modules transformed.
+✓ built in 133ms
+
+$ npm test -- --run
+ Test Files  8 passed (8)
+      Tests  148 passed (148)
+```
+148 = the pre-existing 122 (through this session's start, itself already inflated over Increment 4's 114 by the parallel momentum-agent's own test file existing in the shared run) + 9 new `RISING_SUPPORT` tests + additional tests landed by the parallel momentum agent during the same session in files this agent does not own. `npm run lint` could not be run in this session — every invocation was blocked by the sandbox's auto-mode command classifier (unrelated to file content); build and test coverage above are the verification this report relies on.
+
+#### Deferred / not independently verifiable here
+- No live scan against the running backend was performed for `RISING_SUPPORT` specifically in this session (to avoid colliding with the parallel momentum agent's own live calls against the same shared dev database/backend instance). `specs/backend/strategy-scan.md`'s own Increment already live-verified the exact `RISING_SUPPORT` response shape (`GET /api/strategies` returning 3 strategies; a real `POST /api/strategies/scan` hit against TSMC data producing genuine `supportClose`/`riseClose`/`risePercent`/`priorHighClose`/`confirmCloses` values) — this increment's fixtures were built to match that live-verified shape exactly, and the rendering logic itself was verified via the unit/integration suite above.

@@ -3,7 +3,7 @@
 
 import { ApiError, type ApiErrorBody } from './stocks'
 
-export type StrategyCode = 'BOX_BREAKOUT' | 'HIGHER_LOWS'
+export type StrategyCode = 'BOX_BREAKOUT' | 'HIGHER_LOWS' | 'RISING_SUPPORT'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 
 export interface PresetOption {
@@ -39,11 +39,26 @@ export interface HigherLowsDetail {
   lows: LowPoint[]
 }
 
+export interface ConfirmClosePoint {
+  tradeDate: string
+  close: number
+}
+
+export interface RisingSupportDetail {
+  supportClose: number
+  riseClose: number
+  risePercent: number
+  priorHighClose: number
+  confirmCloses: ConfirmClosePoint[]
+}
+
+export type StrategyDetail = BoxBreakoutDetail | HigherLowsDetail | RisingSupportDetail
+
 export interface StrategyHit {
   stockId: string
   stockName: string
   signalDate: string
-  detail: BoxBreakoutDetail | HigherLowsDetail
+  detail: StrategyDetail
 }
 
 export interface StrategyResult {

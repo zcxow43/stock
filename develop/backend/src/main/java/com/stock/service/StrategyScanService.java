@@ -153,9 +153,11 @@ public class StrategyScanService {
     }
 
     /**
-     * Batched price read: at most two queries total regardless of how many stocks are scanned — one
-     * range query for [startDate, endDate], one window-function query for the lookback bars strictly
-     * before startDate. See specs/backend/strategy-scan.md, "行情讀取必須批次進行".
+     * Batched price read: a fixed, small number of queries regardless of how many stocks are
+     * scanned — one range query for [startDate, endDate], one window-function query for the lookback
+     * bars strictly before startDate, and (only when a selected strategy needs it, e.g.
+     * RISING_SUPPORT's D+1/D+2) one more window-function query for confirmation bars strictly after
+     * endDate. See specs/backend/strategy-scan.md, "行情讀取必須批次進行" and "上漲支撐的確認資料取自 endDate 之後".
      */
     private Map<String, List<StockDailyPrice>> loadSeries(List<StrategySelectionDto> selections,
                                                             List<String> targetIds, LocalDate startDate,
@@ -169,9 +171,12 @@ public class StrategyScanService {
         }
 
         int maxLookback = 0;
+        int maxConfirmAfter = 0;
         for (StrategySelectionDto selection : selections) {
             PatternDetector detector = detectorsByCode.get(selection.getCode());
             maxLookback = Math.max(maxLookback, detector.requiredLookbackTradingDays(selection.getPreset()));
+            maxConfirmAfter = Math.max(maxConfirmAfter,
+                    detector.requiredConfirmTradingDaysAfterEndDate(selection.getPreset()));
         }
 
         if (maxLookback > 0) {
@@ -184,6 +189,13 @@ public class StrategyScanService {
         List<StockDailyPrice> windowRows = priceMapper.findByStockIdsAndDateRange(targetIds, startDate, endDate);
         for (StockDailyPrice row : windowRows) {
             seriesByStock.computeIfAbsent(row.getStockId(), k -> new ArrayList<>()).add(row);
+        }
+        if (maxConfirmAfter > 0) {
+            List<StockDailyPrice> confirmRows =
+                    priceMapper.findRecentAfterDateByStockIds(targetIds, endDate, maxConfirmAfter);
+            for (StockDailyPrice row : confirmRows) {
+                seriesByStock.computeIfAbsent(row.getStockId(), k -> new ArrayList<>()).add(row);
+            }
         }
         return seriesByStock;
     }
