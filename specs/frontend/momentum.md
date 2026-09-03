@@ -1,5 +1,5 @@
 ---
-status: done
+status: pending
 title: "動態分頁（產業別漲幅）"
 requirement: "新增「動態」分頁，內含「漲幅平均」與「漲幅加總」兩個標籤；可設定近幾個交易日、或勾選哪幾週，列出漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現"
 depends_on: [stock-list]
@@ -128,7 +128,7 @@ depends_on: [stock-list]
 
 | 時機 | 呼叫 |
 |---|---|
-| 按「查詢」、切換標籤（該標籤尚無結果時） | `GET /api/momentum/gain?metric=&mode=&days=&startDate=&endDate=&minGain=` |
+| 按「查詢」、切換標籤（該標籤尚無結果時） | `GET /api/momentum/gain?metric=&mode=&days=&startDate=&endDate=&minGain=&commonStocksOnly=` |
 
 契約見 `specs/backend/industry-gain-ranking.md`。
 
@@ -242,6 +242,20 @@ depends_on: [stock-list]
 - [x] 所有顏色取自 `## Visual Style` 的字面 hex；在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
 
 ---
+### 普通股母體
+
+本頁**沒有**自己的 ETF 排除選項。漲幅計算的母體由頁籤列上方的頁面層級勾選框「只看上市普通股」決定，該控制項與其狀態由 `specs/frontend/stock-list.md` 擁有，三個分頁共用。
+
+每次查詢一律以該勾選框當下的狀態帶入 `commonStocksOnly`。切換該勾選框時，若本頁已有結果，**立即以新的值重新查詢**——與策略分頁不同，本頁的查詢是一次彙總查詢、成本低，沒有理由讓畫面停在跟設定不符的舊資料上。
+
+---
+
+- [ ] 本頁**沒有**任何 ETF 排除選項；該控制項只存在於頁籤列上方（見 `specs/frontend/stock-list.md`）
+- [ ] 每次查詢帶出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
+- [ ] 頁面層級勾選框為預設（勾選）時，各產業別分組中不出現 `0050`、`00878`、`2881A`、`910322`
+- [ ] 取消勾選後本頁立即重新查詢，命中檔數明顯增加，且結果中出現 ETF
+- [ ] 「漲幅平均」與「漲幅加總」兩個標籤都套用同一個設定
+
 ## Execution Result
 - Status: DONE
 - Files changed:

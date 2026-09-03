@@ -61,17 +61,17 @@
 .page-strategy .head { margin-bottom:12px; }
 .page-strategy .tabs { margin-bottom:12px; }
 .page-strategy .syncbar { padding:8px 16px; margin-bottom:10px; }
-.page-strategy .cond { padding:7px 16px; margin-bottom:7px; }
+.page-strategy .cond { padding:5px 16px; margin-bottom:5px; }
 .page-strategy .cond h2 { margin:0 0 5px; }
 .page-strategy .cards { margin-bottom:5px; }
 .page-strategy .card { padding:5px 14px; }
-.page-strategy .card .top { margin-bottom:3px; }
-.page-strategy .condrow { margin-bottom:4px; }
-.page-strategy .res { margin-bottom:4px; }
+.page-strategy .card .top { margin-bottom:2px; }
+.page-strategy .condrow { margin-bottom:2px; }
+.page-strategy .res { margin-bottom:1px; }
 .page-strategy thead th { padding:2px 16px; }
-.page-strategy tbody td { padding:1px 16px; font-size:13px; }
-.page-strategy .res h3 { margin:0 0 2px; }
-.page-strategy .note { margin-top:2px; }
+.page-strategy tbody td { padding:1px 16px; font-size:12px; }
+.page-strategy .res h3 { margin:0 0 0; }
+.page-strategy .note { margin-top:1px; }
 
 /* ---- 同步列：更新股票清單 + 同步日 K 兩顆按鈕 ---- */
 .syncbar .meta { display:flex; align-items:center; gap:14px; }
@@ -82,3 +82,28 @@
 .impsum { background:#16202C; border:1px solid #26333F; border-radius:8px;
           padding:8px 16px; margin-bottom:10px; font-size:13px; color:#E6EDF5; }
 .impsum.err { color:#F09A94; background:#3A1C1A; border-color:#8A3A34; }
+
+/* 漲幅門檻輸入（策略卡片內）*/
+.card .rise { display:flex; align-items:center; gap:6px; margin-top:2px; }
+.card .rise .rl { font-size:12px; color:#93A4B8; }
+.card .rise input { width:56px; height:23px; font-size:13px; font-family:inherit; text-align:right;
+                    background:#0F1620; color:#E6EDF5; border:1px solid #26333F; border-radius:6px; padding:0 6px; }
+.card .rise .pct { font-size:12px; color:#93A4B8; }
+
+/* 只看上市普通股：頁面層級設定，位於頁籤列上方 */
+.pageopt { display:flex; align-items:center; gap:7px; font-size:13px; color:#E6EDF5;
+           background:#16202C; border:1px solid #26333F; border-radius:8px;
+           padding:4px 14px; margin-bottom:5px; }
+.pageopt .cb { width:15px; height:15px; border-radius:3px; background:#3E8FD8; border:1px solid #3E8FD8;
+               position:relative; flex:none; }
+.pageopt .cb::after { content:"\2713"; color:#FFFFFF; font-size:11px; position:absolute; left:2px; top:-2px; }
+.onlycommon { display:none; }
+.onlycommon .cb { width:15px; height:15px; border-radius:3px; background:#3E8FD8; border:1px solid #3E8FD8;
+                  position:relative; flex:none; }
+.onlycommon .cb::after { content:"\2713"; color:#FFFFFF; font-size:11px; position:absolute; left:2px; top:-2px; }
+.onlycommon.off .cb { background:#0F1620; border-color:#26333F; }
+.onlycommon.off .cb::after { content:""; }
+.onlycommon.dim { color:#4A5866; }
+.onlycommon.dim .cb { background:#16202C; border-color:#26333F; }
+.onlycommon.dim .cb::after { color:#4A5866; }
+.onlycommon .na { font-size:12px; color:#6B7C90; }

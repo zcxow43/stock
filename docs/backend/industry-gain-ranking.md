@@ -1,75 +1,74 @@
 # 產業別漲幅排行 API
 
-這支 API 針對指定期間，計算每檔上市股票（在市股票）的漲幅，篩出達到門檻的股票並依交易所官方產業別分組回傳，供動態分頁畫面顯示。查詢一律即時運算現有的日線收盤價與產業別對照關係，不落地任何計算結果，因此每次查詢都是依當下參數重新計算的最新答案。本 API 只讀不寫，不涉及任何審核流程；回應呈現的是漲幅統計結果，不是買賣建議。
+產業別漲幅排行 API 針對指定期間內每檔股票的逐日收盤價計算漲跌幅，篩出達到門檻的股票，並依其所屬產業別分組回傳，供動態分頁畫面呈現。使用者可選擇「近 N 交易日」或「指定週」兩種期間模式，並可選擇以漲幅加總或漲幅平均兩種度量方式篩選與排名。此模組僅讀取既有行情與產業別關聯做即時運算，不落地任何計算結果，回應內容也一律以漲幅統計表述，不提供任何買賣建議。
 
 ## 欄位定義
 
-### 查詢參數
+**`GET /api/momentum/gain` 查詢參數**
 
 | Field | Type/Role | Rule |
 |---|---|---|
-| `metric` | 度量方式 | 必填；`SUM`（期間漲幅加總）或 `AVERAGE`（期間漲幅平均），兩者對同一批資料排名相同，僅門檻量級意義不同 |
-| `mode` | 期間模式 | 必填；`DAYS`（近 N 交易日）或 `WEEKS`（指定週區間），兩模式互斥 |
-| `days` | 天數 | `mode=DAYS` 時必填，範圍 1–120；`mode=WEEKS` 時忽略 |
-| `startDate` | 區間起日 | `mode=WEEKS` 時必填；`mode=DAYS` 時忽略 |
-| `endDate` | 區間迄日 | `mode=WEEKS` 時必填，不得早於 `startDate`；`mode=DAYS` 時忽略 |
-| `minGain` | 漲幅門檻（百分比） | 選填，預設 5，範圍 -100 ~ 1000；允許負值與 0 |
+| metric | 必填 | SUM（漲幅加總）或 AVERAGE（漲幅平均） |
+| mode | 必填 | DAYS（近 N 交易日）或 WEEKS（指定週） |
+| days | mode=DAYS 時必填 | 1–120；於 WEEKS 模式下被忽略 |
+| startDate／endDate | mode=WEEKS 時必填 | YYYY-MM-DD；於 DAYS 模式下被忽略 |
+| minGain | 選填，預設 5 | 百分比門檻，範圍 -100 ~ 1000，允許負值與 0 |
+| commonStocksOnly | 選填，預設 true | 省略時視為 true；計算母體只含代號恰為 4 位數字且首字元非 0 的普通股，排除 ETF、特別股與 TDR |
 
-### 回應（整體）
-
-| Field | Type/Role | Rule |
-|---|---|---|
-| `metric` / `mode` | 回聲欄位 | 原樣回傳對應本次查詢的請求條件 |
-| `startDate` / `endDate` | 實際採用區間 | `DAYS` 模式由系統依資料現況決定，非以今日推算；區間內無交易日時為空值 |
-| `tradingDays` | 全市場交易日數 | 區間內全市場相異交易日的數量 |
-| `minGain` | 實際採用門檻 | 四捨五入至小數點後 2 位 |
-| `scannedStocks` | 母體檔數 | 在市股票的總檔數 |
-| `matchedStockCount` | 命中檔數（去重後） | 一檔股票跨多產業命中只計一次 |
-| `insufficientDataCount` | 資料不足檔數 | 期間前無任何收盤價或期間內完全無行情的股票，不列入結果也不視為未達標 |
-| `industries` | 產業別區塊清單 | 只包含至少有一檔命中股票的產業別，見下表 |
-
-### 產業別區塊（industries[]）
+**回應摘要欄位**
 
 | Field | Type/Role | Rule |
 |---|---|---|
-| `industryId` | 產業別代碼 | 空值代表「未分類」區塊 |
-| `industryName` | 產業別名稱 | 「未分類」為固定名稱，用於收容命中但無產業別關聯的股票 |
-| `matchedCount` | 該產業命中檔數 | 等於該區塊 `items` 長度；各產業加總會大於 `matchedStockCount`（因一檔可能跨多產業） |
-| `items` | 命中股票清單 | 依 `gain` 由大到小排序，同值依股票代號升冪 |
+| metric／mode | 回傳確認 | 原樣回傳對應本次請求所用的參數 |
+| startDate／endDate | 實際採用區間 | 由系統決定的實際期間端點；區間內無交易日時皆為 null |
+| tradingDays | 統計 | 區間內全市場相異交易日數 |
+| minGain | 回傳確認 | 實際採用的門檻，2 位小數 |
+| scannedStocks | 統計 | 計算母體檔數（在市且符合普通股篩選條件的總數） |
+| matchedStockCount | 統計 | 去重後的命中檔數，前端顯示總數一律採用此值 |
+| insufficientDataCount | 統計 | 因期間前置資料不足或期間內無有效行情而未參與計算的檔數 |
 
-### 股票項目（items[]）
+**產業別區塊欄位（`industries[]`）**
 
 | Field | Type/Role | Rule |
 |---|---|---|
-| `stockId` / `stockName` | 股票代號／名稱 | 對照在市股票主檔 |
-| `gain` | 漲幅統計值 | 依 `metric` 算出，四捨五入至小數點後 2 位，用於門檻比較與排序 |
-| `tradingDays` | 該檔實際有行情天數 | 可能小於整體 `tradingDays`（因停牌） |
-| `startClose` / `endClose` | 區間首末收盤價 | 僅供對照參考，兩者比值不等於 `gain` |
-| `firstTradeDate` / `lastTradeDate` | 對應日期 | 該檔在區間內第一個／最後一個有行情的交易日 |
+| industryId | 識別欄位 | null 代表「未分類」區塊，永遠排在所有產業別之後 |
+| industryName | 顯示名稱 | 未分類固定顯示為「未分類」 |
+| matchedCount | 統計 | 該產業別下命中檔數，等於該區塊 items 長度；各產業加總會大於 matchedStockCount |
+| items | 命中股票清單 | 見下表 |
+
+**命中股票項目欄位（`items[]`）**
+
+| Field | Type/Role | Rule |
+|---|---|---|
+| stockId／stockName | 識別欄位 | 一檔股票屬於多個產業別時，在每個產業別下各出現一次 |
+| gain | 度量結果 | metric 對應之值，2 位小數，與門檻比較所用的值為同一個已四捨五入的值 |
+| tradingDays | 統計 | 該檔在區間內實際有行情的交易日數，可能小於區間層級的 tradingDays（停牌所致） |
+| startClose／endClose | 參考行情 | 該檔區間內第一個／最後一個有行情交易日的收盤價，不參與門檻判定 |
+| firstTradeDate／lastTradeDate | 參考日期 | 對應 startClose／endClose 的日期 |
 
 ## 限制條件
 
-- 母體固定為在市股票全體，不提供指定股票的查詢參數。
-- 只篩漲幅方向，不提供跌幅篩選。
-- 門檻比較以四捨五入至小數點後 2 位的值進行，與畫面顯示的值一致，避免顯示與篩選結果不一致。
-- `DAYS` 模式的區間以資料庫中最新的交易日為錨點，不是以查詢當下的日期為錨點。
-- `WEEKS` 模式下，區間內若完全沒有交易日，回傳空結果而非錯誤。
-- 一檔股票同屬多個產業別時，於每個所屬產業別的清單中各出現一次；因此各產業命中數加總會大於去重後的總命中檔數，兩個數字需同時提供、不可互相取代。
-- 命中但無任何產業別關聯的股票歸入固定的「未分類」區塊，永遠排在所有產業別之後，不因命中數多而提前。
-- 沒有命中股票的產業別不出現在回應中。
-- 產業別區塊依命中數由多到少排序，同數依名稱升冪；「未分類」不參與排序，固定排最後。
-- 期間第一天的漲跌幅需要期間開始前最近一個有行情交易日的收盤價，該日本身不計入交易日數也不出現在回傳日期中。
-- 若股票在期間起始前完全沒有收盤價，或期間內完全無行情，計入「資料不足」而非「未達門檻」，兩者訊息意義不同。
+- metric 與 mode 皆為必填，缺漏或非允許值即拒絕並說明原因（400）。
+- days 僅接受 1–120，超出範圍即拒絕並說明原因（400）。
+- WEEKS 模式下 startDate 須不晚於 endDate，否則拒絕並說明原因（400）。
+- minGain 僅接受 -100 ~ 1000 之間的值，否則拒絕並說明原因（400）。
+- 計算母體預設只含普通股，需明確帶 `commonStocksOnly=false` 才會納入 ETF、特別股與 TDR；本參數只影響計算母體，不寫入任何資料表。
+- DAYS 模式的期間錨點為資料中最新的交易日，不是今日；WEEKS 模式下若區間內無任何交易日，回傳空結果而非錯誤。
+- 收盤價為 0 的資料視為資料不足，不參與計算、也不視為未達門檻，以避免除以零造成整體查詢失敗。
+- 掃描母體固定為在市股票（可再依 commonStocksOnly 篩選），不提供指定股票清單的參數。
+- 相鄰交易日之間不因停牌造成的日曆間隔做任何插補。
+- 沒有命中股票的產業別不出現在回應中；命中但無產業別關聯的股票一律歸入固定的「未分類」區塊。
+- 回應欄位與文案一律以漲幅／命中／統計表述，不得出現建議、推薦等暗示買賣操作的措辭。
 
 ## 跨主題規則
 
-- 產業別分組所依賴的股票與產業別對應關係由 universe 匯入建立與維護，一檔股票可能同時屬於多個產業別；該對應尚未匯入時，命中股票會全數落入「未分類」區塊（見 [stock-universe-import.md](stock-universe-import.md)）。
-- 漲幅計算使用未經除權息還原的原始收盤價，與型態掃描、技術指標統計採同一份資料，避免同一檔股票在不同功能顯示互相矛盾的漲跌（見 [stock-price-ingestion.md](stock-price-ingestion.md)）。
-- 相鄰交易日的認定（不因停牌造成的日曆間隔做插補）與型態掃描、技術指標統計共用同一套規則，三者須保持一致（見 [strategy-scan.md](strategy-scan.md)、[stock-indicator-statistics.md](stock-indicator-statistics.md)）。
-- 掃描母體中「全部股票」的認定依股票主檔的在市狀態決定，該狀態的人工調整（下市／復市）不在本模組範圍內（見 [stock-catalog.md](stock-catalog.md)）。
+- `commonStocksOnly` 的「只收普通股」判斷邏輯與股票清單查詢 API 共用同一份實作，全系統只有一套代號篩選規則（見 [stock-universe-import.md](stock-universe-import.md)、[stock-catalog.md](stock-catalog.md)）。
+- 單日漲跌幅一律以未經除權息還原的原始收盤價計算，與策略掃描、指標統計採同一份資料來源，避免同一檔股票在不同功能顯示互相矛盾的漲跌（見 [strategy-scan.md](strategy-scan.md)、[stock-indicator-statistics.md](stock-indicator-statistics.md)）。
+- 產業別分組所依據的股票與產業關聯資料，其建立與維護不在本 API 範圍內（見 `specs/dba/stock-industry.md`）。
+- 本 API「回報漲幅統計而非買賣建議」的用語限制，與策略掃描為同一條契約（見 [strategy-scan.md](strategy-scan.md)）。
 
 ## API 清單
 
 | Method | Path | 用途 | 送審分類 |
 |---|---|---|---|
-| GET | /api/momentum/gain | 依期間與漲幅門檻，查詢在市股票的漲幅排行並依產業別分組 | Live direct |
+| GET | /api/momentum/gain | 依期間與門檻計算漲幅，按產業別分組回傳命中股票 | Live direct |

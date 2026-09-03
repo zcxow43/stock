@@ -1,5 +1,5 @@
 ---
-status: done
+status: pending
 title: "股票清單查詢 API"
 requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入個股 K 線頁；總覽分頁另需能新增、修改、下市股票主檔"
 depends_on: [stock-price-ingestion]
@@ -60,6 +60,7 @@ Query 參數：
 | `keyword` | string | 否 | — | 對 `stock_id` 與 `stock_name` 做包含比對，兩者任一命中即回傳 |
 | `market` | string | 否 | — | `TSE` 或 `OTC`；省略代表不限市場別 |
 | `includeInactive` | boolean | 否 | `false` | `false` 只回 `is_active = 1`；`true` 連同已下市一併回傳 |
+| `commonStocksOnly` | boolean | 否 | `true` | **省略時視為 `true`**；只回代號恰為 4 位數字且首字元非 `0` 的普通股，排除 ETF、特別股與 TDR。判斷沿用 `specs/backend/stock-universe-import.md` 的「只收普通股」定義，全系統共用同一份實作 |
 | `page` | int | 否 | `1` | 1-based 頁碼 |
 | `size` | int | 否 | `50` | 每頁筆數，上限 `200` |
 | `sort` | string | 否 | `stockId` | `stockId` / `stockName` / `market` |
@@ -248,6 +249,16 @@ Response `200`：
 - [x] `DELETE` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
 
 ---
+---
+
+- [ ] `GET /api/stocks` 省略 `commonStocksOnly` 時視為 `true`：回應的 `total` 只計代號恰為 4 位數字且首字元非 `0` 的股票
+- [ ] `commonStocksOnly: true` 時 `0050`、`00878`、`2881A`、`910322` 皆不出現在 `items` 中，也不計入 `total`
+- [ ] `commonStocksOnly=false` 時回傳全部在市股票，`total` 明顯大於 `true` 時的值
+- [ ] `commonStocksOnly` 與 `keyword`、`market`、`includeInactive`、分頁、排序可同時使用，彼此獨立生效
+- [ ] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
+- [ ] 本參數只影響查詢結果，不寫入任何資料表：查詢前後 `stock` 的列數、內容與 `is_active` 完全不變
+- [ ] `GET /api/stocks/{stockId}` 不受本參數影響：直接查 `0050` 仍正常回傳該檔資料，不因它是 ETF 而回 `404`
+
 ## Execution Result
 - Status: DONE
 - Files changed:

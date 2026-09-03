@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐）對股票掃描並列出命中標的，每個策略可選三種靈敏度，掃描區間預設近一個月且可自由指定"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐）對股票掃描並列出命中標的，每個策略可選三種靈敏度且漲幅門檻可自行輸入覆寫，掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定"
 depends_on: [stock-price-ingestion, stock-catalog]
 ---
 
@@ -21,6 +21,10 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 三個型態各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
 
+**每個型態的漲幅門檻可由呼叫端逐一覆寫**：請求中該策略的 `risePercent` 有值時，取代靈敏度表裡的漲幅欄位；省略時沿用靈敏度的值。靈敏度仍決定該型態的其餘參數（回看長度、擺動根數、量能倍數、確認根數、盤整前提）。各型態被覆寫的是哪一欄，註明在下方各自的參數表下。
+
+覆寫只改門檻數值，一樣不改判定邏輯——`risePercent` 為 `0` 的效果等同靈敏度表裡漲幅為 0% 的那一段（不驗證漲幅），不是關閉整個型態。
+
 #### 箱型突破 `BOX_BREAKOUT`
 
 對區間內每個交易日 D 判定：
@@ -39,6 +43,8 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `volumeMultiple` | 2.0 | 1.5 | 不驗證 |
 | `confirmBars` | 2 | 1 | 1 |
 
+請求的 `risePercent` 覆寫本表的 **`breakoutPercent`**（突破幅度）。其餘四項一律由靈敏度決定。
+
 **盤整前提不可省略的理由**：不驗證箱高就掃描，一段穩定上升趨勢的任意區間都會被視為「箱型」，其每一根新高都成為「突破」。`LOOSE` 明確關掉這道檢查，因此它的命中數本來就會偏高，這是使用者選擇該靈敏度時應該預期的行為，不是缺陷。
 
 #### 底底高 `HIGHER_LOWS`
@@ -53,6 +59,8 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `swingBars`（左右各） | 5 | 3 | 2 |
 | `requiredRises`（遞增段數） | 3 | 2 | 2 |
 | `risePercent` | 2% | 1% | 0%（高過即可） |
+
+請求的 `risePercent` 覆寫本表的 **`risePercent`**（每段遞增的最小幅度）。`swingBars` 與 `requiredRises` 一律由靈敏度決定。
 
 **容忍度不可省略的理由**：`risePercent` 為 0 時，高出 0.01 元也構成「底底高」，雜訊會全部變成訊號。`LOOSE` 刻意允許這件事，其餘兩段不允許。
 
@@ -73,6 +81,8 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `risePercent` | 5% | 3% | 2% |
 | `confirmBars` | 2 | 2 | 2 |
 
+請求的 `risePercent` 覆寫本表的 **`risePercent`**（上漲日相對前一日的最小漲幅）。`lookback` 由靈敏度決定，`confirmBars` 固定為 2、兩者皆不受覆寫影響。
+
 **支撐線取 D-1 收盤、而非前 `lookback` 日高點的理由**：本型態問的是「這根漲勢有沒有被守住」，而起漲點就是 D-1 的收盤——跌回它以下，代表這根上漲被完全吃掉。改用前段高點當支撐，判定會退化成箱型突破的變形，兩個策略的命中集合大量重疊，使用者同時勾選時看不出差別。
 
 **突破近期區間這道條件不可省略的理由**：只看單日漲幅的話，任何一根大漲都算「忽然間一個上漲」，包含一段已經連漲多日的趨勢中的又一根。加上「收盤需高於前 `lookback` 日的全部收盤」，才把型態限縮在「從一段相對平緩的行情中忽然跳出來」，這正是原始需求「忽然間」三個字要求的東西。
@@ -81,9 +91,15 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 ### 掃描範圍
 
-- `stockIds` 省略或為空陣列 → 掃描 `stock` 表中 `is_active = 1` 的全部股票。
-- `stockIds` 有值 → 只掃描清單內的股票，且清單中允許包含已下市股票（使用者明確指名時不代掃描範圍過濾）。
+- `stockIds` 省略或為空陣列 → 掃描 `stock` 表中 `is_active = 1` 的股票，再依 `commonStocksOnly` 決定是否只留普通股。
+- `stockIds` 有值 → 只掃描清單內的股票，且清單中允許包含已下市股票與非普通股（**使用者明確指名時不代掃描範圍過濾**，`commonStocksOnly` 一律不套用）。
 - 上限 200 檔；超過即拒絕，而非默默截斷。
+
+**普通股篩選（`commonStocksOnly`，預設 `true`）**：只留代號**恰為 4 位數字、且首字元非 `0`** 的股票。這道規則不是本 spec 新訂的，而是沿用 `specs/backend/stock-universe-import.md` 的「只收普通股」定義；同一套判斷同時排除 ETF（`0050`、`00878`）、特別股（`2881A`）與 TDR／存託憑證（`910322`）。兩處必須共用同一個判斷，不得各自實作一份。
+
+預設為 `true` 的理由與該 spec 記載的一致：本模組的三個型態都是為個股價格行為設計的判定規則，ETF 的價格由一籃子成分股加權而成，其「箱型」「突破」「起漲」在意義上與個股不同；把數百檔 ETF 混進母體只會稀釋掃描結果，不會讓使用者多得到可用的訊號。`commonStocksOnly: false` 保留給明確想連 ETF 一起掃的情況。
+
+**本篩選只影響掃描母體，不寫入任何資料表**——`stock` 的內容、`is_active`、以及股票總覽顯示的檔數，都不因這個參數而改變。
 
 ### 區間與資料前置需求
 
@@ -150,10 +166,12 @@ Request：
 ```json
 {
   "strategies": [
-    { "code": "BOX_BREAKOUT", "preset": "STANDARD" },
-    { "code": "HIGHER_LOWS",  "preset": "STRICT" }
+    { "code": "BOX_BREAKOUT", "preset": "STANDARD", "risePercent": 2.5 },
+    { "code": "HIGHER_LOWS",  "preset": "STRICT" },
+    { "code": "RISING_SUPPORT", "preset": "STANDARD", "risePercent": 4 }
   ],
   "stockIds": ["2330", "2317"],
+  "commonStocksOnly": true,
   "startDate": "2026-07-30",
   "endDate": "2026-08-30"
 }
@@ -164,7 +182,9 @@ Request：
 | `strategies` | array | 是 | 至少一個；同一 `code` 不得重複出現 |
 | `strategies[].code` | string | 是 | `BOX_BREAKOUT` / `HIGHER_LOWS` / `RISING_SUPPORT` |
 | `strategies[].preset` | string | 是 | `STRICT` / `STANDARD` / `LOOSE` |
+| `strategies[].risePercent` | number | 否 | 覆寫該策略的漲幅門檻；省略即沿用 `preset` 的值。範圍 `0`～`20`，最多一位小數 |
 | `stockIds` | string[] | 否 | 省略或空陣列 = 全部在市股票；上限 200 |
+| `commonStocksOnly` | boolean | 否 | **省略時視為 `true`**；只掃代號恰為 4 位數字且首字元非 `0` 的普通股。`stockIds` 有值時本欄位不生效 |
 | `startDate` | date | 否 | 預設為 `endDate` 往前一個日曆月 |
 | `endDate` | date | 否 | 預設為今日 |
 
@@ -259,10 +279,11 @@ Response `200`：
 - `stockIds` 含 `stock` 主檔不存在的代號 → `400`，`{"code":"UNKNOWN_STOCK_ID","unknownIds":["9999"]}`
 - `stockIds` 超過 200 檔 → `400`，`{"code":"TOO_MANY_STOCKS"}`
 - `startDate` 晚於 `endDate` → `400`，`{"code":"INVALID_DATE_RANGE"}`
+- `risePercent` 小於 `0`、大於 `20`、或小數超過一位 → `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"RISING_SUPPORT"}`。`strategy` 必須指出是哪一個策略的值不合法——三個策略各有一個獨立輸入，不指名的話使用者無從得知該改哪一格
 
 ### 處理流程
 
-解析並驗證請求 → 決定目標股票清單（指定或全市場在市）→ 對每個策略、每檔股票，讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用該策略該靈敏度的判定 → 收斂為每檔最近一次命中 → 組裝回應。
+解析並驗證請求 → 決定目標股票清單（指定清單；或全市場在市再依 `commonStocksOnly` 過濾）→ 對每個策略取靈敏度參數、並以該策略的 `risePercent` 覆寫其漲幅門檻 → 對每檔股票讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用判定 → 收斂為每檔最近一次命中 → 組裝回應。
 
 **行情讀取必須批次進行**，不得逐檔一次查詢：全市場掃描是 2200 檔，逐檔查詢即 2200 次往返。以單一查詢按 `(stock_id, trade_date)` 主鍵範圍取回目標區間的全部列，再在記憶體中依股票分組判定。
 
@@ -301,6 +322,22 @@ Response `200`：
 - [x] 三個策略可於同一次 `POST /api/strategies/scan` 一併送入，`results` 依送入順序回傳三筆
 - [x] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日 D+2
 - [x] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+
+---
+
+- [ ] 三個策略各自的 `risePercent` 可獨立指定：同一次請求對箱型突破送 `2.5`、對上漲支撐送 `4`、底底高省略，三者分別以 2.5%／4%／該靈敏度原值判定
+- [ ] 省略 `risePercent` 時該策略的判定結果與未加本功能前完全一致（以既有三組構造資料驗證，命中集合不變）
+- [ ] `risePercent` 覆寫的是各型態參數表指定的那一欄：箱型突破改 `breakoutPercent`、底底高改每段遞增的 `risePercent`、上漲支撐改單日漲幅的 `risePercent`
+- [ ] `risePercent` 不影響其餘參數：同一策略在 `STRICT` 與 `LOOSE` 下送相同的 `risePercent`，`lookback`／`swingBars`／`volumeMultiple`／`confirmBars` 仍依各自靈敏度取值
+- [ ] `risePercent` 為 `0` 時等同不驗證漲幅，而非零命中或關閉該型態
+- [ ] `risePercent` 小於 `0`、大於 `20`、或小數超過一位 → `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`，且 `strategy` 指出的是實際不合法的那一個策略
+- [ ] `commonStocksOnly` 省略時視為 `true`：不帶此欄位的全市場掃描，`scannedStocks` 只計代號恰為 4 位數字且首字元非 `0` 的股票
+- [ ] `commonStocksOnly: true` 時 `0050`、`00878`、`2881A`、`910322` 皆不在掃描母體中，也不出現在任何策略的 `items`、`insufficientData` 或 `pendingConfirm`
+- [ ] `commonStocksOnly: false` 時掃描母體為全部 `is_active = 1` 的股票，`scannedStocks` 明顯大於 `true` 時的值
+- [ ] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
+- [ ] `stockIds` 有值時 `commonStocksOnly` 不生效：指定 `["0050","2330"]` 且 `commonStocksOnly: true`，兩檔都被掃描
+- [ ] 本參數不寫任何資料表：掃描前後 `stock` 的列數、內容與 `is_active` 完全不變
+- [ ] 三個策略同時送出、各帶不同 `risePercent`、且 `commonStocksOnly: true` 時，`results` 仍依送入順序回傳三筆
 
 ---
 ## Execution Result

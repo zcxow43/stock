@@ -1,5 +1,5 @@
 ---
-status: done
+status: pending
 title: "產業別漲幅排行 API"
 requirement: "動態分頁 — 以「漲幅平均」與「漲幅加總」兩種度量，列出指定期間內（近 N 交易日，或勾選的數個自然週）漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現"
 depends_on: [stock-price-ingestion, stock-catalog, stock-universe-import]
@@ -90,6 +90,7 @@ GET /api/momentum/gain
 | `startDate` | date | `mode=WEEKS` 時是 | — | `YYYY-MM-DD` |
 | `endDate` | date | `mode=WEEKS` 時是 | — | `YYYY-MM-DD` |
 | `minGain` | decimal | 否 | `5` | 百分比，範圍 `-100` ~ `1000` |
+| `commonStocksOnly` | boolean | 否 | `true` | **省略時視為 `true`**；只回代號恰為 4 位數字且首字元非 `0` 的普通股，排除 ETF、特別股與 TDR。判斷沿用 `specs/backend/stock-universe-import.md` 的「只收普通股」定義，全系統共用同一份實作 |
 
 `mode=DAYS` 時帶入的 `startDate` / `endDate` 一律忽略；`mode=WEEKS` 時帶入的 `days` 一律忽略。忽略而非報錯，是因為前端在兩個模式間切換時保留另一個模式的輸入值是正常的 UI 行為。
 
@@ -199,6 +200,15 @@ Response `200`：
 - [x] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
 
 ---
+---
+
+- [ ] `GET /api/momentum/gain` 省略 `commonStocksOnly` 時視為 `true`：計算母體只含代號恰為 4 位數字且首字元非 `0` 的股票
+- [ ] `commonStocksOnly=true` 時 `0050`、`00878`、`2881A`、`910322` 不出現在任何產業別分組中，也不計入資料不足清單
+- [ ] `commonStocksOnly=false` 時母體為全部在市股票，命中檔數明顯大於 `true` 時的值
+- [ ] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
+- [ ] 本參數只影響計算母體，不寫入任何資料表：查詢前後 `stock` 與 `stock_industry` 的列數與內容完全不變
+- [ ] `commonStocksOnly` 與 `metric`、`mode`、`days`、`minGain` 可同時使用，彼此獨立生效
+
 ## Execution Result
 - Status: DONE
 - Files changed:

@@ -1,47 +1,86 @@
 # 股票清單查詢 API
 
-提供股票主檔的查詢與維護能力，是使用者進入系統瀏覽股票清單、以及在總覽頁新增、修改、下市股票的唯一入口。清單查詢會附上每檔的最新收盤與漲跌，讓使用者能據此判斷要點選哪一檔，並支援關鍵字與市場別篩選及分頁瀏覽。股票的新增與修改會立即生效並反映在清單中；股票代號一經建立即不可更動，因為行情、指標與同步進度皆依代號關聯。下市採取軟刪除做法，只將該檔標記為非上市中狀態、不刪除任何既有行情資料，讓歷史資料得以保留、也讓標的能在需要時重新上架。
+股票清單查詢 API 提供前端讀取股票主檔與最新行情的唯一管道，同時也承擔單一標的的人工維護（新增、修改基本資料、下市）。清單查詢採「先分頁後查行情」的方式，確保效能不受全市場檔數影響，並可用關鍵字、市場別、是否含已下市股票、是否僅列普通股等條件篩選；單檔查詢則額外提供上市以來的彙總資訊。寫入類端點（新增／修改／下市）皆為即時生效，其中下市採軟性下架、不刪除任何歷史行情，以維持資料的可回溯性。
 
 ## 欄位定義
 
-**股票主檔**
+**`GET /api/stocks` 查詢參數**
 
 | Field | Type/Role | Rule |
 |---|---|---|
-| stockId | 股票代號（鍵值） | 1–10 字元，去除頭尾空白不得為空；建立後不可修改，行情／指標／同步進度皆依此鍵關聯 |
-| stockName | 股票名稱 | 1–60 字元，去除頭尾空白不得為空；可修改 |
-| market | 市場別（列舉） | TSE 或 OTC；可修改 |
-| isActive | 上市狀態 | 新增時固定為 true，不接受請求指定；下市（軟刪除）時設為 false；可經修改端點重新設回 true 使其重新上架 |
-| latestTradeDate / latestClose / latestVolume | 最新行情（衍生） | 取自該檔行情資料中最新交易日的收盤與成交量；無任何行情時為 null |
-| previousClose | 前一交易日收盤（衍生） | 取自該檔行情資料第二新的一筆；不足兩筆時為 null |
-| changeAmount / changePercent | 漲跌金額／幅度（衍生，不落地） | 由最新與前一收盤即時計算 |
-| firstTradeDate / tradingDayCount | 首個交易日／累積交易日數（衍生，僅單檔查詢提供） | 取該檔行情資料的最早日期與總筆數；無行情時分別為 null／0 |
+| keyword | 查詢條件（選填） | 對股票代號與名稱做包含比對，任一命中即回傳 |
+| market | 查詢條件（選填） | TSE 或 OTC；省略代表不限市場別 |
+| includeInactive | 查詢條件（選填，預設 false） | false 只回在市股票；true 連同已下市股票一併回傳 |
+| commonStocksOnly | 查詢條件（選填，預設 true） | 省略時視為 true；只回代號恰為 4 位數字且首字元非 0 的普通股，排除 ETF、特別股與 TDR |
+| page | 分頁（選填，預設 1） | 1-based 頁碼 |
+| size | 分頁（選填，預設 50） | 每頁筆數，上限 200 |
+| sort | 排序欄位（選填，預設 stockId） | 限股票代號／股票名稱／市場別 |
+| order | 排序方向（選填，預設 asc） | asc／desc |
+
+**股票清單項目／單檔基本資料（回應）**
+
+| Field | Type/Role | Rule |
+|---|---|---|
+| stockId | 識別欄位 | 股票代號，唯一主鍵，建立後不可修改 |
+| stockName | 基本資料 | 股票名稱 |
+| market | 基本資料 | TSE 或 OTC |
+| isActive | 狀態 | 是否在市；僅由新增／修改／下市端點變更 |
+| latestTradeDate／latestClose／latestVolume | 最新行情 | 取自該檔最近一個有行情的交易日；無任何行情時為 null |
+| previousClose／changeAmount／changePercent | 漲跌計算 | 需要兩個交易日的行情才有值，僅有單一交易日資料時為 null |
+| firstTradeDate／tradingDayCount | 彙總資訊（僅單檔查詢回傳） | 該檔在庫中累積的行情起始日與總交易日數；無任何行情時分別為 null 與 0 |
+
+**新增股票（請求）**
+
+| Field | Type/Role | Rule |
+|---|---|---|
+| stockId | 必填 | 1–10 字元，去除前後空白後不得為空；不得與既有代號重複 |
+| stockName | 必填 | 1–60 字元，去除前後空白後不得為空 |
+| market | 必填 | TSE 或 OTC |
+
+（`isActive` 由系統固定為 true，不接受請求指定）
+
+**修改股票（請求）**
+
+| Field | Type/Role | Rule |
+|---|---|---|
+| stockName | 必填 | 同新增規則 |
+| market | 必填 | 同新增規則 |
+| isActive | 必填 | true 可使已下市股票重新上架；false 等同下市 |
+
+（`stockId` 為路徑參數，不可修改）
+
+**下市回應**
+
+| Field | Type/Role | Rule |
+|---|---|---|
+| stockId／stockName | 識別欄位 | 回傳被下市股票的代號與名稱 |
+| isActive | 狀態 | 下市後固定為 false |
 
 ## 限制條件
 
-- `stockId` 建立後不可修改；如需變更代號須新增一檔並將舊代號下市，不得直接改鍵
-- 新增股票時 `isActive` 固定為 true，不接受請求指定為已下市
-- 代號已存在時拒絕新增，不得默默改為更新，以免覆寫既有股票名稱
-- 下市為軟刪除：僅將 `isActive` 設為 false，不刪除任何行情或指標資料列
-- 對已下市標的重複呼叫下市端點仍視為成功（冪等），不視為錯誤
-- 清單查詢預設只顯示上市中股票，需明確要求才顯示已下市標的
-- 清單查詢採「先分頁、再查行情」的順序，因此排序欄位僅限股票主檔自身欄位（代號／名稱／市場別），不支援依漲跌幅排序
-- 每頁筆數上限 200 筆
-- 尚無任何行情或僅有單日行情的股票仍須出現在清單中，行情欄位以 null 呈現，不隱藏也不補零
+- 清單查詢預設只顯示在市股票，需明確帶 `includeInactive=true` 才會看到已下市標的。
+- 清單查詢預設只顯示普通股，需明確帶 `commonStocksOnly=false` 才會看到 ETF、特別股與 TDR。
+- 本篩選只影響查詢結果，不寫入任何資料表——股票主檔的內容與在市狀態皆不因此改變。
+- 單檔查詢不受普通股篩選影響：直接以代號查詢一檔 ETF 仍正常回傳。
+- 清單一次最多回傳 200 筆，超過即拒絕並說明原因（400）。
+- 清單排序欄位僅限股票代號、股票名稱、市場別，不支援依漲跌幅排序。
+- 新增股票時代號重複會拒絕並說明原因（409），不會靜默覆寫既有股票的名稱。
+- 股票代號一經建立不可修改；如需變更代號須以新增一檔並將舊代號下市的方式處理。
+- 下市為軟性下架，僅改變在市狀態，不刪除任何歷史行情或指標資料，且重複呼叫仍視為成功（冪等）。
+- 查無代號的單檔查詢、修改、下市皆拒絕並說明原因（404）。
 
 ## 跨主題規則
 
-- 下市僅為軟刪除、不刪除任何行情資料列，是因為下市標的的歷史行情必須被保留（見 stock-price-ingestion.md）
-- 股票主檔中的代號與名稱由每日增量同步一併維護，新增／修改於此處與同步流程寫入的資料須保持一致（見 stock-price-ingestion.md）
-- 清單與單檔查詢中的最新行情、漲跌計算皆源自每日增量與回補流程寫入的日線資料（見 stock-price-ingestion.md）
-- 股票主檔是策略型態掃描決定掃描範圍與檢查代號存在性的依據（見 strategy-scan.md）
+- `commonStocksOnly` 的「只收普通股」判斷邏輯由 [stock-universe-import.md](stock-universe-import.md) 定義，全系統共用同一份實作，本 API 僅套用該定義做結果篩選（見 [stock-universe-import.md](stock-universe-import.md)）。
+- 已下市標的的歷史行情必須保留、不得刪除，該規則由 DBA 的股票主檔 spec 規範，本 API 的下市端點刻意不做實體刪除以配合此規則（見 `specs/dba/stock.md`）。
+- 清單顯示的最新收盤與漲跌，其行情資料由每日抓取流程負責維護，本 API 僅讀取、不負責行情的取得或修正（見 [stock-price-ingestion.md](stock-price-ingestion.md)）。
 
 ## API 清單
 
 | Method | Path | 用途 | 送審分類 |
 |---|---|---|---|
-| GET | /api/stocks | 查詢股票清單（關鍵字／市場別篩選、分頁） | Live direct |
-| GET | /api/stocks/{stockId} | 查詢單檔股票基本資料 | Live direct |
-| POST | /api/stocks | 新增股票主檔 | Direct |
-| PUT | /api/stocks/{stockId} | 修改股票名稱／市場別／上市狀態 | Direct |
-| DELETE | /api/stocks/{stockId} | 下市股票（軟刪除） | Direct |
+| GET | /api/stocks | 查詢股票清單（含最新收盤與漲跌，可篩選／分頁／排序） | Live direct |
+| GET | /api/stocks/{stockId} | 查詢單一股票基本資料與彙總行情 | Live direct |
+| POST | /api/stocks | 新增一檔股票主檔 | Direct |
+| PUT | /api/stocks/{stockId} | 修改股票名稱、市場別或在市狀態 | Direct |
+| DELETE | /api/stocks/{stockId} | 下市股票（軟刪除，不刪除任何歷史資料） | Direct |

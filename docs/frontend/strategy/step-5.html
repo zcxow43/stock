@@ -13,6 +13,7 @@
       <h1>股票總覽</h1>
       <div class="count">共 <b>1,032</b> 檔</div>
     </div>
+    <div class="pageopt"><span class="cb"></span>只看上市普通股（排除 ETF、特別股、TDR）</div>
     <div class="tabs">
       <button class="tab">總覽</button>
       <button class="tab on">策略</button>
@@ -33,11 +34,14 @@
       <h2>掃描條件</h2>
       <div class="cards">
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
-          <select><option>嚴格</option></select><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div></div>
+          <select><option>嚴格</option></select><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div>
+          <div class="rise"><span class="rl">漲幅門檻</span><input value="1.0"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
-          <select><option>標準</option></select></div>
+          <select><option>標準</option></select>
+          <div class="rise"><span class="rl">漲幅門檻</span><input value="1.5"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">上漲支撐</span></div>
-          <select><option>標準</option></select></div>
+          <select><option>標準</option></select>
+          <div class="rise"><span class="rl">漲幅門檻</span><input value="3.0"><span class="pct">%</span></div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>

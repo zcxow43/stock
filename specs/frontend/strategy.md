@@ -1,7 +1,7 @@
 ---
 status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐）並各自選靈敏度，掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐）並各自選靈敏度與自行輸入漲幅門檻，母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
 depends_on: [stock-list]
 ---
 
@@ -29,11 +29,25 @@ depends_on: [stock-list]
 
 ### 條件區
 
-**策略勾選**：每個策略一張卡片，卡片內含勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、以及該靈敏度的說明文字一行。
+**策略勾選**：每個策略一張卡片，卡片內含勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、以及該靈敏度的說明文字一行。
 
 - 策略清單與靈敏度說明**一律取自 API**，不在前端寫死。參數是後端的契約，兩邊各存一份必然漂移。
-- 未勾選的卡片其靈敏度下拉為 disabled。
+- 未勾選的卡片其靈敏度下拉與漲幅輸入皆為 disabled。
 - 一個都沒勾時「開始掃描」為 disabled，並在按鈕旁提示「請至少勾選一個策略」——不要讓使用者按了才知道。
+
+**漲幅門檻輸入**：三張卡片各有一個獨立的數字輸入，標籤「漲幅門檻」、後綴 `%`。
+
+| 項目 | 值 |
+|---|---|
+| 範圍 | `0` ～ `20`，最多一位小數 |
+| 預設 | 該卡片**目前選定靈敏度**的漲幅值，由 `GET /api/strategies` 帶出 |
+| 送出 | 值與該靈敏度預設值相同時仍照送 `risePercent`；只有停用（未勾選）才不送 |
+
+**切換靈敏度會重新填入該靈敏度的漲幅值，覆蓋使用者已輸入的數字。** 靈敏度是一組預設，選它就是要那一組的值；若保留使用者輸入不動，畫面會停在「靈敏度寫著嚴格、漲幅卻是寬鬆的數字」這種半套狀態，使用者無從判斷實際送出的是什麼。
+
+三個策略各有一個輸入、而不是共用一個，是因為三者的漲幅意義不同：箱型突破是突破箱頂的幅度、底底高是每段低點遞增的幅度、上漲支撐是單日漲幅。合成一格會讓同一個數字在三處代表三件事。
+
+超出範圍時前端即擋下並在該卡片下方提示「漲幅門檻需介於 0 ~ 20」，不送出請求；後端的 `INVALID_RISE_PERCENT` 為後備。
 
 **股票範圍**：兩個互斥選項。
 
@@ -43,6 +57,12 @@ depends_on: [stock-list]
 | 指定股票 | 展開一個多選輸入，可依代號或名稱搜尋加入，已選的以可移除的標籤呈現；上限 200 檔 |
 
 選到上限時輸入框 disabled 並提示「最多 200 檔」。
+
+**普通股母體**：本頁**沒有**自己的 ETF 排除選項。掃描母體由頁籤列上方的頁面層級勾選框「只看上市普通股」決定，該控制項與其狀態由 `specs/frontend/stock-list.md` 擁有，三個分頁共用。
+
+送出掃描時，以該勾選框當下的狀態填入請求的 `commonStocksOnly`。**「全市場」時才送**；選到「指定股票」時不帶此欄位，因為後端明訂使用者明確指名的代號不代為過濾（見 `specs/backend/strategy-scan.md` 的「掃描範圍」）。此時頁面層級的勾選框維持原狀、不變灰——它對另外兩個分頁依然生效，把它變灰會誤導成整頁設定被關掉了。
+
+切換該勾選框時，若本頁已有掃描結果，**結果保留不動、不自動重掃**——重掃是全市場逐檔判定的長時間作業，不該由一個勾選動作隱式觸發。使用者按「開始掃描」時才以新的值送出。
 
 **區間**：起日與迄日兩個日期輸入，**預設為今日往前一個日曆月至今日**。另提供「近一個月」「近三個月」「近半年」三個快捷鈕，點擊即套用對應區間。起日晚於迄日時前端即擋下並在區間下方提示，不送出請求。
 
@@ -173,7 +193,7 @@ depends_on: [stock-list]
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
-| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（`code` + `preset`）、`stockIds`、`startDate`、`endDate` |
+| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（`code` + `preset` + `risePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`、`endDate` |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`，不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount` 與 `caughtUpCount` 決定完成摘要的呈現方式 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
@@ -189,6 +209,7 @@ depends_on: [stock-list]
 | `UNKNOWN_STOCK_ID` | 於股票範圍區顯示「以下代號不存在」並列出 `unknownIds`，移除後可重新掃描 |
 | `TOO_MANY_STOCKS` | 於股票範圍區顯示「最多 200 檔」（前端已先擋，此為後備） |
 | `INVALID_DATE_RANGE` | 於區間下方顯示「起日不可晚於迄日」（前端已先擋，此為後備） |
+| `INVALID_RISE_PERCENT` | 於回應 `strategy` 指名的那張策略卡片下方顯示「漲幅門檻需介於 0 ~ 20」（前端已先擋，此為後備）。必須定位到該卡片，不可顯示成全頁通用錯誤——三張卡片各有一格，通用訊息無法讓使用者知道該改哪一格 |
 | `JOB_ALREADY_RUNNING` | 不視為錯誤：同步按鈕轉為執行中狀態並開始輪詢進度 |
 | `UPSTREAM_EMPTY` | 於「更新股票清單」下方顯示「交易所尚未發布今日清單，請稍後再試」——這是可重試的時機問題，不是系統故障，訊息必須說出「稍後再試」 |
 | `UPSTREAM_UNAVAILABLE` / `UPSTREAM_MALFORMED` | 於「更新股票清單」下方顯示「無法取得交易所股票清單，請稍後再試」 |
@@ -323,6 +344,22 @@ depends_on: [stock-list]
 - [x] `industrySourceStatus` 非 `OK` 時，摘要以警示色附加「產業別未更新（來源暫時無法取得）」，且股票清單那一半的數字照常顯示、不視為錯誤
 - [x] `industrySourceStatus` 為 `OK` 時，摘要不出現任何產業別未更新的警示文字
 - [x] 「更新股票清單」仍是本頁唯一的產業別匯入入口，動態分頁上沒有相同功能的按鈕
+
+---
+
+- [ ] 三張策略卡片各有一個「漲幅門檻」數字輸入，後綴 `%`，彼此獨立互不連動
+- [ ] 漲幅輸入的初始值為該卡片目前靈敏度的漲幅值，數值取自 `GET /api/strategies`，未在前端寫死
+- [ ] 切換靈敏度後，漲幅輸入重新填入新靈敏度的值，覆蓋使用者先前輸入的數字
+- [ ] 未勾選的卡片其靈敏度下拉與漲幅輸入皆為 disabled
+- [ ] 輸入 `-1`、`20.5` 或 `2.55` 時前端即擋下，於該卡片下方顯示「漲幅門檻需介於 0 ~ 20」，且不送出請求
+- [ ] 送出的 `strategies[]` 每個項目都帶 `risePercent`，值等於該卡片輸入框當下的數字
+- [ ] 後端回 `INVALID_RISE_PERCENT` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
+- [ ] 本頁條件區**沒有**任何 ETF 排除選項；該控制項只存在於頁籤列上方（見 `specs/frontend/stock-list.md`）
+- [ ] 「全市場」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
+- [ ] 頁面層級勾選框為預設（勾選）時掃描全市場，回應的 `scannedStocks` 明顯小於取消勾選時的值，且結果中不出現 `0050`、`00878`、`2881A`、`910322`
+- [ ] 切到「指定股票」時請求不帶 `commonStocksOnly`，且頁面層級勾選框不變灰、不改變狀態
+- [ ] 切換頁面層級勾選框時，本頁既有掃描結果保留不動，且不自動重新掃描
+- [ ] 漲幅輸入與普通股勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
