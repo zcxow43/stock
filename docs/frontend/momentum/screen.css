@@ -81,8 +81,18 @@
 .page-momentum .condrow { margin-bottom:4px; }
 .page-momentum .weeklist { margin:3px 0 0; gap:3px 22px; }
 .page-momentum .gaphint { margin-top:5px; }
-.page-momentum .summary { margin-bottom:6px; }
-.page-momentum .indblock { margin-bottom:5px; }
+.page-momentum .summary { margin-bottom:4px; }
+.page-momentum .indblock { margin-bottom:3px; }
 .page-momentum .indblock h3 { margin:0 0 3px; }
 .page-momentum thead th { padding:3px 16px; }
 .page-momentum tbody td { padding:2px 16px; }
+
+/* --- 排序切換列與產業別區塊平均漲幅 --- */
+.sortrow { display:flex; align-items:center; gap:14px; font-size:13px; color:#93A4B8; margin-bottom:8px; }
+.sortrow .lbl { width:64px; flex:none; }
+.indblock h3 em { font-style:normal; font-weight:600; font-size:13px; }
+.indblock h3 em.up { color:#E04B45; }
+.indblock h3 em.down { color:#16A75C; }
+.indblock h3 em.flat { color:#93A4B8; }
+.page-momentum .sortrow { margin-bottom:4px; }
+.page-momentum .sortrow .seg button { height:26px; }

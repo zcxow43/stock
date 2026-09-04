@@ -16,6 +16,7 @@ import com.stock.service.external.TwseClient;
 import com.stock.service.external.TwseIndustryCodeCatalog;
 import com.stock.service.external.dto.TwseCompanyProfileRow;
 import com.stock.service.external.dto.TwseDailyRow;
+import com.stock.util.CommonStockCodeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * Imports the whole TSE-listed "ordinary share" universe into the `stock` master, and the
@@ -45,11 +45,6 @@ public class StockUniverseImportService {
     private static final Logger log = LoggerFactory.getLogger(StockUniverseImportService.class);
 
     private static final String MARKET_TSE = "TSE";
-
-    /** "恰為 4 個數字字元、且首字元不為 0" — excludes ETFs (leading 0), special shares (letters),
-     * and TDRs/other codes (more than 4 characters). See the spec's 標的篩選 table. Applied to both
-     * source 1 (stock list) and source 2 (industry) codes, per spec 服務流程 step 8. */
-    private static final Pattern ORDINARY_SHARE_CODE = Pattern.compile("^[1-9]\\d{3}$");
 
     private final TwseClient twseClient;
     private final StockMapper stockMapper;
@@ -80,7 +75,7 @@ public class StockUniverseImportService {
         for (TwseDailyRow row : rawRows) {
             String code = trim(row.getCode());
             String name = trim(row.getName());
-            if (code == null || !ORDINARY_SHARE_CODE.matcher(code).matches() || name == null || name.isEmpty()) {
+            if (code == null || !CommonStockCodeUtil.isCommonStockCode(code) || name == null || name.isEmpty()) {
                 skippedCount++;
                 continue;
             }
@@ -153,7 +148,7 @@ public class StockUniverseImportService {
         List<IndustryLinkCandidate> candidates = new ArrayList<>();
         for (TwseCompanyProfileRow row : rawRows) {
             String code = trim(row.getCompanyId());
-            if (code == null || !ORDINARY_SHARE_CODE.matcher(code).matches()) {
+            if (code == null || !CommonStockCodeUtil.isCommonStockCode(code)) {
                 continue;
             }
             String industryName = resolveIndustryName(row.getIndustryCode());

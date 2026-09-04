@@ -12,6 +12,7 @@ public class MomentumGainResponseDto {
 
     private String metric;
     private String mode;
+    private String sort;
     private LocalDate startDate;
     private LocalDate endDate;
     private int tradingDays;
@@ -38,6 +39,14 @@ public class MomentumGainResponseDto {
 
     public void setMode(String mode) {
         this.mode = mode;
+    }
+
+    public String getSort() {
+        return sort;
+    }
+
+    public void setSort(String sort) {
+        this.sort = sort;
     }
 
     public LocalDate getStartDate() {

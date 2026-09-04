@@ -91,7 +91,7 @@
 .card .rise .pct { font-size:12px; color:#93A4B8; }
 
 /* 只看上市普通股：頁面層級設定，位於頁籤列上方 */
-.pageopt { display:flex; align-items:center; gap:7px; font-size:13px; color:#E6EDF5;
+.pageopt { display:flex; align-items:center; justify-content:flex-end; gap:7px; font-size:13px; color:#E6EDF5;
            background:#16202C; border:1px solid #26333F; border-radius:8px;
            padding:4px 14px; margin-bottom:5px; }
 .pageopt .cb { width:15px; height:15px; border-radius:3px; background:#3E8FD8; border:1px solid #3E8FD8;
@@ -107,3 +107,14 @@
 .onlycommon.dim .cb { background:#16202C; border-color:#26333F; }
 .onlycommon.dim .cb::after { color:#4A5866; }
 .onlycommon .na { font-size:12px; color:#6B7C90; }
+
+/* 分 K 連結欄（僅反彈與累積上漲兩張表）*/
+.mk { color:#3E8FD8; }
+
+/* 結果畫面：卡片收合為名稱＋靈敏度＋門檻，省下版面給結果表 */
+.page-strategy.nodesc .card .desc { display:none; }
+.page-strategy.nodesc .card { padding:3px 14px; }
+.page-strategy.nodesc .cards { margin-bottom:3px; }
+.page-strategy.nodesc .cond { padding:4px 16px; margin-bottom:4px; }
+
+.scrollnote { font-size:12px; color:#6B7C90; margin:0 0 6px; }

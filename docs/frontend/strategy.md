@@ -20,9 +20,10 @@
 | 3 | 點「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | **此端點即是向外部來源抓取日線的起點**；不帶 `stockIds` 代表全市場 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 3 | 同步進行中 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 每 5 秒輪詢更新進度條 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 4 | 同步完成 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 重取 `lastSyncedAt` 與完成／失敗／略過筆數 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 5 | 點「開始掃描」 | `POST /api/strategies/scan` | 以三個勾選的策略、各自靈敏度與各自的 `risePercent` 漲幅門檻即時掃描；`commonStocksOnly: true` 讓母體只含上市普通股（排除 ETF、特別股、TDR），回傳各策略命中清單、資料不足與待確認標的 | [strategy-scan](../backend/strategy-scan.md) |
-| 6 | 再點「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | 全數已補齊時回應 `caughtUpCount` 等於 `targetCount`，本次一檔都不抓取 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 6 | 同步結束 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt`，時間為 Asia/Taipei | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
+| 5 | 點「開始掃描」 | `POST /api/strategies/scan` | 以五個勾選的策略、各自靈敏度與各自的 `risePercent` 幅度門檻即時掃描；`commonStocksOnly: true` 讓母體只含上市普通股（排除 ETF、特別股、TDR），回傳各策略命中清單、資料不足與待確認標的 | [strategy-scan](../backend/strategy-scan.md) |
+| 6 | 向下捲動看其餘策略區塊 | —（純畫面捲動，不發請求） | 反彈與累積上漲的「分 K」連結指向 `/stocks/{stockId}/minute/{signalDate}`，點了才會觸發該檔該日的分 K 抓取 | [stock-minute-price](../backend/stock-minute-price.md) |
+| 7 | 再點「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | 全數已補齊時回應 `caughtUpCount` 等於 `targetCount`，本次一檔都不抓取 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
+| 7 | 同步結束 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt`，時間為 Asia/Taipei | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 
 掃描母體的普通股篩選來自**頁籤列上方的頁面層級設定**（三個分頁共用，由 `specs/frontend/stock-list.md` 擁有），送出時填入 `POST /api/strategies/scan` 的 `commonStocksOnly`。它**不是另一支 API**，也不寫任何資料表——取消勾選就會看回全部在市股票。
 

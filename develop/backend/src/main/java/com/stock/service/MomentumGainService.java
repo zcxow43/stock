@@ -11,9 +11,11 @@ import com.stock.exception.InvalidDaysException;
 import com.stock.exception.InvalidMetricException;
 import com.stock.exception.InvalidMinGainException;
 import com.stock.exception.InvalidModeException;
+import com.stock.exception.InvalidSortException;
 import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockIndustryMapper;
 import com.stock.mapper.StockMapper;
+import com.stock.util.CommonStockCodeUtil;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -47,6 +49,8 @@ public class MomentumGainService {
     private static final int SCALE = 2;
     private static final int INTERMEDIATE_SCALE = 10;
     private static final String UNCLASSIFIED_NAME = "未分類";
+    private static final String SORT_MATCH_COUNT = "MATCH_COUNT";
+    private static final String SORT_AVG_GAIN = "AVG_GAIN";
 
     private final StockMapper stockMapper;
     private final StockDailyPriceMapper priceMapper;

@@ -31,7 +31,10 @@ public class MomentumController {
             @RequestParam(required = false) Integer days,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false, defaultValue = "5") BigDecimal minGain) {
-        return ResponseEntity.ok(momentumGainService.getGain(metric, mode, days, startDate, endDate, minGain));
+            @RequestParam(required = false, defaultValue = "5") BigDecimal minGain,
+            @RequestParam(required = false, defaultValue = "true") boolean commonStocksOnly,
+            @RequestParam(required = false) String sort) {
+        return ResponseEntity.ok(momentumGainService.getGain(metric, mode, days, startDate, endDate, minGain,
+                commonStocksOnly, sort));
     }
 }

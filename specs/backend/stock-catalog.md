@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票清單查詢 API"
 requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入個股 K 線頁；總覽分頁另需能新增、修改、下市股票主檔"
 depends_on: [stock-price-ingestion]
@@ -251,13 +251,13 @@ Response `200`：
 ---
 ---
 
-- [ ] `GET /api/stocks` 省略 `commonStocksOnly` 時視為 `true`：回應的 `total` 只計代號恰為 4 位數字且首字元非 `0` 的股票
-- [ ] `commonStocksOnly: true` 時 `0050`、`00878`、`2881A`、`910322` 皆不出現在 `items` 中，也不計入 `total`
-- [ ] `commonStocksOnly=false` 時回傳全部在市股票，`total` 明顯大於 `true` 時的值
-- [ ] `commonStocksOnly` 與 `keyword`、`market`、`includeInactive`、分頁、排序可同時使用，彼此獨立生效
-- [ ] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
-- [ ] 本參數只影響查詢結果，不寫入任何資料表：查詢前後 `stock` 的列數、內容與 `is_active` 完全不變
-- [ ] `GET /api/stocks/{stockId}` 不受本參數影響：直接查 `0050` 仍正常回傳該檔資料，不因它是 ETF 而回 `404`
+- [x] `GET /api/stocks` 省略 `commonStocksOnly` 時視為 `true`：回應的 `total` 只計代號恰為 4 位數字且首字元非 `0` 的股票
+- [x] `commonStocksOnly: true` 時 `0050`、`00878`、`2881A`、`910322` 皆不出現在 `items` 中，也不計入 `total`
+- [x] `commonStocksOnly=false` 時回傳全部在市股票，`total` 明顯大於 `true` 時的值
+- [x] `commonStocksOnly` 與 `keyword`、`market`、`includeInactive`、分頁、排序可同時使用，彼此獨立生效
+- [x] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
+- [x] 本參數只影響查詢結果，不寫入任何資料表：查詢前後 `stock` 的列數、內容與 `is_active` 完全不變
+- [x] `GET /api/stocks/{stockId}` 不受本參數影響：直接查 `0050` 仍正常回傳該檔資料，不因它是 ETF 而回 `404`
 
 ## Execution Result
 - Status: DONE
@@ -317,3 +317,27 @@ Implements the three write endpoints (`POST`/`PUT`/`DELETE /api/stocks{,/{stockI
   - Live DB verified unchanged before and after the full run: `stock` = 34 rows (all `is_active=1`), `stock_daily_price` = 5372, `stock_daily_indicator` = 5372, `stock_sync_progress` = 68 — identical to the pre-existing baseline. All new test fixtures use a `ZW`-prefixed `stock_id` and are deleted in `@BeforeEach`/`@AfterEach`; no `Z%`-prefixed row remained after the run.
   - Did not run `mvn spring-boot:run` per instructions (port 8080 risk); all verification is via the `@SpringBootTest(webEnvironment = RANDOM_PORT)` integration tests against the live dev DB.
   - Left unfixed / deliberately out of scope: no bean-validation (`@Valid`) annotations were added to `CreateStockRequest`/`UpdateStockRequest` — validation is done manually in `StockCatalogService` so the exact `fields` list in `INVALID_STOCK_PAYLOAD` can be constructed precisely, matching the spec's example response shape; a generic `@Valid`-driven `MethodArgumentNotValidException` would have collapsed to the existing generic `VALIDATION_ERROR` code instead.
+
+### Increment 3 — 2026-09-04
+
+Adds the `commonStocksOnly` query parameter to `GET /api/stocks` (the spec's unchecked Acceptance Criteria). Nothing else in the spec was touched — `GET /api/stocks/{stockId}` and the write endpoints are unaffected.
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/util/CommonStockCodeUtil.java` (new) — the single shared definition of "普通股" (`^[1-9]\d{3}$`): exactly 4 digits, non-zero leading digit. Exposes `isCommonStockCode(String)` for in-JVM matching and the public `REGEX` constant.
+  - `develop/backend/src/main/java/com/stock/service/StockUniverseImportService.java` (modified) — removed its own private `ORDINARY_SHARE_CODE` `Pattern` field and switched both call sites (`importUniverse`'s source-1 filter, `fetchIndustryCandidates`'s source-2 filter) to `CommonStockCodeUtil.isCommonStockCode(...)`, so the write-side filter and the new read-side filter are backed by the exact same definition rather than two independently-maintained regexes.
+  - `develop/backend/src/main/java/com/stock/mapper/StockMapper.java` (extended) — `findPage`/`countPage` gained a `commonStockRegex` parameter (nullable `String`; `null` skips the filter).
+  - `develop/backend/src/main/resources/mapper/StockMapper.xml` (extended) — `listFilter` shared `<sql>` fragment (used by both `findPage` and `countPage`) gained `<if test="commonStockRegex != null">AND stock_id REGEXP #{commonStockRegex}</if>`. Bound via `#{}` (a prepared-statement parameter, not `${}` string interpolation), so there is no SQL-injection surface even though the value happens to be a fixed constant today.
+  - `develop/backend/src/main/java/com/stock/service/StockQueryService.java` (extended) — `listStocks` gained a `boolean commonStocksOnly` parameter; passes `CommonStockCodeUtil.REGEX` (when true) or `null` (when false) straight into `stockMapper.countPage`/`findPage`.
+  - `develop/backend/src/main/java/com/stock/controller/StockController.java` (extended) — `GET /api/stocks` gained `@RequestParam(required = false, defaultValue = "true") boolean commonStocksOnly`, mirroring the existing `includeInactive` pattern (default resolved at the controller boundary, not the service).
+  - `develop/backend/src/test/java/com/stock/StockCatalogIntegrationTest.java` (extended: 7 new tests; existing list-query URLs updated) — see Notes.
+  - `develop/backend/src/test/java/com/stock/StockCatalogWriteIntegrationTest.java` (existing list-query URLs updated only; no new tests) — see Notes.
+- Notes:
+  - **Filter runs inside the paged SQL query, not as a post-fetch pass.** `commonStockRegex` is threaded into the same `listFilter` `<sql>` fragment as `keyword`/`market`/`includeInactive`, so it participates in both `countPage` and the single paged `findPage` call — preserving the existing "先分頁、再取行情" cost bound from Increment 1 (still bounded by page size, never by full-universe joins). MySQL 8's regex engine (ICU-based since 8.0.4) understands the same `\d` escape as Java's `Pattern`, so `CommonStockCodeUtil.REGEX` is passed to `stock_id REGEXP #{commonStockRegex}` byte-for-byte identical to the string `Pattern.compile`s on the Java side — one string, two execution engines, not two independently-written predicates.
+  - **Reused, not duplicated:** `StockUniverseImportService`'s own private `ORDINARY_SHARE_CODE` `Pattern` field was deleted and both of its use sites now call `CommonStockCodeUtil.isCommonStockCode(...)` — the spec's "全系統共用同一份實作" requirement is satisfied by construction (there is exactly one place the regex string is written down), not merely by the two filters happening to agree.
+  - **Existing tests needed adjustment, not regression.** `StockCatalogIntegrationTest`'s and `StockCatalogWriteIntegrationTest`'s fixtures use non-numeric stock ids (`ZC01`–`ZC04`, `ZW01`–`ZW09`) to stay out of the way of real market data. Under the new `commonStocksOnly` default of `true`, none of those ids match `^[1-9]\d{3}$`, so every pre-existing `GET /api/stocks?...` call in those two files had `&commonStocksOnly=false` added to keep exercising the already-checked Acceptance Criteria (keyword/market/pagination/etc.) exactly as before — this is a required consequence of introducing a default-on filter, not a weakening of those criteria. All 20 tests in `StockCatalogIntegrationTest` (13 pre-existing + 7 new) and all 11 in `StockCatalogWriteIntegrationTest` pass.
+  - **New tests verify against real data**, not synthetic fixtures: the live dev DB already carries real TWSE-imported rows for `0050`/`00878` (ETFs), `2881A` (special share), `910322` (TDR), and `2330` (an ordinary share) from prior `stock-universe-import` runs. The 7 new tests in `StockCatalogIntegrationTest` read these (never write/delete them) to verify: default-omitted behaves as `true`; explicit `true` and `false` both behave correctly; `false`'s `total` exceeds `true`'s `total`; the parameter composes independently with `market`/`keyword`/`includeInactive`/`sort`/`order`/paging; and the `stock` table's row count and `is_active` values are byte-identical before/after issuing `commonStocksOnly` queries (proving it never writes).
+  - **`GET /api/stocks/{stockId}` intentionally untouched** — `StockQueryService.getStockDetail` never received a `commonStocksOnly` parameter, so `0050` still returns `200` with its detail payload; verified both by the `detail_notAffectedByCommonStocksOnly_etfStillReturned` test and live via `curl http://127.0.0.1:8080/api/stocks/0050`.
+  - Full suite: `mvn -f develop/backend/pom.xml test` → `Tests run: 195, Failures: 0, Errors: 0` (all pre-existing suites plus the two touched here; some other spec's test classes appear in this count from concurrent work on this branch, none of which this increment touched).
+  - **Live-verified end-to-end** via `mvn spring-boot:run` against the real dev DB (127.0.0.1:3306/stock, 1376 stocks, 1085 matching the common-stock pattern): confirmed every unchecked criterion by `curl` — default-omitted `total=1085` vs `commonStocksOnly=false` `total=1376`; `0050`/`00878`/`2881A`/`910322` each return `total=0` when omitted and `total=1` (with the expected `stockId`) under `commonStocksOnly=false`; combined `market=TSE&commonStocksOnly=true&keyword=2330` and `commonStocksOnly=false&sort=stockId&order=desc&page=1&size=3` both behave correctly; `GET /api/stocks/0050` returns `200` with full detail; `SELECT COUNT(*), SUM(is_active) FROM stock` unchanged (`1376`/`1376`) before and after issuing the queries. Server process was stopped afterward (`lsof -i :8080` confirmed empty) so port 8080 is free.
+  - No DB schema changes; no changes to `docker/launch.json` (backend entry unaffected — no new endpoint, only a query parameter on an existing one).
+  - Nothing left unfixed from this increment's `code-quality` self-review: the new SQL parameter is bound (`#{}`, not `${}`), the shared regex is genuinely singular (one Java constant, referenced — not copy-pasted — by both the write-side importer and the read-side query), and the filter's cost is bounded by the same mechanism the spec's already-checked performance criterion relies on.

@@ -1,7 +1,7 @@
 ---
 status: pending
 title: "動態分頁（產業別漲幅）"
-requirement: "新增「動態」分頁，內含「漲幅平均」與「漲幅加總」兩個標籤；可設定近幾個交易日、或勾選哪幾週，列出漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現"
+requirement: "新增「動態」分頁，內含「漲幅平均」與「漲幅加總」兩個標籤；可設定近幾個交易日、或勾選哪幾週，列出漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現；每個產業別區塊顯示該產業命中股票的平均漲幅，並可切換依命中檔數或依產業漲幅排序"
 depends_on: [stock-list]
 ---
 
@@ -9,7 +9,7 @@ depends_on: [stock-list]
 
 ## Overview
 
-`/stocks` 的第三個頁籤（頁籤容器與第一個頁籤見 `specs/frontend/stock-list.md`，第二個見 `specs/frontend/strategy.md`）。使用者設定一段期間與一個漲幅門檻，按下查詢後，**達標的股票依產業別分組列出**——回答的是「這段期間哪些產業在動、動的是哪幾檔」。
+`/stocks` 的第三個頁籤（頁籤容器與第一個頁籤見 `specs/frontend/stock-list.md`，第二個見 `specs/frontend/strategy.md`）。使用者設定一段期間與一個漲幅門檻，按下查詢後，**達標的股票依產業別分組列出**，每個產業別另顯示其命中股票的平均漲幅——回答的是「這段期間哪些產業在動、動得多大、動的是哪幾檔」。
 
 路由：`/stocks?tab=momentum`。
 
@@ -24,7 +24,7 @@ depends_on: [stock-list]
 1. **標籤列** — 頁內第二層標籤，兩個：「漲幅平均」「漲幅加總」。預設停在「漲幅平均」。
 2. **條件區** — 期間設定、漲幅門檻、「查詢」主要按鈕。
 3. **摘要列** — 實際採用的區間、交易日數、命中檔數、資料不足檔數。
-4. **結果區** — 每個產業別一個區塊。
+4. **結果區** — 排序切換列，其下每個產業別一個區塊。
 
 標籤列在條件區**之上**：切換標籤換的是「用哪種方式衡量漲幅」，那是比期間與門檻更上位的選擇，放在下面會讓人以為它只影響結果的排序。
 
@@ -80,9 +80,29 @@ depends_on: [stock-list]
 
 ### 結果區
 
-每個產業別一個區塊，由上而下依回應的 `industries` 順序排列（後端已排序，前端不重排）。
+#### 排序切換
 
-區塊標題：`{industryName}　{matchedCount} 檔`。
+結果區頂端一列，緊接在摘要列下方，兩個互斥選項：
+
+| 選項 | `sort` | 語意 |
+|---|---|---|
+| 依命中檔數（預設） | `MATCH_COUNT` | 命中股票最多的產業別排最前 |
+| 依產業漲幅 | `AVG_GAIN` | 平均漲幅最高的產業別排最前 |
+
+- **切換排序即以新的 `sort` 重新查詢**，不在前端重排既有結果。排序歸後端決定是本頁一貫的作法（見下），前端另做一套排序會讓兩邊的同分規則有機會分歧；本頁的查詢是一次彙總查詢、成本低，多一次往返換到單一排序來源是划算的。
+- **排序設定為兩個標籤共用**（與期間條件相同，與門檻不同）。排序是呈現偏好，和漲幅的量級無關，沒有理由讓兩個標籤各記一份。
+- 因此**切換排序時，另一個標籤已快取的結果即失效**，切過去時重新查詢。否則會出現「切到另一個標籤，看到的順序是舊排序」——排序選項與畫面上的實際順序不符，而使用者完全看不出原因。
+- 尚未查詢過時排序切換仍可操作，選到的值於首次查詢時帶出。
+
+#### 產業別區塊
+
+每個產業別一個區塊，由上而下依回應的 `industries` 順序排列（後端已排序，前端不重排，兩種排序皆然）。
+
+區塊標題：`{industryName}　{matchedCount} 檔　平均 {avgGain}`。
+
+- `avgGain` 以 2 位小數加 `%` 顯示，正值前綴 `+`，並依漲跌著色，與表格內「漲幅」欄用同一組色值。
+- 標題上的「平均」帶說明（hover 顯示）：「此區塊列出的 {matchedCount} 檔的漲幅平均，必然 ≥ 門檻；不代表整個產業的表現」。**這句必須存在**：`avgGain` 的母體只含命中股票，數值必然 ≥ 門檻，讀成「這個產業平均漲了這麼多」是錯的，而畫面上沒有任何其他線索擋得住這個誤讀。
+- 「未分類」區塊同樣顯示平均值。
 
 區塊內為一張表格：
 
@@ -121,6 +141,7 @@ depends_on: [stock-list]
 | 期間內無交易日 | 摘要列顯示「所選期間內沒有交易日」，結果區顯示「請改選其他週」 |
 | 請求失敗 | 結果區顯示錯誤訊息與「重新查詢」按鈕；不得顯示空結果假裝查無命中 |
 | 切換標籤且該標籤已有結果 | 直接顯示既有結果，不重新請求 |
+| 切換排序 | 以新的 `sort` 重新查詢，呈現與「查詢中」一列相同；另一標籤的快取結果同時失效 |
 
 ## Implementation Details
 
@@ -128,7 +149,7 @@ depends_on: [stock-list]
 
 | 時機 | 呼叫 |
 |---|---|
-| 按「查詢」、切換標籤（該標籤尚無結果時） | `GET /api/momentum/gain?metric=&mode=&days=&startDate=&endDate=&minGain=&commonStocksOnly=` |
+| 按「查詢」、切換排序、切換標籤（該標籤尚無有效結果時） | `GET /api/momentum/gain?metric=&mode=&days=&startDate=&endDate=&minGain=&sort=&commonStocksOnly=` |
 
 契約見 `specs/backend/industry-gain-ranking.md`。
 
@@ -141,8 +162,9 @@ depends_on: [stock-list]
 | `days` | `mode=DAYS` 時帶入輸入框的值；`WEEKS` 時不帶 |
 | `startDate` / `endDate` | `mode=WEEKS` 時帶入勾選週折算出的起訖日；`DAYS` 時不帶 |
 | `minGain` | 目前標籤的門檻值 |
+| `sort` | 排序切換當下的值：`MATCH_COUNT`／`AVG_GAIN`（兩個標籤共用） |
 
-回應欄位：`metric`、`mode`、`startDate`、`endDate`、`tradingDays`、`minGain`、`scannedStocks`、`matchedStockCount`、`insufficientDataCount`、`industries[]`（`industryId`、`industryName`、`matchedCount`、`items[]`），每個 item 含 `stockId`、`stockName`、`gain`、`tradingDays`、`startClose`、`endClose`、`firstTradeDate`、`lastTradeDate`。
+回應欄位：`metric`、`mode`、`sort`、`startDate`、`endDate`、`tradingDays`、`minGain`、`scannedStocks`、`matchedStockCount`、`insufficientDataCount`、`industries[]`（`industryId`、`industryName`、`matchedCount`、`avgGain`、`items[]`），每個 item 含 `stockId`、`stockName`、`gain`、`tradingDays`、`startClose`、`endClose`、`firstTradeDate`、`lastTradeDate`。
 
 `firstTradeDate` / `lastTradeDate` 不在表格中顯示，但需保留於資料模型中——供「交易日」欄的 tooltip 說明該檔實際涵蓋的日期。
 
@@ -150,7 +172,7 @@ depends_on: [stock-list]
 
 | `code` | 前端行為 |
 |---|---|
-| `INVALID_METRIC` / `INVALID_MODE` | 視為程式錯誤：正常操作不應觸發（兩者皆由受控元件產生），顯示通用錯誤訊息 |
+| `INVALID_METRIC` / `INVALID_MODE` / `INVALID_SORT` | 視為程式錯誤：正常操作不應觸發（三者皆由受控元件產生），顯示通用錯誤訊息 |
 | `INVALID_DAYS` | 於天數輸入框下方顯示「請輸入 1 – 120 之間的交易日數」（前端已先擋，此為後備） |
 | `INVALID_DATE_RANGE` | 於週清單下方顯示「所選週的區間無效」（前端已先擋，此為後備） |
 | `INVALID_MIN_GAIN` | 於門檻輸入框下方顯示「請輸入 -100 – 1000 之間的數值」（前端已先擋，此為後備） |
@@ -201,6 +223,9 @@ depends_on: [stock-list]
 | 摘要列命中檔數（強調） | `#E6EDF5` |
 | 產業別區塊標題文字 | `#E6EDF5` |
 | 產業別區塊命中檔數文字 | `#93A4B8` |
+| 產業別區塊平均漲幅（漲／跌／平） | `#E04B45` / `#16A75C` / `#93A4B8` |
+| 排序切換選項（未選）背景／文字 | `#1B2836` / `#93A4B8` |
+| 排序切換選項（選中）背景／文字 | `#26333F` / `#E6EDF5` |
 | 「未分類」區塊標題文字 | `#93A4B8` |
 | 資料不足／停牌註記提示文字 | `#D9A441` |
 | 產業別未匯入提示文字／背景／邊框 | `#D9A441` / `#2E2411` / `#5C4A1E` |
@@ -255,6 +280,21 @@ depends_on: [stock-list]
 - [ ] 頁面層級勾選框為預設（勾選）時，各產業別分組中不出現 `0050`、`00878`、`2881A`、`910322`
 - [ ] 取消勾選後本頁立即重新查詢，命中檔數明顯增加，且結果中出現 ETF
 - [ ] 「漲幅平均」與「漲幅加總」兩個標籤都套用同一個設定
+
+---
+
+- [ ] 結果區頂端有排序切換列，兩個選項「依命中檔數」「依產業漲幅」，預設停在「依命中檔數」
+- [ ] 切換排序時以新的 `sort` 重新查詢，不在前端重排既有結果
+- [ ] 排序設定兩個標籤共用：在「漲幅平均」切成「依產業漲幅」後切到「漲幅加總」，排序選項仍為「依產業漲幅」
+- [ ] 切換排序後另一標籤的快取結果失效：切過去時發出新請求，且畫面順序與排序選項一致
+- [ ] 尚未查詢過時排序切換可操作，其值於首次查詢時帶出；每次查詢帶出的 `sort` 等於該控制項當下的值
+- [ ] 產業別區塊標題為 `{industryName}　{matchedCount} 檔　平均 {avgGain}`，平均值為 2 位小數加 `%`、正值前綴 `+`
+- [ ] 區塊標題的平均值依漲跌著色：正值 `#E04B45`、負值 `#16A75C`、平盤 `#93A4B8`
+- [ ] 區塊標題的「平均」帶 hover 說明，明確指出母體只含命中股票、必然 ≥ 門檻、不代表整個產業的表現
+- [ ] 「未分類」區塊同樣顯示平均值
+- [ ] `sort=AVG_GAIN` 的結果中，畫面由上而下的區塊平均值為遞減，且「未分類」仍在最後
+- [ ] 兩種排序下前端皆完全依回應的 `industries` 順序呈現，不做任何前端重排
+- [ ] 新增元素的顏色皆取自 `## Visual Style`，平均值採與表格「漲幅」欄相同的紅綠色值
 
 ## Execution Result
 - Status: DONE

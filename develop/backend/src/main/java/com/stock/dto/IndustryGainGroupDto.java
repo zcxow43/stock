@@ -1,5 +1,6 @@
 package com.stock.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -12,6 +13,7 @@ public class IndustryGainGroupDto {
     private Integer industryId;
     private String industryName;
     private int matchedCount;
+    private BigDecimal avgGain;
     private List<StockGainItemDto> items;
 
     public IndustryGainGroupDto() {
@@ -39,6 +41,20 @@ public class IndustryGainGroupDto {
 
     public void setMatchedCount(int matchedCount) {
         this.matchedCount = matchedCount;
+    }
+
+    /**
+     * Arithmetic mean of this block's already-rounded {@code items[].gain} values, over hit
+     * stocks only (matched but under-threshold or insufficient-data stocks in the same industry
+     * are excluded) — reports how much the stocks that moved moved, not the industry's overall
+     * performance.
+     */
+    public BigDecimal getAvgGain() {
+        return avgGain;
+    }
+
+    public void setAvgGain(BigDecimal avgGain) {
+        this.avgGain = avgGain;
     }
 
     public List<StockGainItemDto> getItems() {

@@ -76,9 +76,10 @@ class StrategyScanIntegrationTest {
 
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        // 3 total since increment 2 added RISING_SUPPORT — see
-        // catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording below for its wording.
-        assertEquals(3, strategies.size());
+        // 5 total since increment 2 added RISING_SUPPORT and increment 3 added REBOUND/CUMULATIVE_RISE
+        // — see catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording and
+        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording below.
+        assertEquals(5, strategies.size());
 
         JsonNode box = findByCode(strategies, "BOX_BREAKOUT");
         assertEquals("箱型突破", box.get("name").asText());
@@ -158,7 +159,10 @@ class StrategyScanIntegrationTest {
             request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
             request.setStartDate(LocalDate.of(2026, 1, 1));
             request.setEndDate(LocalDate.of(2026, 1, 10));
-            // stockIds omitted -> ALL active
+            // stockIds omitted -> ALL active. This AC is about is_active filtering, not
+            // commonStocksOnly (increment 3) — the synthetic "SS..." ids used here are not
+            // 4-digit codes, so they must not be filtered out by the default commonStocksOnly=true.
+            request.setCommonStocksOnly(false);
 
             JsonNode root = postScan(request);
             assertEquals(2, root.get("scannedStocks").asInt());
@@ -594,7 +598,9 @@ class StrategyScanIntegrationTest {
 
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        assertEquals(3, strategies.size());
+        // 5 total since increment 3 added REBOUND/CUMULATIVE_RISE — see
+        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording below.
+        assertEquals(5, strategies.size());
 
         JsonNode risingSupport = findByCode(strategies, "RISING_SUPPORT");
         assertEquals("上漲支撐", risingSupport.get("name").asText());
@@ -970,6 +976,668 @@ class StrategyScanIntegrationTest {
         assertNoAdviceWording(response.getBody());
     }
 
+    // ==================== Increment 3: risePercent override ====================
+
+    @Test
+    void boxBreakout_risePercentOverridesBreakoutPercentOnly_defaultAcceptsButHigherOverrideRejects() throws Exception {
+        String stockId = "SS601";
+        seedStock(stockId, "突破覆寫測試", true);
+        LocalDate start = LocalDate.of(2026, 3, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.00", 1600);
+
+        ScanRequestDto defaultRequest = scanRequest(
+                Collections.singletonList(new String[]{"BOX_BREAKOUT", "STANDARD"}),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate);
+        JsonNode defaultResult = postScan(defaultRequest).get("results").get(0);
+        assertEquals(1, defaultResult.get("matchedCount").asInt(),
+                "STANDARD's own 1.5% breakoutPercent must accept a 105.00 close over a 103 box top");
+
+        ScanRequestDto overrideRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("2.5"))),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate);
+        JsonNode overrideResult = postScan(overrideRequest).get("results").get(0);
+        assertEquals(0, overrideResult.get("matchedCount").asInt(),
+                "risePercent=2.5 overrides breakoutPercent to 2.5% (needs >=105.575), which 105.00 must fail");
+    }
+
+    @Test
+    void risingSupport_risePercentOverridesSingleDayRiseOnly_defaultAcceptsButHigherOverrideRejects() throws Exception {
+        String stockId = "SS602";
+        seedStock(stockId, "漲幅覆寫測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 3, 1);
+        String[] lookbackCloses = {"1000.00", "1000.00", "1000.00", "1000.00", "1000.00",
+                "1010.00", "1000.00", "1000.00", "1000.00", "1000.00"};
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1035.00", 1000); // 3.5% rise over D-1=1000, breaks above priorHigh 1010
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1020.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1010.00", 1000);
+
+        ScanRequestDto defaultRequest = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode defaultResult = postScan(defaultRequest).get("results").get(0);
+        assertEquals(1, defaultResult.get("matchedCount").asInt(), "STANDARD's own 3% floor must accept a 3.5% rise");
+
+        ScanRequestDto overrideRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", new BigDecimal("4"))),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode overrideResult = postScan(overrideRequest).get("results").get(0);
+        assertEquals(0, overrideResult.get("matchedCount").asInt(), "risePercent=4 must reject a 3.5% rise");
+    }
+
+    @Test
+    void higherLows_risePercentOverridesPerLegRiseOnly_standardDefaultRejectsButLowerOverrideAccepts() throws Exception {
+        String stockId = "SS603";
+        seedStock(stockId, "底底高覆寫測試", true);
+        LocalDate day0 = LocalDate.of(2026, 3, 1);
+        List<LocalDate> dates = seedHigherLowsFixture(stockId, day0,
+                new String[]{"100.00", "100.30", "100.60"}); // ~0.3% each rise
+
+        ScanRequestDto defaultRequest = scanRequest(
+                Collections.singletonList(new String[]{"HIGHER_LOWS", "STANDARD"}),
+                Collections.singletonList(stockId), dates.get(3), dates.get(dates.size() - 1));
+        JsonNode defaultResult = postScan(defaultRequest).get("results").get(0);
+        assertEquals(0, defaultResult.get("matchedCount").asInt(), "STANDARD's own 1% floor must reject ~0.3% legs");
+
+        // 0.2%, not 0.3%: the fixture's second leg (100.60 over 100.30) is only a 0.2991% rise, so a
+        // 0.30% override would still (correctly) reject it, and risePercent allows at most one
+        // decimal digit anyway — 0.2% comfortably clears both legs.
+        ScanRequestDto overrideRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("HIGHER_LOWS", "STANDARD", new BigDecimal("0.2"))),
+                Collections.singletonList(stockId), dates.get(3), dates.get(dates.size() - 1));
+        JsonNode overrideResult = postScan(overrideRequest).get("results").get(0);
+        assertEquals(1, overrideResult.get("matchedCount").asInt(), "risePercent=0.2 must accept both ~0.3% legs");
+    }
+
+    @Test
+    void risePercent_zero_disablesThresholdEntirely_evenAHairsWidthRiseCounts() throws Exception {
+        String stockId = "SS604";
+        seedStock(stockId, "門檻歸零測試", true);
+        LocalDate day0 = LocalDate.of(2026, 3, 20);
+        List<LocalDate> dates = seedHigherLowsFixture(stockId, day0,
+                new String[]{"100.00", "100.01", "100.02"}); // a hair's width above the previous low each time
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(selection("HIGHER_LOWS", "STANDARD", BigDecimal.ZERO)),
+                Collections.singletonList(stockId), dates.get(3), dates.get(dates.size() - 1));
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "risePercent=0 must behave like 'strictly higher is enough', not zero matches or a disabled pattern");
+    }
+
+    @Test
+    void risePercent_doesNotAffectOtherParameters_sameOverrideStillDiffersByLookback() throws Exception {
+        String stockId = "SS605";
+        seedStock(stockId, "覆寫不影響其餘參數測試", true);
+        LocalDate lookbackStart = LocalDate.of(2026, 3, 1);
+        String[] lookbackCloses = new String[20];
+        for (int i = 0; i < 20; i++) {
+            lookbackCloses[i] = "1000.00";
+        }
+        // 10 trading days before D: inside STRICT's 20-day lookback, outside LOOSE's 5-day one.
+        lookbackCloses[9] = "2000.00";
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1100.00", 1000); // 10% rise over support 1000
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1150.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1150.00", 1000);
+
+        BigDecimal sameOverride = new BigDecimal("8"); // below the raw 10% rise regardless of preset
+
+        ScanRequestDto looseRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "LOOSE", sameOverride)),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode looseResult = postScan(looseRequest).get("results").get(0);
+        assertEquals(1, looseResult.get("matchedCount").asInt(),
+                "LOOSE's 5-day lookback still applies with the override -> the 2000 spike stays out of view");
+
+        ScanRequestDto strictRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "STRICT", sameOverride)),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode strictResult = postScan(strictRequest).get("results").get(0);
+        assertEquals(0, strictResult.get("matchedCount").asInt(),
+                "STRICT's 20-day lookback still applies with the SAME override -> the 2000 spike still blocks it");
+    }
+
+    @Test
+    void risePercent_appliesIndependentlyAcrossStrategiesInOneRequest_resultsInSubmittedOrder() throws Exception {
+        String boxStock = "SS701";
+        String risingStock = "SS702";
+        String higherLowsStock = "SS703";
+        seedStock(boxStock, "獨立覆寫-箱型", true);
+        seedStock(risingStock, "獨立覆寫-上漲支撐", true);
+        seedStock(higherLowsStock, "獨立覆寫-底底高", true);
+
+        // HIGHER_LOWS: 25-day fixture; dates.get(3) becomes the shared scan startDate, dates.get(last) the shared endDate.
+        LocalDate higherLowsDay0 = LocalDate.of(2026, 3, 22);
+        List<LocalDate> higherLowsDates = seedHigherLowsFixture(higherLowsStock, higherLowsDay0,
+                new String[]{"100.00", "102.00", "104.50"}); // +2%, +2.45% legs -> hits under STANDARD's own 1% floor
+        LocalDate startDate = higherLowsDates.get(3);
+        LocalDate endDate = higherLowsDates.get(higherLowsDates.size() - 1);
+
+        // BOX_BREAKOUT: 20 lookback bars ending the day before startDate; breakout day = startDate itself.
+        seedTightBox(boxStock, startDate.minusDays(20), 20, "100.00", "103.00", "97.00", 1000);
+        insertPriceRow(boxStock, startDate, "104.00", "106.00", "104.00", "105.00", 1600);
+
+        // RISING_SUPPORT: 10 lookback bars ending the day before startDate; D = startDate.
+        String[] risingLookback = {"1000.00", "1000.00", "1000.00", "1000.00", "1000.00",
+                "1010.00", "1000.00", "1000.00", "1000.00", "1000.00"};
+        seedCloseSeries(risingStock, startDate.minusDays(10), risingLookback, 1000);
+        insertCloseOnlyRow(risingStock, startDate, "1035.00", 1000);
+        insertCloseOnlyRow(risingStock, startDate.plusDays(1), "1020.00", 1000);
+        insertCloseOnlyRow(risingStock, startDate.plusDays(2), "1010.00", 1000);
+
+        List<StrategySelectionDto> selections = Arrays.asList(
+                selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("2.5")),
+                selection("RISING_SUPPORT", "STANDARD", new BigDecimal("4")),
+                selection("HIGHER_LOWS", "STANDARD")); // no override -> STANDARD's own 1% floor
+        ScanRequestDto request = scanRequestFromSelections(selections,
+                Arrays.asList(boxStock, risingStock, higherLowsStock), startDate, endDate);
+        request.setCommonStocksOnly(true);
+
+        JsonNode results = postScan(request).get("results");
+        assertEquals(3, results.size());
+        assertEquals("BOX_BREAKOUT", results.get(0).get("strategy").asText());
+        assertEquals("RISING_SUPPORT", results.get(1).get("strategy").asText());
+        assertEquals("HIGHER_LOWS", results.get(2).get("strategy").asText());
+
+        assertEquals(0, results.get(0).get("matchedCount").asInt(),
+                "2.5% override must reject a 105.00 close against a 103 box top (needs >=105.575)");
+        assertEquals(0, results.get(1).get("matchedCount").asInt(),
+                "4% override must reject a 3.5% single-day rise");
+        assertEquals(1, results.get(2).get("matchedCount").asInt(),
+                "no override -> STANDARD's own 1% per-leg floor still applies and the 2%/2.45% legs clear it");
+    }
+
+    @Test
+    void risePercent_negative_rejectedWithInvalidRisePercentNamingStrategy() {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "STANDARD", new BigDecimal("-1"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("HIGHER_LOWS", response.getBody().getStrategy());
+    }
+
+    @Test
+    void risePercent_tooHigh_rejectedWithInvalidRisePercentNamingCorrectStrategyAmongMultiple() {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Arrays.asList(
+                selection("HIGHER_LOWS", "STANDARD"), // valid, no override
+                selection("RISING_SUPPORT", "STANDARD", new BigDecimal("100"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("RISING_SUPPORT", response.getBody().getStrategy());
+    }
+
+    @Test
+    void risePercent_moreThanOneDecimalDigit_rejectedWithInvalidRisePercent() {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("2.55"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("BOX_BREAKOUT", response.getBody().getStrategy());
+    }
+
+    @Test
+    void risePercent_trailingZeroDecimal_isNotRejectedAsTooManyDecimalDigits() {
+        String stockId = "SS606";
+        seedStock(stockId, "小數尾零測試", true);
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("2.50"))));
+        request.setStockIds(Collections.singletonList(stockId));
+        request.setStartDate(LocalDate.now().minusDays(1));
+        request.setEndDate(LocalDate.now());
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/scan", request, String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "\"2.50\" carries only one real decimal digit; body: " + response.getBody());
+    }
+
+    // ==================== Increment 3: commonStocksOnly ====================
+    // Exercised against the live dataset's real ETF (0050/00878), special share (2881A) and TDR
+    // (910322) rows, plus real ordinary shares — these already exist from stock-universe-import and
+    // are never written to by these tests, only read.
+
+    @Test
+    void commonStocksOnly_omittedDefaultsToTrue_scannedStocksCountsOnlyCommonCodes() throws Exception {
+        Long expectedCommonActive = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM stock WHERE is_active = 1 AND stock_id REGEXP '^[1-9][0-9]{3}$'", Long.class);
+
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        request.setStartDate(LocalDate.now().minusDays(3));
+        request.setEndDate(LocalDate.now());
+        // stockIds and commonStocksOnly both omitted -> ALL active, filtered to common stocks only.
+
+        JsonNode root = postScan(request);
+        assertEquals(expectedCommonActive.intValue(), root.get("scannedStocks").asInt());
+    }
+
+    @Test
+    void commonStocksOnly_false_scannedStocksSubstantiallyLargerThanDefaultTrue() throws Exception {
+        Long expectedAllActive = jdbc.queryForObject("SELECT COUNT(*) FROM stock WHERE is_active = 1", Long.class);
+
+        ScanRequestDto trueRequest = new ScanRequestDto();
+        trueRequest.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        trueRequest.setStartDate(LocalDate.now().minusDays(3));
+        trueRequest.setEndDate(LocalDate.now());
+        int scannedCommonOnly = postScan(trueRequest).get("scannedStocks").asInt();
+
+        ScanRequestDto falseRequest = new ScanRequestDto();
+        falseRequest.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        falseRequest.setCommonStocksOnly(false);
+        falseRequest.setStartDate(LocalDate.now().minusDays(3));
+        falseRequest.setEndDate(LocalDate.now());
+        int scannedAll = postScan(falseRequest).get("scannedStocks").asInt();
+
+        assertEquals(expectedAllActive.intValue(), scannedAll);
+        assertTrue(scannedAll > scannedCommonOnly,
+                "commonStocksOnly=false (" + scannedAll + ") should exceed the default true (" + scannedCommonOnly + ")");
+    }
+
+    @Test
+    void commonStocksOnly_true_excludesKnownEtfSpecialShareAndTdrFromAllResultLists() throws Exception {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        request.setStartDate(LocalDate.now().minusDays(5));
+        request.setEndDate(LocalDate.now());
+        // commonStocksOnly omitted -> true
+
+        JsonNode result = postScan(request).get("results").get(0);
+        for (String code : new String[]{"0050", "00878", "2881A", "910322"}) {
+            assertFalse(containsStockId(result.get("items"), code), code + " must not appear in items");
+            assertFalse(toStringList(result.get("insufficientData")).contains(code),
+                    code + " must not appear in insufficientData");
+            assertFalse(toStringList(result.get("pendingConfirm")).contains(code),
+                    code + " must not appear in pendingConfirm");
+        }
+    }
+
+    @Test
+    void commonStocksOnly_ignoredWhenStockIdsGiven_bothCommonAndNonCommonAreScanned() throws Exception {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        request.setStockIds(Arrays.asList("0050", "2330"));
+        request.setCommonStocksOnly(true);
+        request.setStartDate(LocalDate.now().minusDays(5));
+        request.setEndDate(LocalDate.now());
+
+        JsonNode root = postScan(request);
+        assertEquals(2, root.get("scannedStocks").asInt(),
+                "commonStocksOnly must be ignored entirely once stockIds names an explicit list");
+    }
+
+    @Test
+    void commonStocksOnly_neverWritesToStockTable_rowCountAndActiveFlagsUnchanged() throws Exception {
+        Long countBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Long.class);
+        Long activeCountBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock WHERE is_active = 1", Long.class);
+
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("HIGHER_LOWS", "LOOSE")));
+        request.setCommonStocksOnly(true);
+        request.setStartDate(LocalDate.now().minusDays(3));
+        request.setEndDate(LocalDate.now());
+        postScan(request);
+
+        Long countAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Long.class);
+        Long activeCountAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock WHERE is_active = 1", Long.class);
+        assertEquals(countBefore, countAfter, "commonStocksOnly must never write to the stock table");
+        assertEquals(activeCountBefore, activeCountAfter);
+    }
+
+    // ==================== Increment 3: REBOUND + CUMULATIVE_RISE ====================
+
+    @Test
+    void catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording() throws Exception {
+        ResponseEntity<String> response = rest.getForEntity("/api/strategies", String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        JsonNode strategies = root.get("strategies");
+        assertEquals(5, strategies.size());
+
+        JsonNode rebound = findByCode(strategies, "REBOUND");
+        assertEquals("反彈", rebound.get("name").asText());
+        assertEquals(3, rebound.get("presets").size());
+        assertEquals("回看 20 日，自區間最高收盤跌幅 ≥ 20% 的最低點",
+                findPresetByCode(rebound.get("presets"), "STRICT").get("description").asText());
+        assertEquals("回看 20 日，自區間最高收盤跌幅 ≥ 15% 的最低點",
+                findPresetByCode(rebound.get("presets"), "STANDARD").get("description").asText());
+        assertEquals("回看 10 日，自區間最高收盤跌幅 ≥ 10% 的最低點",
+                findPresetByCode(rebound.get("presets"), "LOOSE").get("description").asText());
+
+        JsonNode cumulativeRise = findByCode(strategies, "CUMULATIVE_RISE");
+        assertEquals("累積上漲", cumulativeRise.get("name").asText());
+        assertEquals(3, cumulativeRise.get("presets").size());
+        assertEquals("回看 20 日，自區間最低收盤累積漲幅 ≥ 20% 的最高點",
+                findPresetByCode(cumulativeRise.get("presets"), "STRICT").get("description").asText());
+        assertEquals("回看 20 日，自區間最低收盤累積漲幅 ≥ 15% 的最高點",
+                findPresetByCode(cumulativeRise.get("presets"), "STANDARD").get("description").asText());
+        assertEquals("回看 10 日，自區間最低收盤累積漲幅 ≥ 10% 的最高點",
+                findPresetByCode(cumulativeRise.get("presets"), "LOOSE").get("description").asText());
+    }
+
+    @Test
+    void rebound_standard_matchesHandCalculatedPeakTroughAndDropPercent() throws Exception {
+        String stockId = "SS801";
+        seedStock(stockId, "反彈手算測試", true);
+        LocalDate day1 = LocalDate.of(2026, 8, 6);
+        seedRamp(stockId, day1, 90.00, 110.00, 4, 1000); // 08-06..08-09, below the peak
+        LocalDate peakDate = day1.plusDays(4); // 08-10
+        insertCloseOnlyRow(stockId, peakDate, "120.00", 1000);
+        List<LocalDate> declineDates = seedRamp(stockId, peakDate.plusDays(1), 119.00, 100.00, 15, 1000); // 08-11..08-25
+        LocalDate d = declineDates.get(declineDates.size() - 1); // 08-25
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(stockId, item.get("stockId").asText());
+        assertEquals(d.toString(), item.get("signalDate").asText());
+        JsonNode detail = item.get("detail");
+        assertEquals(peakDate.toString(), detail.get("peakDate").asText());
+        assertBigDecimalEquals("120.00", detail.get("peakClose"));
+        assertBigDecimalEquals("100.00", detail.get("troughClose"));
+        assertBigDecimalEquals("16.67", detail.get("dropPercent"));
+        assertTrue(result.get("insufficientData").isEmpty());
+        assertTrue(result.get("pendingConfirm").isEmpty());
+    }
+
+    @Test
+    void rebound_dMustBeLow_dayAfterTrueTroughDoesNotMatchEvenThoughStillNearLow() throws Exception {
+        String stockId = "SS802";
+        seedStock(stockId, "反彈低點限定測試", true);
+        LocalDate fillerStart = LocalDate.of(2026, 8, 22);
+        seedRamp(stockId, fillerStart, 80.00, 80.00, 10, 1000); // 08-22..08-31, flat filler below the peak
+        LocalDate peakDate = fillerStart.plusDays(10); // 09-01
+        insertCloseOnlyRow(stockId, peakDate, "120.00", 1000);
+        seedRamp(stockId, peakDate.plusDays(1), 117.00, 96.00, 8, 1000); // 09-02..09-09
+        LocalDate y = peakDate.plusDays(9); // 09-10: the true, deepest trough
+        insertCloseOnlyRow(stockId, y, "93.00", 1000);
+        LocalDate z = y.plusDays(1); // 09-11: an uptick, still well below the peak but no longer the low
+        insertCloseOnlyRow(stockId, z, "95.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "STANDARD"}),
+                Collections.singletonList(stockId), y, z);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "only the true trough day must match, not every day of the decline");
+        JsonNode item = result.get("items").get(0);
+        assertEquals(y.toString(), item.get("signalDate").asText(),
+                "the day after the true trough must not be reported even though it is still deep");
+    }
+
+    @Test
+    void rebound_measuresWindowMaxToPostMin_notFirstMinusLastClose() throws Exception {
+        String stockId = "SS803";
+        seedStock(stockId, "首尾相減會漏失測試", true);
+        LocalDate day1 = LocalDate.of(2026, 7, 1);
+        insertCloseOnlyRow(stockId, day1, "90.00", 1000);
+        seedRamp(stockId, day1.plusDays(1), 110.00, 190.00, 5, 1000); // 07-02..07-06, rising toward the peak
+        LocalDate peakDate = day1.plusDays(6); // 07-07
+        insertCloseOnlyRow(stockId, peakDate, "200.00", 1000);
+        List<LocalDate> declineDates = seedRamp(stockId, peakDate.plusDays(1), 180.00, 90.00, 13, 1000); // 07-08..07-20
+        LocalDate d = declineDates.get(declineDates.size() - 1); // 07-20, close == day1's close
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "first (90.00) and last (90.00) close are identical, but the mid-window peak means a real drop happened");
+        JsonNode detail = result.get("items").get(0).get("detail");
+        assertBigDecimalEquals("200.00", detail.get("peakClose"));
+        assertBigDecimalEquals("90.00", detail.get("troughClose"));
+        assertBigDecimalEquals("55.00", detail.get("dropPercent"));
+    }
+
+    @Test
+    void cumulativeRise_standard_matchesHandCalculatedTroughPeakAndRisePercent() throws Exception {
+        String stockId = "SS811";
+        seedStock(stockId, "累積上漲手算測試", true);
+        LocalDate troughDate = LocalDate.of(2026, 8, 5);
+        insertCloseOnlyRow(stockId, troughDate, "80.00", 1000);
+        seedRamp(stockId, troughDate.plusDays(1), 81.00, 99.00, 18, 1000); // 08-06..08-23
+        LocalDate d = LocalDate.of(2026, 8, 28); // deliberate 4-day calendar gap from 08-23; no interpolation
+        insertCloseOnlyRow(stockId, d, "100.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"CUMULATIVE_RISE", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(d.toString(), item.get("signalDate").asText());
+        JsonNode detail = item.get("detail");
+        assertEquals(troughDate.toString(), detail.get("troughDate").asText());
+        assertBigDecimalEquals("80.00", detail.get("troughClose"));
+        assertBigDecimalEquals("100.00", detail.get("peakClose"));
+        assertBigDecimalEquals("25.00", detail.get("risePercent"));
+        assertTrue(result.get("insufficientData").isEmpty());
+        assertTrue(result.get("pendingConfirm").isEmpty());
+    }
+
+    @Test
+    void cumulativeRise_noSingleDayRiseRequired_slowSteadyClimbStillMatches() throws Exception {
+        String stockId = "SS812";
+        seedStock(stockId, "緩步盤堅測試", true);
+        LocalDate start = LocalDate.of(2026, 6, 1);
+        List<LocalDate> dates = seedRamp(stockId, start, 100.00, 119.00, 20, 1000); // ~1%/day, no day near 5%
+        LocalDate d = dates.get(dates.size() - 1);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"CUMULATIVE_RISE", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "19% cumulative rise across the window clears STANDARD's 15% floor even though no single day rises 5%");
+    }
+
+    @Test
+    void cumulativeRise_dMustBeHigh_dayAfterTruePeakDoesNotMatchEvenThoughStillHigh() throws Exception {
+        String stockId = "SS813";
+        seedStock(stockId, "累積上漲高點限定測試", true);
+        LocalDate fillerStart = LocalDate.of(2026, 8, 22);
+        seedRamp(stockId, fillerStart, 90.00, 90.00, 10, 1000); // 08-22..08-31, flat filler above the trough
+        LocalDate troughDate = fillerStart.plusDays(10); // 09-01
+        insertCloseOnlyRow(stockId, troughDate, "80.00", 1000);
+        seedRamp(stockId, troughDate.plusDays(1), 83.00, 104.00, 8, 1000); // 09-02..09-09
+        LocalDate y = troughDate.plusDays(9); // 09-10: the true, highest peak
+        insertCloseOnlyRow(stockId, y, "107.00", 1000);
+        LocalDate z = y.plusDays(1); // 09-11: a downtick, still well above the trough but no longer the high
+        insertCloseOnlyRow(stockId, z, "105.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"CUMULATIVE_RISE", "STANDARD"}),
+                Collections.singletonList(stockId), y, z);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "only the true peak day must match, not every day of the climb");
+        JsonNode item = result.get("items").get(0);
+        assertEquals(y.toString(), item.get("signalDate").asText(),
+                "the day after the true peak must not be reported even though it is still high");
+    }
+
+    @Test
+    void rebound_lookbackVariesByPreset_strictAndLooseProduceDifferentHitResults() throws Exception {
+        String stockId = "SS821";
+        seedStock(stockId, "回看區間反彈測試", true);
+        LocalDate d1 = LocalDate.of(2026, 5, 1);
+        insertCloseOnlyRow(stockId, d1, "200.00", 1000);
+        seedRamp(stockId, d1.plusDays(1), 190.00, 115.00, 9, 1000); // day2..day10
+        List<LocalDate> looseRamp = seedRamp(stockId, d1.plusDays(10), 114.00, 110.10, 10, 1000); // day11..day20
+        LocalDate d = looseRamp.get(looseRamp.size() - 1); // day20
+
+        ScanRequestDto strictRequest = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "STRICT"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode strictResult = postScan(strictRequest).get("results").get(0);
+        assertEquals(1, strictResult.get("matchedCount").asInt(),
+                "STRICT's 20-day lookback reaches the far 200 peak, clearing the 20% floor");
+
+        ScanRequestDto looseRequest = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "LOOSE"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode looseResult = postScan(looseRequest).get("results").get(0);
+        assertEquals(0, looseResult.get("matchedCount").asInt(),
+                "LOOSE's 10-day lookback only sees the local 114 peak, which fails the 10% floor");
+    }
+
+    @Test
+    void cumulativeRise_lookbackVariesByPreset_strictAndLooseProduceDifferentHitResults() throws Exception {
+        String stockId = "SS822";
+        seedStock(stockId, "回看區間累積上漲測試", true);
+        LocalDate d1 = LocalDate.of(2026, 5, 1);
+        insertCloseOnlyRow(stockId, d1, "10.00", 1000);
+        seedRamp(stockId, d1.plusDays(1), 20.00, 95.00, 9, 1000); // day2..day10
+        List<LocalDate> looseRamp = seedRamp(stockId, d1.plusDays(10), 96.00, 98.50, 10, 1000); // day11..day20
+        LocalDate d = looseRamp.get(looseRamp.size() - 1); // day20
+
+        ScanRequestDto strictRequest = scanRequest(
+                Collections.singletonList(new String[]{"CUMULATIVE_RISE", "STRICT"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode strictResult = postScan(strictRequest).get("results").get(0);
+        assertEquals(1, strictResult.get("matchedCount").asInt(),
+                "STRICT's 20-day lookback reaches the far 10.00 trough, clearing the 20% floor");
+
+        ScanRequestDto looseRequest = scanRequest(
+                Collections.singletonList(new String[]{"CUMULATIVE_RISE", "LOOSE"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode looseResult = postScan(looseRequest).get("results").get(0);
+        assertEquals(0, looseResult.get("matchedCount").asInt(),
+                "LOOSE's 10-day lookback only sees the local 96.00 trough, which fails the 10% floor");
+    }
+
+    @Test
+    void rebound_risePercentOverridesDropPercentNotTreatedAsRiseThreshold() throws Exception {
+        String stockId = "SS831";
+        seedStock(stockId, "跌幅覆寫測試", true);
+        LocalDate day1 = LocalDate.of(2026, 4, 1);
+        insertCloseOnlyRow(stockId, day1, "100.00", 1000);
+        List<LocalDate> declineDates = seedRamp(stockId, day1.plusDays(1), 99.00, 88.00, 19, 1000); // 12% total drop
+        LocalDate d = declineDates.get(declineDates.size() - 1);
+
+        ScanRequestDto defaultRequest = scanRequest(
+                Collections.singletonList(new String[]{"REBOUND", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode defaultResult = postScan(defaultRequest).get("results").get(0);
+        assertEquals(0, defaultResult.get("matchedCount").asInt(), "12% drop must fail STANDARD's 15% floor");
+
+        ScanRequestDto overrideRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("REBOUND", "STANDARD", new BigDecimal("10"))),
+                Collections.singletonList(stockId), d, d);
+        JsonNode overrideResult = postScan(overrideRequest).get("results").get(0);
+        assertEquals(1, overrideResult.get("matchedCount").asInt(),
+                "risePercent=10 must be applied as a 10% DROP floor, which the 12% drop clears");
+        assertBigDecimalEquals("12.00", overrideResult.get("items").get(0).get("detail").get("dropPercent"));
+    }
+
+    @Test
+    void risePercent_upperBoundRaisedTo50_30And50AreValidBut50Point1IsRejected() {
+        String stockId = "SS841";
+        seedStock(stockId, "上限放寬測試", true);
+
+        ScanRequestDto thirty = new ScanRequestDto();
+        thirty.setStrategies(Collections.singletonList(selection("REBOUND", "STANDARD", new BigDecimal("30"))));
+        thirty.setStockIds(Collections.singletonList(stockId));
+        thirty.setStartDate(LocalDate.now().minusDays(1));
+        thirty.setEndDate(LocalDate.now());
+        ResponseEntity<String> thirtyResponse = rest.postForEntity("/api/strategies/scan", thirty, String.class);
+        assertEquals(HttpStatus.OK, thirtyResponse.getStatusCode(), "30 must be a valid risePercent override");
+
+        ScanRequestDto fifty = new ScanRequestDto();
+        fifty.setStrategies(Collections.singletonList(selection("REBOUND", "STANDARD", new BigDecimal("50"))));
+        fifty.setStockIds(Collections.singletonList(stockId));
+        fifty.setStartDate(LocalDate.now().minusDays(1));
+        fifty.setEndDate(LocalDate.now());
+        ResponseEntity<String> fiftyResponse = rest.postForEntity("/api/strategies/scan", fifty, String.class);
+        assertEquals(HttpStatus.OK, fiftyResponse.getStatusCode(), "the boundary value 50 must be valid");
+
+        ScanRequestDto fiftyOne = new ScanRequestDto();
+        fiftyOne.setStrategies(Collections.singletonList(selection("REBOUND", "STANDARD", new BigDecimal("50.1"))));
+        ResponseEntity<ErrorResponse> fiftyOneResponse =
+                rest.postForEntity("/api/strategies/scan", fiftyOne, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, fiftyOneResponse.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", fiftyOneResponse.getBody().getCode());
+        assertEquals("REBOUND", fiftyOneResponse.getBody().getStrategy());
+    }
+
+    @Test
+    void reboundAndCumulativeRise_insufficientLookback_reportedSeparatelyFromNoMatch() throws Exception {
+        String stockId = "SS851";
+        seedStock(stockId, "反彈與累積上漲資料不足測試", true);
+        LocalDate start = LocalDate.of(2026, 2, 1);
+        // Only 5 bars strictly before D; STANDARD needs lookback-1 = 19.
+        seedCloseSeries(stockId, start.minusDays(5), repeat("100.00", 5), 1000);
+        insertCloseOnlyRow(stockId, start, "100.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Arrays.asList(new String[]{"REBOUND", "STANDARD"}, new String[]{"CUMULATIVE_RISE", "STANDARD"}),
+                Collections.singletonList(stockId), start, start);
+        JsonNode results = postScan(request).get("results");
+        for (JsonNode result : results) {
+            assertEquals(0, result.get("matchedCount").asInt());
+            assertTrue(result.get("items").isEmpty());
+            assertTrue(toStringList(result.get("insufficientData")).contains(stockId));
+        }
+    }
+
+    @Test
+    void scan_fiveStrategiesTogether_resultsReturnedInSubmittedOrder() throws Exception {
+        String stockId = "SS861";
+        seedStock(stockId, "五策略合併測試", true);
+        LocalDate start = LocalDate.of(2026, 11, 1);
+        LocalDate end = LocalDate.of(2026, 11, 10);
+        seedCloseSeries(stockId, start.minusDays(60), repeat("100.00", 80), 1000);
+
+        ScanRequestDto request = scanRequest(
+                Arrays.asList(
+                        new String[]{"REBOUND", "LOOSE"},
+                        new String[]{"RISING_SUPPORT", "STANDARD"},
+                        new String[]{"BOX_BREAKOUT", "LOOSE"},
+                        new String[]{"HIGHER_LOWS", "LOOSE"},
+                        new String[]{"CUMULATIVE_RISE", "LOOSE"}),
+                Collections.singletonList(stockId), start, end);
+        JsonNode results = postScan(request).get("results");
+        assertEquals(5, results.size());
+        assertEquals("REBOUND", results.get(0).get("strategy").asText());
+        assertEquals("RISING_SUPPORT", results.get(1).get("strategy").asText());
+        assertEquals("BOX_BREAKOUT", results.get(2).get("strategy").asText());
+        assertEquals("HIGHER_LOWS", results.get(3).get("strategy").asText());
+        assertEquals("CUMULATIVE_RISE", results.get(4).get("strategy").asText());
+    }
+
+    @Test
+    void reboundAndCumulativeRiseScanResponse_containsNoAdviceWording() throws Exception {
+        String stockId = "SS871";
+        seedStock(stockId, "反彈累積上漲文案測試", true);
+        LocalDate day1 = LocalDate.of(2026, 8, 6);
+        seedRamp(stockId, day1, 90.00, 110.00, 4, 1000);
+        LocalDate peakDate = day1.plusDays(4);
+        insertCloseOnlyRow(stockId, peakDate, "120.00", 1000);
+        List<LocalDate> declineDates = seedRamp(stockId, peakDate.plusDays(1), 119.00, 100.00, 15, 1000);
+        LocalDate d = declineDates.get(declineDates.size() - 1);
+
+        ScanRequestDto request = scanRequest(
+                Arrays.asList(new String[]{"REBOUND", "STANDARD"}, new String[]{"CUMULATIVE_RISE", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/scan", request, String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNoAdviceWording(response.getBody());
+        assertFalse(response.getBody().contains("進場"), "must not contain 進場: " + response.getBody());
+        assertFalse(response.getBody().contains("出場"), "must not contain 出場: " + response.getBody());
+    }
+
     // ==================== helpers ====================
 
     private JsonNode findByCode(JsonNode array, String code) {
@@ -998,10 +1666,25 @@ class StrategyScanIntegrationTest {
         return result;
     }
 
+    private boolean containsStockId(JsonNode items, String stockId) {
+        for (JsonNode item : items) {
+            if (stockId.equals(item.get("stockId").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private StrategySelectionDto selection(String code, String preset) {
         StrategySelectionDto dto = new StrategySelectionDto();
         dto.setCode(code);
         dto.setPreset(preset);
+        return dto;
+    }
+
+    private StrategySelectionDto selection(String code, String preset, BigDecimal risePercent) {
+        StrategySelectionDto dto = selection(code, preset);
+        dto.setRisePercent(risePercent);
         return dto;
     }
 
@@ -1017,6 +1700,37 @@ class StrategyScanIntegrationTest {
         request.setStartDate(startDate);
         request.setEndDate(endDate);
         return request;
+    }
+
+    /** Increment 3 helper: builds the request directly from fully-formed selections (needed once
+     *  risePercent overrides are involved, since the String[] shorthand above has no room for them). */
+    private ScanRequestDto scanRequestFromSelections(List<StrategySelectionDto> selections, List<String> stockIds,
+                                                       LocalDate startDate, LocalDate endDate) {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(selections);
+        request.setStockIds(stockIds);
+        request.setStartDate(startDate);
+        request.setEndDate(endDate);
+        return request;
+    }
+
+    /**
+     * `count` close-only bars linearly interpolated from startValue (day 0) to endValue (day
+     * count-1) inclusive, 2-decimal precision, consecutive calendar days ascending from start.
+     * Used for REBOUND/CUMULATIVE_RISE fixtures, where only the two endpoints of a leg need an
+     * exact value and the days in between just need to be monotonic.
+     */
+    private List<LocalDate> seedRamp(String stockId, LocalDate start, double startValue, double endValue,
+                                      int count, long volume) {
+        List<LocalDate> dates = new ArrayList<>(count);
+        LocalDate d = start;
+        for (int i = 0; i < count; i++) {
+            double v = count == 1 ? startValue : startValue + (endValue - startValue) * i / (count - 1);
+            insertCloseOnlyRow(stockId, d, String.format(java.util.Locale.ROOT, "%.2f", v), volume);
+            dates.add(d);
+            d = d.plusDays(1);
+        }
+        return dates;
     }
 
     private JsonNode postScan(ScanRequestDto request) throws Exception {

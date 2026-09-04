@@ -85,7 +85,7 @@ class StockCatalogIntegrationTest {
     @Test
     void list_defaultsToActiveOnly_withPagingMetadata() {
         ResponseEntity<StockListResponse> response =
-                rest.getForEntity(url("/api/stocks?keyword=ZC"), StockListResponse.class);
+                rest.getForEntity(url("/api/stocks?keyword=ZC&commonStocksOnly=false"), StockListResponse.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         StockListResponse body = response.getBody();
@@ -101,19 +101,19 @@ class StockCatalogIntegrationTest {
     @Test
     void list_keywordMatchesByStockIdOrStockName() {
         // RestTemplate encodes URI template variables itself; pass the raw keyword, not pre-encoded.
-        StockListResponse byName = rest.getForEntity("/api/stocks?keyword={keyword}", StockListResponse.class,
+        StockListResponse byName = rest.getForEntity("/api/stocks?keyword={keyword}&commonStocksOnly=false", StockListResponse.class,
                 "測試台積電").getBody();
         assertEquals(1, byName.getTotal());
         assertEquals("ZC01", byName.getItems().get(0).getStockId());
 
-        StockListResponse byId = rest.getForEntity(url("/api/stocks?keyword=ZC01"), StockListResponse.class).getBody();
+        StockListResponse byId = rest.getForEntity(url("/api/stocks?keyword=ZC01&commonStocksOnly=false"), StockListResponse.class).getBody();
         assertEquals(1, byId.getTotal());
         assertEquals("ZC01", byId.getItems().get(0).getStockId());
     }
 
     @Test
     void list_marketFilter_restrictsToOtc_andRejectsInvalidMarket() {
-        StockListResponse otc = rest.getForEntity(url("/api/stocks?keyword=ZC&market=OTC"), StockListResponse.class)
+        StockListResponse otc = rest.getForEntity(url("/api/stocks?keyword=ZC&market=OTC&commonStocksOnly=false"), StockListResponse.class)
                 .getBody();
         assertEquals(1, otc.getTotal());
         assertEquals("ZC02", otc.getItems().get(0).getStockId());
@@ -127,7 +127,7 @@ class StockCatalogIntegrationTest {
     @Test
     void list_includeInactive_togglesDelistedStock() {
         StockListResponse withInactive =
-                rest.getForEntity(url("/api/stocks?keyword=ZC&includeInactive=true"), StockListResponse.class)
+                rest.getForEntity(url("/api/stocks?keyword=ZC&includeInactive=true&commonStocksOnly=false"), StockListResponse.class)
                         .getBody();
         assertEquals(4, withInactive.getTotal());
         assertTrue(withInactive.getItems().stream().anyMatch(i -> "ZC04".equals(i.getStockId())));
@@ -164,7 +164,7 @@ class StockCatalogIntegrationTest {
     @Test
     void list_stockWithoutAnyPriceRow_stillListed_withNullLatestClose() {
         StockListResponse response =
-                rest.getForEntity(url("/api/stocks?keyword=ZC03"), StockListResponse.class).getBody();
+                rest.getForEntity(url("/api/stocks?keyword=ZC03&commonStocksOnly=false"), StockListResponse.class).getBody();
         assertEquals(1, response.getTotal());
         StockListItemDto item = response.getItems().get(0);
         assertEquals("ZC03", item.getStockId());
@@ -179,7 +179,7 @@ class StockCatalogIntegrationTest {
     @Test
     void list_stockWithSingleTradingDay_hasLatestCloseButNullPreviousAndChange() {
         StockListResponse response =
-                rest.getForEntity(url("/api/stocks?keyword=ZC02"), StockListResponse.class).getBody();
+                rest.getForEntity(url("/api/stocks?keyword=ZC02&commonStocksOnly=false"), StockListResponse.class).getBody();
         StockListItemDto item = response.getItems().get(0);
         assertEquals(0, new BigDecimal("50.00").compareTo(item.getLatestClose()));
         assertNull(item.getPreviousClose());
@@ -190,7 +190,7 @@ class StockCatalogIntegrationTest {
     @Test
     void list_latestCloseAndChange_computedFromLastTwoTradingDays() {
         StockListResponse response =
-                rest.getForEntity(url("/api/stocks?keyword=ZC01"), StockListResponse.class).getBody();
+                rest.getForEntity(url("/api/stocks?keyword=ZC01&commonStocksOnly=false"), StockListResponse.class).getBody();
         StockListItemDto item = response.getItems().get(0);
         assertEquals(0, new BigDecimal("110.00").compareTo(item.getLatestClose()));
         assertEquals(0, new BigDecimal("105.00").compareTo(item.getPreviousClose()));
@@ -225,5 +225,103 @@ class StockCatalogIntegrationTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertEquals("STOCK_NOT_FOUND", response.getBody().getCode());
         assertEquals("ZC-DOES-NOT-EXIST", response.getBody().getStockId());
+    }
+
+    // ---- commonStocksOnly (specs/backend/stock-catalog.md increment) ----
+    // Exercised against the live dataset's real ETF (0050/00878), special share (2881A) and TDR
+    // (910322) rows, plus real ordinary share 2330 — these already exist from stock-universe-import
+    // and are never written to by these tests, only read.
+
+    @Test
+    void list_commonStocksOnlyOmitted_defaultsToTrue_excludesNonOrdinaryCodes() {
+        for (String code : new String[] {"0050", "00878", "2881A", "910322"}) {
+            StockListResponse response =
+                    rest.getForEntity(url("/api/stocks?keyword=" + code), StockListResponse.class).getBody();
+            assertEquals(0, response.getTotal(), code + " must not appear when commonStocksOnly is omitted");
+            assertTrue(response.getItems().isEmpty());
+        }
+
+        StockListResponse ordinary =
+                rest.getForEntity(url("/api/stocks?keyword=2330"), StockListResponse.class).getBody();
+        assertEquals(1, ordinary.getTotal());
+        assertEquals("2330", ordinary.getItems().get(0).getStockId());
+    }
+
+    @Test
+    void list_commonStocksOnlyTrueExplicit_excludesEtfSpecialShareAndTdr() {
+        for (String code : new String[] {"0050", "00878", "2881A", "910322"}) {
+            StockListResponse response = rest.getForEntity(
+                    url("/api/stocks?keyword=" + code + "&commonStocksOnly=true"), StockListResponse.class).getBody();
+            assertEquals(0, response.getTotal(), code + " must not appear when commonStocksOnly=true");
+        }
+    }
+
+    @Test
+    void list_commonStocksOnlyFalse_includesEtfSpecialShareAndTdr() {
+        StockListResponse etf = rest.getForEntity(
+                url("/api/stocks?keyword=0050&commonStocksOnly=false"), StockListResponse.class).getBody();
+        assertEquals(1, etf.getTotal());
+        assertEquals("0050", etf.getItems().get(0).getStockId());
+
+        StockListResponse tdr = rest.getForEntity(
+                url("/api/stocks?keyword=910322&commonStocksOnly=false"), StockListResponse.class).getBody();
+        assertEquals(1, tdr.getTotal());
+        assertEquals("910322", tdr.getItems().get(0).getStockId());
+    }
+
+    @Test
+    void list_commonStocksOnlyFalse_totalIsSubstantiallyLargerThanDefaultTrue() {
+        long totalCommonOnly =
+                rest.getForEntity(url("/api/stocks?size=1"), StockListResponse.class).getBody().getTotal();
+        long totalAll = rest.getForEntity(url("/api/stocks?size=1&commonStocksOnly=false"), StockListResponse.class)
+                .getBody().getTotal();
+
+        assertTrue(totalAll > totalCommonOnly,
+                "commonStocksOnly=false total (" + totalAll + ") should exceed the default true total (" + totalCommonOnly + ")");
+    }
+
+    @Test
+    void list_commonStocksOnlyCombinesIndependentlyWithOtherParameters() {
+        // market + commonStocksOnly=true together: an ordinary TSE share still matches.
+        StockListResponse marketAndCommon = rest.getForEntity(
+                url("/api/stocks?keyword=2330&market=TSE&commonStocksOnly=true"), StockListResponse.class).getBody();
+        assertEquals(1, marketAndCommon.getTotal());
+
+        // market + commonStocksOnly=false together: the TSE-listed ETF now matches.
+        StockListResponse marketAndAll = rest.getForEntity(
+                url("/api/stocks?keyword=0050&market=TSE&commonStocksOnly=false"), StockListResponse.class).getBody();
+        assertEquals(1, marketAndAll.getTotal());
+        assertEquals("0050", marketAndAll.getItems().get(0).getStockId());
+
+        // Sort/order/paging still apply on top of commonStocksOnly.
+        StockListResponse sorted = rest.getForEntity(
+                url("/api/stocks?commonStocksOnly=false&sort=stockId&order=desc&page=1&size=5"),
+                StockListResponse.class).getBody();
+        assertEquals(5, sorted.getItems().size());
+        for (int i = 1; i < sorted.getItems().size(); i++) {
+            assertTrue(sorted.getItems().get(i - 1).getStockId().compareTo(sorted.getItems().get(i).getStockId()) >= 0);
+        }
+    }
+
+    @Test
+    void list_commonStocksOnly_isReadOnly_doesNotMutateStockTable() {
+        Integer countBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Integer.class);
+        Integer activeBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock WHERE is_active = 1", Integer.class);
+
+        rest.getForEntity(url("/api/stocks?commonStocksOnly=true&size=10"), StockListResponse.class);
+        rest.getForEntity(url("/api/stocks?commonStocksOnly=false&size=10"), StockListResponse.class);
+
+        Integer countAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Integer.class);
+        Integer activeAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock WHERE is_active = 1", Integer.class);
+
+        assertEquals(countBefore, countAfter);
+        assertEquals(activeBefore, activeAfter);
+    }
+
+    @Test
+    void detail_notAffectedByCommonStocksOnly_etfStillReturned() {
+        ResponseEntity<StockDetailDto> response = rest.getForEntity(url("/api/stocks/0050"), StockDetailDto.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("0050", response.getBody().getStockId());
     }
 }

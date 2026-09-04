@@ -100,8 +100,11 @@ public class BoxBreakoutDetector implements PatternDetector {
 
     @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
-                                           String presetCode) {
+                                           String presetCode, BigDecimal risePercentOverride) {
         Params params = presetParams.get(presetCode);
+        // risePercent overrides breakoutPercent (specs/backend/strategy-scan.md, 箱型突破's override
+        // mapping); lookback/rangeMaxPercent/volumeMultiple/confirmBars stay preset-driven.
+        BigDecimal breakoutPercent = resolveRatio(risePercentOverride, params.breakoutPercent);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {
@@ -145,7 +148,7 @@ public class BoxBreakoutDetector implements PatternDetector {
             }
 
             // 3. breakout
-            BigDecimal breakoutThreshold = boxHigh.multiply(BigDecimal.ONE.add(params.breakoutPercent));
+            BigDecimal breakoutThreshold = boxHigh.multiply(BigDecimal.ONE.add(breakoutPercent));
             if (d.getClosePrice().compareTo(breakoutThreshold) <= 0) {
                 continue;
             }

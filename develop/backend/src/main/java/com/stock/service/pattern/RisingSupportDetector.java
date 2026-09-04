@@ -106,8 +106,11 @@ public class RisingSupportDetector implements PatternDetector {
 
     @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
-                                           String presetCode) {
+                                           String presetCode, BigDecimal risePercentOverride) {
         Params params = presetParams.get(presetCode);
+        // risePercent overrides the single-day rise threshold (specs/backend/strategy-scan.md, 上漲
+        // 支撐's override mapping); lookback and the fixed 2-day confirmBars stay preset-driven.
+        BigDecimal risePercent = resolveRatio(risePercentOverride, params.risePercent);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {
@@ -149,7 +152,7 @@ public class RisingSupportDetector implements PatternDetector {
             BigDecimal supportClose = bars.get(i - 1).getClosePrice();
             BigDecimal riseRatio = dClose.subtract(supportClose)
                     .divide(supportClose, CALC_SCALE, RoundingMode.HALF_UP);
-            if (riseRatio.compareTo(params.risePercent) < 0) {
+            if (riseRatio.compareTo(risePercent) < 0) {
                 continue;
             }
 

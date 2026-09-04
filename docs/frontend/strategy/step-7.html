@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="../_scripts/shell.css">
 <link rel="stylesheet" href="screen.css">
 </head>
-<body class="page-strategy nodesc">
+<body class="page-strategy">
   <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
   <div class="wrap">
     <div class="head">
@@ -23,7 +23,7 @@
       <div class="meta">
         <span class="cnt">股票清單：共 <b>1,032</b> 檔</span>
         <span class="sep">|</span>
-        <div class="last">最後同步：<b>2026-08-30 09:14</b>　<span style="color:#6B7C90">完成 1,032 ・ 失敗 0 ・ 略過 0</span></div>
+        <div class="last" data-target>最後同步：<b>2026-08-30 09:14</b>　<span style="color:#D9A441">已是最新，無需更新（1,032 檔）</span></div>
       </div>
       <div class="btns">
         <button class="btn">更新股票清單</button>
@@ -57,21 +57,15 @@
         <input class="date" value="2026-07-30"> <span>~</span> <input class="date" value="2026-08-30">
         <div class="seg"><button class="on">近一個月</button><button>近三個月</button><button>近半年</button></div></div>
       <div class="actions"><button class="btn primary">開始掃描</button>
-        <span class="hint">已勾選 5 個策略</span></div>
+        <span class="hint">已勾選 2 個策略</span></div>
     </div>
-    <div class="res union" data-target>
-      <h3>命中彙總<span> — 共 5 檔</span></h3>
+    <div class="res union">
+      <h3>命中彙總<span> — 共 2 檔</span></h3>
       <table>
         <thead><tr><th>代號</th><th>名稱</th><th>命中策略與訊號日</th></tr></thead>
         <tbody>
           <tr class="hover"><td class="code">2330</td><td>台積電</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span><span class="sep">・</span><span class="stag">箱型突破</span><span class="sdate">2026-08-27</span></td></tr>
-          <tr><td class="code">3231</td><td>緯創</td>
-            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-28</span></td></tr>
-          <tr><td class="code">2454</td><td>聯發科</td>
-            <td class="hits"><span class="stag">上漲支撐</span><span class="sdate">2026-08-26</span></td></tr>
-          <tr><td class="code">2603</td><td>長榮</td>
-            <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-25</span></td></tr>
           <tr><td class="code">2317</td><td>鴻海</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span></td></tr>
         </tbody>
@@ -85,6 +79,9 @@
           <tr class="hover"><td class="code">2317</td><td>鴻海</td><td>2026-08-25</td>
             <td class="lows">07-08 240.00 → 07-29 248.50 → 08-13 256.00 → 08-25 262.50</td>
             <td class="r up">+9.38%</td></tr>
+          <tr><td class="code">2330</td><td>台積電</td><td>2026-08-25</td>
+            <td class="lows">07-10 2180.00 → 07-30 2215.00 → 08-14 2262.00 → 08-25 2305.00</td>
+            <td class="r up">+5.73%</td></tr>
         </tbody>
       </table>
       <div class="note">另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>

@@ -71,11 +71,15 @@ public interface StockMapper {
     /**
      * One page of the stock master, filtered/sorted by columns of the stock table only
      * (idx_market_active covers market+is_active; sort/order are pre-validated against a whitelist
-     * by the caller before reaching this query).
+     * by the caller before reaching this query). {@code commonStockRegex} is null to skip the
+     * commonStocksOnly filter, or {@link com.stock.util.CommonStockCodeUtil#REGEX} to apply it —
+     * the same regex string used by the write-side universe import filter, passed as a bind
+     * parameter into a MySQL REGEXP predicate rather than re-expressed as separate SQL.
      */
     List<Stock> findPage(@Param("keyword") String keyword,
                           @Param("market") String market,
                           @Param("includeInactive") boolean includeInactive,
+                          @Param("commonStockRegex") String commonStockRegex,
                           @Param("sortColumn") String sortColumn,
                           @Param("orderDirection") String orderDirection,
                           @Param("limit") int limit,
@@ -84,5 +88,6 @@ public interface StockMapper {
     /** Total row count for the same filter used by findPage, for pagination metadata. */
     long countPage(@Param("keyword") String keyword,
                    @Param("market") String market,
-                   @Param("includeInactive") boolean includeInactive);
+                   @Param("includeInactive") boolean includeInactive,
+                   @Param("commonStockRegex") String commonStockRegex);
 }

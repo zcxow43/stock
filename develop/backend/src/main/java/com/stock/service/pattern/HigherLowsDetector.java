@@ -103,8 +103,11 @@ public class HigherLowsDetector implements PatternDetector {
 
     @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
-                                           String presetCode) {
+                                           String presetCode, BigDecimal risePercentOverride) {
         Params params = presetParams.get(presetCode);
+        // risePercent overrides the per-leg rise threshold (specs/backend/strategy-scan.md, 底底高's
+        // override mapping); swingBars/requiredRises stay preset-driven.
+        BigDecimal risePercent = resolveRatio(risePercentOverride, params.risePercent);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {
@@ -143,7 +146,7 @@ public class HigherLowsDetector implements PatternDetector {
         for (int k = 1; k < swingLows.size(); k++) {
             BigDecimal prev = swingLows.get(k - 1).low;
             BigDecimal curr = swingLows.get(k).low;
-            BigDecimal threshold = prev.multiply(BigDecimal.ONE.add(params.risePercent));
+            BigDecimal threshold = prev.multiply(BigDecimal.ONE.add(risePercent));
             boolean qualifies = curr.compareTo(prev) > 0 && curr.compareTo(threshold) >= 0;
             if (qualifies) {
                 currentRun++;

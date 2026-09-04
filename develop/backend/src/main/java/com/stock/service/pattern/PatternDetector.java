@@ -3,15 +3,21 @@ package com.stock.service.pattern;
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.PresetDto;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
 /**
- * One pattern (BOX_BREAKOUT / HIGHER_LOWS / RISING_SUPPORT). Each implementation owns its own
- * STRICT/STANDARD/LOOSE parameter table and the catalogue description text for each preset — see
- * specs/backend/strategy-scan.md, "型態定義". Presets change thresholds only, never the algorithm.
+ * One pattern (BOX_BREAKOUT / HIGHER_LOWS / RISING_SUPPORT / REBOUND / CUMULATIVE_RISE). Each
+ * implementation owns its own STRICT/STANDARD/LOOSE parameter table and the catalogue description
+ * text for each preset — see specs/backend/strategy-scan.md, "型態定義". Presets change thresholds
+ * only, never the algorithm.
  */
 public interface PatternDetector {
+
+    BigDecimal PERCENT_DIVISOR = BigDecimal.valueOf(100);
+    int RATIO_SCALE = 10;
 
     /** Wire code, e.g. "BOX_BREAKOUT". */
     String getCode();
@@ -28,7 +34,8 @@ public interface PatternDetector {
     /**
      * Trading days of history required strictly before the scan's startDate for this preset —
      * drives how far back the batched lookback pre-fetch must reach (specs/backend/strategy-scan.md,
-     * "區間與資料前置需求").
+     * "區間與資料前置需求"). REBOUND/CUMULATIVE_RISE return lookback − 1, since their own window
+     * already counts D itself as one of the `lookback` bars.
      */
     int requiredLookbackTradingDays(String presetCode);
 
@@ -38,6 +45,8 @@ public interface PatternDetector {
      * batched price read also fetches a small window after endDate, e.g. RISING_SUPPORT's D+1/D+2
      * (specs/backend/strategy-scan.md, "上漲支撐的確認資料取自 endDate 之後"). Fixed per pattern rather than
      * per preset when the pattern's own rule says the confirmation length does not vary by sensitivity.
+     * REBOUND/CUMULATIVE_RISE never override this — they do not confirm and so never produce
+     * pendingConfirm (specs/backend/strategy-scan.md, "反彈與累積上漲一律不產生 pendingConfirm").
      */
     default int requiredConfirmTradingDaysAfterEndDate(String presetCode) {
         return 0;
@@ -50,7 +59,30 @@ public interface PatternDetector {
      * {@link #requiredConfirmTradingDaysAfterEndDate} — up to that many trading days after endDate.
      * Adjacent list entries are adjacent *trading* days; calendar gaps from suspensions are never
      * interpolated.
+     *
+     * @param risePercentOverride the request's per-strategy `risePercent` override, expressed as a
+     *                            whole percent (e.g. {@code 2.5} for 2.5%), already validated to
+     *                            fall within [0, 50] with at most one decimal digit; null means "use
+     *                            the preset's own threshold". Each implementation substitutes this
+     *                            for whichever one of its own fields the spec's per-strategy mapping
+     *                            table names — see specs/backend/strategy-scan.md, "型態定義" — and
+     *                            leaves every other parameter (lookback, swingBars, volumeMultiple,
+     *                            confirmBars, …) exactly as the preset specifies.
      */
     PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
-                                    String presetCode);
+                                    String presetCode, BigDecimal risePercentOverride);
+
+    /**
+     * Converts a whole-percent override (e.g. {@code 2.5} meaning 2.5%) into the ratio form
+     * (e.g. {@code 0.025}) every detector's threshold math is written in, or returns the preset's
+     * own ratio unchanged when no override was given. Shared here — rather than duplicated per
+     * detector — because every implementation performs exactly this substitution and nothing else
+     * with the override value.
+     */
+    default BigDecimal resolveRatio(BigDecimal risePercentOverride, BigDecimal presetRatio) {
+        if (risePercentOverride == null) {
+            return presetRatio;
+        }
+        return risePercentOverride.divide(PERCENT_DIVISOR, RATIO_SCALE, RoundingMode.HALF_UP);
+    }
 }

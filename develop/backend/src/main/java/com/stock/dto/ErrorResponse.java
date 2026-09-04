@@ -23,13 +23,16 @@ public class ErrorResponse {
     // key "duplicated" — distinct from unknownIds (UNKNOWN_STOCK_ID), which is a separate error.
     private final List<String> unknown;
     private final List<String> duplicated;
+    // INVALID_RISE_PERCENT's "strategy" key — distinct from unknown/duplicated: it names the one
+    // strategy whose risePercent override is out of range, not a list of offenders.
+    private final String strategy;
 
     public ErrorResponse(String code) {
-        this(code, null, null, null, null, null, null, null);
+        this(code, null, null, null, null, null, null, null, null);
     }
 
     public ErrorResponse(String code, List<String> unknownIds) {
-        this(code, unknownIds, null, null, null, null, null, null);
+        this(code, unknownIds, null, null, null, null, null, null, null);
     }
 
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
@@ -43,7 +46,8 @@ public class ErrorResponse {
                            @JsonProperty("stockId") String stockId,
                            @JsonProperty("fields") List<String> fields,
                            @JsonProperty("unknown") List<String> unknown,
-                           @JsonProperty("duplicated") List<String> duplicated) {
+                           @JsonProperty("duplicated") List<String> duplicated,
+                           @JsonProperty("strategy") String strategy) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -52,42 +56,47 @@ public class ErrorResponse {
         this.fields = fields;
         this.unknown = unknown;
         this.duplicated = duplicated;
+        this.strategy = strategy;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
-        return new ErrorResponse("PAGE_SIZE_EXCEEDED", null, limit, null, null, null, null, null);
+        return new ErrorResponse("PAGE_SIZE_EXCEEDED", null, limit, null, null, null, null, null, null);
     }
 
     public static ErrorResponse tooManyStockIds(int limit) {
-        return new ErrorResponse("TOO_MANY_STOCK_IDS", null, limit, null, null, null, null, null);
+        return new ErrorResponse("TOO_MANY_STOCK_IDS", null, limit, null, null, null, null, null, null);
     }
 
     public static ErrorResponse invalidSortField(List<String> allowed) {
-        return new ErrorResponse("INVALID_SORT_FIELD", null, null, allowed, null, null, null, null);
+        return new ErrorResponse("INVALID_SORT_FIELD", null, null, allowed, null, null, null, null, null);
     }
 
     public static ErrorResponse stockNotFound(String stockId) {
-        return new ErrorResponse("STOCK_NOT_FOUND", null, null, null, stockId, null, null, null);
+        return new ErrorResponse("STOCK_NOT_FOUND", null, null, null, stockId, null, null, null, null);
     }
 
     public static ErrorResponse invalidInterval(List<Integer> allowedIntervals) {
-        return new ErrorResponse("INVALID_INTERVAL", null, null, allowedIntervals, null, null, null, null);
+        return new ErrorResponse("INVALID_INTERVAL", null, null, allowedIntervals, null, null, null, null, null);
     }
 
     public static ErrorResponse invalidStockPayload(List<String> fields) {
-        return new ErrorResponse("INVALID_STOCK_PAYLOAD", null, null, null, null, fields, null, null);
+        return new ErrorResponse("INVALID_STOCK_PAYLOAD", null, null, null, null, fields, null, null, null);
     }
 
     public static ErrorResponse unknownStrategy(List<String> unknown) {
-        return new ErrorResponse("UNKNOWN_STRATEGY", null, null, null, null, null, unknown, null);
+        return new ErrorResponse("UNKNOWN_STRATEGY", null, null, null, null, null, unknown, null, null);
     }
 
     public static ErrorResponse duplicateStrategy(List<String> duplicated) {
-        return new ErrorResponse("DUPLICATE_STRATEGY", null, null, null, null, null, null, duplicated);
+        return new ErrorResponse("DUPLICATE_STRATEGY", null, null, null, null, null, null, duplicated, null);
     }
 
     public static ErrorResponse tooManyStocks() {
-        return new ErrorResponse("TOO_MANY_STOCKS", null, null, null, null, null, null, null);
+        return new ErrorResponse("TOO_MANY_STOCKS", null, null, null, null, null, null, null, null);
+    }
+
+    public static ErrorResponse invalidRisePercent(String strategy) {
+        return new ErrorResponse("INVALID_RISE_PERCENT", null, null, null, null, null, null, null, strategy);
     }
 
     public String getCode() {
@@ -120,5 +129,9 @@ public class ErrorResponse {
 
     public List<String> getDuplicated() {
         return duplicated;
+    }
+
+    public String getStrategy() {
+        return strategy;
     }
 }

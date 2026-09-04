@@ -92,7 +92,7 @@ class StockCatalogWriteIntegrationTest {
         assertEquals(0, body.getTradingDayCount());
 
         StockListResponse list =
-                rest.getForEntity("/api/stocks?keyword=ZW01&includeInactive=true", StockListResponse.class).getBody();
+                rest.getForEntity("/api/stocks?keyword=ZW01&includeInactive=true&commonStocksOnly=false", StockListResponse.class).getBody();
         assertEquals(1, list.getTotal());
         assertTrue(list.getItems().get(0).getIsActive());
     }
@@ -153,7 +153,7 @@ class StockCatalogWriteIntegrationTest {
         rest.exchange("/api/stocks/ZW06", HttpMethod.DELETE, null, StockDeleteResponse.class);
 
         StockListResponse beforeReactivate =
-                rest.getForEntity("/api/stocks?keyword=ZW06", StockListResponse.class).getBody();
+                rest.getForEntity("/api/stocks?keyword=ZW06&commonStocksOnly=false", StockListResponse.class).getBody();
         assertEquals(0, beforeReactivate.getTotal());
 
         ResponseEntity<StockDetailDto> response = rest.exchange("/api/stocks/ZW06", HttpMethod.PUT,
@@ -162,7 +162,7 @@ class StockCatalogWriteIntegrationTest {
         assertTrue(response.getBody().getIsActive());
 
         StockListResponse afterReactivate =
-                rest.getForEntity("/api/stocks?keyword=ZW06", StockListResponse.class).getBody();
+                rest.getForEntity("/api/stocks?keyword=ZW06&commonStocksOnly=false", StockListResponse.class).getBody();
         assertEquals(1, afterReactivate.getTotal());
     }
 
@@ -216,11 +216,11 @@ class StockCatalogWriteIntegrationTest {
         rest.exchange("/api/stocks/ZW08", HttpMethod.DELETE, null, StockDeleteResponse.class);
 
         StockListResponse defaultList =
-                rest.getForEntity("/api/stocks?keyword=ZW08", StockListResponse.class).getBody();
+                rest.getForEntity("/api/stocks?keyword=ZW08&commonStocksOnly=false", StockListResponse.class).getBody();
         assertEquals(0, defaultList.getTotal());
 
         StockListResponse withInactive =
-                rest.getForEntity("/api/stocks?keyword=ZW08&includeInactive=true", StockListResponse.class).getBody();
+                rest.getForEntity("/api/stocks?keyword=ZW08&includeInactive=true&commonStocksOnly=false", StockListResponse.class).getBody();
         assertEquals(1, withInactive.getTotal());
         assertFalse(withInactive.getItems().get(0).getIsActive());
     }

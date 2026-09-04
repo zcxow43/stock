@@ -9,6 +9,7 @@ import com.stock.dto.StrategyResultDto;
 import com.stock.dto.StrategySelectionDto;
 import com.stock.exception.DuplicateStrategyException;
 import com.stock.exception.InvalidDateRangeException;
+import com.stock.exception.InvalidRisePercentException;
 import com.stock.exception.NoStrategySelectedException;
 import com.stock.exception.TooManyStocksException;
 import com.stock.exception.UnknownStockIdException;
@@ -17,8 +18,11 @@ import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.service.pattern.PatternDetectionOutcome;
 import com.stock.service.pattern.PatternDetector;
+import com.stock.util.CommonStockCodeUtil;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,6 +40,9 @@ import java.util.Map;
 public class StrategyScanService {
 
     public static final int MAX_STOCK_IDS = 200;
+    private static final BigDecimal RISE_PERCENT_MIN = BigDecimal.ZERO;
+    private static final BigDecimal RISE_PERCENT_MAX = new BigDecimal("50");
+    private static final int RISE_PERCENT_MAX_SCALE = 1;
 
     private final StockMapper stockMapper;
     private final StockDailyPriceMapper priceMapper;
@@ -55,7 +62,10 @@ public class StrategyScanService {
     public ScanResponseDto scan(ScanRequestDto request) {
         List<StrategySelectionDto> selections = validateStrategies(request.getStrategies());
 
-        List<Stock> targetStocks = resolveTargetStocks(request.getStockIds());
+        // Omitted -> true (specs/backend/strategy-scan.md, "commonStocksOnly（預設 true）"); ignored
+        // entirely whenever stockIds names an explicit list.
+        boolean commonStocksOnly = !Boolean.FALSE.equals(request.getCommonStocksOnly());
+        List<Stock> targetStocks = resolveTargetStocks(request.getStockIds(), commonStocksOnly);
 
         LocalDate endDate = request.getEndDate() != null ? request.getEndDate() : LocalDate.now();
         LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : endDate.minusMonths(1);
@@ -117,12 +127,47 @@ public class StrategyScanService {
         if (!duplicated.isEmpty()) {
             throw new DuplicateStrategyException(duplicated);
         }
+        // Only reached once every code/preset is known — "strategy" in the error must name a real
+        // strategy. Checked in submission order so the first offending selection is the one reported.
+        for (StrategySelectionDto selection : selections) {
+            validateRisePercent(selection);
+        }
         return selections;
     }
 
-    private List<Stock> resolveTargetStocks(List<String> requestedIds) {
+    private void validateRisePercent(StrategySelectionDto selection) {
+        BigDecimal risePercent = selection.getRisePercent();
+        if (risePercent == null) {
+            return;
+        }
+        if (risePercent.compareTo(RISE_PERCENT_MIN) < 0 || risePercent.compareTo(RISE_PERCENT_MAX) > 0) {
+            throw new InvalidRisePercentException(selection.getCode());
+        }
+        try {
+            // setScale(..., UNNECESSARY) throws iff rounding to 1 decimal place would lose precision,
+            // i.e. iff the value genuinely carries more than one decimal digit — trailing zeros
+            // (e.g. "2.50") are not "more than one decimal place" and pass.
+            risePercent.setScale(RISE_PERCENT_MAX_SCALE, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException e) {
+            throw new InvalidRisePercentException(selection.getCode());
+        }
+    }
+
+    private List<Stock> resolveTargetStocks(List<String> requestedIds, boolean commonStocksOnly) {
         if (requestedIds == null || requestedIds.isEmpty()) {
-            return stockMapper.findActiveStocks();
+            List<Stock> active = stockMapper.findActiveStocks();
+            if (!commonStocksOnly) {
+                return active;
+            }
+            // 普通股 filter shared verbatim with the universe import / stock catalog (specs/backend/
+            // strategy-scan.md, "普通股篩選"); scan-population only, never touches the stock table.
+            List<Stock> commonOnly = new ArrayList<>();
+            for (Stock s : active) {
+                if (CommonStockCodeUtil.isCommonStockCode(s.getStockId())) {
+                    commonOnly.add(s);
+                }
+            }
+            return commonOnly;
         }
         if (requestedIds.size() > MAX_STOCK_IDS) {
             throw new TooManyStocksException(MAX_STOCK_IDS);
@@ -211,7 +256,8 @@ public class StrategyScanService {
 
         for (String stockId : targetIds) {
             List<StockDailyPrice> bars = seriesByStock.getOrDefault(stockId, Collections.emptyList());
-            PatternDetectionOutcome outcome = detector.detect(bars, startDate, endDate, selection.getPreset());
+            PatternDetectionOutcome outcome = detector.detect(bars, startDate, endDate, selection.getPreset(),
+                    selection.getRisePercent());
             if (outcome.isInsufficientData()) {
                 insufficientData.add(stockId);
             } else if (outcome.isHit()) {

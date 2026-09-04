@@ -3,11 +3,16 @@ package com.stock.dto;
 import java.time.LocalDate;
 import java.util.List;
 
-/** POST /api/strategies/scan request body. */
+/**
+ * POST /api/strategies/scan request body. `commonStocksOnly` is nullable on the wire so omission
+ * can be distinguished from an explicit value — the service layer treats null as `true` (see
+ * specs/backend/strategy-scan.md, "掃描範圍"). It is ignored entirely whenever `stockIds` is given.
+ */
 public class ScanRequestDto {
 
     private List<StrategySelectionDto> strategies;
     private List<String> stockIds;
+    private Boolean commonStocksOnly;
     private LocalDate startDate;
     private LocalDate endDate;
 
@@ -28,6 +33,14 @@ public class ScanRequestDto {
 
     public void setStockIds(List<String> stockIds) {
         this.stockIds = stockIds;
+    }
+
+    public Boolean getCommonStocksOnly() {
+        return commonStocksOnly;
+    }
+
+    public void setCommonStocksOnly(Boolean commonStocksOnly) {
+        this.commonStocksOnly = commonStocksOnly;
     }
 
     public LocalDate getStartDate() {

@@ -68,6 +68,12 @@
         WHERE is_active = 1
     </select>
 
+    <!--
+        commonStockRegex: null skips the commonStocksOnly filter entirely; a non-null value is
+        CommonStockCodeUtil.REGEX passed in verbatim from the service layer (MySQL 8's ICU-based
+        regex engine understands the same \d escape as Java's Pattern) so the "普通股" definition is
+        written down in exactly one place, shared with the write-side stock-universe-import filter.
+    -->
     <sql id="listFilter">
         <where>
             <if test="keyword != null and keyword != ''">
@@ -78,6 +84,9 @@
             </if>
             <if test="!includeInactive">
                 AND is_active = 1
+            </if>
+            <if test="commonStockRegex != null">
+                AND stock_id REGEXP #{commonStockRegex}
             </if>
         </where>
     </sql>

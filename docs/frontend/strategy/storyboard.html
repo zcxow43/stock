@@ -6,7 +6,7 @@
 <style>
   :root { color-scheme: light; }
   body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
-  .board { position:relative; width:2360px; height:1580px; }
+  .board { position:relative; width:2360px; height:2333px; }
   .frame { position:absolute; }
   .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
 
@@ -26,12 +26,12 @@
   .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
               word-break:break-all; }
   .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
-  svg.links { position:absolute; inset:0; width:2360px; height:1580px; pointer-events:none; z-index:5; }
+  svg.links { position:absolute; inset:0; width:2360px; height:2333px; pointer-events:none; z-index:5; }
 </style>
 </head>
 <body>
 <div class="board">
-  <svg class="links" viewBox="0 0 2360 1580">
+  <svg class="links" viewBox="0 0 2360 2333">
     <defs>
       <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
         <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
@@ -45,23 +45,23 @@
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
     <rect x="2065.8" y="163.7" width="208.5" height="24.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1645.6" y="1075.2" width="47.6" height="24.7"
+    <rect x="1645.6" y="1069.5" width="47.6" height="24.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="857.8" y="1086.7" width="644.3" height="63.2"
+    <rect x="857.8" y="1068.6" width="644.3" height="85.3"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1426.8" y="958.7" width="67.6" height="24.7"
-          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="160.4" y="961.9" width="186.5" height="18.3"
+    <rect x="160.4" y="1728.9" width="186.5" height="18.3"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
     <polygon points="660.0,180.1 849.4,188.4 849.2,194.9 869.5,186.8 849.9,176.9 849.7,183.4 660.2,175.1"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
     <polygon points="1501.4,178.5 2038.8,178.5 2038.8,185.0 2058.8,176.0 2038.8,167.0 2038.8,173.5 1501.4,173.5"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1957.5,483.0 1957.5,845.0 1951.0,845.0 1960.0,865.0 1969.0,845.0 1962.5,845.0 1962.5,483.0"
+    <polygon points="1957.5,483.0 1957.5,831.0 1951.0,831.0 1960.0,851.0 1969.0,831.0 1962.5,831.0 1962.5,483.0"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1638.5,1087.0 1529.0,1093.9 1528.5,1087.4 1509.2,1097.6 1529.7,1105.4 1529.3,1098.9 1638.8,1092.0"
+    <polygon points="1638.5,1081.2 1529.0,1087.7 1528.6,1081.3 1509.2,1091.4 1529.7,1099.2 1529.3,1092.7 1638.8,1086.2"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1419.8,968.5 373.9,968.5 373.9,962.0 353.9,971.0 373.9,980.0 373.9,973.5 1419.8,973.5"
+    <polygon points="1510.0,1055.0 90.0,1055.0 90.0,1048.5 70.0,1057.5 90.0,1066.5 90.0,1060.0 1510.0,1060.0"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="397.6,1263.3 262.0,1702.3 255.8,1700.4 258.5,1722.2 273.0,1705.7 266.8,1703.8 402.4,1264.7"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
   </svg>
   
@@ -77,17 +77,21 @@
     <img src="step-3.png" width="660" height="413" alt="點擊「同步日 K 至今日」：母體已是 1,032 檔，同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。">
     <div class="caption"><span class="num">3</span>點擊「同步日 K 至今日」：母體已是 1,032 檔，同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/stocks/sync/backfill</code><span class="note">body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場（即匯入後的 1,032 檔）</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">每 5 秒輪詢更新進度</span></span></div></div>
   </div>
-  <div class="frame" style="left:1630px; top:865px; width:660px;">
-    <img src="step-4.png" width="660" height="413" alt="同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選三個策略，各自的「漲幅門檻」已依所選靈敏度帶入預設值（底底高 1.0%、箱型突破 1.5%、上漲支撐 3.0%）可再自行輸入。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用，掃描母體因此排除 ETF、特別股與 TDR。">
-    <div class="caption"><span class="num">4</span>同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選三個策略，各自的「漲幅門檻」已依所選靈敏度帶入預設值（底底高 1.0%、箱型突破 1.5%、上漲支撐 3.0%）可再自行輸入。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用，掃描母體因此排除 ETF、特別股與 TDR。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">同步完成後重取 lastSyncedAt</span></span></div></div>
+  <div class="frame" style="left:1630px; top:851px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。">
+    <div class="caption"><span class="num">4</span>同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">同步完成後重取 lastSyncedAt</span></span></div></div>
   </div>
-  <div class="frame" style="left:850px; top:865px; width:660px;">
-    <img src="step-5.png" width="660" height="413" alt="點擊「開始掃描」：母體已排除 ETF、特別股與 TDR，結果區最上方是聯集表格「命中彙總 — 共 3 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是三個策略各自的區塊。資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。">
-    <div class="caption"><span class="num">5</span>點擊「開始掃描」：母體已排除 ETF、特別股與 TDR，結果區最上方是聯集表格「命中彙總 — 共 3 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下才是三個策略各自的區塊。資料不足與待確認的標的以獨立提示呈現，不混入命中清單也不納入聯集。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/strategies/scan</code><span class="note">body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場</span></span></div></div>
+  <div class="frame" style="left:850px; top:851px; width:660px;">
+    <img src="step-5.png" width="660" height="413" alt="點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。">
+    <div class="caption"><span class="num">5</span>點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/strategies/scan</code><span class="note">body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場</span></span></div></div>
   </div>
-  <div class="frame" style="left:70px; top:865px; width:660px;">
-    <img src="step-6.png" width="660" height="413" alt="再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。">
-    <div class="caption"><span class="num">6</span>再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/stocks/sync/backfill</code><span class="note">body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=1032、caughtUpCount=1032，代表本次一檔都不需抓取</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">取 lastSyncedAt，時間為 Asia/Taipei</span></span></div></div>
+  <div class="frame" style="left:70px; top:851px; width:660px;">
+    <img src="step-6.png" width="660" height="413" alt="同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。">
+    <div class="caption"><span class="num">6</span>同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。</div>
+  </div>
+  <div class="frame" style="left:70px; top:1632px; width:660px;">
+    <img src="step-7.png" width="660" height="413" alt="再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。">
+    <div class="caption"><span class="num">7</span>再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/stocks/sync/backfill</code><span class="note">body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=1032、caughtUpCount=1032，代表本次一檔都不需抓取</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">取 lastSyncedAt，時間為 Asia/Taipei</span></span></div></div>
   </div>
 </div>
 </body>

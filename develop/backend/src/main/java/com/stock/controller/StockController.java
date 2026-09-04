@@ -40,12 +40,14 @@ public class StockController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String market,
             @RequestParam(required = false, defaultValue = "false") boolean includeInactive,
+            @RequestParam(required = false, defaultValue = "true") boolean commonStocksOnly,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order) {
         return ResponseEntity.ok(
-                stockQueryService.listStocks(keyword, market, includeInactive, page, size, sort, order));
+                stockQueryService.listStocks(keyword, market, includeInactive, commonStocksOnly,
+                        page, size, sort, order));
     }
 
     @GetMapping("/{stockId}")

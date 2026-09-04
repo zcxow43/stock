@@ -120,6 +120,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.tooManyStocks());
     }
 
+    @ExceptionHandler(InvalidRisePercentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRisePercent(InvalidRisePercentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRisePercent(e.getStrategy()));
+    }
+
     @ExceptionHandler(InvalidMetricException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));
@@ -138,6 +143,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidMinGainException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMinGain(InvalidMinGainException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_MIN_GAIN"));
+    }
+
+    @ExceptionHandler(InvalidSortException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSort(InvalidSortException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_SORT"));
     }
 
     @ExceptionHandler(UpstreamEmptyException.class)

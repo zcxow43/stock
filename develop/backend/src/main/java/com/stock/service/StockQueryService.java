@@ -13,6 +13,7 @@ import com.stock.exception.PageSizeExceededException;
 import com.stock.exception.StockNotFoundException;
 import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockMapper;
+import com.stock.util.CommonStockCodeUtil;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -58,6 +59,7 @@ public class StockQueryService {
     }
 
     public StockListResponse listStocks(String keyword, String market, boolean includeInactive,
+                                         boolean commonStocksOnly,
                                          Integer page, Integer size, String sort, String order) {
         int pageValue = page == null ? DEFAULT_PAGE : page;
         int sizeValue = size == null ? DEFAULT_SIZE : size;
@@ -83,15 +85,19 @@ public class StockQueryService {
         String orderDirection = "desc".equalsIgnoreCase(orderValue) ? "DESC" : "ASC";
 
         String trimmedKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+        // commonStocksOnly defaults to true and is applied entirely inside the same paged `stock`
+        // query as market/keyword/includeInactive — never as a post-fetch in-memory filter, which
+        // would break the "先分頁、再取行情" cost bound the rest of this method relies on.
+        String commonStockRegex = commonStocksOnly ? CommonStockCodeUtil.REGEX : null;
 
-        long total = stockMapper.countPage(trimmedKeyword, trimmedMarket, includeInactive);
+        long total = stockMapper.countPage(trimmedKeyword, trimmedMarket, includeInactive, commonStockRegex);
 
         List<Stock> stocks;
         if (total == 0) {
             stocks = Collections.emptyList();
         } else {
             int offset = (pageValue - 1) * sizeValue;
-            stocks = stockMapper.findPage(trimmedKeyword, trimmedMarket, includeInactive,
+            stocks = stockMapper.findPage(trimmedKeyword, trimmedMarket, includeInactive, commonStockRegex,
                     sortColumn, orderDirection, sizeValue, offset);
         }
 
