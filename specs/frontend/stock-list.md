@@ -44,7 +44,7 @@ depends_on: []
 | 分頁 | 送往 | 效果 |
 |---|---|---|
 | 一、總覽 | `GET /api/stocks` 的 `commonStocksOnly` | 清單與「共 N 檔」都只計普通股 |
-| 二、策略 | `POST /api/strategies/scan` 的 `commonStocksOnly` | 掃描母體只含普通股（見 `specs/frontend/strategy.md`） |
+| 二、策略 | `POST /api/strategies/scan` 的 `commonStocksOnly`；同頁「同步日 K 至今日」的 `POST /api/stocks/sync/backfill` 的 `commonStocksOnly` | 掃描母體只含普通股，且該分頁的日 K 同步母體同樣只含普通股（見 `specs/frontend/strategy.md`） |
 | 三、動態 | `GET /api/momentum/gain` 的 `commonStocksOnly` | 漲幅計算母體只含普通股（見 `specs/frontend/momentum.md`） |
 
 **這個設定不寫任何資料表**——它只改查詢帶的參數。`stock` 的內容、`is_active`、以及每日行情回補的標的範圍都不受影響：取消勾選就會立刻看回全部在市股票。

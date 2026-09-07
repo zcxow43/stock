@@ -18,15 +18,15 @@
   },
   {
     "file": "step-3.html",
-    "caption": "點擊「同步日 K 至今日」：母體已是 1,032 檔，同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。",
+    "caption": "點擊「同步日 K 至今日」：母體是 1,032 檔上市普通股（沿用頁籤列上方「只看上市普通股」的預設勾選），同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。",
     "api": [
-      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true，不帶 stockIds 代表全市場（即匯入後的 1,032 檔）",
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true, commonStocksOnly=true（取自頁面層級勾選框），不帶 stockIds 代表全市場；此端點即是向 Yahoo／FinMind 逐檔抓取歷史日 K 的起點，8 檔並行",
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 每 5 秒輪詢更新進度"
     ]
   },
   {
     "file": "step-4.html",
-    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。",
+    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。",
     "api": [
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"
     ]
@@ -45,9 +45,9 @@
   },
   {
     "file": "step-7.html",
-    "caption": "再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔）」而非「完成 1,032 檔」；掃描結果保留不受影響。",
+    "caption": "再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔上市普通股）」而非「完成 1,032 檔」；掃描結果保留不受影響。",
     "api": [
-      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true；回應 targetCount=1032、caughtUpCount=1032，代表本次一檔都不需抓取",
+      "POST /api/stocks/sync/backfill — body startDate=2026-01-01, endDate=2026-08-30, catchUp=true, commonStocksOnly=true；回應 targetCount=1032、caughtUpCount=1032、commonStocksOnly=true，代表本次一檔都不需抓取",
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 取 lastSyncedAt，時間為 Asia/Taipei"
     ]
   }

@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）並各自選靈敏度與自行輸入漲幅門檻，母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）並各自選靈敏度與自行輸入漲幅門檻，母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；同步的母體預設只含上市普通股，沿用頁面層級的「只看上市普通股」設定"
 depends_on: [stock-list]
 ---
 
@@ -167,7 +167,7 @@ depends_on: [stock-list]
 
 同步列上有**兩顆按鈕，順序即操作順序**：左為「更新股票清單」，右為「同步日 K 至今日」。**兩顆都是次要按鈕樣式**——本頁唯一的主要按鈕是「開始掃描」。同步列上的兩顆是準備資料的前置動作，不是使用者來這一頁的目的；把它們也做成主要按鈕會出現三顆同等搶眼的藍色按鈕，反而看不出該按哪一顆。
 
-兩顆放在一起，是因為它們是同一件事的兩個步驟，而且第二步的涵蓋範圍完全取決於第一步有沒有做過：「同步日 K 至今日」的標的是 `stock` 中 `is_active = 1` 的全部股票，`stock` 只有開發種子的 34 檔時，同步會**正常完成**、不報任何錯，但只補了 34 檔的行情，掃描結果也就只涵蓋這 34 檔。把「更新股票清單」擺在它左邊，是讓這個前置關係在畫面上看得見，而不是變成一個只有讀過 spec 的人才知道的隱含步驟。
+兩顆放在一起，是因為它們是同一件事的兩個步驟，而且第二步的涵蓋範圍完全取決於第一步有沒有做過：「同步日 K 至今日」的標的是 `stock` 中 `is_active = 1` 且符合頁面層級「只看上市普通股」設定的股票，`stock` 只有開發種子的 34 檔時，同步會**正常完成**、不報任何錯，但只補了 34 檔的行情，掃描結果也就只涵蓋這 34 檔。把「更新股票清單」擺在它左邊，是讓這個前置關係在畫面上看得見，而不是變成一個只有讀過 spec 的人才知道的隱含步驟。
 
 #### 更新股票清單
 
@@ -184,7 +184,9 @@ depends_on: [stock-list]
 #### 同步日 K 至今日
 
 - 按鈕文字「同步日 K 至今日」。按下後進入執行中狀態：按鈕 disabled、顯示進行中狀態與已完成檔數／總檔數。
-- 同步是背景長時間作業（全市場逐檔受速率限制，可能數十分鐘），因此**送出後即輪詢進度，不阻塞畫面**；使用者可以在同步進行中切換頁籤或離開，回來時仍看得到進度。
+- 同步是背景長時間作業（全市場逐檔受速率限制，即使並行後仍以分鐘計），因此**送出後即輪詢進度，不阻塞畫面**；使用者可以在同步進行中切換頁籤或離開，回來時仍看得到進度。
+- **同步母體沿用頁面層級的「只看上市普通股」設定**：本按鈕把該勾選框的當下狀態原樣帶進 `commonStocksOnly`（見 `specs/frontend/stock-list.md` 的「頁面層級設定」）。勾選（預設）時只同步上市普通股，取消勾選時同步 `is_active = 1` 的全部股票。這個對應必須成立，否則會出現「取消勾選後畫面上看得到 ETF，但它的日 K 永遠不會被同步」的狀態，而使用者從畫面上完全看不出原因。
+- **完成摘要必須說出母體是什麼。** `commonStocksOnly` 為 `true` 時，`202` 回應的 `targetCount` 會小於常駐顯示的「共 N 檔」——主檔含約 350 檔非普通股，它們不在同步母體內（見 `specs/backend/stock-price-ingestion.md` 的「全跑母體預設只含上市普通股」）。完成檔數因此要寫成「完成 N 檔上市普通股」，不得只寫「完成 N」；同理，全數已是最新時寫「已是最新，無需更新（N 檔上市普通股）」。兩個數字並列而沒有說明母體，會讓使用者以為有幾百檔漏掉了。`commonStocksOnly` 為 `false` 時照舊寫「完成 N」。
 - 完成後更新「最後同步」時間並顯示完成摘要。摘要的內容取決於這次同步**是否真的抓了東西**：
   - `caughtUpCount` 等於 `targetCount`（全部標的都已是最新，一次外部請求都沒發出）→ 顯示「已是最新，無需更新（N 檔）」，**不得顯示「完成 N 檔」**。
   - 否則 → 顯示完成／失敗／略過檔數，並在 `caughtUpCount` 大於 0 時附註「另 N 檔已是最新」。
@@ -220,7 +222,7 @@ depends_on: [stock-list]
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
 | 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（`code` + `preset` + `risePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`、`endDate` |
-| 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`，不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount` 與 `caughtUpCount` 決定完成摘要的呈現方式 |
+| 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
 
@@ -402,6 +404,14 @@ depends_on: [stock-list]
 - [x] 切到「指定股票」時請求不帶 `commonStocksOnly`，且頁面層級勾選框不變灰、不改變狀態
 - [x] 切換頁面層級勾選框時，本頁既有掃描結果保留不動，且不自動重新掃描
 - [x] 漲幅輸入與普通股勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+---
+
+- [ ] 按「同步日 K 至今日」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
+- [ ] 頁面層級勾選框為預設（勾選）時，`202` 回應的 `targetCount` 小於或等於常駐顯示的「共 N 檔」，且完成摘要寫的是「完成 N 檔上市普通股」而非「完成 N」
+- [ ] 取消勾選後按同步，送出 `commonStocksOnly: false`，摘要寫「完成 N」且 `targetCount` 等於常駐的「共 N 檔」
+- [ ] 常駐顯示的「共 N 檔」不因同步母體縮小而改變（它取自 `GET /api/stocks` 的 `total`，與同步母體是兩件事）
+- [ ] `caughtUpCount` 等於 `targetCount` 時的摘要為「已是最新，無需更新（N 檔上市普通股）」，不誤報成「完成 N 檔」
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
