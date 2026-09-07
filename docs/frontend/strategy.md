@@ -20,7 +20,7 @@
 | 3 | 點「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | **此端點即是向 Yahoo／FinMind 逐檔抓取日線的起點**（預設 8 檔並行）；不帶 `stockIds` 代表全市場，`commonStocksOnly: true` 讓同步母體只含上市普通股 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 3 | 同步進行中 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 每 5 秒輪詢更新進度條 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 4 | 同步完成 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 重取 `lastSyncedAt` 與完成／失敗／略過筆數；摘要以回應的 `commonStocksOnly` 說明母體是「上市普通股」 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 5 | 點「開始掃描」 | `POST /api/strategies/scan` | 以五個勾選的策略、各自靈敏度與各自的 `risePercent` 幅度門檻即時掃描；`commonStocksOnly: true` 讓母體只含上市普通股（排除 ETF、特別股、TDR），回傳各策略命中清單、資料不足與待確認標的 | [strategy-scan](../backend/strategy-scan.md) |
+| 5 | 點「開始掃描」 | `POST /api/strategies/scan` | 以五個勾選的策略即時掃描：前四個各帶靈敏度與 `risePercent` 幅度門檻，累積上漲改帶 `days`（此例 30 日）與 `risePercent`、不帶靈敏度；`commonStocksOnly: true` 讓母體只含上市普通股（排除 ETF、特別股、TDR），回傳各策略命中清單、資料不足與待確認標的 | [strategy-scan](../backend/strategy-scan.md) |
 | 6 | 向下捲動看其餘策略區塊 | —（純畫面捲動，不發請求） | 反彈與累積上漲的「分 K」連結指向 `/stocks/{stockId}/minute/{signalDate}`，點了才會觸發該檔該日的分 K 抓取 | [stock-minute-price](../backend/stock-minute-price.md) |
 | 7 | 再點「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | 全數已補齊時回應 `caughtUpCount` 等於 `targetCount`，本次一檔都不抓取 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 7 | 同步結束 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt`，時間為 Asia/Taipei | [stock-price-ingestion](../backend/stock-price-ingestion.md) |

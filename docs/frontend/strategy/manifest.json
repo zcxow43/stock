@@ -26,7 +26,7 @@
   },
   {
     "file": "step-4.html",
-    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。",
+    "caption": "同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，前四張卡片各自選靈敏度、門檻依所選靈敏度帶入預設值後可再自行輸入（反彈那格是「跌幅門檻」）；累積上漲沒有靈敏度下拉，改為自己填「天數」與「漲幅門檻」兩格，這裡把天數從預設的 20 改成 30 日。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。",
     "api": [
       "GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL — 同步完成後重取 lastSyncedAt"
     ]
@@ -35,12 +35,12 @@
     "file": "step-5.html",
     "caption": "點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。",
     "api": [
-      "POST /api/strategies/scan — body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
+      "POST /api/strategies/scan — body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0, 反彈/STANDARD/risePercent=15.0, 累積上漲/days=30/risePercent=15.0（不帶 preset）], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場"
     ]
   },
   {
     "file": "step-6.html",
-    "caption": "同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。",
+    "caption": "同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；累積上漲區塊的標題括號寫的是這次實際採用的天數（30 日），取自回應而非畫面上的輸入值；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。",
     "api": []
   },
   {

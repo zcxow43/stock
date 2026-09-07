@@ -45,7 +45,7 @@
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
     <rect x="2027.4" y="165.0" width="247.0" height="24.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1645.6" y="1086.3" width="47.6" height="24.7"
+    <rect x="1645.6" y="1086.8" width="47.6" height="24.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
     <rect x="857.8" y="1085.4" width="644.3" height="85.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
@@ -57,7 +57,7 @@
              fill="#D62828" stroke="none" filter="url(#soft)"/>
     <polygon points="1957.5,483.0 1957.5,846.0 1951.0,846.0 1960.0,866.0 1969.0,846.0 1962.5,846.0 1962.5,483.0"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1638.5,1098.0 1529.0,1104.6 1528.6,1098.2 1509.2,1108.3 1529.7,1116.1 1529.3,1109.6 1638.8,1103.0"
+    <polygon points="1638.5,1098.5 1529.0,1105.0 1528.6,1098.5 1509.2,1108.7 1529.7,1116.5 1529.3,1110.0 1638.8,1103.4"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
     <polygon points="1510.0,1070.0 90.0,1070.0 90.0,1063.5 70.0,1072.5 90.0,1081.5 90.0,1075.0 1510.0,1075.0"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
@@ -78,16 +78,16 @@
     <div class="caption"><span class="num">3</span>點擊「同步日 K 至今日」：母體是 1,032 檔上市普通股（沿用頁籤列上方「只看上市普通股」的預設勾選），同步轉為執行中並顯示 18 / 1,032 進度，畫面不被阻塞；此時仍可再按「更新股票清單」，兩顆按鈕互不阻擋。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/stocks/sync/backfill</code><span class="note">body startDate=2026-01-01, endDate=2026-08-30, catchUp=true, commonStocksOnly=true（取自頁面層級勾選框），不帶 stockIds 代表全市場；此端點即是向 Yahoo／FinMind 逐檔抓取歷史日 K 的起點，8 檔並行</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">每 5 秒輪詢更新進度</span></span></div></div>
   </div>
   <div class="frame" style="left:1630px; top:866px; width:660px;">
-    <img src="step-4.png" width="660" height="413" alt="同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。">
-    <div class="caption"><span class="num">4</span>同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，各自的門檻已依所選靈敏度帶入預設值，可再自行輸入（反彈那格是「跌幅門檻」）。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">同步完成後重取 lastSyncedAt</span></span></div></div>
+    <img src="step-4.png" width="660" height="413" alt="同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，前四張卡片各自選靈敏度、門檻依所選靈敏度帶入預設值後可再自行輸入（反彈那格是「跌幅門檻」）；累積上漲沒有靈敏度下拉，改為自己填「天數」與「漲幅門檻」兩格，這裡把天數從預設的 20 改成 30 日。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。">
+    <div class="caption"><span class="num">4</span>同步完成，最後同步時間更新為 2026-08-30 09:14、完成 1,032 檔上市普通股（摘要說明母體，避免與常駐的「共 N 檔」對不起來）；勾選五個策略，前四張卡片各自選靈敏度、門檻依所選靈敏度帶入預設值後可再自行輸入（反彈那格是「跌幅門檻」）；累積上漲沒有靈敏度下拉，改為自己填「天數」與「漲幅門檻」兩格，這裡把天數從預設的 20 改成 30 日。頁籤列上方的「只看上市普通股」為預設勾選，三個分頁共用。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks/sync/progress?jobType=PRICE_BACKFILL</code><span class="note">同步完成後重取 lastSyncedAt</span></span></div></div>
   </div>
   <div class="frame" style="left:850px; top:866px; width:660px;">
     <img src="step-5.png" width="660" height="413" alt="點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。">
-    <div class="caption"><span class="num">5</span>點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/strategies/scan</code><span class="note">body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場</span></span></div></div>
+    <div class="caption"><span class="num">5</span>點擊「開始掃描」：結果區最上方是聯集表格「命中彙總 — 共 5 檔」，同時命中兩個策略的 2330 在同一列逐一列出各策略的訊號日；其下依勾選順序是各策略區塊。畫面一次放不下五個區塊，其餘三個在下方（見次格）。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/strategies/scan</code><span class="note">body strategies=[底底高/STRICT/risePercent=1.0, 箱型突破/STANDARD/risePercent=1.5, 上漲支撐/STANDARD/risePercent=3.0, 反彈/STANDARD/risePercent=15.0, 累積上漲/days=30/risePercent=15.0（不帶 preset）], commonStocksOnly=true, startDate=2026-07-30, endDate=2026-08-30，不帶 stockIds 代表全市場</span></span></div></div>
   </div>
   <div class="frame" style="left:70px; top:866px; width:660px;">
-    <img src="step-6.png" width="660" height="413" alt="同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。">
-    <div class="caption"><span class="num">6</span>同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。</div>
+    <img src="step-6.png" width="660" height="413" alt="同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；累積上漲區塊的標題括號寫的是這次實際採用的天數（30 日），取自回應而非畫面上的輸入值；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。">
+    <div class="caption"><span class="num">6</span>同一份掃描結果向下捲動：上漲支撐，以及反彈與累積上漲兩個新型態的區塊。後兩者都以「高點→低點」或「低點→高點」的幅度命中，訊號日即該段的端點；累積上漲區塊的標題括號寫的是這次實際採用的天數（30 日），取自回應而非畫面上的輸入值；最右的「分 K」連結導向該檔該日的分 K 圖，供自行判讀當日盤中走勢。這兩個新型態不做事後確認，因此沒有待確認提示。</div>
   </div>
   <div class="frame" style="left:70px; top:1662px; width:660px;">
     <img src="step-7.png" width="660" height="413" alt="再次點擊「同步日 K 至今日」：1,032 檔皆已補齊至今日，未發出任何外部請求，摘要顯示「已是最新，無需更新（1,032 檔上市普通股）」而非「完成 1,032 檔」；掃描結果保留不受影響。">

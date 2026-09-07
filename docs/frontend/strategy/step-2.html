@@ -51,9 +51,10 @@
           <div class="desc">回看 20 日，自區間最高收盤跌幅 ≥ 15% 的最低點</div>
           <div class="rise"><span class="rl">跌幅門檻</span><input value="15.0"><span class="pct">%</span></div></div>
         <div class="card "><div class="top"><span class="box"></span><span class="nm">累積上漲</span></div>
-          <select><option>標準</option></select>
-          <div class="desc">回看 20 日，自區間最低收盤累積漲幅 ≥ 15% 的最高點</div>
-          <div class="rise"><span class="rl">漲幅門檻</span><input value="15.0"><span class="pct">%</span></div></div>
+          <div class="desc">回看指定天數，自窗口內最低收盤累積漲幅達門檻的最高點</div>
+          <div class="rise"><span class="rl">天數</span><input value="30" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">漲幅門檻</span><input value="15.0"><span class="pct">%</span></div>
+          <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
