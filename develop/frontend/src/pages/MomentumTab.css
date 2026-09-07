@@ -186,6 +186,18 @@
   cursor: help;
 }
 
+/* sort toggle */
+
+.mt-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mt-sort-label {
+  margin: 0 4px 0 0;
+}
+
 /* results area */
 
 .mt-results-placeholder {

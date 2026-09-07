@@ -14,6 +14,7 @@ import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import com.stock.service.JobRunningRegistry;
 import com.stock.service.StockSyncService;
+import com.stock.service.external.SourceAvailabilityTracker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,10 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -52,6 +55,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class StockPriceIngestionIntegrationTest {
+
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
     @Autowired
     private TestRestTemplate rest;
@@ -76,6 +81,9 @@ class StockPriceIngestionIntegrationTest {
     private StockSyncService stockSyncService;
 
     @Autowired
+    private SourceAvailabilityTracker sourceAvailabilityTracker;
+
+    @Autowired
     private DataSource dataSource;
 
     @Value("${app.external.twse-daily-all-url}")
@@ -83,6 +91,9 @@ class StockPriceIngestionIntegrationTest {
 
     @Value("${app.external.finmind-base-url}")
     private String finmindBaseUrl;
+
+    @Value("${app.external.yahoo-finance-base-url}")
+    private String yahooBaseUrl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -94,12 +105,14 @@ class StockPriceIngestionIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
         waitUntilNotRunning(10_000);
         mockServer = MockRestServiceServer.bindTo(externalApiRestTemplate).ignoreExpectOrder(false).build();
+        sourceAvailabilityTracker.reset();
         cleanupTestData();
     }
 
     @AfterEach
     void tearDown() {
         waitUntilNotRunning(15_000);
+        sourceAvailabilityTracker.reset();
         cleanupTestData();
     }
 
@@ -232,7 +245,7 @@ class StockPriceIngestionIntegrationTest {
     // ---------- 3. Backfill selected mode, rate limiting/retry, idempotency ----------
 
     @Test
-    void backfill_selectedMode_onlyProcessesGivenIds_retriesOn429_andIsIdempotent() throws Exception {
+    void backfill_selectedMode_onlyProcessesGivenIds_retriesOnTimeout_andIsIdempotent() throws Exception {
         seedStock("T201", "測試回補一", true);
         seedStock("T202", "測試回補二", true);
         // decoy stock that must NOT be touched because it's not in stockIds
@@ -254,9 +267,21 @@ class StockPriceIngestionIntegrationTest {
                 new String[]{"2025-09-01"},
                 new String[]{"50.00"}, new String[]{"51.00"}, new String[]{"49.50"}, new String[]{"50.50"});
 
-        // T201: first attempt rate-limited (429), retried once and succeeds
-        mockServer.expect(requestTo(finmindUrlT201)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        // Yahoo is priority (spec: 來源順位); these synthetic stocks don't exist there, so each
+        // stock's very first call is a Yahoo 404 that correctly falls through to FinMind.
+        // Registered in actual runtime order (T201 fully settles before T202 starts):
+        // Yahoo(T201) 404 -> FinMind(T201) timeout -> FinMind(T201) success -> Yahoo(T202) 404 ->
+        // FinMind(T202) success.
+        expectYahooNotFound("T201", start, end);
+        // T201 on FinMind: first attempt times out (non-block failure -- spec: 依既有規則退避重試),
+        // retried once on the SAME source and succeeds. (429/403 are now block-class and switch
+        // source instead of retrying in place -- see StockPriceIngestionMultiSourceIntegrationTest
+        // for that behavior; a timeout is what still exercises same-source backoff-retry here.)
+        mockServer.expect(requestTo(finmindUrlT201)).andRespond(request -> {
+            throw new IOException("simulated timeout");
+        });
         mockServer.expect(requestTo(finmindUrlT201)).andRespond(withSuccess(t201Body, MediaType.APPLICATION_JSON));
+        expectYahooNotFound("T202", start, end);
         mockServer.expect(requestTo(finmindUrlT202)).andRespond(withSuccess(t202Body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -296,7 +321,9 @@ class StockPriceIngestionIntegrationTest {
 
         // ---- idempotency: re-run same range for T201, row count must stay the same ----
         mockServer.reset();
+        expectYahooNotFound("T201", start, end);
         mockServer.expect(requestTo(finmindUrlT201)).andRespond(withSuccess(t201Body, MediaType.APPLICATION_JSON));
+        expectYahooNotFound("T202", start, end);
         mockServer.expect(requestTo(finmindUrlT202)).andRespond(withSuccess(t202Body, MediaType.APPLICATION_JSON));
 
         BackfillRequest rerun = new BackfillRequest();
@@ -333,7 +360,9 @@ class StockPriceIngestionIntegrationTest {
         String body212 = finmindFixture("T212", new String[]{"2025-09-01"},
                 new String[]{"20.00"}, new String[]{"21.00"}, new String[]{"19.50"}, new String[]{"20.50"});
 
+        expectYahooNotFound("T211", start, end);
         mockServer.expect(requestTo(finmindUrl211)).andRespond(withSuccess(body211, MediaType.APPLICATION_JSON));
+        expectYahooNotFound("T212", start, end);
         mockServer.expect(requestTo(finmindUrl212Full)).andRespond(withSuccess(body212, MediaType.APPLICATION_JSON));
 
         BackfillRequest first = new BackfillRequest();
@@ -350,6 +379,7 @@ class StockPriceIngestionIntegrationTest {
 
         mockServer.reset();
         // T211 must NOT be requested again (already DONE); only T212 is fetched on resume
+        expectYahooNotFound("T212", start, end);
         mockServer.expect(requestTo(finmindUrl212Full)).andRespond(withSuccess(body212, MediaType.APPLICATION_JSON));
 
         BackfillRequest resumeRequest = new BackfillRequest();
@@ -399,6 +429,7 @@ class StockPriceIngestionIntegrationTest {
             String body221 = finmindFixture("T221", new String[]{"2025-09-01"},
                     new String[]{"30.00"}, new String[]{"31.00"}, new String[]{"29.50"}, new String[]{"30.50"});
 
+            expectYahooNotFound("T221", start, end);
             mockServer.expect(requestTo(finmindUrl221)).andRespond(withSuccess(body221, MediaType.APPLICATION_JSON));
 
             BackfillRequest request = new BackfillRequest();
@@ -446,7 +477,9 @@ class StockPriceIngestionIntegrationTest {
         String body232 = finmindFixture("T232", new String[]{"2025-09-01"},
                 new String[]{"2.00"}, new String[]{"2.10"}, new String[]{"1.90"}, new String[]{"2.05"});
 
+        expectYahooNotFound("T231", start, end);
         mockServer.expect(requestTo(url231)).andRespond(withSuccess(body231, MediaType.APPLICATION_JSON));
+        expectYahooNotFound("T232", start, end);
         mockServer.expect(requestTo(url232)).andRespond(withSuccess(body232, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -487,9 +520,13 @@ class StockPriceIngestionIntegrationTest {
         String body = finmindFixture("T261", new String[]{"2025-09-01"},
                 new String[]{"1.00"}, new String[]{"1.10"}, new String[]{"0.90"}, new String[]{"1.05"});
 
+        // Yahoo is priority now (spec: 來源順位), so the gate moves to Yahoo's request -- it's the
+        // first (and here, only) external call this in-flight job makes before the concurrent
+        // manual call fires; FinMind's success response, ungated, follows once Yahoo's 404 falls
+        // through to it.
         CountDownLatch requestReceived = new CountDownLatch(1);
         CountDownLatch releaseResponse = new CountDownLatch(1);
-        mockServer.expect(requestTo(url)).andRespond(request -> {
+        mockServer.expect(requestTo(yahooDailyUrl("T261", start, end))).andRespond(request -> {
             requestReceived.countDown();
             try {
                 assertTrue(releaseResponse.await(10, TimeUnit.SECONDS),
@@ -498,8 +535,12 @@ class StockPriceIngestionIntegrationTest {
                 Thread.currentThread().interrupt();
                 throw new java.io.IOException("interrupted while gating the in-flight response", e);
             }
-            return withSuccess(body, MediaType.APPLICATION_JSON).createResponse(request);
+            return withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"chart\":{\"result\":null,\"error\":{\"code\":\"Not Found\","
+                            + "\"description\":\"No data found, symbol may be delisted\"}}}")
+                    .createResponse(request);
         });
+        mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         assertTrue(jobRunningRegistry.tryStart("PRICE_BACKFILL"), "test setup: registry should have been free");
         try {
@@ -548,7 +589,9 @@ class StockPriceIngestionIntegrationTest {
         // T242 has no trading data in range at all -> must be marked SKIPPED
         String body242 = "{\"msg\":\"success\",\"status\":200,\"data\":[]}";
 
+        expectYahooNotFound("T241", start, end);
         mockServer.expect(requestTo(url241)).andRespond(withSuccess(body241, MediaType.APPLICATION_JSON));
+        expectYahooNotFound("T242", start, end);
         mockServer.expect(requestTo(url242)).andRespond(withSuccess(body242, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -621,10 +664,16 @@ class StockPriceIngestionIntegrationTest {
         LocalDate end = LocalDate.of(2025, 9, 1);
         String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T244&start_date="
                 + start + "&end_date=" + end;
-        // max-retries=3 in test config -> 4 total attempts; queue 429 for every one so the
-        // stock ends up FAILED without ever reaching DONE.
+        expectYahooNotFound("T244", start, end);
+        // max-retries=3 in test config -> 4 total attempts; queue a timeout for every one so the
+        // stock ends up FAILED without ever reaching DONE. (429/403 are now block-class and
+        // switch source instead of exhausting retries into FAILED -- see
+        // StockPriceIngestionMultiSourceIntegrationTest for that behavior; a timeout is what still
+        // exhausts same-source backoff-retry into FAILED here.)
         for (int i = 0; i < 4; i++) {
-            mockServer.expect(requestTo(url)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+            mockServer.expect(requestTo(url)).andRespond(request -> {
+                throw new IOException("simulated timeout");
+            });
         }
 
         BackfillRequest request = new BackfillRequest();
@@ -659,6 +708,7 @@ class StockPriceIngestionIntegrationTest {
                 new String[]{"40.00"}, new String[]{"42.00"}, new String[]{"39.50"}, new String[]{"41.00"});
         // Only the gap URL is registered: a request for the full 2025-09-01..2025-09-10 range
         // (i.e. re-fetching the already-synced part) would fail with "No further requests expected".
+        expectYahooNotFound("T251", gapStart, requestEnd);
         mockServer.expect(requestTo(gapUrl)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -723,6 +773,7 @@ class StockPriceIngestionIntegrationTest {
         String url = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T253&start_date="
                 + start + "&end_date=" + weekendEnd;
         String emptyBody = "{\"msg\":\"success\",\"status\":200,\"data\":[]}";
+        expectYahooNotFound("T253", start, weekendEnd);
         mockServer.expect(requestTo(url)).andRespond(withSuccess(emptyBody, MediaType.APPLICATION_JSON));
 
         BackfillRequest first = new BackfillRequest();
@@ -783,6 +834,7 @@ class StockPriceIngestionIntegrationTest {
                 + start + "&end_date=" + end;
         String body = finmindFixture("T271", new String[]{"2025-09-01"},
                 new String[]{"10.00"}, new String[]{"10.50"}, new String[]{"9.50"}, new String[]{"10.20"});
+        expectYahooNotFound("T271", start, end);
         mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -813,6 +865,7 @@ class StockPriceIngestionIntegrationTest {
                 + start + "&end_date=" + end;
         String body = finmindFixture("T272", new String[]{"2025-09-01"},
                 new String[]{"11.00"}, new String[]{"11.50"}, new String[]{"10.50"}, new String[]{"11.20"});
+        expectYahooNotFound("T272", start, end);
         mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -876,6 +929,7 @@ class StockPriceIngestionIntegrationTest {
                 + gapStart + "&end_date=" + endDate;
         String body = finmindFixture("T284", new String[]{"2025-09-08"},
                 new String[]{"20.00"}, new String[]{"21.00"}, new String[]{"19.50"}, new String[]{"20.50"});
+        expectYahooNotFound("T284", gapStart, endDate);
         mockServer.expect(requestTo(gapUrl)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -908,6 +962,7 @@ class StockPriceIngestionIntegrationTest {
                 + endDate + "&end_date=" + endDate;
         String body = finmindFixture("T285", new String[]{"2025-09-01"},
                 new String[]{"5.00"}, new String[]{"5.50"}, new String[]{"4.50"}, new String[]{"5.20"});
+        expectYahooNotFound("T285", endDate, endDate);
         mockServer.expect(requestTo(url)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         BackfillRequest request = new BackfillRequest();
@@ -1048,6 +1103,29 @@ class StockPriceIngestionIntegrationTest {
                         + "attempt_count, last_error, started_at, finished_at) "
                         + "VALUES (?, 'PRICE_BACKFILL', ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 stockId, status, targetStartDate, targetEndDate, lastSyncedDate, attemptCount, lastError);
+    }
+
+    /**
+     * Since this increment, Yahoo is the priority per-stock history source (spec: 來源順位 —
+     * YAHOO -> FINMIND) and every real request now goes through it first. This test file's
+     * stocks are synthetic (T-prefixed) and don't exist on Yahoo, so every test below registers
+     * a 404 for the Yahoo URL before its existing FinMind expectation(s) -- exactly the ambiguous
+     * "not found" case the spec describes (spec: Yahoo 的 404 帶有歧義), which correctly falls
+     * through to FinMind, leaving every existing assertion on FinMind's data untouched. See
+     * StockPriceIngestionMultiSourceIntegrationTest for the dedicated multi-source scenarios
+     * (block/switch, 404-on-every-source, all-sources-blocked, etc).
+     */
+    private String yahooDailyUrl(String stockId, LocalDate startDate, LocalDate endDate) {
+        long period1 = startDate.atStartOfDay(TAIPEI).toEpochSecond();
+        long period2 = endDate.plusDays(1).atStartOfDay(TAIPEI).toEpochSecond();
+        return yahooBaseUrl + "/" + stockId + ".TW?interval=1d&period1=" + period1 + "&period2=" + period2;
+    }
+
+    private void expectYahooNotFound(String stockId, LocalDate startDate, LocalDate endDate) {
+        mockServer.expect(requestTo(yahooDailyUrl(stockId, startDate, endDate)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"chart\":{\"result\":null,\"error\":{\"code\":\"Not Found\","
+                                + "\"description\":\"No data found, symbol may be delisted\"}}}"));
     }
 
     private String finmindFixture(String stockId, String[] dates, String[] opens, String[] maxes,

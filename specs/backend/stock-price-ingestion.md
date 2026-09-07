@@ -1,7 +1,7 @@
 ---
 status: done
 title: "股票行情抓取與回補"
-requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日"
+requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日。逐檔歷史採 Yahoo 為主、FinMind 為備援的雙來源，任一來源對本機 IP 施加封鎖時自動切換來源繼續作業，不中斷批次、不消耗重試次數"
 depends_on: []
 ---
 
@@ -16,26 +16,109 @@ depends_on: []
 | 路徑 | 來源 | 請求數 | 用途 |
 |---|---|---|---|
 | 每日增量 | 交易所當日全市場快照 | **1 次**取得全市場 | 每個交易日收盤後例行更新 |
-| 指定多檔回補 | 逐檔歷史查詢 | 每檔 1 次 | 補特定標的的歷史 |
-| 全市場回補 | 逐檔歷史查詢 | 約 2200 次 | 系統初次建置 |
+| 指定多檔回補 | 逐檔歷史查詢（雙來源） | 每檔 1 次 | 補特定標的的歷史 |
+| 全市場回補 | 逐檔歷史查詢（雙來源） | 約 2200 次 | 系統初次建置 |
 
 「指定多檔」與「全市場」是**同一條程式路徑的不同參數**，不是兩套實作——差別僅在標的清單的來源。
+
+**逐檔歷史有兩個可互換的外部來源**（Yahoo 為主、FinMind 為備援），任一來源對本機 IP 施加封鎖時自動切換到另一個繼續作業。這不是備援設施的錦上添花，而是這條路徑能否跑完的前提：全市場回補是約 2200 次外部請求的長時間作業，單一來源等於單點故障。完整規範見下方「來源選擇與封鎖切換」。
 
 **啟動補齊（startup catch-up）不是第四條路徑**，而是在應用程式啟動完成時自動以 `catchUp` 參數呼叫上表的回補路徑，把每一檔在市股票從它自己的進度接續補到今日。它沒有自己的抓取邏輯、自己的速率控制或自己的進度表——完整規範見下方「啟動時自動補齊」。
 
 ## Requirements
 
-### 資料源與其限制（設計前提）
+### 資料源與其限制（設計前提，均為實測確認）
 
-- **每日全市場快照**：`https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL`
-  單一請求回傳全體上市股票當日的代號、名稱、開高低收、成交量、成交金額、成交筆數。上櫃需另打櫃買中心對應端點。此來源**同時提供代號與名稱**，故 `stock` 主檔由此順帶維護，不需獨立資料源。
+本模組有**三個**外部來源，職責不同，不可互相替代：
 
-- **逐檔歷史查詢**：`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=<代號>&start_date=<起日>&end_date=<迄日>`
-  回傳單檔在區間內的每日 `open` / `max` / `min` / `close` / `Trading_Volume` / `Trading_money` / `Trading_turnover`。
+| 用途 | 來源 | 端點 | 涵蓋 | 請求數 |
+|---|---|---|---|---|
+| 每日全市場快照 | 交易所 OpenAPI | `https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL` | 全體上市股票的**當日**一根日 K | 1 次 |
+| 逐檔歷史（**主**） | Yahoo Finance | `https://query1.finance.yahoo.com/v8/finance/chart/<代號><.TW\|.TWO>?interval=1d&period1=<起始epoch秒>&period2=<結束epoch秒>` | 單檔**整段區間**的日 K | 每檔 1 次 |
+| 逐檔歷史（**備援**） | FinMind | `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=<代號>&start_date=<起日>&end_date=<迄日>` | 同上 | 每檔 1 次 |
 
-- **關鍵限制（已實測確認）**：免費層**不支援一次取得全市場**——省略 `data_id` 的請求回 HTTP 400（`"Your level is free. Please update your user level."`）。全市場回補因此必然是逐檔的長時間作業，這是 `stock_sync_progress` 斷點續傳機制存在的直接原因。
+#### 每日全市場快照（交易所）
 
-- **速率控制為必要機制，不是最佳化**：逐檔回補必須有可設定的請求間隔與並行上限，並對 HTTP 429／逾時採用指數退避重試。預設值以保守為準（序列執行、每次請求間隔至少 1 秒），並可由設定調整。硬編死的無節流迴圈會在數十次請求內被來源封鎖。
+單一請求回傳全體上市股票當日的代號、名稱、開高低收、成交量、成交金額、成交筆數。上櫃需另打櫃買中心對應端點。此來源**同時提供代號與名稱**，故 `stock` 主檔由此順帶維護，不需獨立資料源。
+
+#### 逐檔歷史為什麼必須有兩個來源
+
+全市場回補是約 2200 次外部請求的長時間作業，期間任一來源都可能對本機 IP 施加封鎖。已發生的實例（2026-09-06）：FinMind 回 `403 {"msg":"ip banned","status":403,"retry_after":505,"token_tail":""}`，該次啟動 131 檔全數失敗、**0 檔成功**；同一時間、同一 IP 的交易所快照是成功的（1368 檔主檔 upsert 完成），證實封鎖來自單一服務，而非連外中斷。**單一逐檔來源即單點故障**——這是雙來源存在的直接原因，與 `stock_sync_progress` 斷點續傳存在的原因（逐檔、長時間、會中斷）是同一個。
+
+#### Yahoo（主來源）的已測事實
+
+- 與分 K（`specs/backend/stock-minute-price.md`）是**同一支端點、同一個平行陣列格式**：`chart.result[0].timestamp[]` 為每根 K 棒起始時間的 epoch 秒，`indicators.quote[0]` 之下的 `open[]` / `high[]` / `low[]` / `close[]` / `volume[]` 與其**逐一索引對應**。正規化必須沿用該 spec 既有的索引配對機制，**不得另寫一套解析**。
+- `interval=1d` **沒有** `interval=1m` 那個「只有最近 30 天」的限制：實測 2015-01 的區間照常回 `200` 且有資料。因此逐檔歷史**不需要**分 K 那套 `OUT_OF_WINDOW` 超窗判斷。
+- 回應同時含 `quote` 與 `adjclose` 兩組。**一律取 `quote`**——它是未經除權息還原的原始成交價，與下方「價格處理」的約定一致；`adjclose` 不使用。
+- 代號後綴依 `stock.market` 決定：上市 `.TW`、上櫃 `.TWO`（實測 `6488.TWO` 正常、ETF `0050.TW` 正常）。
+- 不需 token。每檔 1 次請求即取得整段區間，請求數與 FinMind 相同——改以它為主來源**不會**讓回補變慢。
+
+#### Yahoo 的 404 帶有歧義，不得逕自判定為下市
+
+`2330.TWO`（正確股票、**錯誤後綴**）與 `9999.TW`（代號不存在）回完全相同的 `404`：
+
+```json
+{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}
+```
+
+回應本身**無法區分**「這檔真的不存在」與「我們把後綴組錯了」。因此 Yahoo 的 `404` **不得**直接標記為 `SKIPPED`——`SKIPPED` 的語意是「不需重試」，一旦標上去就永久不再嘗試，一個後綴 bug 會靜默地把整批標的判定成已下市，而且從進度表上看起來一切正常。處置規則見下方「來源選擇與封鎖切換」。
+
+#### FinMind（備援來源）的已測限制
+
+- 免費層**不支援一次取得全市場**：省略 `data_id` 的請求回 `400`（`"Your level is free. Please update your user level."`），故它同樣只能逐檔。
+- **API token 必須設定。** 現行設定值為空字串，請求以匿名身分送出（403 回應中 `token_tail` 為空可證），套用最低的免費配額，這是 2026-09-06 封鎖的直接成因。**備援來源本身若處在容易被封鎖的狀態，等於沒有備援**——token 必須提供，且**不得寫死在設定檔中隨程式碼進版控**，改由部署環境注入；未設定時應在啟動時留下明確的警告紀錄，而不是安靜地以匿名身分運作。
+
+#### 速率控制為必要機制，不是最佳化
+
+逐檔回補必須有可設定的請求間隔與並行上限，並對逾時與速率類錯誤採用指數退避重試。預設值以保守為準（序列執行、每次請求間隔至少 1 秒），並可由設定調整。硬編死的無節流迴圈會在數十次請求內被來源封鎖。**兩個來源各自獨立計算請求間隔、退避與封鎖狀態**，不共用計數——其中一個被封鎖不應拖慢另一個。
+
+### 來源選擇與封鎖切換
+
+逐檔歷史的來源選擇是本模組的核心機制。它要達成的事只有一件：**任一來源被封鎖時，整批作業繼續跑完，而不是把封鎖期內的每一檔都記成失敗。**
+
+#### 來源順位
+
+`YAHOO` → `FINMIND`。每一檔都從順位最前、且**當下可用**的來源開始。
+
+#### 來源可用性
+
+每個來源各自維護一個「封鎖到期時間」：
+
+- 初始為無，即可用。
+- 收到**封鎖類回應**時設為到期時間；在到期前該來源視為不可用，**完全不對它發出請求**——不是「發了再失敗」。被封鎖期間繼續請求會延長封鎖，2026-09-06 的紀錄即顯示程式在整個封鎖窗內以每秒一檔的節奏持續請求。
+- 到期後恢復可用；下一檔重新從順位最前的來源開始嘗試，藉此**自動切回主來源**，不需人工介入或重啟。
+
+**封鎖類回應**的判定：
+- HTTP `403` 或 HTTP `429`；
+- 或回應內容指出配額／封鎖（例如 FinMind 的 `{"msg":"ip banned"}`）。
+
+到期時間的取得：
+- 回應提供 `retry_after`（秒）時以它為準——FinMind 的 403 body 中即帶此欄位。
+- 未提供時採可設定的預設冷卻時間，沿用本 spec「預設值以保守為準」的既有原則，實際數值由設定決定，不寫死。
+
+#### 每一檔的處理順序
+
+1. 取順位中第一個可用來源，請求該檔的目標區間。
+2. **成功** → 正規化、UPSERT 寫入、更新該檔進度為 `DONE`，並在 `stock_daily_price.source` 記下**實際取得該列的來源**（`YAHOO` / `FINMIND` / `TWSE`）。
+3. **封鎖類回應** → 將該來源標記為不可用（設定到期時間），**不動這一檔的進度、不累加 `attempt_count`**，改以順位中下一個可用來源重試**同一檔**。
+4. **所有來源皆不可用** → 此時才是真正無來源可用。該檔維持或回到 `PENDING`，**不標記 `FAILED`、不累加 `attempt_count`**，並結束本批作業——繼續往下跑只會對剩下的每一檔重複同一件事。作業回報為正常結束（非錯誤），剩餘標的留給下一次 `catchUp`／`resume` 接手。
+5. **非封鎖類的失敗**（逾時、格式錯誤、5xx）→ 依既有規則退避重試；重試耗盡才把該檔標記 `FAILED` 並累加 `attempt_count`。
+
+#### 封鎖絕不消耗 `attempt_count`
+
+這是本機制的關鍵約束。`attempt_count` 的用途是「避免單一標的無限重試卡住整批作業」（見 `specs/dba/stock-sync-progress.md`），它衡量的是**這一檔本身有問題**。來源被封鎖與這一檔是哪一檔完全無關，把它算進去會讓一次封鎖在 `max-attempt-count` 次啟動之後把**全市場**標的一起推過重試上限，屆時非人工重置無法恢復。2026-09-06 的事故正是這個形狀：630 檔 `FAILED`、`attempt_count` 全部為 `1`、`last_error` 全部是 `HTTP 403`——沒有任何一檔是真的有問題。
+
+#### 404 的處置
+
+因上述歧義，單一來源的 `404` 不構成結論：
+
+- 收到 `404` → **改用順位中下一個來源重試同一檔**。
+- 下一個來源取得資料 → 照常寫入。這同時暴露了後綴組錯之類的問題，因為資料明明存在。
+- **所有來源都表示查無此標的** → 此時才標記 `SKIPPED`。單一來源說「找不到」不足以構成永久跳過的結論。
+
+#### 事故善後不需要額外機制
+
+封鎖留下的 `FAILED` 殘留列**不需要**一次性的資料修補，也不需要新的清理端點：`catchUp` 已經會依 `last_synced_date` 與 `endDate` 的差距重新開啟落後的列並把 `attempt_count` 歸零（見下方「`catchUp` 的語意」），`last_synced_date` 為 `NULL` 與落後於 `endDate` 兩種情形都涵蓋，`FAILED` 列也在其中。**下一次啟動補齊即自動恢復。** 不新增端點、不寫一次性 DML migration。
 
 ### 時區
 
@@ -55,6 +138,9 @@ depends_on: []
 - 一律寫入**原始成交價（未經除權息還原）**，與 `specs/dba/stock-daily-price.md` 的約定一致。
 - 資料源回傳的字串價格（含千分位符號、民國紀年）必須在寫入前正規化為數值與西元日期。
 - 停牌或無交易的日期，資料源不會回傳該列——**不得補零**。零價格會使 KD 的最低價計算歸零、MACD 出現虛假的暴跌訊號。無資料即不寫入該列。
+- **價格在兩個來源之間是一致的，來源切換不會造成價格斷層。** 以 2330 於 2026-01-01～2026-09-06 逐日比對，Yahoo 與 FinMind 的共同 163 個交易日中，開高低收**不一致 0 天**。覆蓋度 Yahoo 略優（Yahoo 有 `2026-07-10` 而 FinMind 缺該日，反向缺漏為 0）。
+- **成交量的口徑隨來源而異，且無法互相換算。** 同一組比對中，成交量 163 天**全部不同**，Yahoo 系統性偏低，量比中位數 `0.864`（範圍 `0.54`～`0.95`），推測不含盤後定價、零股與鉅額交易。改以 Yahoo 為主來源後，畫面上的成交量會較交易所口徑低約 14%。此差異**可接受**，因為成交量不參與任何運算——MACD／KD 只讀價格，型態掃描（`specs/backend/strategy-scan.md`）與產業別漲幅排行（`specs/backend/industry-gain-ranking.md`）也不讀量——它只出現在顯示欄位（`latestVolume` / `totalVolume` / `avgVolume` 與日 K 圖的量副圖）。但它**必須被明講**：日後有人拿本系統的量去對交易所的量，會以為是 bug。
+- **成交金額與成交筆數是選填的。** Yahoo 只提供 OHLCV，不提供這兩項；由它取得的列，`turnover` 與 `transaction_count` 寫入 `0`。這是**刻意接受的取捨，不是遺漏**——兩欄未被任何 API 契約輸出（對外只暴露成交量），且既有來源的列本來就有一部分為 `0`。交易所快照與 FinMind 仍照常寫入實際值。
 
 ### 寫入語意
 
@@ -79,7 +165,8 @@ depends_on: []
 - 批次啟動時，為目標標的在 `stock_sync_progress` 以 `job_type = 'PRICE_BACKFILL'` UPSERT 建立 `PENDING` 列。
 - 逐檔處理，狀態依 `specs/dba/stock-sync-progress.md` 的進度語意流轉。
 - 續傳：重新呼叫回補端點並帶 `resume = true` 時，只取 `status IN ('PENDING','FAILED')` 且 `attempt_count` 未達上限的標的，並從各檔的 `last_synced_date` 之後接續。
-- 目標區間內查無任何交易資料的標的標記為 `SKIPPED`，不再重試。
+- 目標區間內查無任何交易資料的標的標記為 `SKIPPED`，不再重試；**但單一來源回報查無資料不足以構成 `SKIPPED`**，須所有來源皆如此（見「來源選擇與封鎖切換」的 404 處置）。
+- **來源封鎖造成的作業中止不改變任何標的的 `status`，也不累加 `attempt_count`**，因此不需要續傳以外的任何補救動作。
 
 ### 啟動時同步股票主檔（universe）
 
@@ -256,6 +343,7 @@ Response `200`：
 - [x] `POST /api/stocks/sync/backfill` 帶 `stockIds: ["2330","2317"]` 時只處理該 2 檔，回應 `mode` 為 `SELECTED`
 - [x] 同一端點省略 `stockIds` 時處理 `is_active = 1` 的全部股票，回應 `mode` 為 `ALL`
 - [x] 回補過程對外部資料源的請求有間隔控制，且 HTTP 429 觸發指數退避重試而非立即失敗
+      （429 的處置已由 Increment 7 的「來源選擇與封鎖切換」取代：429 現屬**封鎖類回應**，改為標記該來源不可用並切換至下一個來源，而非對同一來源退避重試。間隔控制不變；指數退避重試現適用於逾時與 5xx 等非封鎖類失敗。）
 - [x] 中途強制中斷後，以 `resume: true` 重新呼叫只處理未完成與失敗的標的，已完成標的不再發出外部請求
 - [x] 對同一檔同一區間連續執行兩次回補，`stock_daily_price` 的列數不變（冪等）
 - [x] 資料源未回傳的日期（停牌日）在 `stock_daily_price` 中不存在對應列，且**不存在任何價格為 0 的列**
@@ -297,6 +385,31 @@ Response `200`：
 - [x] 連續重啟兩次，第二次的 `stock` 列數與名稱與第一次相同（UPSERT 冪等，不產生重複股票）
 - [x] 主檔同步只寫入 `market = 'TSE'` 的列，不因本步驟產生任何 `OTC` 列
 - [x] 既有 34 檔種子股票在同步後仍存在，其 `stock_id` 未變動、名稱為資料源的最新值
+
+---
+
+### 多來源與封鎖切換（本次新增）
+
+- [x] 逐檔歷史預設走 Yahoo：一次全新回補後，`stock_daily_price` 中該批次寫入的列其 `source` 為 `YAHOO`
+- [x] Yahoo 回應的 `quote` 與 `adjclose` 並存時取 `quote`：對一檔在區間內有除權息的股票，寫入值等於未還原的原始成交價，不等於 `adjclose`
+- [x] 上櫃股票以 `.TWO`、上市股票以 `.TW` 組代號請求，依 `stock.market` 決定；以一檔 `OTC` 股票驗證能取得資料
+- [x] 逐檔歷史請求區間早於今日 30 天時仍正常取得資料（`interval=1d` 無分 K 的 30 天限制），不產生任何超窗判定
+- [x] 主來源回 `403`／`429` 或 body 指出封鎖時，該檔**改由 FinMind 取得並成功寫入**，該列 `source` 為 `FINMIND`，且該檔進度為 `DONE`
+- [x] 承上，該檔的 `attempt_count` 維持不變（不因來源封鎖而累加），`status` 不曾進入 `FAILED`
+- [x] 主來源被判定封鎖後，同一批次的**後續標的不再對該來源發出任何請求**（以請求數斷言，非以耗時推測）直到封鎖到期
+- [x] 回應帶 `retry_after` 時以其值為封鎖到期依據；未帶時採設定的預設冷卻時間，兩者皆不寫死在程式中
+- [x] 封鎖到期後的下一檔重新從順位最前的來源（Yahoo）開始嘗試，無需重啟或人工介入
+- [x] **兩個來源同時不可用**時：本批作業正常結束（非拋出例外），剩餘標的維持 `PENDING`，無任何標的被標記 `FAILED`，且 `attempt_count` 全部未累加
+- [x] 承上情境後緊接著執行一次啟動補齊，先前未處理的標的照常被接續處理完成
+- [x] 主來源回 `404` 時改由備援來源重試同一檔；備援取得資料則照常寫入，該檔**不得**被標記 `SKIPPED`
+- [x] 僅當**所有**來源都回報查無此標的時，該檔才標記 `SKIPPED`
+- [x] Yahoo 來源寫入的列，`turnover` 與 `transaction_count` 為 `0`，且 `open`/`high`/`low`/`close`/`volume` 皆為有效值；此情形不觸發任何驗證錯誤
+- [x] 同一檔同一區間分別由 Yahoo 與 FinMind 各回補一次，`stock_daily_price` 列數不變（跨來源仍冪等），且 OHLC 相同
+- [x] 兩個來源各自獨立計算請求間隔與退避：其中一個進入封鎖冷卻，不影響另一個的請求節奏
+- [x] FinMind token 未設定時，啟動階段留下明確警告紀錄；token 由部署環境注入，不寫死於版控中的設定檔
+- [x] 既有的 `FAILED` 殘留列在下一次啟動補齊時由 `catchUp` 自動重新開啟並將 `attempt_count` 歸零，全程不需要任何一次性 DML migration 或新增清理端點
+- [x] `stock_daily_price.source` 寫入 `YAHOO` 不需要任何 schema 變更（欄位為 `VARCHAR(20)` 且無 CHECK 約束，見 `specs/dba/stock-daily-price.md`）；本次不產生任何 DBA migration
+- [x] 每日增量（交易所全市場快照）與分 K（Yahoo `interval=1m`）的行為完全未改變
 
 ## Execution Result
 - Status: DONE
@@ -469,3 +582,29 @@ Response `200`：
     - Confirmed no stray `mvn`/`BackendApplication` process was left running and port 8080 was free before finishing (`ps aux` / `lsof -i :8080` both empty).
   - Self-reviewed via the `code-quality` skill: confirmed `syncStockMaster()`'s catch block logs with the exception attached (`log.warn(msg, e)`, not swallowed), confirmed no new resource-lifecycle or atomicity concerns were introduced (the single write path, `PriceIngestionService.applyDailySnapshot`, was already `@Transactional` and untouched), confirmed the ordering guarantee needs no explicit synchronization primitive because both steps run on the same thread with no `@Async` boundary between them, and confirmed the new config class carries only the one field the spec actually asks for (no speculative `startDate`/`rateLimit` fields copied over from `BackfillProperties.StartupCatchUp` for symmetry's sake). No issues required fixing as a result of this review.
 - Not implemented / explicitly out of scope: no changes were made toward `specs/backend/stock-universe-import.md` itself (its own `POST /api/stocks/universe/import` endpoint, ordinary-share filtering, and `502` error contract) — that spec is still `pending` and is a separate execution. The `status:` frontmatter is left untouched per instructions.
+
+### Increment 7 — 2026-09-06
+- Status: DONE
+- Scope: the 20 trailing unchecked Acceptance Criteria under 多來源與封鎖切換（本次新增） — the Yahoo-primary/FinMind-fallback dual-source pipeline with independent per-source block tracking. No other path was touched: the daily full-market snapshot, minute-bar ingestion, resume/catchUp semantics, caughtUpCount, timezone settings, and both startup-sync steps are unchanged (verified by the full pre-existing suite still passing, see below).
+- Design: a `PriceHistorySource` interface (`getCode()`, `fetchDailyHistory(stockId, market, start, end)`) implemented by both `YahooFinanceClient` (priority) and `FinMindClient` (fallback). A new `PriceHistoryFetcher` walks them in a fixed `List.of(yahoo, finMind)` priority order per stock, consulting a new `SourceAvailabilityTracker` (in-memory, `ConcurrentHashMap<sourceCode, blockedUntilInstant>`) before ever calling a source. Three new exceptions in `service.external` carry the classification a source's HTTP call resolves to: `SourceBlockedException` (403/429/quota-body; carries a nullable `retryAfterSeconds`), `SymbolNotFoundException` (404, ambiguous), and the pre-existing `RateLimitedException` is narrowed to timeouts only (was previously also thrown for 429). A new `AllSourcesBlockedException` (raised by the fetcher, caught by `BackfillRunner`) is the "end this batch normally" signal. A shared `RetryAfterExtractor` (used by both clients) centralizes the block-response judgment (HTTP 403/429 or a quota-indicating body) and `retry_after` parsing (HTTP header first, then the JSON body field FinMind's actual incident response used) so the two clients cannot silently drift on what counts as "blocked".
+- Files changed:
+  - New: `service/external/PriceHistorySource.java`, `SourceBlockedException.java`, `SymbolNotFoundException.java`, `AllSourcesBlockedException.java`, `SourceAvailabilityTracker.java`, `PriceHistoryFetcher.java`, `RetryAfterExtractor.java`.
+  - `service/external/FinMindClient.java` — implements `PriceHistorySource`; `fetchHistory`'s HTTP-error classification now checks `RetryAfterExtractor.isBlockedResponse` (403/429/quota-body) before falling through to 404/other; added `@PostConstruct warnIfTokenMissing()` logging a WARN when `app.external.finmind-token` is blank.
+  - `service/external/YahooFinanceClient.java` — implements `PriceHistorySource` via a new `fetchDailyHistory(stockId, market, start, end)` method (interval=1d, no 30-day window check, reuses the existing `at()`/parallel-array pairing via a new shared `barAt`/`quoteOf` extraction that `fetchMinuteBars`'s `normalize()` was refactored to reuse too — same parsing, two call sites, no second parser). `buildSymbol(stockId, market)` extracted and reused by both `fetchMinuteBars` and `fetchDailyHistory`. `fetchMinuteBars` itself is otherwise byte-for-byte unchanged (same exception classes, same 429→RateLimitedException mapping, same 30-day-window contract).
+  - `service/PriceIngestionService.java` — `applyBackfillResult` gained a `source` parameter (removed the hardcoded `SOURCE_FINMIND` constant); the daily-snapshot path (`applyDailySnapshot`, still `SOURCE_TWSE`) is untouched.
+  - `service/BackfillRunner.java` — rewritten to call `PriceHistoryFetcher` instead of `FinMindClient` directly; added a `StockMapper` dependency to resolve each stock's `market` for Yahoo's suffix; `processOne` now catches `AllSourcesBlockedException` (reverts the stock to PENDING via a new `markPending`, then rethrows) and `SymbolNotFoundException` (marks SKIPPED via the existing `markSkippedThrough`); `run()`'s per-stock loop specially catches `AllSourcesBlockedException` to `break` the whole batch as a normal completion (no exception surfaces past `run()`), logged at INFO, distinct from the pre-existing generic `catch (Throwable)` → FAILED path used for every other failure mode.
+  - `mapper/StockSyncProgressMapper.java` + `.xml` — new `markPending` (reverts RUNNING→PENDING without touching attempt_count/last_error/last_synced_date).
+  - `config/BackfillProperties.java` — new `RateLimit.defaultBlockCooldownSeconds` (default 600), used only when a block response doesn't carry its own retry_after.
+  - `application.yml` / test `application.yml` — added `app.backfill.rate-limit.default-block-cooldown-seconds` (600 prod, 1 test, so block-recovery tests don't wait 10 minutes).
+- No DBA migration was created or needed — `stock_daily_price.source` is already VARCHAR(20) with no CHECK constraint (confirmed by writing YAHOO-sourced rows successfully in every new test). No cleanup endpoint or one-off DML was added for the 2026-09-06 incident's residual FAILED rows — catchUp's existing `findCaughtUpStockIds`/`upsertPendingForCatchUp` (Increment 2) already reopens any row whose `last_synced_date` is NULL or behind endDate, FAILED included, and resets attempt_count to 0; a new test (`preExistingFailedRow_fromBlockIncident_reopenedByCatchUp_...`) seeds a row in the exact incident shape (FAILED, attempt_count=1, last_error='HTTP 403', last_synced_date=NULL) and confirms catchUp: true reopens and completes it with attempt_count back to 0.
+- New tests:
+  - `service/external/PriceHistoryFetcherTest.java` (11 tests, pure Mockito, no Spring/DB/HTTP) — the priority/block/404/timeout orchestration in isolation, with every "no request issued" claim asserted by Mockito verify(..., times/never()) call counts, never elapsed time.
+  - `service/external/YahooFinanceClientDailyHistoryTest.java` (7 tests) and `service/external/FinMindClientTest.java` (8 tests) — standalone RestTemplate + MockRestServiceServer (no Spring context), covering quote-vs-adjclose, OTC/TSE suffix, the 30-day-window absence, zero-turnover/transaction-count validity, 403/404 classification, retry_after extraction from both the header and FinMind's actual incident body shape, and the token-missing WARN log (via a Logback ListAppender).
+  - `StockPriceIngestionMultiSourceIntegrationTest.java` (9 tests, real DB + MockRestServiceServer) — end-to-end wiring: default-Yahoo routing with a >30-day-old range and Yahoo-row turnover/transaction_count/OHLCV DB assertions; OTC routing; block→fallback with attempt_count/status untouched; a same-batch second stock proving the blocked source gets zero further requests; a full block-lifecycle test (both sources blocked → batch ends with both stocks left PENDING, attempt_count untouched, no FAILED → sleep past both cooldowns (the default *and* an explicit retry_after) → a second resume call recovers both stocks via Yahoo again, unprompted); 404-ambiguity fallthrough (found by FinMind, not SKIPPED) and all-sources-404 (SKIPPED); cross-source idempotency (Yahoo then FinMind, same range, row count unchanged, OHLC identical); and the pre-existing-FAILED-row recovery test above.
+  - Updated `StockPriceIngestionIntegrationTest.java`: every existing per-stock backfill test now registers a Yahoo 404 ahead of its existing FinMind mock, since Yahoo is now tried first; test stock ids are synthetic and genuinely don't exist on Yahoo, so this is the realistic 404-ambiguity path, not a workaround. Two tests' *trigger* changed, not their intent: `backfill_selectedMode_onlyProcessesGivenIds_retriesOn429_andIsIdempotent` → renamed `...retriesOnTimeout_andIsIdempotent`, and `progress_lastSyncedAt_unchanged_whenBackfillRunFailsCompletely`'s repeated-429 fixture → a repeated simulated timeout (IOException). This is a deliberate, spec-mandated behavior change, not a silent regression: 429 is now classified as a block-class response (spec: 封鎖類回應的判定 — HTTP 403 or 429) that switches source instead of retrying the same one, which is the entire point of this increment (this is exactly what caused the 2026-09-06 incident: continuing to hammer a 429-returning source). Only a timeout remains same-source-backoff-retryable, so that's what now exercises the "backoff retry, not immediate failure" behavior those two tests were written to prove; the block-switch behavior itself (what 429 now does) is covered by the new tests above.
+- Verification performed:
+  - `mvn -f develop/backend/pom.xml compile` — clean.
+  - `mvn -f develop/backend/pom.xml test` — 279/279 passing, run twice consecutively with no flakiness. This includes the full pre-existing suite (MomentumGainIntegrationTest 42/42 with its pre-existing uncommitted changes left untouched, StockMinutePriceIntegrationTest 15/15, StockIndicatorStatisticsIntegrationTest, StrategyScanIntegrationTest, StockCatalogIntegrationTest/WriteIntegrationTest, StockUniverseImportIntegrationTest, StartupCatchUpRunnerTest, IndicatorRebuildServiceTest/IndicatorCalculationServiceTest, NormalizeUtilTest, BackendApplicationTests) — none of it needed logic changes, only the Yahoo-mock additions described above.
+  - One manual live check (no other live calls were made — the automated suite is 100% mock-driven): curl (not through the app) against the real Yahoo endpoint for a genuine OTC stock, 6488.TWO with interval=1d, confirming HTTP 200 with real quote data (GlobalWafers Co., Ltd., exchangeName: TWO) — corroborating the mocked OTC-suffix test against the real external contract without spending any requests through the batch pipeline.
+  - Self-reviewed via the code-quality skill: found and fixed one DRY violation (the block-response predicate was duplicated identically in FinMindClient and YahooFinanceClient; consolidated into `RetryAfterExtractor.isBlockedResponse`), fixed a couple of test-assertion style nits (`assertEquals(false, ...)` → `assertFalse`, `assertTrue(x.equals(y))` → `assertEquals`). No null-safety, resource-lifecycle, atomicity, or performance issues found: `market` is looked up defensively (`stock != null ? stock.getMarket() : null`, safe because `YahooFinanceClient.buildSymbol` treats null as non-OTC); the price-write + progress-update transaction boundary in `PriceIngestionService.applyBackfillResult` is unchanged; `SourceAvailabilityTracker` uses a ConcurrentHashMap and never sleeps, so a blocked source's cooldown cannot slow the other source's pacing (also proven negatively by PriceHistoryFetcherTest's zero-call-count assertions on the blocked source).
+- Honest gaps / what was NOT independently timing-verified: criterion "兩個來源各自獨立計算請求間隔與退避" is verified structurally (no shared counters exist in the code, SourceAvailabilityTracker is keyed per source, and the per-stock rate-limit sleep in BackfillRunner is unconditional/source-independent) and via the zero-call-count unit test, but no separate wall-clock timing measurement was taken — consistent with this spec's own instruction that "後續標的不再對該來源發出任何請求" must be asserted by request count, not elapsed time, which by extension made a timing-based proof for the closely related "independent pacing" criterion a weaker, not a stronger, form of evidence here.

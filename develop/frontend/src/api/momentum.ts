@@ -5,6 +5,7 @@ import { ApiError, type ApiErrorBody } from './stocks'
 
 export type Metric = 'AVERAGE' | 'SUM'
 export type PeriodMode = 'DAYS' | 'WEEKS'
+export type MomentumSort = 'MATCH_COUNT' | 'AVG_GAIN'
 
 export interface MomentumGainItem {
   stockId: string
@@ -22,12 +23,16 @@ export interface MomentumIndustryGroup {
   industryId: number | null
   industryName: string
   matchedCount: number
+  /** Mean of this block's `items[].gain` — population is matched stocks only, so this is
+   * always >= the query's `minGain`. Never render it as "the industry's overall gain". */
+  avgGain: number
   items: MomentumGainItem[]
 }
 
 export interface MomentumGainResponse {
   metric: Metric
   mode: PeriodMode
+  sort: MomentumSort
   startDate: string | null
   endDate: string | null
   tradingDays: number
@@ -47,6 +52,11 @@ export interface MomentumGainParams {
   startDate?: string
   endDate?: string
   minGain: number
+  /** Shared by both metric tabs — always sent, not per-metric. */
+  sort: MomentumSort
+  /** Page-level 只看上市普通股 setting, owned by `StockListPage`, always sent
+   * (specs/frontend/stock-list.md「頁面層級設定」). */
+  commonStocksOnly: boolean
 }
 
 /** GET /api/momentum/gain */
@@ -65,6 +75,8 @@ export async function fetchMomentumGain(
     query.set('endDate', params.endDate)
   }
   query.set('minGain', String(params.minGain))
+  query.set('sort', params.sort)
+  query.set('commonStocksOnly', String(params.commonStocksOnly))
 
   let response: Response
   try {

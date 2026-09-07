@@ -554,7 +554,8 @@ class MomentumGainIntegrationTest {
         insertCloseOnlyRow("MG208", d1, "110.00");
 
         ResponseEntity<String> response = rest.getForEntity(
-                "/api/momentum/gain?metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100",
+                "/api/momentum/gain?metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                        + "&minGain=-100&commonStocksOnly=false",
                 String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         String body = response.getBody();
@@ -563,9 +564,480 @@ class MomentumGainIntegrationTest {
         assertFalse(body.contains("可進場"), "must not contain 可進場: " + body);
     }
 
+    // ==================== commonStocksOnly ====================
+
+    @Test
+    void commonStocksOnly_omitted_defaultsToTrue_excludesNonCommonFormat() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 1, 4);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("9791", "普通股格式", true);
+        seedStock("9791A", "特別股格式", true);
+        insertCloseOnlyRow("9791", d0, "100.00");
+        insertCloseOnlyRow("9791", d1, "110.00");
+        insertCloseOnlyRow("9791A", d0, "100.00");
+        insertCloseOnlyRow("9791A", d1, "110.00");
+        try {
+            // Deliberately NOT using the get() helper (it injects commonStocksOnly=false) so the
+            // request genuinely omits the param and exercises the real default.
+            ResponseEntity<String> response = rest.getForEntity(
+                    "/api/momentum/gain?metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100",
+                    String.class);
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+            JsonNode root = objectMapper.readTree(response.getBody());
+            assertEquals(1, root.get("scannedStocks").asInt(),
+                    "population must be restricted to the 4-digit non-zero-leading format by default");
+            JsonNode items = onlyIndustryItems(root);
+            assertEquals(1, items.size());
+            assertEquals("9791", items.get(0).get("stockId").asText());
+        } finally {
+            jdbc.update("DELETE FROM stock_daily_price WHERE stock_id IN ('9791','9791A')");
+            jdbc.update("DELETE FROM stock WHERE stock_id IN ('9791','9791A')");
+        }
+    }
+
+    @Test
+    void commonStocksOnly_true_excludesEtfSpecialShareAndTdrPatterns_notCountedAsInsufficientEither()
+            throws Exception {
+        // Synthetic stand-ins for the spec's literal examples (0050/00878/2881A/910322), one per
+        // excluded shape: 4-digit-leading-zero (ETF), 5-digit-leading-zero (ETF), letter-suffixed
+        // (special share), 6-digit (TDR). Using synthetic ids keeps this test deterministic and
+        // independent of what happens to be in the live production universe on any given day; the
+        // literal production codes are checked separately via a live curl (see spec Execution Result).
+        String[] excludedIds = {"0791", "00791", "9791A", "910791"};
+        LocalDate d0 = LocalDate.of(2027, 1, 11);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("9791", "普通股對照組", true);
+        insertCloseOnlyRow("9791", d0, "100.00");
+        insertCloseOnlyRow("9791", d1, "110.00");
+        for (String id : excludedIds) {
+            seedStock(id, "非普通股格式", true);
+            insertCloseOnlyRow(id, d0, "100.00");
+            insertCloseOnlyRow(id, d1, "110.00");
+        }
+        try {
+            JsonNode root = rawGet("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                    + "&minGain=-100&commonStocksOnly=true");
+            assertEquals(1, root.get("scannedStocks").asInt());
+            assertEquals(0, root.get("insufficientDataCount").asInt(),
+                    "excluded-by-format stocks must not be counted as insufficient data");
+            JsonNode items = onlyIndustryItems(root);
+            assertEquals(1, items.size());
+            assertEquals("9791", items.get(0).get("stockId").asText());
+        } finally {
+            List<String> all = new ArrayList<>(List.of(excludedIds));
+            all.add("9791");
+            String inList = String.join(",", all.stream().map(id -> "'" + id + "'").toArray(String[]::new));
+            jdbc.update("DELETE FROM stock_daily_price WHERE stock_id IN (" + inList + ")");
+            jdbc.update("DELETE FROM stock WHERE stock_id IN (" + inList + ")");
+        }
+    }
+
+    @Test
+    void commonStocksOnly_false_widerPopulation_matchedCountGreaterThanTrue() throws Exception {
+        String[] nonCommonIds = {"0791", "00791", "9791A", "910791"};
+        LocalDate d0 = LocalDate.of(2027, 1, 18);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("9791", "普通股對照組", true);
+        insertCloseOnlyRow("9791", d0, "100.00");
+        insertCloseOnlyRow("9791", d1, "110.00");
+        for (String id : nonCommonIds) {
+            seedStock(id, "非普通股格式", true);
+            insertCloseOnlyRow(id, d0, "100.00");
+            insertCloseOnlyRow(id, d1, "110.00");
+        }
+        try {
+            JsonNode trueRoot = rawGet("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                    + "&minGain=-100&commonStocksOnly=true");
+            JsonNode falseRoot = rawGet("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                    + "&minGain=-100&commonStocksOnly=false");
+            assertEquals(1, trueRoot.get("matchedStockCount").asInt());
+            assertEquals(5, falseRoot.get("matchedStockCount").asInt());
+            assertTrue(falseRoot.get("matchedStockCount").asInt() > trueRoot.get("matchedStockCount").asInt());
+            assertEquals(1, trueRoot.get("scannedStocks").asInt());
+            assertEquals(5, falseRoot.get("scannedStocks").asInt());
+        } finally {
+            List<String> all = new ArrayList<>(List.of(nonCommonIds));
+            all.add("9791");
+            String inList = String.join(",", all.stream().map(id -> "'" + id + "'").toArray(String[]::new));
+            jdbc.update("DELETE FROM stock_daily_price WHERE stock_id IN (" + inList + ")");
+            jdbc.update("DELETE FROM stock WHERE stock_id IN (" + inList + ")");
+        }
+    }
+
+    @Test
+    void commonStocksOnly_isReadOnly_neverMutatesStockOrStockIndustryTables() throws Exception {
+        long stockCountBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Long.class);
+        long linkCountBefore = jdbc.queryForObject("SELECT COUNT(*) FROM stock_industry", Long.class);
+        String stockChecksumBefore = jdbc.queryForObject(
+                "SELECT MD5(GROUP_CONCAT(stock_id, stock_name, market, is_active ORDER BY stock_id)) FROM stock",
+                String.class);
+
+        get("metric=SUM&mode=DAYS&days=5&minGain=-100&commonStocksOnly=true");
+        get("metric=SUM&mode=DAYS&days=5&minGain=-100&commonStocksOnly=false");
+
+        long stockCountAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock", Long.class);
+        long linkCountAfter = jdbc.queryForObject("SELECT COUNT(*) FROM stock_industry", Long.class);
+        String stockChecksumAfter = jdbc.queryForObject(
+                "SELECT MD5(GROUP_CONCAT(stock_id, stock_name, market, is_active ORDER BY stock_id)) FROM stock",
+                String.class);
+
+        assertEquals(stockCountBefore, stockCountAfter);
+        assertEquals(linkCountBefore, linkCountAfter);
+        assertEquals(stockChecksumBefore, stockChecksumAfter, "stock table content must be byte-identical");
+    }
+
+    @Test
+    void commonStocksOnly_combinesIndependentlyWithOtherParams() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 1, 25);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("9791", "組合測試", true);
+        insertCloseOnlyRow("9791", d0, "100.00");
+        insertCloseOnlyRow("9791", d1, "110.00");
+        try {
+            JsonNode root = rawGet("metric=AVERAGE&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                    + "&minGain=3&commonStocksOnly=true");
+            assertEquals(1, root.get("scannedStocks").asInt());
+            JsonNode items = onlyIndustryItems(root);
+            assertBigDecimalEquals("10.00", items.get(0).get("gain"));
+        } finally {
+            jdbc.update("DELETE FROM stock_daily_price WHERE stock_id = '9791'");
+            jdbc.update("DELETE FROM stock WHERE stock_id = '9791'");
+        }
+    }
+
+    // ==================== avgGain / sort ====================
+
+    @Test
+    void avgGain_returnedForEveryIndustryBlock() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 2, 1);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試avgGain基本");
+        seedStock("MG301", "avgGain基本1", true);
+        insertCloseOnlyRow("MG301", d0, "100.00");
+        insertCloseOnlyRow("MG301", d1, "108.00");
+        linkStockIndustry("MG301", industryId);
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100");
+        JsonNode group = findIndustryById(root, industryId);
+        assertBigDecimalEquals("8.00", group.get("avgGain"));
+    }
+
+    @Test
+    void avgGain_computedFromRoundedDisplayValues_matchesSpecExample() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 2, 8);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試avgGain捨入");
+        String[][] rows = {{"MG302", "105.01"}, {"MG303", "105.02"}, {"MG304", "105.04"}};
+        for (String[] row : rows) {
+            seedStock(row[0], "avgGain捨入", true);
+            insertCloseOnlyRow(row[0], d0, "100.00");
+            insertCloseOnlyRow(row[0], d1, row[1]);
+            linkStockIndustry(row[0], industryId);
+        }
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100");
+        JsonNode group = findIndustryById(root, industryId);
+        assertEquals(3, group.get("matchedCount").asInt());
+        // avgGain must be computed from the already-rounded 5.01/5.02/5.04 display values
+        // ((5.01+5.02+5.04)/3 = 5.023333... -> 5.02), not from any unrounded intermediate.
+        assertBigDecimalEquals("5.02", group.get("avgGain"));
+    }
+
+    @Test
+    void avgGain_excludesStocksInSameIndustryThatDidNotMatch() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 2, 15);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試avgGain母體");
+        seedStock("MG305", "命中", true);
+        insertCloseOnlyRow("MG305", d0, "100.00");
+        insertCloseOnlyRow("MG305", d1, "105.00");
+        linkStockIndustry("MG305", industryId);
+        seedStock("MG306", "未達標", true);
+        insertCloseOnlyRow("MG306", d0, "100.00");
+        insertCloseOnlyRow("MG306", d1, "101.00"); // gain 1.00, below minGain=5
+        linkStockIndustry("MG306", industryId);
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=5");
+        JsonNode group = findIndustryById(root, industryId);
+        assertEquals(1, group.get("matchedCount").asInt(), "only the matched stock counts");
+        assertBigDecimalEquals("5.00", group.get("avgGain"));
+    }
+
+    @Test
+    void avgGain_alwaysGreaterOrEqualToMinGain() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 2, 22);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試avgGain下限");
+        String[][] rows = {{"MG307", "106.00"}, {"MG308", "112.00"}};
+        for (String[] row : rows) {
+            seedStock(row[0], "下限測試", true);
+            insertCloseOnlyRow(row[0], d0, "100.00");
+            insertCloseOnlyRow(row[0], d1, row[1]);
+            linkStockIndustry(row[0], industryId);
+        }
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=5");
+        JsonNode group = findIndustryById(root, industryId);
+        BigDecimal minGain = root.get("minGain").decimalValue();
+        assertTrue(group.get("avgGain").decimalValue().compareTo(minGain) >= 0,
+                "avgGain must never be below minGain");
+    }
+
+    @Test
+    void avgGain_multiIndustryStock_countsInBothBlocksAvgGain() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 3, 1);
+        LocalDate d1 = d0.plusDays(1);
+        int industryA = upsertIndustry("MG測試avgGain跨產業A");
+        int industryB = upsertIndustry("MG測試avgGain跨產業B");
+        seedStock("MG309", "跨產業", true);
+        insertCloseOnlyRow("MG309", d0, "100.00");
+        insertCloseOnlyRow("MG309", d1, "106.00"); // gain 6.00
+        linkStockIndustry("MG309", industryA);
+        linkStockIndustry("MG309", industryB);
+        seedStock("MG310", "A獨有", true);
+        insertCloseOnlyRow("MG310", d0, "100.00");
+        insertCloseOnlyRow("MG310", d1, "105.00"); // gain 5.00
+        linkStockIndustry("MG310", industryA);
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100");
+        JsonNode groupA = findIndustryById(root, industryA);
+        JsonNode groupB = findIndustryById(root, industryB);
+        assertBigDecimalEquals("5.50", groupA.get("avgGain")); // (6.00+5.00)/2
+        assertBigDecimalEquals("6.00", groupB.get("avgGain")); // MG309 only
+    }
+
+    @Test
+    void avgGain_unclassifiedBlockAlsoReturnsAvgGain() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 3, 8);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("MG311", "未分類avgGain", true);
+        insertCloseOnlyRow("MG311", d0, "100.00");
+        insertCloseOnlyRow("MG311", d1, "109.00");
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100");
+        JsonNode items = onlyIndustryItems(root); // the sole block here is the unclassified one
+        assertEquals(1, items.size());
+        JsonNode unclassified = root.get("industries").get(0);
+        assertTrue(unclassified.get("industryId").isNull());
+        assertBigDecimalEquals("9.00", unclassified.get("avgGain"));
+    }
+
+    @Test
+    void avgGain_sumVsAverageMetric_differByTradingDayCountMultiple() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 3, 15);
+        LocalDate d1 = d0.plusDays(1);
+        LocalDate d2 = d0.plusDays(2);
+        seedStock("MG312", "度量對照", true);
+        insertCloseOnlyRow("MG312", d0, "100.00");
+        insertCloseOnlyRow("MG312", d1, "105.00"); // day1: +5.00
+        insertCloseOnlyRow("MG312", d2, "110.25"); // day2: +5.00
+
+        JsonNode sumRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d2 + "&minGain=-100");
+        JsonNode avgRoot = get("metric=AVERAGE&mode=WEEKS&startDate=" + d1 + "&endDate=" + d2 + "&minGain=-100");
+        int tradingDays = onlyIndustryItems(sumRoot).get(0).get("tradingDays").asInt();
+        assertEquals(2, tradingDays);
+
+        BigDecimal sumAvgGain = onlyIndustryItems(sumRoot).get(0).get("gain").decimalValue(); // single-stock block
+        BigDecimal averageAvgGain = onlyIndustryItems(avgRoot).get(0).get("gain").decimalValue();
+        assertEquals(0, sumAvgGain.compareTo(averageAvgGain.multiply(BigDecimal.valueOf(tradingDays))),
+                "SUM-mode avgGain must equal AVERAGE-mode avgGain times the trading day count");
+    }
+
+    @Test
+    void sort_omitted_defaultsToMatchCount_orderUnchanged() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 3, 22);
+        LocalDate d1 = d0.plusDays(1);
+        int industryFew = upsertIndustry("MG測試sort少量");
+        int industryMany = upsertIndustry("MG測試sort多量");
+        seedStock("MG313", "少量1", true);
+        insertCloseOnlyRow("MG313", d0, "100.00");
+        insertCloseOnlyRow("MG313", d1, "109.00"); // gain 9.00 (higher gain, fewer count)
+        linkStockIndustry("MG313", industryFew);
+        for (String id : new String[]{"MG314", "MG315"}) {
+            seedStock(id, "多量", true);
+            insertCloseOnlyRow(id, d0, "100.00");
+            insertCloseOnlyRow(id, d1, "106.00"); // gain 6.00 each (lower gain, more count)
+            linkStockIndustry(id, industryMany);
+        }
+
+        JsonNode omittedRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100");
+        JsonNode explicitRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=MATCH_COUNT");
+        assertEquals("MATCH_COUNT", omittedRoot.get("sort").asText());
+        assertEquals(industryMany, onlyRealIndustries(omittedRoot).get(0).get("industryId").asInt(),
+                "matchedCount 2 must rank before matchedCount 1 by default");
+        assertEquals(onlyRealIndustries(explicitRoot).get(0).get("industryId").asInt(),
+                onlyRealIndustries(omittedRoot).get(0).get("industryId").asInt(),
+                "omitting sort must produce the exact same order as sort=MATCH_COUNT");
+    }
+
+    @Test
+    void sortAvgGain_ordersDescendingByAvgGain_thenMatchedCount_thenIndustryName() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 3, 29);
+        LocalDate d1 = d0.plusDays(1);
+        int industryY = upsertIndustry("MG測試sortY"); // avgGain 8.00, matchedCount 2 -> ranks 1st
+        int industryX = upsertIndustry("MG測試sortX"); // avgGain 8.00, matchedCount 1, name < Z -> ranks 2nd
+        int industryZ = upsertIndustry("MG測試sortZ"); // avgGain 8.00, matchedCount 1, name > X -> ranks 3rd
+        for (String id : new String[]{"MG316", "MG317"}) {
+            seedStock(id, "Y群組", true);
+            insertCloseOnlyRow(id, d0, "100.00");
+            insertCloseOnlyRow(id, d1, "108.00");
+            linkStockIndustry(id, industryY);
+        }
+        seedStock("MG318", "X群組", true);
+        insertCloseOnlyRow("MG318", d0, "100.00");
+        insertCloseOnlyRow("MG318", d1, "108.00");
+        linkStockIndustry("MG318", industryX);
+        seedStock("MG319", "Z群組", true);
+        insertCloseOnlyRow("MG319", d0, "100.00");
+        insertCloseOnlyRow("MG319", d1, "108.00");
+        linkStockIndustry("MG319", industryZ);
+
+        JsonNode root = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=AVG_GAIN");
+        assertEquals("AVG_GAIN", root.get("sort").asText());
+        List<JsonNode> real = onlyRealIndustries(root);
+        assertEquals(3, real.size());
+        assertEquals(industryY, real.get(0).get("industryId").asInt(), "matchedCount 2 breaks the avgGain tie first");
+        assertEquals(industryX, real.get(1).get("industryId").asInt(), "industryName asc breaks the remaining tie");
+        assertEquals(industryZ, real.get(2).get("industryId").asInt());
+    }
+
+    @Test
+    void unclassifiedBlock_alwaysLast_underBothSortValues() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 4, 5);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試未分類排序");
+        seedStock("MG320", "有產業", true);
+        insertCloseOnlyRow("MG320", d0, "100.00");
+        insertCloseOnlyRow("MG320", d1, "101.00"); // low gain, low matchedCount(1)
+        linkStockIndustry("MG320", industryId);
+        // 3 unclassified stocks with a much higher avgGain and matchedCount than the classified block.
+        for (String id : new String[]{"MG321", "MG322", "MG323"}) {
+            seedStock(id, "無產業", true);
+            insertCloseOnlyRow(id, d0, "100.00");
+            insertCloseOnlyRow(id, d1, "150.00");
+        }
+
+        JsonNode matchCountRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=MATCH_COUNT");
+        JsonNode avgGainRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=AVG_GAIN");
+        assertUnclassifiedIsLast(matchCountRoot);
+        assertUnclassifiedIsLast(avgGainRoot);
+    }
+
+    private void assertUnclassifiedIsLast(JsonNode root) {
+        JsonNode industries = root.get("industries");
+        assertTrue(industries.size() >= 2);
+        JsonNode last = industries.get(industries.size() - 1);
+        assertTrue(last.get("industryId").isNull(), "未分類 must be last regardless of sort/avgGain/matchedCount");
+    }
+
+    @Test
+    void sort_doesNotAffectItemOrderWithinBlock() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 4, 12);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試block內順序");
+        String[][] rows = {{"MG324", "112.00"}, {"MG325", "109.00"}, {"MG326", "106.00"}};
+        for (String[] row : rows) {
+            seedStock(row[0], "區塊內排序", true);
+            insertCloseOnlyRow(row[0], d0, "100.00");
+            insertCloseOnlyRow(row[0], d1, row[1]);
+            linkStockIndustry(row[0], industryId);
+        }
+
+        JsonNode matchCountRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=MATCH_COUNT");
+        JsonNode avgGainRoot = get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=-100&sort=AVG_GAIN");
+        JsonNode itemsA = findIndustryById(matchCountRoot, industryId).get("items");
+        JsonNode itemsB = findIndustryById(avgGainRoot, industryId).get("items");
+        assertEquals(itemsA.size(), itemsB.size());
+        for (int i = 0; i < itemsA.size(); i++) {
+            assertEquals(itemsA.get(i).get("stockId").asText(), itemsB.get(i).get("stockId").asText(),
+                    "item order within a block must be identical regardless of sort");
+        }
+    }
+
+    @Test
+    void sort_invalidValue_rejectedWithInvalidSort() {
+        assertErrorCode("metric=SUM&mode=DAYS&days=5&sort=FOO", "INVALID_SORT");
+    }
+
+    @Test
+    void sort_combinesIndependentlyWithOtherParams() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 4, 19);
+        LocalDate d1 = d0.plusDays(1);
+        int industryId = upsertIndustry("MG測試sort組合");
+        seedStock("MG327", "組合", true);
+        insertCloseOnlyRow("MG327", d0, "100.00");
+        insertCloseOnlyRow("MG327", d1, "108.00");
+        linkStockIndustry("MG327", industryId);
+
+        JsonNode root = get("metric=AVERAGE&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                + "&minGain=3&sort=AVG_GAIN&commonStocksOnly=false");
+        assertEquals("AVG_GAIN", root.get("sort").asText());
+        JsonNode group = findIndustryById(root, industryId);
+        assertBigDecimalEquals("8.00", group.get("avgGain"));
+    }
+
+    @Test
+    void avgGainAndSort_addNoExtraDatabaseQueries() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 4, 26);
+        LocalDate d1 = d0.plusDays(1);
+        List<String> ids = seedQualifyingStocks("MGSORTQ_", 5, d0, d1);
+
+        queryCountInterceptor.reset(MAPPER_PREFIX);
+        get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100&sort=MATCH_COUNT");
+        int matchCountQueries = queryCountInterceptor.getCount();
+
+        queryCountInterceptor.reset(MAPPER_PREFIX);
+        get("metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1 + "&minGain=-100&sort=AVG_GAIN");
+        int avgGainQueries = queryCountInterceptor.getCount();
+
+        assertEquals(matchCountQueries, avgGainQueries,
+                "avgGain/sort must be computed in-memory: no extra query for sort=AVG_GAIN");
+        assertTrue(matchCountQueries > 0);
+
+        jdbc.update("DELETE FROM stock_daily_price WHERE stock_id LIKE 'MGSORTQ_%'");
+        jdbc.update("DELETE FROM stock WHERE stock_id LIKE 'MGSORTQ_%'");
+    }
+
+    @Test
+    void avgGain_wording_noOverallPerformanceOrAdviceLanguage() throws Exception {
+        LocalDate d0 = LocalDate.of(2027, 5, 3);
+        LocalDate d1 = d0.plusDays(1);
+        seedStock("MG328", "avgGain文案測試", true);
+        insertCloseOnlyRow("MG328", d0, "100.00");
+        insertCloseOnlyRow("MG328", d1, "110.00");
+
+        ResponseEntity<String> response = rest.getForEntity(
+                "/api/momentum/gain?metric=SUM&mode=WEEKS&startDate=" + d1 + "&endDate=" + d1
+                        + "&minGain=-100&commonStocksOnly=false",
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        String body = response.getBody();
+        assertFalse(body.contains("產業整體表現"), "must not describe avgGain as overall industry performance: " + body);
+        assertFalse(body.contains("建議"), "must not contain 建議: " + body);
+        assertFalse(body.contains("推薦"), "must not contain 推薦: " + body);
+    }
+
     // ==================== helpers ====================
 
+    /**
+     * All synthetic stock ids used by this test class ("MG..."-prefixed) are deliberately
+     * non-numeric so they never collide with real production stock ids, but that also means none
+     * of them match the commonStocksOnly=true regex (specs/backend/stock-universe-import.md's
+     * "只收普通股" 4-digit definition). Tests that don't care about commonStocksOnly get
+     * {@code commonStocksOnly=false} injected automatically so the default (true) doesn't silently
+     * filter every synthetic stock out of the population; tests that exercise commonStocksOnly
+     * itself pass it explicitly and are left untouched.
+     */
     private JsonNode get(String query) throws Exception {
+        if (!query.contains("commonStocksOnly")) {
+            query = query + "&commonStocksOnly=false";
+        }
         ResponseEntity<String> response = rest.getForEntity("/api/momentum/gain?" + query, String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
         return objectMapper.readTree(response.getBody());
@@ -576,6 +1048,24 @@ class MomentumGainIntegrationTest {
         JsonNode industries = root.get("industries");
         assertEquals(1, industries.size(), "expected exactly one industry block (the unclassified one)");
         return industries.get(0).get("items");
+    }
+
+    /** Raw call with no automatic commonStocksOnly injection — for tests exercising that param itself. */
+    private JsonNode rawGet(String query) throws Exception {
+        ResponseEntity<String> response = rest.getForEntity("/api/momentum/gain?" + query, String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        return objectMapper.readTree(response.getBody());
+    }
+
+    /** `industries` with the trailing 未分類 (industryId == null) block, if any, excluded. */
+    private List<JsonNode> onlyRealIndustries(JsonNode root) {
+        List<JsonNode> result = new ArrayList<>();
+        for (JsonNode node : root.get("industries")) {
+            if (!node.get("industryId").isNull()) {
+                result.add(node);
+            }
+        }
+        return result;
     }
 
     private JsonNode findIndustryById(JsonNode root, int industryId) {

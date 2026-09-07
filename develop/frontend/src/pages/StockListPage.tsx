@@ -17,6 +17,11 @@ export default function StockListPage() {
   const tab = resolveTab(searchParams.get('tab'))
   const [total, setTotal] = useState(0)
 
+  // Page-level "只看上市普通股" setting — shared by all three tabs, lives above the tab
+  // bar (not inside any tab panel), defaults to checked, and is plain component state:
+  // never persisted to localStorage or the URL, so a reload always comes back to checked.
+  const [commonStocksOnly, setCommonStocksOnly] = useState(true)
+
   const selectTab = (next: TabKey) => {
     // `replace: true` — switching tabs is a view change, not a new history entry to back-button through.
     setSearchParams(next === 'overview' ? {} : { tab: next }, { replace: true })
@@ -29,6 +34,17 @@ export default function StockListPage() {
         <div className="sl-count">
           共 <b>{total.toLocaleString('en-US')}</b> 檔
         </div>
+      </div>
+
+      <div className="sl-page-setting">
+        <label className="sl-page-setting-label">
+          <input
+            type="checkbox"
+            checked={commonStocksOnly}
+            onChange={(e) => setCommonStocksOnly(e.target.checked)}
+          />
+          只看上市普通股（排除 ETF、特別股、TDR）
+        </label>
       </div>
 
       <div className="sl-tabs" role="tablist">
@@ -64,13 +80,13 @@ export default function StockListPage() {
       {/* All three tabs stay mounted and are toggled with display:none so switching never
           re-fetches, remounts, or flickers the header/tab bar above. */}
       <div data-testid="sl-tabpanel-overview" style={{ display: tab === 'overview' ? 'block' : 'none' }}>
-        <StockOverviewTab onTotalChange={setTotal} />
+        <StockOverviewTab onTotalChange={setTotal} commonStocksOnly={commonStocksOnly} />
       </div>
       <div data-testid="sl-tabpanel-strategy" style={{ display: tab === 'strategy' ? 'block' : 'none' }}>
-        <StrategyTab />
+        <StrategyTab commonStocksOnly={commonStocksOnly} />
       </div>
       <div data-testid="sl-tabpanel-momentum" style={{ display: tab === 'momentum' ? 'block' : 'none' }}>
-        <MomentumTab />
+        <MomentumTab commonStocksOnly={commonStocksOnly} />
       </div>
     </div>
   )

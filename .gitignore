@@ -3,3 +3,6 @@ node_modules/
 
 # Maven build output
 target/
+
+# Detached dev-server state written by /start (PIDs + logs); never committed
+.run/

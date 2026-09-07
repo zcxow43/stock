@@ -3,7 +3,7 @@
 
 import { ApiError, type ApiErrorBody } from './stocks'
 
-export type StrategyCode = 'BOX_BREAKOUT' | 'HIGHER_LOWS' | 'RISING_SUPPORT'
+export type StrategyCode = 'BOX_BREAKOUT' | 'HIGHER_LOWS' | 'RISING_SUPPORT' | 'REBOUND' | 'CUMULATIVE_RISE'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 
 export interface PresetOption {
@@ -52,7 +52,26 @@ export interface RisingSupportDetail {
   confirmCloses: ConfirmClosePoint[]
 }
 
-export type StrategyDetail = BoxBreakoutDetail | HigherLowsDetail | RisingSupportDetail
+export interface ReboundDetail {
+  peakDate: string
+  peakClose: number
+  troughClose: number
+  dropPercent: number
+}
+
+export interface CumulativeRiseDetail {
+  troughDate: string
+  troughClose: number
+  peakClose: number
+  risePercent: number
+}
+
+export type StrategyDetail =
+  | BoxBreakoutDetail
+  | HigherLowsDetail
+  | RisingSupportDetail
+  | ReboundDetail
+  | CumulativeRiseDetail
 
 export interface StrategyHit {
   stockId: string
@@ -78,10 +97,13 @@ export interface ScanResponse {
 }
 
 export interface ScanRequest {
-  strategies: { code: StrategyCode; preset: PresetCode }[]
+  strategies: { code: StrategyCode; preset: PresetCode; risePercent?: number }[]
   stockIds?: string[]
   startDate?: string
   endDate?: string
+  /** Only sent for a "全市場" scan (`stockIds` omitted) — the page-level 只看上市普通股
+   * setting from specs/frontend/stock-list.md. "指定股票" never sends this field. */
+  commonStocksOnly?: boolean
 }
 
 async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> {
@@ -128,7 +150,13 @@ export async function scanStrategies(payload: ScanRequest, signal?: AbortSignal)
 
   if (!response.ok) {
     const body = await parseErrorBody(response)
-    throw new ApiError(body?.code ?? null, `請求失敗（${response.status}）`, null, body?.unknownIds ?? null)
+    throw new ApiError(
+      body?.code ?? null,
+      `請求失敗（${response.status}）`,
+      null,
+      body?.unknownIds ?? null,
+      body?.strategy ?? null,
+    )
   }
 
   return (await response.json()) as ScanResponse

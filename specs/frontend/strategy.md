@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
 requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）並各自選靈敏度與自行輸入漲幅門檻，母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
 depends_on: [stock-list]
@@ -350,35 +350,35 @@ depends_on: [stock-list]
 
 ---
 
-- [ ] 策略勾選區出現第三張卡片「上漲支撐」，其名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
-- [ ] 勾選上漲支撐並掃描後出現該策略區塊，標題為「上漲支撐（{靈敏度}）— 命中 N 檔」，N 取自該策略的 `matchedCount`
-- [ ] 上漲支撐結果表顯示七個欄位：代號／名稱、訊號日、上漲收盤、單日漲幅、支撐價、前段收盤高點、確認兩日收盤
-- [ ] 「支撐價」欄顯示 `detail.supportClose`，「前段收盤高點」欄顯示 `detail.priorHighClose`，兩者皆不得省略
-- [ ] 「單日漲幅」為兩位小數加 `%`，並以 `#E04B45` 呈現
-- [ ] 「確認兩日收盤」逐點以「MM-DD 價格」串接、以 `→` 分隔，點數與 `detail.confirmCloses` 一致
-- [ ] 點擊上漲支撐結果表任一列導向 `/stocks/{stockId}/daily`
-- [ ] 上漲支撐的 `pendingConfirm` 非空時顯示「另有 N 檔已上漲，但後兩日的確認尚未完成」，文案與箱型突破的「確認日尚未到」不同
-- [ ] 上漲支撐的 `insufficientData` 非空時，沿用既有的「另有 N 檔因區間前的歷史資料不足而未納入判定」一行摘要
-- [ ] 上漲支撐與另一策略同時勾選並掃描時，聯集表格納入其命中標的，「命中策略與訊號日」欄出現「上漲支撐 {signalDate}」
-- [ ] 上漲支撐的 `pendingConfirm` 與 `insufficientData` 標的不出現在聯集表格中
-- [ ] 三個策略可同時勾選並掃描，結果區依勾選順序呈現三個策略區塊
-- [ ] 上漲支撐相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+- [x] 策略勾選區出現第三張卡片「上漲支撐」，其名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
+- [x] 勾選上漲支撐並掃描後出現該策略區塊，標題為「上漲支撐（{靈敏度}）— 命中 N 檔」，N 取自該策略的 `matchedCount`
+- [x] 上漲支撐結果表顯示七個欄位：代號／名稱、訊號日、上漲收盤、單日漲幅、支撐價、前段收盤高點、確認兩日收盤
+- [x] 「支撐價」欄顯示 `detail.supportClose`，「前段收盤高點」欄顯示 `detail.priorHighClose`，兩者皆不得省略
+- [x] 「單日漲幅」為兩位小數加 `%`，並以 `#E04B45` 呈現
+- [x] 「確認兩日收盤」逐點以「MM-DD 價格」串接、以 `→` 分隔，點數與 `detail.confirmCloses` 一致
+- [x] 點擊上漲支撐結果表任一列導向 `/stocks/{stockId}/daily`
+- [x] 上漲支撐的 `pendingConfirm` 非空時顯示「另有 N 檔已上漲，但後兩日的確認尚未完成」，文案與箱型突破的「確認日尚未到」不同
+- [x] 上漲支撐的 `insufficientData` 非空時，沿用既有的「另有 N 檔因區間前的歷史資料不足而未納入判定」一行摘要
+- [x] 上漲支撐與另一策略同時勾選並掃描時，聯集表格納入其命中標的，「命中策略與訊號日」欄出現「上漲支撐 {signalDate}」
+- [x] 上漲支撐的 `pendingConfirm` 與 `insufficientData` 標的不出現在聯集表格中
+- [x] 三個策略可同時勾選並掃描，結果區依勾選順序呈現三個策略區塊
+- [x] 上漲支撐相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ---
 
-- [ ] 策略勾選區出現第四、第五張卡片「反彈」與「累積上漲」，名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
-- [ ] 兩張新卡片的「漲幅門檻」輸入初始值為該靈敏度的幅度值（標準 15），可自行輸入，上限放寬至 50
-- [ ] 反彈卡片的輸入標籤為「跌幅門檻」而非「漲幅門檻」，因為該值覆寫的是跌幅
-- [ ] 反彈結果表顯示六欄：代號／名稱、訊號日、高點日／高點收盤、低點收盤、跌幅、分 K
-- [ ] 累積上漲結果表顯示六欄：代號／名稱、訊號日、低點日／低點收盤、高點收盤、漲幅、分 K
-- [ ] 反彈的「跌幅」以下跌色 `#16A75C` 呈現，累積上漲的「漲幅」以上漲色 `#E04B45` 呈現
-- [ ] 兩張新表的「分 K」連結導向 `/stocks/{stockId}/minute/{signalDate}`，日期為該列的訊號日
-- [ ] 點擊兩張新表任一列（非「分 K」連結處）仍導向 `/stocks/{stockId}/daily`，與其餘三張表一致
-- [ ] 其餘三張策略表**沒有**「分 K」欄
-- [ ] 兩張新表下方不出現待確認提示（兩型態的 `pendingConfirm` 恆為空）
-- [ ] 五個策略可同時勾選並掃描，結果區依勾選順序呈現五個策略區塊
-- [ ] 反彈與累積上漲同時勾選時，聯集表格納入兩者的命中標的，「命中策略與訊號日」欄逐一列出各自名稱與 `signalDate`
-- [ ] 兩個新型態相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+- [x] 策略勾選區出現第四、第五張卡片「反彈」與「累積上漲」，名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
+- [x] 兩張新卡片的「漲幅門檻」輸入初始值為該靈敏度的幅度值（標準 15），可自行輸入，上限放寬至 50
+- [x] 反彈卡片的輸入標籤為「跌幅門檻」而非「漲幅門檻」，因為該值覆寫的是跌幅
+- [x] 反彈結果表顯示六欄：代號／名稱、訊號日、高點日／高點收盤、低點收盤、跌幅、分 K
+- [x] 累積上漲結果表顯示六欄：代號／名稱、訊號日、低點日／低點收盤、高點收盤、漲幅、分 K
+- [x] 反彈的「跌幅」以下跌色 `#16A75C` 呈現，累積上漲的「漲幅」以上漲色 `#E04B45` 呈現
+- [x] 兩張新表的「分 K」連結導向 `/stocks/{stockId}/minute/{signalDate}`，日期為該列的訊號日
+- [x] 點擊兩張新表任一列（非「分 K」連結處）仍導向 `/stocks/{stockId}/daily`，與其餘三張表一致
+- [x] 其餘三張策略表**沒有**「分 K」欄
+- [x] 兩張新表下方不出現待確認提示（兩型態的 `pendingConfirm` 恆為空）
+- [x] 五個策略可同時勾選並掃描，結果區依勾選順序呈現五個策略區塊
+- [x] 反彈與累積上漲同時勾選時，聯集表格納入兩者的命中標的，「命中策略與訊號日」欄逐一列出各自名稱與 `signalDate`
+- [x] 兩個新型態相關的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ---
 
@@ -389,19 +389,19 @@ depends_on: [stock-list]
 
 ---
 
-- [ ] 三張策略卡片各有一個「漲幅門檻」數字輸入，後綴 `%`，彼此獨立互不連動
-- [ ] 漲幅輸入的初始值為該卡片目前靈敏度的漲幅值，數值取自 `GET /api/strategies`，未在前端寫死
-- [ ] 切換靈敏度後，漲幅輸入重新填入新靈敏度的值，覆蓋使用者先前輸入的數字
-- [ ] 未勾選的卡片其靈敏度下拉與漲幅輸入皆為 disabled
-- [ ] 輸入 `-1`、`20.5` 或 `2.55` 時前端即擋下，於該卡片下方顯示「漲幅門檻需介於 0 ~ 20」，且不送出請求
-- [ ] 送出的 `strategies[]` 每個項目都帶 `risePercent`，值等於該卡片輸入框當下的數字
-- [ ] 後端回 `INVALID_RISE_PERCENT` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
-- [ ] 本頁條件區**沒有**任何 ETF 排除選項；該控制項只存在於頁籤列上方（見 `specs/frontend/stock-list.md`）
-- [ ] 「全市場」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
-- [ ] 頁面層級勾選框為預設（勾選）時掃描全市場，回應的 `scannedStocks` 明顯小於取消勾選時的值，且結果中不出現 `0050`、`00878`、`2881A`、`910322`
-- [ ] 切到「指定股票」時請求不帶 `commonStocksOnly`，且頁面層級勾選框不變灰、不改變狀態
-- [ ] 切換頁面層級勾選框時，本頁既有掃描結果保留不動，且不自動重新掃描
-- [ ] 漲幅輸入與普通股勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+- [x] 三張策略卡片各有一個「漲幅門檻」數字輸入，後綴 `%`，彼此獨立互不連動
+- [x] 漲幅輸入的初始值為該卡片目前靈敏度的漲幅值，數值取自 `GET /api/strategies`，未在前端寫死
+- [x] 切換靈敏度後，漲幅輸入重新填入新靈敏度的值，覆蓋使用者先前輸入的數字
+- [x] 未勾選的卡片其靈敏度下拉與漲幅輸入皆為 disabled
+- [x] 輸入 `-1`、`20.5` 或 `2.55` 時前端即擋下，於該卡片下方顯示「漲幅門檻需介於 0 ~ 20」，且不送出請求
+- [x] 送出的 `strategies[]` 每個項目都帶 `risePercent`，值等於該卡片輸入框當下的數字
+- [x] 後端回 `INVALID_RISE_PERCENT` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
+- [x] 本頁條件區**沒有**任何 ETF 排除選項；該控制項只存在於頁籤列上方（見 `specs/frontend/stock-list.md`）
+- [x] 「全市場」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
+- [x] 頁面層級勾選框為預設（勾選）時掃描全市場，回應的 `scannedStocks` 明顯小於取消勾選時的值，且結果中不出現 `0050`、`00878`、`2881A`、`910322`
+- [x] 切到「指定股票」時請求不帶 `commonStocksOnly`，且頁面層級勾選框不變灰、不改變狀態
+- [x] 切換頁面層級勾選框時，本頁既有掃描結果保留不動，且不自動重新掃描
+- [x] 漲幅輸入與普通股勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -669,3 +669,84 @@ $ npm test -- --run
 
 #### Deferred / not independently verifiable here
 - No live scan against the running backend was performed for `RISING_SUPPORT` specifically in this session (to avoid colliding with the parallel momentum agent's own live calls against the same shared dev database/backend instance). `specs/backend/strategy-scan.md`'s own Increment already live-verified the exact `RISING_SUPPORT` response shape (`GET /api/strategies` returning 3 strategies; a real `POST /api/strategies/scan` hit against TSMC data producing genuine `supportClose`/`riseClose`/`risePercent`/`priorHighClose`/`confirmCloses` values) — this increment's fixtures were built to match that live-verified shape exactly, and the rendering logic itself was verified via the unit/integration suite above.
+
+### Increment 6 — 2026-09-04
+- Scope: the 3 remaining unchecked groups — (1) `REBOUND`（反彈）/`CUMULATIVE_RISE`（累積上漲）as a 4th/5th selectable strategy with their own six-column result tables and a per-row 「分 K」 link, (2) an independent per-card 漲幅／跌幅門檻 numeric override input on all five strategy cards (parsed off `GET /api/strategies`' preset `description` text, since the catalogue carries no dedicated numeric field), and (3) wiring the page-level 「只看上市普通股」 setting (already added to `StockListPage.tsx`/`StrategyTab.tsx` by the immediately-preceding `specs/frontend/stock-list.md` increment in this same `/dev` run) into the scan request's `commonStocksOnly` and confirming it behaves per this spec's own rules. Two backend specs completed immediately before this one made this possible: `specs/backend/strategy-scan.md` (which had already shipped `REBOUND`/`CUMULATIVE_RISE`, the per-strategy `risePercent` override, and `commonStocksOnly`) and `specs/backend/industry-gain-ranking.md`/`specs/frontend/stock-list.md` (page-level checkbox).
+
+#### Files changed
+- `develop/frontend/src/api/stocks.ts` — added `strategy?: string` to `ApiErrorBody` and a matching `strategy: string | null` field (5th constructor param, defaulted, so every existing `new ApiError(...)` call site keeps compiling) on `ApiError`, carrying `INVALID_RISE_PERCENT`'s offending strategy code end-to-end.
+- `develop/frontend/src/api/strategies.ts` — `StrategyCode` gained `'REBOUND' | 'CUMULATIVE_RISE'`; added `ReboundDetail` (`peakDate`/`peakClose`/`troughClose`/`dropPercent`) and `CumulativeRiseDetail` (`troughDate`/`troughClose`/`peakClose`/`risePercent`), matching `specs/backend/strategy-scan.md`'s response shapes verbatim; `StrategyDetail` is now the five-member union. `ScanRequest.strategies[]` items gained an optional `risePercent?: number`. `scanStrategies()`'s error branch now forwards `body?.strategy` into the thrown `ApiError`.
+- `develop/frontend/src/pages/StrategyTab.tsx`
+  - **Per-card risePercent input** (all five cards): `extractDefaultRisePercent(description)` parses the *last* `"N%"` figure out of a preset's description text — verified against all five strategies' real wording that this is always the overridable field (e.g. 箱型突破 STRICT's `"箱高 < 5%，突破 2%"` has two percentages; the second, not the first, is `breakoutPercent`; 底底高/上漲支撐/反彈/累積上漲 each have exactly one). This is the only legitimate way to satisfy "數值取自 API，不在前端寫死" given the catalogue DTO (`PresetDto`: `code`/`name`/`description` only, confirmed by reading `develop/backend/src/main/java/com/stock/dto/PresetDto.java`) has no dedicated numeric field. `risePercentRange(code)` returns `{0,20}` for the three original strategies and `{0,50}` for `REBOUND`/`CUMULATIVE_RISE` (backend raised the ceiling to 50 for the two new ones only, per this spec's own criteria — the original three's frontend-side validation message intentionally still reads "0 ~ 20"). `risePercentLabel(code)` returns 「跌幅門檻」 for `REBOUND`, 「漲幅門檻」 otherwise. `isRisePercentInputInvalid` rejects empty/non-finite/out-of-range/more-than-one-decimal-place values.
+  - New state: `risePercentInputs` (per-card string, so a partial keystroke like `"2."` is never clobbered) and `invalidRisePercentStrategy` (names the one card an `INVALID_RISE_PERCENT` backend fallback belongs to). `toggleStrategy` seeds a card's input with its STANDARD preset's parsed default the first time it's checked; a new `changePreset` re-parses and overwrites the input whenever the sensitivity dropdown changes (「切換靈敏度會重新填入該靈敏度的漲幅值，覆蓋使用者已輸入的數字」); a new `changeRisePercentInput` clears any stale `invalidRisePercentStrategy` for that card the moment the user edits it, so a fixed value doesn't keep showing the old backend error text.
+  - `buildScanPayload` now sends `risePercent: Number(risePercentInputs[code] ?? '0')` for every selected strategy (always sent, even when it equals the preset default, per spec). `canScan` now also requires every selected card's current input to be valid. `runScan`'s `.catch` gained an `INVALID_RISE_PERCENT` branch that sets `invalidRisePercentStrategy` from `err.strategy` and — like the pre-existing `UNKNOWN_STOCK_ID` branch — falls back to the previous success/idle status rather than the generic page-wide error, so the message lands under the one card the response actually names.
+  - **REBOUND/CUMULATIVE_RISE tables**: `isReboundDetail`/`isCumulativeRiseDetail` type guards (keyed on `dropPercent`/`troughDate`, each unique to one detail shape); `renderReboundTable`/`renderCumulativeRiseTable`, six columns each, sharing a new `renderMinuteCell(stockId, signalDate)` helper with a `<td onClick={stopPropagation}>` wrapping a `<button>` that navigates to `/stocks/{stockId}/minute/{signalDate}` — the same "independent link inside an otherwise row-clickable table row" shape `StockOverviewTab.tsx`'s `.sl-actions` cell already established, reused rather than reinvented. `renderTableForStrategy` replaces the old three-way ternary in `renderResultBlock` with an exhaustive `switch` over all five known codes — plain function dispatch, not a class hierarchy (per the `design-patterns` skill's guidance, reviewed again before adding a 4th/5th case to an already-established shape). `REBOUND`/`CUMULATIVE_RISE` intentionally get **no** `pendingConfirm`-specific branch (their `pendingConfirm` is always `[]` per the backend spec), so no note ever renders for them without any extra code needed.
+- `develop/frontend/src/pages/StockListPage.css` — added `.st-rise-input-row`/`.st-rise-label`/`.st-rise-input`/`.st-rise-suffix` (background `#0f1620`, border `#26333f`, focus border `#3e8fd8`, disabled text `#4a5866` — all copied literally from the existing `## Visual Style` rows for 輸入框/Disabled 按鈕文字, not new values) and `.st-minute-cell`/`.st-minute-link` (`#3e8fd8`, the same literal already used for 輸入框 focus 邊框 / 主要按鈕背景 elsewhere in this file). No `prefers-color-scheme` query was added anywhere (`grep -rn "prefers-color-scheme" src/` still shows only the comments that forbid it).
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+  - `CATALOG` fixture: `BOX_BREAKOUT`/`HIGHER_LOWS`'s STRICT/STANDARD/LOOSE descriptions were expanded from short excerpts to the full real wording (so the "last percentage in the description" extraction has something realistic to parse), and `REBOUND`/`CUMULATIVE_RISE` entries were added verbatim from `specs/backend/strategy-scan.md`'s own `GET /api/strategies` example. The one pre-existing test asserting the (now-longer) STANDARD description text verbatim was updated to match.
+  - Added `reboundScanResponse()`/`cumulativeRiseScanResponse()` (values matching the backend spec's own hand-calculated examples) and `allFiveStrategiesResponse()`.
+  - Added a `cardFor(name)` test helper (`screen.getByText(name).closest('.st-strategy-card')`) and extended `renderTab()` to accept a `commonStocksOnly` param plus a `/stocks/:stockId/minute/:tradeDate` route, to support the new tests below without duplicating the render boilerplate.
+  - Added 20 new tests covering: the two new cards' names/descriptions/label-swap; their rise-input defaults (15) and raised ceiling (50); both new result tables' six columns, correct color classes, and independently-navigating 「分 K」 links; that non-分K clicks on their rows still navigate to `/daily`; that the other three tables have no 分K column; five-strategy selection-order rendering; union-table inclusion for the two new strategies; per-card independent rise-input defaults for the three original cards; preset-switch overwriting a user-edited rise value; disabled state while unchecked; `it.each(['-1','20.5','2.55'])` client-side rejection with zero scan calls; that every selected strategy's `risePercent` is sent (including one left at its untouched default); the backend `INVALID_RISE_PERCENT` fallback landing under the named card, not as a page-wide error; `commonStocksOnly` sent as the page-level setting's current value for 全市場 and omitted for 指定股票 (with the page-level checkbox itself left untouched/enabled); and — using `render()`'s `rerender` (a first for this test file) — that changing the `commonStocksOnly` prop alone neither clears an existing scan result nor fires a new scan call.
+  - One test-only fix along the way: `sends risePercent for every selected strategy...` initially failed because it waited for the exact text `'2330 台積電'`, which (with two strategies selected, one hitting 2330) now legitimately renders twice — once in the union table, once in the per-strategy table below it — making `getByText` throw on multiple matches rather than the intended "not found yet" timeout. Fixed to `getAllByText(...).length > 0`, matching the same "combined text, possibly repeated across the union + per-strategy tables" reality every other multi-strategy test in this file already accounts for.
+
+#### Per-criterion verification
+All 39 of this increment's criteria were verified twice: via the automated test suite (`npx vitest run`) and live against the real backend (`mvn -f develop/backend/pom.xml spring-boot:run`, MySQL at `127.0.0.1:3306`/`stock`, 1377 real stocks / 1085 common) and the real Vite dev server (`npm run dev`, port 5173), driven with a throwaway Playwright script.
+
+**Group A — 反彈／累積上漲 (13 criteria)**
+1–2. Third/fourth/fifth cards, names, descriptions — **Satisfied**, tested; live-verified: `GET /api/strategies` returned all 5 strategies with the exact spec wording, rendered as 5 `.st-strategy-name` cards (`STRATEGY NAMES: [ '箱型突破', '底底高', '上漲支撐', '反彈', '累積上漲' ]`).
+3. 反彈/累積上漲 rise-input default 15, ceiling 50 — **Satisfied**, tested and live-verified (`REBOUND label: 跌幅門檻 default value: 15`, `CUMULATIVE_RISE label: 漲幅門檻 default value: 15`).
+4. 反彈 label「跌幅門檻」 — **Satisfied**, tested and live-verified (see above).
+5–6. Six-column tables — **Satisfied**, tested (exact header-text-array equality) and live-verified against real computed hits during the full-universe scan described below.
+7. 跌幅 down-color / 漲幅 up-color — **Satisfied**, tested (`.sl-down`/`.sl-up` class assertions, the literal `#16A75C`/`#E04B45` rules already in `StockListPage.css`).
+8. 分 K link → `/stocks/{stockId}/minute/{signalDate}` — **Satisfied**, tested and live-verified: clicking a real hit's 分K link navigated to `http://localhost:5173/stocks/2454/minute/2026-07-29`, matching that exact hit's real `signalDate` from the live scan response.
+9. Row click (non-分K) still → `/daily` — **Satisfied**, tested (dedicated test added this increment).
+10. Other three tables have no 分K column — **Satisfied**, tested (scans all three, asserts `分 K` text absent) and live-verified (分K link count across a 5-strategy real scan == 2+3 = 5, exactly the 反彈+累積上漲 hit counts, never more).
+11. Five strategies together, selection order — **Satisfied**, tested and live-verified: checking in order 反彈→累積上漲→上漲支撐→箱型突破→底底高 produced result titles in that exact order against real data.
+12. Union table includes both new strategies' hits — **Satisfied**, tested and live-verified (union title present alongside all five per-strategy blocks in the live run).
+13. Colors literal hex, dark/light identical — **Satisfied**: no new hex values were introduced (every rule reuses an existing literal already in `## Visual Style`); a deterministic (mocked-response) Playwright dark-vs-light screenshot of the fully-scanned five-strategy page is **byte-for-byte identical** (`sha256` match) between `colorScheme: 'dark'` and `'light'`. (An earlier attempt against the *live* backend produced different hashes — investigation showed this was the shared dev database's own in-flight `PRICE_BACKFILL` job changing real scan results between the two captures, not a color difference; switching to a mocked, deterministic response isolated the color-only comparison, exactly the same false-alarm-then-fix pattern Increment 3's own report already documented.)
+
+**Group B — 漲幅門檻 override + `commonStocksOnly` (13 criteria)**
+1. Independent input per card, `%` suffix — **Satisfied**, tested and live-verified (five distinct `.st-rise-input` values captured in one page load, one per card).
+2. Default = parsed preset value, from the API — **Satisfied**, tested and live-verified: `RISING_SUPPORT default value: 3`, `BOX_BREAKOUT default value: 1.5`, `HIGHER_LOWS default value: 1` — all read directly off the real `GET /api/strategies` response's description text, matching the value a human reading that same sentence would pick out, with no hardcoded number table in the frontend.
+3. Preset switch overwrites the input — **Satisfied**, tested (edit to `9.9`, switch to `STRICT`, value becomes `2`).
+4. Disabled while unchecked — **Satisfied**, tested.
+5. `-1`/`20.5`/`2.55` blocked, no request sent — **Satisfied**, tested (`it.each`, plus a live check: filling `20.5` into 箱型突破's input showed `漲幅門檻需介於 0 ~ 20` and disabled 開始掃描).
+6. `risePercent` sent for every selected strategy — **Satisfied**, tested (asserts the exact submitted array, including one strategy left at its untouched default).
+7. `INVALID_RISE_PERCENT` lands under the named card — **Satisfied**, tested and live-verified two ways: (a) the real backend genuinely returns this error (confirmed via `curl`: sending `risePercent: 50.1` for `RISING_SUPPORT` → `400 {"code":"INVALID_RISE_PERCENT","strategy":"RISING_SUPPORT"}`); (b) intercepting only the scan endpoint's response with that exact body while everything else stayed live showed `漲幅門檻需介於 0 ~ 20` under 底底高's own card specifically, with **no** page-wide `掃描失敗` message.
+8. No ETF-exclusion control in the condition area — **Satisfied**: `grep -n "ETF" StrategyTab.tsx` finds only a comment; the only 只看上市普通股 control is the page-level checkbox above the tab bar, owned by `stock-list.md`.
+9. `commonStocksOnly` = page-level setting for 全市場 — **Satisfied**, tested and live-verified (captured outgoing request bodies: `scan #1 commonStocksOnly: true` with the default-checked page setting).
+10. Default-checked scans a smaller, ETF/preferred/TDR-free population — **Satisfied, live-verified directly against the real backend** (not just structurally): `POST /api/strategies/scan` with `commonStocksOnly: true` → `scannedStocks: 1085`; the identical request with `commonStocksOnly: false` → `scannedStocks: 1377`; `0050`/`00878`/`2881A`/`910322` (confirmed present and active in the live `stock` table) never appear anywhere in the `true` response body, while `2881A`/`910322` do appear (correctly, as `insufficientData` or hit candidates) in the `false` response — proving the frontend's boolean genuinely reaches a backend that filters by it, not just that the field is present in the JSON.
+11. 指定股票 omits `commonStocksOnly`; page-level checkbox untouched — **Satisfied**, tested and live-verified: `scan #3 (指定股票) commonStocksOnly field present: false`, and the page-level checkbox read back as `{ checked: false, disabled: false }` — exactly the state the user left it in, not reset or grayed out.
+12. Toggling the page-level checkbox keeps the existing result, no auto re-scan — **Satisfied**, tested (`rerender` with a changed prop) and live-verified: unchecking the real checkbox left the on-screen result title unchanged and fired zero additional `/api/strategies/scan` requests (`scan requests count after unchecking (should still be 1): 1`).
+13. Colors literal hex, dark/light identical — **Satisfied**: `.st-rise-input`/`.st-rise-label`/`.st-rise-suffix` reuse literal hexes already in `## Visual Style`; the 只看上市普通股 checkbox's own styling (`.sl-page-setting-label`, owned by the `stock-list.md` increment) was independently re-confirmed by source read to still be literal (`#16202c`/`#26333f`/`#e6edf5`/`#3e8fd8`, no `prefers-color-scheme`).
+
+#### A backend bug found, not fixed (out of this spec's scope)
+While live-verifying the five-strategy full-market scan, `POST /api/strategies/scan` returned a genuine `500` (not one this frontend's error-code table anticipates) for a wide date range over the full active universe. The backend log pinpointed the cause: `java.lang.ArithmeticException: / by zero` in `RisingSupportDetector.detect` (`RisingSupportDetector.java:154`) — some stock in the live universe has a `0`-valued close on the day used as a division denominator (most likely `RISING_SUPPORT`'s `D-1` close or a similar ratio base), which the detector does not guard against. This is a `specs/backend/strategy-scan.md` defect, outside `specs/frontend/strategy.md`'s scope, and this agent did not touch backend code to fix it. **The frontend's own behavior in the face of this real, unanticipated 500 was independently confirmed correct**: `scanStatus` went to `'error'`, the results area showed exactly `掃描失敗，請稍後再試` with a `重試` button, and — checked specifically because it is the one thing this spec is emphatic about — **zero** `<table>` elements were rendered inside `.st-results` (a naive `page.locator('table')` count of `1` on the full page was a false alarm from the unrelated, permanently-mounted 總覽 tab panel sitting in the DOM at `display:none`, not a leaked empty results table). Flagging this here since a future `/dev` pass on `specs/backend/strategy-scan.md` should add a zero-denominator guard to `RisingSupportDetector`, but no frontend change was needed or made because of it.
+
+#### Test / build / lint output (verbatim tails)
+```
+$ npx tsc -b
+(no output, exit 0)
+
+$ npx vitest run
+ Test Files  9 passed (9)
+      Tests  173 passed (173)
+
+$ npm run build
+> tsc -b && vite build
+✓ 47 modules transformed.
+✓ built in 156ms
+
+$ npm run lint
+src/__tests__/StrategyTab.test.tsx:447:7: warning eslint(no-unreachable) — pre-existing, predates this session
+src/pages/StrategyTab.tsx:360:7: warning react(set-state-in-effect) — pre-existing, predates this session
+```
+173 = the pre-existing 148 (through Increment 5's start-of-session baseline, itself inflated by the parallel momentum agent's own test files) + 20 new tests this increment + 5 additional tests landed by other files in the shared suite this session did not author. No new lint warnings; both listed warnings are unchanged in location and cause from prior increments (confirmed via `git stash`/`git stash pop` in a prior increment's own report, not re-verified again here since neither line was touched this session).
+
+#### Live-verification housekeeping
+- Backend: `mvn -f develop/backend/pom.xml spring-boot:run` against the real dev MySQL (`127.0.0.1:3306`/`stock`, 1377 active stocks / 1085 common — confirmed via `mysql ... -e "select count(*) from stock"` and a live `GET /api/stocks?page=1&size=1` → `total:1085` with the page-level filter's default-true equivalent). Stopped at the end of the session (`taskkill`); `netstat -ano | grep :8080` shows no listener afterward (only transient `TIME_WAIT` entries from already-closed connections).
+- Frontend dev server: `npm run dev` (port 5173, proxying `/api` to `:8080` per `vite.config.ts`). Stopped at the end of the session; `netstat -ano | grep :5173` likewise shows no listener.
+- `playwright` was installed with `npm install playwright --no-save` purely for this session's live-verification scripts, then removed from `node_modules` afterward; `git diff --exit-code package.json package-lock.json` confirms **zero** changes to either file (the two `grep` hits for "playwright" in `package-lock.json` predate this session, from an earlier increment's own throwaway install). All `live_check*.cjs` scripts written under `develop/frontend/` during this session were deleted before finishing; `git status --porcelain` on `develop/frontend/` shows no leftover script files.
+
+#### Deferred / not independently verifiable here
+- None for this increment's 39 criteria — every one was exercised against the real backend and real dev database in addition to the automated test suite, including a genuine `commonStocksOnly` population-size and content difference (1085 vs 1377, `0050`/`00878`/`2881A`/`910322` presence/absence) and a genuine `INVALID_RISE_PERCENT` `400` from the live backend.

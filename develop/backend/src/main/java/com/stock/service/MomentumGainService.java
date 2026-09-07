@@ -65,10 +65,12 @@ public class MomentumGainService {
 
     public MomentumGainResponseDto getGain(String metricParam, String modeParam, Integer days,
                                             LocalDate startDateParam, LocalDate endDateParam,
-                                            BigDecimal minGainParam) {
+                                            BigDecimal minGainParam, boolean commonStocksOnly,
+                                            String sortParam) {
         String metric = validateMetric(metricParam);
         String mode = validateMode(modeParam);
         BigDecimal minGain = validateMinGain(minGainParam).setScale(SCALE, RoundingMode.HALF_UP);
+        String sort = validateSort(sortParam);
 
         LocalDate startDate;
         LocalDate endDate;
@@ -95,7 +97,16 @@ public class MomentumGainService {
             tradingDays = 0; // resolved below via countDistinctTradeDatesInRange — startDate is never null here
         }
 
-        List<Stock> population = stockMapper.findActiveStocks(); // Query: population
+        List<Stock> allActive = stockMapper.findActiveStocks(); // Query: population
+        List<Stock> population = allActive;
+        if (commonStocksOnly) {
+            population = new ArrayList<>(allActive.size());
+            for (Stock s : allActive) {
+                if (CommonStockCodeUtil.isCommonStockCode(s.getStockId())) {
+                    population.add(s);
+                }
+            }
+        }
         int scannedStocks = population.size();
 
         if ("WEEKS".equals(mode)) {
@@ -107,7 +118,7 @@ public class MomentumGainService {
         }
 
         if (population.isEmpty() || startDate == null) {
-            return emptyResponse(metric, mode, startDate, endDate, Math.max(tradingDays, 0), minGain, scannedStocks);
+            return emptyResponse(metric, mode, sort, startDate, endDate, Math.max(tradingDays, 0), minGain, scannedStocks);
         }
 
         List<String> targetIds = new ArrayList<>(population.size());
@@ -225,12 +236,11 @@ public class MomentumGainService {
             group.setIndustryId(entry.getKey());
             group.setIndustryName(industryNameById.get(entry.getKey()));
             group.setMatchedCount(items.size());
+            group.setAvgGain(averageGain(items));
             group.setItems(items);
             industries.add(group);
         }
-        industries.sort(Comparator
-                .comparingInt(IndustryGainGroupDto::getMatchedCount).reversed()
-                .thenComparing(IndustryGainGroupDto::getIndustryName));
+        industries.sort(industryComparator(sort));
 
         if (!unclassifiedItems.isEmpty()) {
             unclassifiedItems.sort(itemComparator);
@@ -238,6 +248,7 @@ public class MomentumGainService {
             unclassified.setIndustryId(null);
             unclassified.setIndustryName(UNCLASSIFIED_NAME);
             unclassified.setMatchedCount(unclassifiedItems.size());
+            unclassified.setAvgGain(averageGain(unclassifiedItems));
             unclassified.setItems(unclassifiedItems);
             industries.add(unclassified);
         }
@@ -245,6 +256,7 @@ public class MomentumGainService {
         MomentumGainResponseDto response = new MomentumGainResponseDto();
         response.setMetric(metric);
         response.setMode(mode);
+        response.setSort(sort);
         response.setStartDate(startDate);
         response.setEndDate(endDate);
         response.setTradingDays(tradingDays);
@@ -256,11 +268,13 @@ public class MomentumGainService {
         return response;
     }
 
-    private MomentumGainResponseDto emptyResponse(String metric, String mode, LocalDate startDate, LocalDate endDate,
-                                                    int tradingDays, BigDecimal minGain, int scannedStocks) {
+    private MomentumGainResponseDto emptyResponse(String metric, String mode, String sort, LocalDate startDate,
+                                                    LocalDate endDate, int tradingDays, BigDecimal minGain,
+                                                    int scannedStocks) {
         MomentumGainResponseDto response = new MomentumGainResponseDto();
         response.setMetric(metric);
         response.setMode(mode);
+        response.setSort(sort);
         response.setStartDate(startDate);
         response.setEndDate(endDate);
         response.setTradingDays(tradingDays);
@@ -297,5 +311,46 @@ public class MomentumGainService {
             throw new InvalidMinGainException(minGain);
         }
         return minGain;
+    }
+
+    private String validateSort(String sort) {
+        if (sort == null) {
+            return SORT_MATCH_COUNT;
+        }
+        if (!SORT_MATCH_COUNT.equals(sort) && !SORT_AVG_GAIN.equals(sort)) {
+            throw new InvalidSortException(sort);
+        }
+        return sort;
+    }
+
+    /**
+     * Mean of a block's already-rounded {@code items[].gain} values (spec "產業別彙總": the display
+     * values, not the unrounded per-day sums), rounded to 2 decimals. {@code items} is never empty
+     * here — a block is only ever built from at least one matched stock.
+     */
+    private BigDecimal averageGain(List<StockGainItemDto> items) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (StockGainItemDto item : items) {
+            sum = sum.add(item.getGain());
+        }
+        return sum.divide(BigDecimal.valueOf(items.size()), SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Ordering between industry blocks only (never affects the item ordering within a block).
+     * MATCH_COUNT: matchedCount desc, then industryName asc. AVG_GAIN: avgGain desc, then
+     * matchedCount desc, then industryName asc. The "未分類" block is appended after this sort
+     * runs, so it never participates in either ordering.
+     */
+    private Comparator<IndustryGainGroupDto> industryComparator(String sort) {
+        if (SORT_AVG_GAIN.equals(sort)) {
+            return Comparator
+                    .comparing(IndustryGainGroupDto::getAvgGain, Comparator.reverseOrder())
+                    .thenComparing(Comparator.comparingInt(IndustryGainGroupDto::getMatchedCount).reversed())
+                    .thenComparing(IndustryGainGroupDto::getIndustryName);
+        }
+        return Comparator
+                .comparingInt(IndustryGainGroupDto::getMatchedCount).reversed()
+                .thenComparing(IndustryGainGroupDto::getIndustryName);
     }
 }

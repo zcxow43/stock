@@ -35,7 +35,6 @@ import java.util.Set;
 public class PriceIngestionService {
 
     private static final String SOURCE_TWSE = "TWSE";
-    private static final String SOURCE_FINMIND = "FINMIND";
     private static final String MARKET_TSE = "TSE";
 
     private final StockMapper stockMapper;
@@ -91,12 +90,16 @@ public class PriceIngestionService {
      * last row actually written: the source omits weekends/holidays entirely, so recording the
      * last real trading day would make every later catch-up re-request that already-processed
      * empty tail forever (spec: `last_synced_date` 的認定).
+     *
+     * {@code source} is whichever {@link com.stock.service.external.PriceHistorySource} actually
+     * supplied these rows this run (YAHOO or FINMIND) — recorded per spec: 每一檔的處理順序 step 2,
+     * 並在 stock_daily_price.source 記下實際取得該列的來源.
      */
     @Transactional
     public void applyBackfillResult(String stockId, String jobType, List<NormalizedPriceRow> rows,
-                                     LocalDate requestedEndDate) {
+                                     LocalDate requestedEndDate, String source) {
         for (NormalizedPriceRow row : rows) {
-            priceMapper.upsert(toDomain(row, SOURCE_FINMIND));
+            priceMapper.upsert(toDomain(row, source));
         }
         progressMapper.markDone(stockId, jobType, requestedEndDate);
     }

@@ -31,6 +31,9 @@ app:
       max-retries: 3
       initial-backoff-ms: 30
       backoff-multiplier: 2
+      # Small on purpose: tests that exercise "block expires, source recovers" sleep past this
+      # value rather than waiting out the 600s production default.
+      default-block-cooldown-seconds: 1
     max-attempt-count: 5
     # Must stay disabled in tests: startup catch-up would otherwise fire real requests against
     # the live TWSE/FinMind APIs on every test-suite boot, making results depend on external

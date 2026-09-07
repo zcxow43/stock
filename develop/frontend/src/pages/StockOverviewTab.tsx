@@ -73,9 +73,12 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; stock: StockListItem } |
 export interface StockOverviewTabProps {
   /** Lifted so the shared page header ("共 N 檔") can render outside the tab content. */
   onTotalChange: (total: number) => void
+  /** Page-level "只看上市普通股" setting, owned and toggled by `StockListPage` and
+   * shared across all three tabs — see specs/frontend/stock-list.md「頁面層級設定」. */
+  commonStocksOnly: boolean
 }
 
-export default function StockOverviewTab({ onTotalChange }: StockOverviewTabProps) {
+export default function StockOverviewTab({ onTotalChange, commonStocksOnly }: StockOverviewTabProps) {
   const navigate = useNavigate()
 
   const [rawSearch, setRawSearch] = useState('')
@@ -104,7 +107,7 @@ export default function StockOverviewTab({ onTotalChange }: StockOverviewTabProp
   useEffect(() => {
     const controller = new AbortController()
     setStatus('loading')
-    fetchStocks(query, controller.signal)
+    fetchStocks(query, commonStocksOnly, controller.signal)
       .then((resp) => {
         setData(resp)
         setStatus('success')
@@ -126,7 +129,7 @@ export default function StockOverviewTab({ onTotalChange }: StockOverviewTabProp
       })
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, retryToken])
+  }, [query, retryToken, commonStocksOnly])
 
   // Success/not-found banners auto-dismiss so they don't linger over the table forever.
   useEffect(() => {

@@ -38,6 +38,35 @@
   font-weight: 600;
 }
 
+/* ---------- page-level "只看上市普通股" setting (above the tab bar, shared by all tabs) ---------- */
+
+.sl-page-setting {
+  display: flex;
+  justify-content: flex-end;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.sl-page-setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #e6edf5;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sl-page-setting-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
 /* ---------- tab bar ---------- */
 
 .sl-tabs {
@@ -554,6 +583,63 @@
   font-size: 12px;
   line-height: 1.5;
   color: #93a4b8;
+}
+
+.st-rise-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-rise-label {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-rise-input {
+  width: 70px;
+  height: 32px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.st-rise-input::placeholder {
+  color: #6b7c90;
+}
+
+.st-rise-input:focus {
+  border-color: #3e8fd8;
+}
+
+.st-rise-input:disabled {
+  color: #4a5866;
+}
+
+.st-rise-suffix {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-minute-cell {
+  white-space: nowrap;
+}
+
+.st-minute-link {
+  appearance: none;
+  background: none;
+  border: none;
+  color: #3e8fd8;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
 }
 
 .st-scope {

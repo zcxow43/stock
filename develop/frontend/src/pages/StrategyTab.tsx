@@ -6,8 +6,10 @@ import {
   scanStrategies,
   type BoxBreakoutDetail,
   type ConfirmClosePoint,
+  type CumulativeRiseDetail,
   type HigherLowsDetail,
   type PresetCode,
+  type ReboundDetail,
   type RisingSupportDetail,
   type ScanRequest,
   type ScanResponse,
@@ -88,6 +90,51 @@ function isRisingSupportDetail(detail: StrategyDetail): detail is RisingSupportD
   return 'riseClose' in detail
 }
 
+function isReboundDetail(detail: StrategyDetail): detail is ReboundDetail {
+  return 'dropPercent' in detail
+}
+
+function isCumulativeRiseDetail(detail: StrategyDetail): detail is CumulativeRiseDetail {
+  return 'troughDate' in detail
+}
+
+/** REBOUND's 「跌幅門檻」 covers the same request field (`risePercent`) as every other
+ * strategy's 「漲幅門檻」 — the label swap is cosmetic only, per
+ * specs/backend/strategy-scan.md's "欄位名沿用同一個以維持請求結構一致". */
+function risePercentLabel(code: StrategyCode): string {
+  return code === 'REBOUND' ? '跌幅門檻' : '漲幅門檻'
+}
+
+/** BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT keep the original 0~20 range; REBOUND/
+ * CUMULATIVE_RISE (added later) use the backend's raised 0~50 ceiling. */
+function risePercentRange(code: StrategyCode): { min: number; max: number } {
+  return code === 'REBOUND' || code === 'CUMULATIVE_RISE' ? { min: 0, max: 50 } : { min: 0, max: 20 }
+}
+
+/** The catalogue (`GET /api/strategies`) carries no dedicated numeric field for a preset's
+ * rise/drop threshold — only human-readable `description` text. Every preset description
+ * across all five strategies happens to state its overridable threshold as the *last*
+ * "N%" figure in the sentence (earlier percentages, if any, describe a different,
+ * non-overridable parameter, e.g. 箱型突破's 箱高 ratio) — so parsing that text is the
+ * sole legitimate way to read a default that "取自 API，不在前端寫死". No percentage at
+ * all (e.g. 箱型突破 LOOSE's「收盤突破上緣即計」) means the threshold is 0. */
+function extractDefaultRisePercent(description: string | undefined): number {
+  if (!description) return 0
+  const matches = [...description.matchAll(/(\d+(?:\.\d+)?)%/g)]
+  if (matches.length === 0) return 0
+  return Number(matches[matches.length - 1][1])
+}
+
+function isRisePercentInputInvalid(value: string, range: { min: number; max: number }): boolean {
+  if (value.trim() === '') return true
+  const num = Number(value)
+  if (!Number.isFinite(num)) return true
+  if (num < range.min || num > range.max) return true
+  // "最多一位小數"
+  const rounded = Math.round(num * 10) / 10
+  return Math.abs(rounded - num) > 1e-9
+}
+
 interface UnionHit {
   strategyCode: StrategyCode
   signalDate: string
@@ -158,7 +205,15 @@ function ExpandableNote({ label, ids }: { label: string; ids: string[] }) {
   )
 }
 
-export default function StrategyTab() {
+export interface StrategyTabProps {
+  /** Page-level "只看上市普通股" setting, owned by `StockListPage` and shared across all
+   * three tabs (specs/frontend/stock-list.md「頁面層級設定」). Defaults to `true` so this
+   * component still renders standalone (e.g. in tests that don't pass it). Only applies
+   * to "全市場" scans — "指定股票" never sends it (specs/backend/strategy-scan.md). */
+  commonStocksOnly?: boolean
+}
+
+export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProps) {
   const navigate = useNavigate()
 
   // ---------- strategy catalogue ----------
@@ -167,6 +222,13 @@ export default function StrategyTab() {
 
   const [selectionOrder, setSelectionOrder] = useState<StrategyCode[]>([])
   const [selectedPresets, setSelectedPresets] = useState<Partial<Record<StrategyCode, PresetCode>>>({})
+  // Per-card 漲幅／跌幅門檻 input, kept as the raw string the user typed so a partial
+  // entry (e.g. "2.") isn't clobbered mid-keystroke. Populated with the current preset's
+  // parsed default the first time a card is checked, and again whenever its preset changes.
+  const [risePercentInputs, setRisePercentInputs] = useState<Partial<Record<StrategyCode, string>>>({})
+  // Names the one card the backend's `INVALID_RISE_PERCENT` fallback error belongs to
+  // (client-side validation already blocks this in normal use).
+  const [invalidRisePercentStrategy, setInvalidRisePercentStrategy] = useState<StrategyCode | null>(null)
 
   // ---------- stock scope ----------
   const [scope, setScope] = useState<'ALL' | 'SELECTED'>('ALL')
@@ -247,8 +309,11 @@ export default function StrategyTab() {
   // `total` is needed here, not the list content.
   useEffect(() => {
     const controller = new AbortController()
+    // Unfiltered — this widget shows the raw active-stock universe size (matches
+    // `totalActiveCount` from 更新股票清單), not the page-level 只看上市普通股 setting.
     fetchStocks(
       { keyword: '', market: 'ALL', includeInactive: false, page: 1, size: 1, sort: 'stockId', order: 'asc' },
+      false,
       controller.signal,
     )
       .then((resp) => setTotalStockCount(resp.total))
@@ -296,6 +361,9 @@ export default function StrategyTab() {
       return
     }
     const controller = new AbortController()
+    // Unfiltered — 指定股票 lets the user name any stock explicitly (ETFs included);
+    // the page-level 只看上市普通股 setting never applies to this branch (backend
+    // doesn't filter it either, see specs/backend/strategy-scan.md「掃描範圍」).
     fetchStocks(
       {
         keyword: debouncedStockSearch,
@@ -306,6 +374,7 @@ export default function StrategyTab() {
         sort: 'stockId',
         order: 'asc',
       },
+      false,
       controller.signal,
     )
       .then((resp) => setStockSuggestions(resp.items))
@@ -319,6 +388,26 @@ export default function StrategyTab() {
   const toggleStrategy = (code: StrategyCode) => {
     setSelectionOrder((order) => (order.includes(code) ? order.filter((c) => c !== code) : [...order, code]))
     setSelectedPresets((presets) => (presets[code] ? presets : { ...presets, [code]: 'STANDARD' }))
+    setRisePercentInputs((inputs) => {
+      if (inputs[code] !== undefined) return inputs
+      const presetMeta = catalog.find((s) => s.code === code)?.presets.find((p) => p.code === 'STANDARD')
+      return { ...inputs, [code]: String(extractDefaultRisePercent(presetMeta?.description)) }
+    })
+  }
+
+  /** 切換靈敏度會重新填入該靈敏度的漲幅值，覆蓋使用者已輸入的數字 — a preset is a named
+   * bundle of defaults, so selecting one must show that bundle's own value, not a stale
+   * number left over from whatever the user typed under the previous preset. */
+  const changePreset = (code: StrategyCode, preset: PresetCode) => {
+    setSelectedPresets((presets) => ({ ...presets, [code]: preset }))
+    const presetMeta = catalog.find((s) => s.code === code)?.presets.find((p) => p.code === preset)
+    setRisePercentInputs((inputs) => ({ ...inputs, [code]: String(extractDefaultRisePercent(presetMeta?.description)) }))
+    setInvalidRisePercentStrategy((current) => (current === code ? null : current))
+  }
+
+  const changeRisePercentInput = (code: StrategyCode, value: string) => {
+    setRisePercentInputs((inputs) => ({ ...inputs, [code]: value }))
+    setInvalidRisePercentStrategy((current) => (current === code ? null : current))
   }
 
   const applyShortcut = (key: ShortcutKey) => {
@@ -354,16 +443,25 @@ export default function StrategyTab() {
   }
 
   const buildScanPayload = (): ScanRequest => ({
-    strategies: selectionOrder.map((code) => ({ code, preset: selectedPresets[code] ?? 'STANDARD' })),
+    strategies: selectionOrder.map((code) => ({
+      code,
+      preset: selectedPresets[code] ?? 'STANDARD',
+      // 值與該靈敏度預設值相同時仍照送 — every selected card's current number goes out,
+      // never omitted just because it happens to match the preset's own default.
+      risePercent: Number(risePercentInputs[code] ?? '0'),
+    })),
     stockIds: scope === 'SELECTED' ? selectedStocks.map((s) => s.stockId) : undefined,
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
+    // 使用者明確指名的代號不代為過濾 — only sent for a 全市場 scan.
+    commonStocksOnly: scope === 'ALL' ? commonStocksOnly : undefined,
   })
 
   const runScan = (payload: ScanRequest) => {
     setScanStatus('scanning')
     setScanErrorMessage(null)
     setUnknownIds(null)
+    setInvalidRisePercentStrategy(null)
     setLastScanPayload(payload)
     scanStrategies(payload)
       .then((resp) => {
@@ -376,6 +474,13 @@ export default function StrategyTab() {
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
+        if (err instanceof ApiError && err.code === 'INVALID_RISE_PERCENT') {
+          // Backend fallback only — client-side validation already blocks this in normal
+          // use. Must name the offending card, not a page-wide generic error.
+          setInvalidRisePercentStrategy((err.strategy as StrategyCode) ?? null)
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
         setScanStatus('error')
         setScanErrorMessage('掃描失敗，請稍後再試')
       })
@@ -383,7 +488,11 @@ export default function StrategyTab() {
 
   const noStrategySelected = selectionOrder.length === 0
   const noStockSelected = scope === 'SELECTED' && selectedStocks.length === 0
-  const canScan = !noStrategySelected && !noStockSelected && !dateInvalid && scanStatus !== 'scanning'
+  const hasInvalidRisePercent = selectionOrder.some((code) =>
+    isRisePercentInputInvalid(risePercentInputs[code] ?? '', risePercentRange(code)),
+  )
+  const canScan =
+    !noStrategySelected && !noStockSelected && !dateInvalid && !hasInvalidRisePercent && scanStatus !== 'scanning'
 
   const handleScanClick = () => {
     if (!canScan) return
@@ -598,6 +707,102 @@ export default function StrategyTab() {
     </table>
   )
 
+  /** Independent "分 K" link inside its own cell — stops the click before it reaches the
+   * row's own onClick (which navigates to /daily), so the two navigation targets never
+   * collide into one ambiguous click. */
+  const renderMinuteCell = (stockId: string, signalDate: string) => (
+    <td className="st-minute-cell" onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="st-minute-link" onClick={() => navigate(`/stocks/${stockId}/minute/${signalDate}`)}>
+        分 K
+      </button>
+    </td>
+  )
+
+  const renderReboundTable = (items: StrategyHit[]) => (
+    <table className="sl-table st-result-table">
+      <thead>
+        <tr>
+          <th>代號 / 名稱</th>
+          <th>訊號日</th>
+          <th>高點日 / 高點收盤</th>
+          <th className="sl-r">低點收盤</th>
+          <th className="sl-r">跌幅</th>
+          <th>分 K</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => {
+          const detail = item.detail
+          const rb = isReboundDetail(detail) ? detail : null
+          return (
+            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
+              <td>
+                {item.stockId} {item.stockName}
+              </td>
+              <td>{item.signalDate}</td>
+              <td>
+                {rb?.peakDate ?? '—'} / {formatPrice2(rb?.peakClose)}
+              </td>
+              <td className="sl-r">{formatPrice2(rb?.troughClose)}</td>
+              <td className="sl-r sl-down">{formatPercent2(rb?.dropPercent)}</td>
+              {renderMinuteCell(item.stockId, item.signalDate)}
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+
+  const renderCumulativeRiseTable = (items: StrategyHit[]) => (
+    <table className="sl-table st-result-table">
+      <thead>
+        <tr>
+          <th>代號 / 名稱</th>
+          <th>訊號日</th>
+          <th>低點日 / 低點收盤</th>
+          <th className="sl-r">高點收盤</th>
+          <th className="sl-r">漲幅</th>
+          <th>分 K</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => {
+          const detail = item.detail
+          const cr = isCumulativeRiseDetail(detail) ? detail : null
+          return (
+            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
+              <td>
+                {item.stockId} {item.stockName}
+              </td>
+              <td>{item.signalDate}</td>
+              <td>
+                {cr?.troughDate ?? '—'} / {formatPrice2(cr?.troughClose)}
+              </td>
+              <td className="sl-r">{formatPrice2(cr?.peakClose)}</td>
+              <td className="sl-r sl-up">{formatPercent2(cr?.risePercent)}</td>
+              {renderMinuteCell(item.stockId, item.signalDate)}
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+
+  const renderTableForStrategy = (result: StrategyResult) => {
+    switch (result.strategy) {
+      case 'BOX_BREAKOUT':
+        return renderBoxTable(result.items)
+      case 'HIGHER_LOWS':
+        return renderHigherLowsTable(result.items)
+      case 'RISING_SUPPORT':
+        return renderRisingSupportTable(result.items)
+      case 'REBOUND':
+        return renderReboundTable(result.items)
+      case 'CUMULATIVE_RISE':
+        return renderCumulativeRiseTable(result.items)
+    }
+  }
+
   const renderResultBlock = (result: StrategyResult) => {
     const title = `${strategyName(result.strategy)}（${presetName(result.strategy, result.preset)}）— 命中 ${result.matchedCount} 檔`
     return (
@@ -608,12 +813,8 @@ export default function StrategyTab() {
             <p>此區間內沒有命中的股票</p>
             <p className="st-last-sync-hint">最後同步：{formatSyncTime(lastSyncedAt)}</p>
           </div>
-        ) : result.strategy === 'BOX_BREAKOUT' ? (
-          renderBoxTable(result.items)
-        ) : result.strategy === 'HIGHER_LOWS' ? (
-          renderHigherLowsTable(result.items)
         ) : (
-          renderRisingSupportTable(result.items)
+          renderTableForStrategy(result)
         )}
         {result.insufficientData.length > 0 ? (
           <ExpandableNote
@@ -734,6 +935,9 @@ export default function StrategyTab() {
               const selected = selectionOrder.includes(strategy.code)
               const preset = selectedPresets[strategy.code] ?? 'STANDARD'
               const presetMeta = strategy.presets.find((p) => p.code === preset)
+              const range = risePercentRange(strategy.code)
+              const riseValue = risePercentInputs[strategy.code] ?? ''
+              const riseInvalid = selected && isRisePercentInputInvalid(riseValue, range)
               return (
                 <div
                   key={strategy.code}
@@ -747,12 +951,7 @@ export default function StrategyTab() {
                     className="sl-select"
                     disabled={!selected}
                     value={preset}
-                    onChange={(e) =>
-                      setSelectedPresets((presets) => ({
-                        ...presets,
-                        [strategy.code]: e.target.value as PresetCode,
-                      }))
-                    }
+                    onChange={(e) => changePreset(strategy.code, e.target.value as PresetCode)}
                   >
                     {strategy.presets.map((p) => (
                       <option key={p.code} value={p.code}>
@@ -760,6 +959,28 @@ export default function StrategyTab() {
                       </option>
                     ))}
                   </select>
+                  <div className="st-rise-input-row">
+                    <label htmlFor={`st-rise-${strategy.code}`} className="st-rise-label">
+                      {risePercentLabel(strategy.code)}
+                    </label>
+                    <input
+                      id={`st-rise-${strategy.code}`}
+                      type="number"
+                      className="st-rise-input"
+                      disabled={!selected}
+                      min={range.min}
+                      max={range.max}
+                      step="0.1"
+                      value={riseValue}
+                      onChange={(e) => changeRisePercentInput(strategy.code, e.target.value)}
+                    />
+                    <span className="st-rise-suffix">%</span>
+                  </div>
+                  {riseInvalid || invalidRisePercentStrategy === strategy.code ? (
+                    <div className="st-inline-error">
+                      {risePercentLabel(strategy.code)}需介於 {range.min} ~ {range.max}
+                    </div>
+                  ) : null}
                   <p className="st-strategy-desc">{presetMeta?.description}</p>
                 </div>
               )

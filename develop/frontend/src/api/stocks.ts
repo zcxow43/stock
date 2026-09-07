@@ -37,6 +37,8 @@ export interface ApiErrorBody {
   allowed?: unknown[]
   stockId?: string
   fields?: string[]
+  /** Populated for `INVALID_RISE_PERCENT` — names which strategy's `risePercent` was invalid. */
+  strategy?: string
 }
 
 /** Errors GlobalExceptionHandler treats as caller bugs — normal, controlled-input usage never triggers these. */
@@ -52,17 +54,21 @@ export class ApiError extends Error {
   fields: string[] | null
   /** Populated for `UNKNOWN_STOCK_ID` responses — the offending stock ids from the request. */
   unknownIds: string[] | null
+  /** Populated for `INVALID_RISE_PERCENT` responses — which strategy's card the error belongs to. */
+  strategy: string | null
 
   constructor(
     code: string | null,
     message: string,
     fields: string[] | null = null,
     unknownIds: string[] | null = null,
+    strategy: string | null = null,
   ) {
     super(message)
     this.code = code
     this.fields = fields
     this.unknownIds = unknownIds
+    this.strategy = strategy
   }
 }
 
@@ -80,8 +86,14 @@ export interface StockListParams {
   order: SortOrder
 }
 
+/**
+ * `commonStocksOnly` is the page-level "只看上市普通股" setting owned by
+ * `StockListPage` (specs/frontend/stock-list.md) — a separate argument, not a field of
+ * `StockListParams`, since it never resets/changes alongside the tab's own filters.
+ */
 export async function fetchStocks(
   params: StockListParams,
+  commonStocksOnly: boolean,
   signal?: AbortSignal,
 ): Promise<StockListResponse> {
   const query = new URLSearchParams()
@@ -92,6 +104,7 @@ export async function fetchStocks(
     query.set('market', params.market)
   }
   query.set('includeInactive', String(params.includeInactive))
+  query.set('commonStocksOnly', String(commonStocksOnly))
   query.set('page', String(params.page))
   query.set('size', String(params.size))
   query.set('sort', params.sort)

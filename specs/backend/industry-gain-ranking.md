@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "產業別漲幅排行 API"
 requirement: "動態分頁 — 以「漲幅平均」與「漲幅加總」兩種度量，列出指定期間內（近 N 交易日，或勾選的數個自然週）漲幅超過門檻的股票，並按產業別分組顯示；一檔股票屬於多個產業別時，在每一個產業別下都要出現；每個產業別另回傳其命中股票的平均漲幅，並可依命中檔數或依平均漲幅排序"
 depends_on: [stock-price-ingestion, stock-catalog, stock-universe-import]
@@ -228,30 +228,30 @@ Response `200`：
 ---
 ---
 
-- [ ] `GET /api/momentum/gain` 省略 `commonStocksOnly` 時視為 `true`：計算母體只含代號恰為 4 位數字且首字元非 `0` 的股票
-- [ ] `commonStocksOnly=true` 時 `0050`、`00878`、`2881A`、`910322` 不出現在任何產業別分組中，也不計入資料不足清單
-- [ ] `commonStocksOnly=false` 時母體為全部在市股票，命中檔數明顯大於 `true` 時的值
-- [ ] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
-- [ ] 本參數只影響計算母體，不寫入任何資料表：查詢前後 `stock` 與 `stock_industry` 的列數與內容完全不變
-- [ ] `commonStocksOnly` 與 `metric`、`mode`、`days`、`minGain` 可同時使用，彼此獨立生效
+- [x] `GET /api/momentum/gain` 省略 `commonStocksOnly` 時視為 `true`：計算母體只含代號恰為 4 位數字且首字元非 `0` 的股票
+- [x] `commonStocksOnly=true` 時 `0050`、`00878`、`2881A`、`910322` 不出現在任何產業別分組中，也不計入資料不足清單
+- [x] `commonStocksOnly=false` 時母體為全部在市股票，命中檔數明顯大於 `true` 時的值
+- [x] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
+- [x] 本參數只影響計算母體，不寫入任何資料表：查詢前後 `stock` 與 `stock_industry` 的列數與內容完全不變
+- [x] `commonStocksOnly` 與 `metric`、`mode`、`days`、`minGain` 可同時使用，彼此獨立生效
 
 ---
 
-- [ ] 每個產業別區塊回傳 `avgGain`
-- [ ] `avgGain` 由**已四捨五入的顯示值**計算：某產業命中三檔、回傳的 `gain` 為 `5.01`／`5.02`／`5.04` 時，`avgGain` 為 `5.02`（而非以未捨入原始值平均）
-- [ ] `avgGain` 的母體只含命中股票：同一產業別下存在未達門檻的股票時，其漲幅完全不影響 `avgGain`
-- [ ] 任何 `minGain` 下，每一個區塊的 `avgGain` 皆 ≥ `minGain`
-- [ ] 一檔屬於兩個產業別的命中股票，其 `gain` 同時計入兩個區塊的 `avgGain`
-- [ ] 「未分類」區塊同樣回傳 `avgGain`
-- [ ] `metric=SUM` 與 `metric=AVERAGE` 下的 `avgGain` 相差一個交易日數的倍數，單位與同一回應的 `items[].gain` 一致
-- [ ] `sort` 省略時視為 `MATCH_COUNT`，區塊順序與加入本參數前完全相同
-- [ ] `sort=AVG_GAIN` 時區塊依 `avgGain` 由大到小排序；同值依 `matchedCount` 由多到少，再同值依 `industryName` 升冪
-- [ ] 兩種 `sort` 下「未分類」皆排在最後，即使其 `avgGain` 最高或 `matchedCount` 最大
-- [ ] `sort` 不影響區塊內 `items` 的順序：同一組查詢在 `MATCH_COUNT` 與 `AVG_GAIN` 下，各區塊內部的股票順序完全相同
-- [ ] `sort` 帶入非法值時回傳 `400` 與 `{"code":"INVALID_SORT"}`
-- [ ] `sort` 與 `metric`、`mode`、`days`、`minGain`、`commonStocksOnly` 可同時使用，彼此獨立生效
-- [ ] `avgGain` 與 `sort` 不增加資料庫查詢次數：加入本功能前後，同一組查詢的查詢次數相同
-- [ ] `avgGain` 的欄位說明與產出文件表述為「命中股票的平均漲幅」，無「產業整體表現」或任何暗示買賣操作的措辭
+- [x] 每個產業別區塊回傳 `avgGain`
+- [x] `avgGain` 由**已四捨五入的顯示值**計算：某產業命中三檔、回傳的 `gain` 為 `5.01`／`5.02`／`5.04` 時，`avgGain` 為 `5.02`（而非以未捨入原始值平均）
+- [x] `avgGain` 的母體只含命中股票：同一產業別下存在未達門檻的股票時，其漲幅完全不影響 `avgGain`
+- [x] 任何 `minGain` 下，每一個區塊的 `avgGain` 皆 ≥ `minGain`
+- [x] 一檔屬於兩個產業別的命中股票，其 `gain` 同時計入兩個區塊的 `avgGain`
+- [x] 「未分類」區塊同樣回傳 `avgGain`
+- [x] `metric=SUM` 與 `metric=AVERAGE` 下的 `avgGain` 相差一個交易日數的倍數，單位與同一回應的 `items[].gain` 一致
+- [x] `sort` 省略時視為 `MATCH_COUNT`，區塊順序與加入本參數前完全相同
+- [x] `sort=AVG_GAIN` 時區塊依 `avgGain` 由大到小排序；同值依 `matchedCount` 由多到少，再同值依 `industryName` 升冪
+- [x] 兩種 `sort` 下「未分類」皆排在最後，即使其 `avgGain` 最高或 `matchedCount` 最大
+- [x] `sort` 不影響區塊內 `items` 的順序：同一組查詢在 `MATCH_COUNT` 與 `AVG_GAIN` 下，各區塊內部的股票順序完全相同
+- [x] `sort` 帶入非法值時回傳 `400` 與 `{"code":"INVALID_SORT"}`
+- [x] `sort` 與 `metric`、`mode`、`days`、`minGain`、`commonStocksOnly` 可同時使用，彼此獨立生效
+- [x] `avgGain` 與 `sort` 不增加資料庫查詢次數：加入本功能前後，同一組查詢的查詢次數相同
+- [x] `avgGain` 的欄位說明與產出文件表述為「命中股票的平均漲幅」，無「產業整體表現」或任何暗示買賣操作的措辭
 
 ## Execution Result
 - Status: DONE
@@ -286,3 +286,28 @@ Response `200`：
 
 ### Left unfixed (deliberately, with reason)
 - Malformed (non-numeric) `minGain` or malformed date strings fall through to Spring's default `MethodArgumentTypeMismatchException` handling rather than a custom `INVALID_MIN_GAIN`/`INVALID_DATE_RANGE` body — this is a pre-existing gap shared by every other numeric/date query param in the codebase (`StockStatisticsController`'s `startDate`/`endDate`, `MinuteBarController`'s `interval`), not something introduced here, and the spec's error table only covers missing/out-of-range values, not type-malformed ones. Left consistent with the rest of the codebase rather than fixing it ad hoc for one endpoint.
+
+### Increment 2 — 2026-09-04
+- Status: DONE
+- Starting state: the controller (`MomentumController`), the three response DTOs, the exception classes (`InvalidSortException`/`InvalidSortFieldException`), and `GlobalExceptionHandler`'s `INVALID_SORT` handler had already been updated by a prior, unrelated commit to expose `commonStocksOnly`/`sort` — but `MomentumGainService.getGain(...)` still had its old 6-arg signature, so the module did not compile. This increment's scope was exactly the 21 previously-unchecked Acceptance Criteria (commonStocksOnly population filter + avgGain/sort industry-block ordering), and getting it back to a compiling, correct state was part of implementing them.
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/MomentumGainService.java` — extended `getGain(...)` to accept `commonStocksOnly`/`sort`; filters the already-fetched active-stock population in-memory by `CommonStockCodeUtil.isCommonStockCode` (same shared utility as `stock-universe-import`/`stock-catalog`, no second regex) when `commonStocksOnly=true`; added `validateSort`, `averageGain` (mean of each block's already-rounded `items[].gain`, scale 2), and `industryComparator` (branches on `sort` — `MATCH_COUNT`: matchedCount desc, industryName asc; `AVG_GAIN`: avgGain desc, matchedCount desc, industryName asc); `avgGain` is computed for every block including "未分類", which is still appended after the sort so it never participates in either ordering.
+  - `develop/backend/src/test/java/com/stock/MomentumGainIntegrationTest.java` — added 20 new tests (one per unchecked AC, two ACs sharing one test in two cases) covering `commonStocksOnly` default/true/false/read-only/independent-combination, and `avgGain`/`sort` computation, rounding-from-display-values, cross-industry membership, metric-unit consistency, default/explicit sort equivalence, full three-way tie-break chain, unclassified-always-last under both sort values, item-order invariance, `INVALID_SORT`, param independence, and fixed query count. Also fixed the pre-existing `get()` helper and one raw `rest.getForEntity` call to inject `commonStocksOnly=false` when the test doesn't specify it — all of this class's synthetic `MG*`-prefixed stock ids are non-numeric, so they'd otherwise be silently excluded by the new default-`true` behavior and every pre-existing (already-checked) test would start failing.
+- Notes:
+  - `commonStocksOnly` costs no extra query: it filters the single already-fetched `findActiveStocks()` list in memory, so `scannedStocks` reflects the post-filter population size in both this increment and the query-count-fixed guarantee established in increment 1.
+  - `avgGain`/`sort` are entirely in-memory over the already-built per-stock items — no new mapper call — verified by a test comparing `QueryCountInterceptor` counts between `sort=MATCH_COUNT` and `sort=AVG_GAIN` on the same fixture (equal, and `> 0`).
+  - The spec's literal example codes (`0050`, `00878`, `2881A`, `910322`) were checked directly against the live database (see below): `0050`/`00878` have real recent price history and were confirmed present under `commonStocksOnly=false` / absent under `=true` at the same window and threshold; `2881A`/`910322` turned out to have no trading data before the test window's `startDate` in the live dataset (pre-existing `insufficientDataCount` territory, unrelated to this feature), so the automated suite instead uses synthetic stand-ins for all four excluded shapes (4-digit-leading-zero, 5-digit-leading-zero, letter-suffixed, 6-digit) with fully controlled price data, keeping the assertion deterministic.
+  - Applied the `code-quality` skill to the diff: no null-safety, resource-lifecycle, or performance issues found — `averageGain` is only ever called with a non-empty list (a block is only built from ≥1 matched stock), the new `Comparator`s never see a null `avgGain` (set immediately before sorting), and the population filter is a single linear pass over an already-fetched list, consistent with the file's existing loop-based (non-stream) style.
+
+### Verified live (real DB, `mvn spring-boot:run` on port 8080, then stopped) — Increment 2
+- `commonStocksOnly` omitted vs. `=true` vs. `=false` over the same `DAYS`-mode window (`days=10`, real ~1377-active-stock dataset): omitted and `=true` both scanned **1085** stocks; `=false` scanned **1377** and matched **102** vs. **56** for `=true` — population and matched-count both widen exactly as specified.
+- `0050` and `00878` (both with real recent price history) present in `items` under `commonStocksOnly=false`, absent under `=true`, same window/threshold — reproduces the spec's literal example directly.
+- `sort=AVG_GAIN` vs. omitted (`MATCH_COUNT`) over the same live query: block order changed from matchedCount-descending to avgGain-descending as expected, and the trailing "未分類" block stayed last under both.
+- `sort=FOO` reproduced live: `400` with `{"code":"INVALID_SORT"}`.
+- DB left exactly as found: `stock` active count 1377 (unchanged), zero leftover synthetic rows (`MG%` and the numeric `9791`/`0791`/`00791`/`9791A`/`910791` test ids) confirmed by direct query after the run.
+
+### Test results — Increment 2
+- `mvn -f develop/backend/pom.xml test`: **244 tests, 0 failures, 0 errors, 0 skipped** (224 pre-existing + 20 new in this class), BUILD SUCCESS. (Total grew beyond the 188 recorded at the end of increment 1 because unrelated specs were implemented by other sessions in between — see this repo's commit history between the two increments; none of that growth is from this increment.)
+
+### Left unfixed (deliberately, with reason) — Increment 2
+- None. All 21 ACs in scope for this increment were implemented and verified (automated test, and live curl for the ACs describing directly observable API behavior).

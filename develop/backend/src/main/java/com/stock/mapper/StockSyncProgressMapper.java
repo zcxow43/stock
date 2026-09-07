@@ -113,6 +113,14 @@ public interface StockSyncProgressMapper {
 
     int markRunning(@Param("stockId") String stockId, @Param("jobType") String jobType);
 
+    /**
+     * Reverts a stock from RUNNING back to PENDING without touching attempt_count/last_error/
+     * last_synced_date. Used only when every price history source is currently blocked/unavailable
+     * (spec: 所有來源皆不可用 — 該檔維持或回到 PENDING) — this stock's progress must look exactly as if
+     * it had never been attempted this run.
+     */
+    int markPending(@Param("stockId") String stockId, @Param("jobType") String jobType);
+
     int markDone(@Param("stockId") String stockId, @Param("jobType") String jobType,
                   @Param("lastSyncedDate") LocalDate lastSyncedDate);
 

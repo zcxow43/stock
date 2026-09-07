@@ -31,6 +31,8 @@ app:
       max-retries: 5
       initial-backoff-ms: 2000
       backoff-multiplier: 2
+      # Used only when a block-class response doesn't itself carry a retry_after (spec: 到期時間的取得).
+      default-block-cooldown-seconds: 600
     max-attempt-count: 5
     startup-catch-up:
       enabled: true

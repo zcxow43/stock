@@ -7,6 +7,7 @@ import {
   type MomentumGainParams,
   type MomentumGainResponse,
   type MomentumIndustryGroup,
+  type MomentumSort,
   type PeriodMode,
 } from '../api/momentum'
 import './MomentumTab.css'
@@ -18,6 +19,11 @@ const WEEK_COUNT = 12
 const METRICS: { key: Metric; label: string; hint: string }[] = [
   { key: 'AVERAGE', label: '漲幅平均', hint: '期間內每個交易日漲跌幅的平均' },
   { key: 'SUM', label: '漲幅加總', hint: '期間內每個交易日漲跌幅的相加' },
+]
+
+const SORTS: { key: MomentumSort; label: string }[] = [
+  { key: 'MATCH_COUNT', label: '依命中檔數' },
+  { key: 'AVG_GAIN', label: '依產業漲幅' },
 ]
 
 function pad2(n: number): string {
@@ -110,9 +116,24 @@ function initialMetricState(): MetricState {
   }
 }
 
+/** Drops a cached query result (status/data/error) while keeping the metric's own
+ * threshold input untouched. Used when a setting shared across both metric tabs
+ * (`sort`, the page-level `commonStocksOnly`) changes, making any cached result stale. */
+function resetQueryState(state: MetricState): MetricState {
+  return { ...state, status: 'idle', data: null, errorMessage: null }
+}
+
+export interface MomentumTabProps {
+  /** Page-level "只看上市普通股" setting, owned by `StockListPage` and shared across all
+   * three tabs (specs/frontend/stock-list.md「頁面層級設定」). Defaults to `true` so this
+   * component still renders standalone (e.g. in tests that don't pass it). This tab has no
+   * ETF-exclusion option of its own — every query carries whatever value is current here. */
+  commonStocksOnly?: boolean
+}
+
 /** 動態分頁（產業別漲幅）— specs/frontend/momentum.md. Mirrors StrategyTab.tsx's structure
  * (condition area above / results area below), mounted as the 3rd tab panel by StockListPage. */
-export default function MomentumTab() {
+export default function MomentumTab({ commonStocksOnly = true }: MomentumTabProps) {
   const navigate = useNavigate()
   const weekOptions = useMemo(() => buildWeekOptions(new Date()), [])
 
@@ -128,6 +149,10 @@ export default function MomentumTab() {
   const [daysInput, setDaysInput] = useState(String(DEFAULT_DAYS))
   const [selectedWeeks, setSelectedWeeks] = useState<Set<number>>(() => new Set([0]))
 
+  // Sort is shared across both metric tabs, same as the period condition — it's a
+  // presentation preference, unrelated to the threshold's magnitude.
+  const [sort, setSort] = useState<MomentumSort>('MATCH_COUNT')
+
   // Whether the very first 查詢 click has happened yet — before that, switching metric
   // tabs must stay idle (not silently fire a request the user never asked for).
   const everQueriedRef = useRef(false)
@@ -142,6 +167,29 @@ export default function MomentumTab() {
       controllers.SUM?.abort()
     }
   }, [])
+
+  // Page-level 只看上市普通股 setting changed: any cached result was computed against the
+  // old population, so both metrics' caches are stale. Unlike the strategy tab, this
+  // page's query is a single cheap aggregate query, so if the active metric already had a
+  // result we requery it immediately rather than leaving a result on screen that no longer
+  // matches the current setting (specs/frontend/momentum.md「普通股母體」).
+  const prevCommonStocksOnlyRef = useRef(commonStocksOnly)
+  useEffect(() => {
+    if (prevCommonStocksOnlyRef.current === commonStocksOnly) return
+    prevCommonStocksOnlyRef.current = commonStocksOnly
+    // Abort any request still in flight for either metric first — otherwise its response
+    // (computed against the *old* commonStocksOnly) could land after the reset below and
+    // silently overwrite it with a stale result.
+    abortControllersRef.current.AVERAGE?.abort()
+    abortControllersRef.current.SUM?.abort()
+    const activeHadQuery = metricStates[activeMetric].status !== 'idle'
+    setMetricStates((prev) => ({
+      AVERAGE: resetQueryState(prev.AVERAGE),
+      SUM: resetQueryState(prev.SUM),
+    }))
+    if (activeHadQuery) runQuery(activeMetric)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commonStocksOnly])
 
   const current = metricStates[activeMetric]
 
@@ -177,23 +225,31 @@ export default function MomentumTab() {
     setMetricStates((prev) => ({ ...prev, [metric]: { ...prev[metric], ...patch } }))
   }
 
-  const buildParams = (metric: Metric, minGain: number): MomentumGainParams | null => {
+  const buildParams = (metric: Metric, minGain: number, sortValue: MomentumSort): MomentumGainParams | null => {
     if (periodMode === 'DAYS') {
       if (daysValidation.value == null) return null
-      return { metric, mode: 'DAYS', days: daysValidation.value, minGain }
+      return { metric, mode: 'DAYS', days: daysValidation.value, minGain, sort: sortValue, commonStocksOnly }
     }
     if (!weeksRange) return null
-    return { metric, mode: 'WEEKS', startDate: weeksRange.startDate, endDate: weeksRange.endDate, minGain }
+    return {
+      metric,
+      mode: 'WEEKS',
+      startDate: weeksRange.startDate,
+      endDate: weeksRange.endDate,
+      minGain,
+      sort: sortValue,
+      commonStocksOnly,
+    }
   }
 
-  const runQuery = (metric: Metric, overrideMinGainInput?: string) => {
+  const runQuery = (metric: Metric, overrideMinGainInput?: string, overrideSort?: MomentumSort) => {
     const minGainInput = overrideMinGainInput ?? metricStates[metric].minGainInput
     const { value: minGain, error: minGainError } = validateMinGain(minGainInput)
     if (minGainError || minGain == null) {
       updateMetricState(metric, { minGainInput, minGainError })
       return
     }
-    const params = buildParams(metric, minGain)
+    const params = buildParams(metric, minGain, overrideSort ?? sort)
     if (!params) return
 
     abortControllersRef.current[metric]?.abort()
@@ -214,7 +270,7 @@ export default function MomentumTab() {
           if (err.code === 'INVALID_DAYS') message = '請輸入 1 – 120 之間的交易日數'
           else if (err.code === 'INVALID_DATE_RANGE') message = '所選週的區間無效'
           else if (err.code === 'INVALID_MIN_GAIN') message = '請輸入 -100 – 1000 之間的數值'
-          else if (err.code === 'INVALID_METRIC' || err.code === 'INVALID_MODE') {
+          else if (err.code === 'INVALID_METRIC' || err.code === 'INVALID_MODE' || err.code === 'INVALID_SORT') {
             message = '發生非預期的錯誤，請重新整理頁面'
           }
         }
@@ -247,6 +303,23 @@ export default function MomentumTab() {
     if (value == null) return
     const halved = Math.round((value / 2) * 100) / 100
     runQuery(activeMetric, String(halved))
+  }
+
+  const handleSortChange = (nextSort: MomentumSort) => {
+    if (nextSort === sort) return
+    setSort(nextSort)
+    // Abort any request still in flight first — otherwise its response (computed under
+    // the *old* sort) could land after the reset below and silently overwrite it.
+    abortControllersRef.current.AVERAGE?.abort()
+    abortControllersRef.current.SUM?.abort()
+    // Sort is shared across both metric tabs, but a cached result reflects the sort that
+    // was in effect when it was fetched — invalidate both so the inactive tab requeries
+    // (rather than showing stale ordering) the next time it's switched to.
+    setMetricStates((prev) => ({
+      AVERAGE: resetQueryState(prev.AVERAGE),
+      SUM: resetQueryState(prev.SUM),
+    }))
+    if (everQueriedRef.current) runQuery(activeMetric, undefined, nextSort)
   }
 
   const toggleWeek = (index: number) => {
@@ -288,13 +361,37 @@ export default function MomentumTab() {
     )
   }
 
+  const renderSortToggle = () => (
+    <div className="mt-sort-row" role="group" aria-label="排序">
+      <span className="mt-section-label mt-sort-label">排序</span>
+      {SORTS.map((s) => (
+        <button
+          key={s.key}
+          type="button"
+          className={`mt-mode-btn${sort === s.key ? ' mt-mode-btn-active' : ''}`}
+          aria-pressed={sort === s.key}
+          onClick={() => handleSortChange(s.key)}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+  )
+
   const renderIndustryBlock = (group: MomentumIndustryGroup, marketWideTradingDays: number) => {
     const items = group.items ?? []
     return (
       <div className="mt-industry-block" key={group.industryId ?? 'unclassified'}>
         <h3 className="mt-industry-title">
           <span className={group.industryId === null ? 'mt-unclassified-name' : undefined}>{group.industryName}</span>
-          <span className="mt-industry-count">　{group.matchedCount} 檔</span>
+          <span className="mt-industry-count">　{group.matchedCount} 檔　</span>
+          <span
+            className="mt-industry-count"
+            title={`此區塊列出的 ${group.matchedCount} 檔的漲幅平均，必然 ≥ 門檻；不代表整個產業的表現`}
+          >
+            平均
+          </span>{' '}
+          <span className={gainClass(group.avgGain)}>{formatPercent(group.avgGain)}</span>
         </h3>
         <table className="sl-table mt-industry-table">
           <thead>
@@ -347,35 +444,44 @@ export default function MomentumTab() {
 
     if (status === 'error') {
       return (
-        <div className="mt-results-error">
-          <p>{errorMessage}</p>
-          <button type="button" className="sl-btn sl-btn-primary" onClick={handleRetryClick}>
-            重新查詢
-          </button>
-        </div>
+        <>
+          {renderSortToggle()}
+          <div className="mt-results-error">
+            <p>{errorMessage}</p>
+            <button type="button" className="sl-btn sl-btn-primary" onClick={handleRetryClick}>
+              重新查詢
+            </button>
+          </div>
+        </>
       )
     }
 
     if (status === 'idle') {
       return (
-        <div className="mt-results-placeholder">
-          <p>設定期間與門檻後按下查詢</p>
-        </div>
+        <>
+          {renderSortToggle()}
+          <div className="mt-results-placeholder">
+            <p>設定期間與門檻後按下查詢</p>
+          </div>
+        </>
       )
     }
 
     if (status === 'loading' && !data) {
       return (
-        <div className="mt-skeleton-list">
-          {[0, 1, 2].map((i) => (
-            <div className="mt-skeleton-block" key={i}>
-              <div className="sl-skeleton-bar mt-skeleton-title" />
-              <div className="sl-skeleton-bar" />
-              <div className="sl-skeleton-bar" />
-              <div className="sl-skeleton-bar" />
-            </div>
-          ))}
-        </div>
+        <>
+          {renderSortToggle()}
+          <div className="mt-skeleton-list">
+            {[0, 1, 2].map((i) => (
+              <div className="mt-skeleton-block" key={i}>
+                <div className="sl-skeleton-bar mt-skeleton-title" />
+                <div className="sl-skeleton-bar" />
+                <div className="sl-skeleton-bar" />
+                <div className="sl-skeleton-bar" />
+              </div>
+            ))}
+          </div>
+        </>
       )
     }
 
@@ -416,6 +522,7 @@ export default function MomentumTab() {
     return (
       <div className={dimmed ? 'mt-results-dimmed' : undefined}>
         {renderSummary(data)}
+        {renderSortToggle()}
         {body}
       </div>
     )

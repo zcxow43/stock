@@ -51,6 +51,10 @@ public class BackfillProperties {
         private int maxRetries = 5;
         private long initialBackoffMs = 2000;
         private int backoffMultiplier = 2;
+        // Used only when a block-class response (HTTP 403/429 or a quota-indicating body) doesn't
+        // itself carry a retry_after value (spec: 到期時間的取得 — 未提供時採可設定的預設冷卻時間).
+        // Conservative default: 10 minutes, consistent with this spec's "預設值以保守為準" principle.
+        private long defaultBlockCooldownSeconds = 600;
 
         public long getIntervalMs() {
             return intervalMs;
@@ -82,6 +86,14 @@ public class BackfillProperties {
 
         public void setBackoffMultiplier(int backoffMultiplier) {
             this.backoffMultiplier = backoffMultiplier;
+        }
+
+        public long getDefaultBlockCooldownSeconds() {
+            return defaultBlockCooldownSeconds;
+        }
+
+        public void setDefaultBlockCooldownSeconds(long defaultBlockCooldownSeconds) {
+            this.defaultBlockCooldownSeconds = defaultBlockCooldownSeconds;
         }
     }
 

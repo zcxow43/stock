@@ -97,6 +97,12 @@
         WHERE stock_id = #{stockId} AND job_type = #{jobType}
     </update>
 
+    <update id="markPending">
+        UPDATE stock_sync_progress
+        SET status = 'PENDING', started_at = NULL
+        WHERE stock_id = #{stockId} AND job_type = #{jobType}
+    </update>
+
     <update id="markDone">
         UPDATE stock_sync_progress
         SET status = 'DONE', last_synced_date = #{lastSyncedDate}, finished_at = NOW()
