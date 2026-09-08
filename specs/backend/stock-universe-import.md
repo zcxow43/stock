@@ -201,39 +201,43 @@ Response `200`：
 
 ## Acceptance Criteria
 
+### 請求數與寫入範圍
+- [x] 一次呼叫**恰好**對外發出 2 次請求（`STOCK_DAY_ALL` 一次、`t187ap03_L` 一次），不逐檔查詢
 - [x] `POST /api/stocks/universe/import` **不逐檔查詢**外部來源、不建立 `stock_sync_progress` 列
-- [x] 匯入後 `stock` 的列數大於 1000，且全部 `market = 'TSE'`
 - [x] 匯入後 `stock_daily_price` 與 `stock_daily_indicator` 的列數**完全不變**（本 API 不寫行情）
+- [x] 匯入後 `stock` 的列數大於 1000，且全部 `market = 'TSE'`
+
+### 標的篩選與寫入語意
 - [x] 代號 `0050`、`00878`、`2881A`、`910322` 一律不出現在 `stock` 中，且計入 `skippedCount`
 - [x] 代號 `2330`、`1101` 出現在 `stock` 中，`stock_name` 為資料源回傳的名稱
 - [x] 連續執行兩次，第二次的 `insertedCount` 為 `0`、`updatedCount` 等於第一次的 `eligibleCount`，且 `stock` 列數不變
 - [x] 既有 34 檔種子股票在匯入後 `stock_id` 不重複、`stock_name` 為資料源的最新值
 - [x] 事前以 `DELETE /api/stocks/{stockId}` 將某檔設為 `is_active = 0`，匯入後該檔仍為 `is_active = 0`
-- [x] 資料源回傳空陣列時回 `502 UPSTREAM_EMPTY`，且 `stock` 列數與內容完全不變
-- [x] 資料源連線失敗時回 `502 UPSTREAM_UNAVAILABLE`，且 `stock` 列數與內容完全不變
-- [x] 回應的 `skippedCount` 等於 `fetchedCount` 減 `eligibleCount`
-- [x] 回應的 `totalActiveCount` 等於匯入後 `SELECT COUNT(*) FROM stock WHERE is_active = 1` 的結果
-- [x] 匯入完成後呼叫 `GET /api/stocks?page=1&size=50`，`total` 反映匯入後的檔數
 
----
-
-- [x] 一次呼叫**恰好**對外發出 2 次請求（`STOCK_DAY_ALL` 一次、`t187ap03_L` 一次），不逐檔查詢
+### 產業別匯入
 - [x] 匯入後 `industry` 有多列，`industry_name` 為中文產業別名稱（例如「半導體業」「光電業」），非亂碼、非數字代碼
 - [x] 匯入後 `stock_industry` 有多列，且 `2330` 的關聯指向「半導體業」（以 `HEX(industry_name)` 確認為正確 UTF-8）
-- [x] 回應含 `industrySourceStatus`（`OK`）、`industryCount`、`industryLinkedStockCount`、`uncategorizedStockCount` 四個欄位
-- [x] `uncategorizedStockCount` 等於 `totalActiveCount − industryLinkedStockCount`
 - [x] 連續執行兩次，第二次的 `industryCount` 與 `stock_industry` 列數與第一次相同（產業別匯入為冪等）
 - [x] **整組取代生效**：先人工為 `2330` 多插一筆指向其他產業的關聯，再匯入一次，該筆多餘關聯消失，只留下來源給的那一筆
 - [x] **未涵蓋的股票關聯不動**：先人工建立一檔不存在於來源 2 的股票（例如以 `POST /api/stocks` 新增）及其產業別關聯，匯入後該關聯仍完整存在
 - [x] `industry` 中既有名稱的 `industry_id` 在重複匯入後**不變**（以匯入前後的 `industry_id` 比對驗證）
+- [x] 產業別來源中的非普通股代號（`0050`、`2881A`、`910322` 等）不會在 `stock_industry` 產生任何列
+
+### 來源失敗處理
+- [x] 資料源回傳空陣列時回 `502 UPSTREAM_EMPTY`，且 `stock` 列數與內容完全不變
+- [x] 資料源連線失敗時回 `502 UPSTREAM_UNAVAILABLE`，且 `stock` 列數與內容完全不變
+- [x] 來源 1 失敗（空陣列／連線失敗）時，`stock`、`industry`、`stock_industry` **三張表**的列數與內容皆完全不變
 - [x] 產業別來源連線失敗時，API 仍回 `200`，`industrySourceStatus` 為 `UNAVAILABLE`，`stock` 的清單更新照常生效，且 `industry`／`stock_industry` 的列數與內容完全不變
 - [x] 產業別來源回傳空陣列時，API 回 `200`、`industrySourceStatus` 為 `EMPTY`，且 `stock_industry` 內容完全不變
 - [x] 產業別來源回應無法解析時，API 回 `200`、`industrySourceStatus` 為 `MALFORMED`，且 `stock_industry` 內容完全不變
-- [x] 來源 1 失敗（空陣列／連線失敗）時，`stock`、`industry`、`stock_industry` **三張表**的列數與內容皆完全不變
-- [x] 產業別來源中的非普通股代號（`0050`、`2881A`、`910322` 等）不會在 `stock_industry` 產生任何列
-- [x] 匯入後 `stock_daily_price` 與 `stock_daily_indicator` 的列數仍完全不變（本 API 仍不寫行情）
 
----
+### 回應欄位
+- [x] 回應的 `skippedCount` 等於 `fetchedCount` 減 `eligibleCount`
+- [x] 回應的 `totalActiveCount` 等於匯入後 `SELECT COUNT(*) FROM stock WHERE is_active = 1` 的結果
+- [x] 回應含 `industrySourceStatus`（`OK`）、`industryCount`、`industryLinkedStockCount`、`uncategorizedStockCount` 四個欄位
+- [x] `uncategorizedStockCount` 等於 `totalActiveCount − industryLinkedStockCount`
+- [x] 匯入完成後呼叫 `GET /api/stocks?page=1&size=50`，`total` 反映匯入後的檔數
+
 ## Execution Result
 - Status: DONE
 - Files changed:

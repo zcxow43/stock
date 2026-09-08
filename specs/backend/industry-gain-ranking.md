@@ -56,7 +56,7 @@ depends_on: [stock-price-ingestion, stock-catalog, stock-universe-import]
 
 ### 掃描範圍
 
-- 母體固定為 `stock` 中 `is_active = 1` 的全部股票，**沒有指定股票的參數**。本 API 回答的是「這段期間哪些股票漲得多」，先挑好股票再問這個問題沒有意義。
+- 母體為 `stock` 中 `is_active = 1` 的股票，並依 `commonStocksOnly`（省略時視為 `true`）決定是否只留普通股，**沒有指定股票的參數**。本 API 回答的是「這段期間哪些股票漲得多」，先挑好股票再問這個問題沒有意義。
 - 期間前置資料不足（`startDate` 之前沒有任何一根收盤價）或期間內完全無行情的股票，計入 `insufficientDataCount`，**不列入結果、也不視為未達門檻**。兩者對使用者是不同的訊息：「算過了沒到門檻」與「資料不夠所以沒算」。
 - **收盤價為 `0` 的列同樣視為資料不足**，該檔計入 `insufficientDataCount`。單日漲跌幅的分母是前一個交易日的收盤價，為 `0` 時這個比值沒有定義——不是「漲了無限多」，而是「這一天沒有可用的價格」。
   - 這不是假設性的邊界情況：實際資料中有 876 列、涵蓋 49 檔標的（ETN、權證類）的 `close_price` 為 `0.00`。母體是全市場在市股票，因此**任何一次全市場查詢都必然掃到它們**。若不處理，整支 API 會在遇到第一檔時以除以零中止，使用者看到的是整個查詢失敗，而不是少了幾檔。
@@ -165,7 +165,7 @@ Response `200`：
 | `startDate` / `endDate` | date | **實際採用**的區間端點（`DAYS` 模式由後端決定）；期間內無任何交易日時皆為 `null` |
 | `tradingDays` | int | 區間內全市場相異交易日數 |
 | `minGain` | decimal | 實際採用的門檻，2 位小數 |
-| `scannedStocks` | int | 母體檔數（`is_active = 1` 的總數） |
+| `scannedStocks` | int | 母體檔數（`is_active = 1`，並依 `commonStocksOnly` 篩選後的總數） |
 | `matchedStockCount` | int | **去重後**的命中檔數 |
 | `insufficientDataCount` | int | 因資料不足未參與計算的檔數 |
 | `industries[].industryId` | int / null | `null` 代表「未分類」區塊 |
@@ -193,7 +193,7 @@ Response `200`：
 
 1. 解析並驗證參數。
 2. 決定區間：`DAYS` 模式查詢相異 `trade_date` 由新到舊取 `days` 個；`WEEKS` 模式直接採用參數。
-3. 取母體：`stock` 中 `is_active = 1` 的 `stock_id` 與 `stock_name`。
+3. 取母體：`stock` 中 `is_active = 1` 的 `stock_id` 與 `stock_name`，再依 `commonStocksOnly` 決定是否只留普通股。
 4. **一次批次查詢**取回 `[startDate, endDate]` 區間內全部股票的 `(stock_id, trade_date, close_price)`；**再一次批次查詢**取回每檔在 `startDate` 之前最近 1 個交易日的 `close_price`。
 5. 在記憶體中依股票分組、依 `trade_date` 排序，逐日計算單日漲跌幅並累加；算出 `SUM` 或 `AVERAGE`，四捨五入至 2 位小數後與 `minGain` 比較。
 6. **一次批次查詢**取回命中股票的產業別關聯（`stock_industry` join `industry`）。
@@ -202,32 +202,24 @@ Response `200`：
 **行情與關聯的讀取必須批次進行**，不得逐檔查詢：母體是全市場 1300 檔以上，逐檔即 1300 次往返。整支 API 對資料庫的查詢次數為固定值（區間交易日、母體、區間行情、前置行情、產業別關聯），**不隨股票檔數增加**。此為 `specs/backend/strategy-scan.md` 已建立的作法，沿用不另立一套。
 
 ## Acceptance Criteria
+
+### 區間與度量
 - [x] `GET /api/momentum/gain?metric=SUM&mode=DAYS&days=20` 回傳 `200`，`startDate`／`endDate` 為資料庫中最新 20 個相異交易日的兩端，且 `tradingDays` 為 20
 - [x] `DAYS` 模式的區間錨點為資料庫中最新的 `trade_date`，不是今日：在最新交易日早於今日的資料上驗證 `endDate` 等於該最新交易日
 - [x] `SUM` 的值等於期間內每日漲跌幅的相加：以構造資料（前置日收盤 100，區間內連續 4 個交易日收盤 100→105→105→110.25）驗證 `gain` 為 `0.00 + 5.00 + 0.00 + 5.00 = 10.00`
 - [x] `AVERAGE` 對同一組構造資料為 `10.00 ÷ 4 = 2.50`，且 `SUM` 與 `AVERAGE` 兩種度量下的股票排名順序一致
 - [x] 期間第一天的漲跌幅以 `startDate` 之前最近的交易日收盤價計算，該前置日不計入 `tradingDays`、不出現在 `firstTradeDate`
-- [x] `startDate` 之前無任何收盤價的股票計入 `insufficientDataCount`，且不出現在任何產業別的 `items` 中
 - [x] 相鄰交易日規則：區間內含停牌造成的日曆間隔時，結果與無間隔的同價格序列完全一致（不插補）
-- [x] `minGain` 省略時預設為 `5`；`minGain=-100` 時全部有足夠資料的股票皆列出
-- [x] 門檻比較以四捨五入至 2 位小數後的值進行：`gain` 原始值為 `4.996` 的股票在 `minGain=5` 時**會**被列出，且回傳的 `gain` 為 `5.00`
-- [x] **一檔股票屬於兩個產業別且達標時，在兩個產業別的 `items` 中各出現一次**
-- [x] 承上，`matchedStockCount` 為去重後的檔數，**小於**各產業 `matchedCount` 的加總
-- [x] 命中但在 `stock_industry` 中無任何關聯的股票，出現在 `industryId` 為 `null`、`industryName` 為「未分類」的區塊中
-- [x] 「未分類」區塊排在所有產業別之後，即使其 `matchedCount` 最大
-- [x] 產業別區塊依 `matchedCount` 由多到少排序，同數依 `industryName` 升冪
-- [x] `items` 依 `gain` 由大到小排序，同值依 `stockId` 升冪
-- [x] 沒有命中股票的產業別不出現在 `industries` 中
 - [x] `mode=WEEKS` 且 `startDate`／`endDate` 之間無任何交易日時，回傳 `200`、`industries` 為空陣列、`startDate`／`endDate` 為 `null`，而非錯誤
 - [x] `mode=DAYS` 時帶入的 `startDate`／`endDate` 被忽略而不報錯；`mode=WEEKS` 時帶入的 `days` 同樣被忽略
 - [x] `items[].tradingDays` 反映**該檔**實際有行情的日數：對區間內停牌數日的股票，其值小於回應層級的 `tradingDays`
-- [x] 五種錯誤各自回傳指定的 `code`：`INVALID_METRIC`／`INVALID_MODE`／`INVALID_DAYS`／`INVALID_DATE_RANGE`／`INVALID_MIN_GAIN`
-- [x] 全市場查詢時對資料庫的查詢次數為固定值，3 檔與 300 檔母體的查詢次數相同（不隨股票數線性增加）
-- [x] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
 
----
----
+### 門檻與資料不足
+- [x] `minGain` 省略時預設為 `5`；`minGain=-100` 時全部有足夠資料的股票皆列出
+- [x] 門檻比較以四捨五入至 2 位小數後的值進行：`gain` 原始值為 `4.996` 的股票在 `minGain=5` 時**會**被列出，且回傳的 `gain` 為 `5.00`
+- [x] `startDate` 之前無任何收盤價的股票計入 `insufficientDataCount`，且不出現在任何產業別的 `items` 中
 
+### 計算母體（`commonStocksOnly`）
 - [x] `GET /api/momentum/gain` 省略 `commonStocksOnly` 時視為 `true`：計算母體只含代號恰為 4 位數字且首字元非 `0` 的股票
 - [x] `commonStocksOnly=true` 時 `0050`、`00878`、`2881A`、`910322` 不出現在任何產業別分組中，也不計入資料不足清單
 - [x] `commonStocksOnly=false` 時母體為全部在市股票，命中檔數明顯大於 `true` 時的值
@@ -235,8 +227,21 @@ Response `200`：
 - [x] 本參數只影響計算母體，不寫入任何資料表：查詢前後 `stock` 與 `stock_industry` 的列數與內容完全不變
 - [x] `commonStocksOnly` 與 `metric`、`mode`、`days`、`minGain` 可同時使用，彼此獨立生效
 
----
+### 產業別分組與排序
+- [x] **一檔股票屬於兩個產業別且達標時，在兩個產業別的 `items` 中各出現一次**
+- [x] 承上，`matchedStockCount` 為去重後的檔數，**小於**各產業 `matchedCount` 的加總
+- [x] 命中但在 `stock_industry` 中無任何關聯的股票，出現在 `industryId` 為 `null`、`industryName` 為「未分類」的區塊中
+- [x] 「未分類」區塊排在所有產業別之後，即使其 `matchedCount` 最大
+- [x] 產業別區塊依 `matchedCount` 由多到少排序，同數依 `industryName` 升冪
+- [x] `items` 依 `gain` 由大到小排序，同值依 `stockId` 升冪
+- [x] 沒有命中股票的產業別不出現在 `industries` 中
+- [x] `sort` 省略時視為 `MATCH_COUNT`，區塊順序與加入本參數前完全相同
+- [x] `sort=AVG_GAIN` 時區塊依 `avgGain` 由大到小排序；同值依 `matchedCount` 由多到少，再同值依 `industryName` 升冪
+- [x] 兩種 `sort` 下「未分類」皆排在最後，即使其 `avgGain` 最高或 `matchedCount` 最大
+- [x] `sort` 不影響區塊內 `items` 的順序：同一組查詢在 `MATCH_COUNT` 與 `AVG_GAIN` 下，各區塊內部的股票順序完全相同
+- [x] `sort` 與 `metric`、`mode`、`days`、`minGain`、`commonStocksOnly` 可同時使用，彼此獨立生效
 
+### 產業別平均漲幅（`avgGain`）
 - [x] 每個產業別區塊回傳 `avgGain`
 - [x] `avgGain` 由**已四捨五入的顯示值**計算：某產業命中三檔、回傳的 `gain` 為 `5.01`／`5.02`／`5.04` 時，`avgGain` 為 `5.02`（而非以未捨入原始值平均）
 - [x] `avgGain` 的母體只含命中股票：同一產業別下存在未達門檻的股票時，其漲幅完全不影響 `avgGain`
@@ -244,13 +249,15 @@ Response `200`：
 - [x] 一檔屬於兩個產業別的命中股票，其 `gain` 同時計入兩個區塊的 `avgGain`
 - [x] 「未分類」區塊同樣回傳 `avgGain`
 - [x] `metric=SUM` 與 `metric=AVERAGE` 下的 `avgGain` 相差一個交易日數的倍數，單位與同一回應的 `items[].gain` 一致
-- [x] `sort` 省略時視為 `MATCH_COUNT`，區塊順序與加入本參數前完全相同
-- [x] `sort=AVG_GAIN` 時區塊依 `avgGain` 由大到小排序；同值依 `matchedCount` 由多到少，再同值依 `industryName` 升冪
-- [x] 兩種 `sort` 下「未分類」皆排在最後，即使其 `avgGain` 最高或 `matchedCount` 最大
-- [x] `sort` 不影響區塊內 `items` 的順序：同一組查詢在 `MATCH_COUNT` 與 `AVG_GAIN` 下，各區塊內部的股票順序完全相同
+
+### 錯誤與效能
+- [x] 五種錯誤各自回傳指定的 `code`：`INVALID_METRIC`／`INVALID_MODE`／`INVALID_DAYS`／`INVALID_DATE_RANGE`／`INVALID_MIN_GAIN`
 - [x] `sort` 帶入非法值時回傳 `400` 與 `{"code":"INVALID_SORT"}`
-- [x] `sort` 與 `metric`、`mode`、`days`、`minGain`、`commonStocksOnly` 可同時使用，彼此獨立生效
+- [x] 全市場查詢時對資料庫的查詢次數為固定值，3 檔與 300 檔母體的查詢次數相同（不隨股票數線性增加）
 - [x] `avgGain` 與 `sort` 不增加資料庫查詢次數：加入本功能前後，同一組查詢的查詢次數相同
+
+### 用語
+- [x] 回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
 - [x] `avgGain` 的欄位說明與產出文件表述為「命中股票的平均漲幅」，無「產業整體表現」或任何暗示買賣操作的措辭
 
 ## Execution Result

@@ -225,7 +225,9 @@ Response `200`：
 | `firstTradeDate` / `tradingDayCount` | 該檔在 `stock_daily_price` 的 `MIN(trade_date)` 與 `COUNT(*)` |
 
 ## Acceptance Criteria
-- [x] `GET /api/stocks` 預設回傳第 1 頁、50 筆、僅 `is_active = 1` 的股票，且 `total` 為符合條件的總數
+
+### 清單查詢、篩選與分頁
+- [x] `GET /api/stocks` 預設回傳第 1 頁、50 筆、`is_active = 1` 且通過普通股篩選的股票，且 `total` 為符合條件的總數
 - [x] `keyword=台積` 與 `keyword=2330` 皆能命中 2330（代號與名稱同時比對）
 - [x] `market=OTC` 只回傳上櫃股票；帶入 `TWSE` 等非法值回 `400` 與 `INVALID_MARKET`
 - [x] `includeInactive=true` 時已下市標的出現在結果中，預設則不出現
@@ -234,30 +236,36 @@ Response `200`：
 - [x] 在 `stock_daily_price` 中無資料的標的仍出現在清單，且其 `latestClose` 為 `null` 而非 `0`
 - [x] 僅有單一交易日資料的標的，`latestClose` 有值而 `previousClose`／`changePercent` 為 `null`
 - [x] 對 2200 檔規模的資料查詢任一頁，對 `stock_daily_price` 的查詢筆數不超過該頁 `size` 所涵蓋的股票數（驗證為「先分頁再取行情」，而非全表關聯後分頁）
-- [x] `GET /api/stocks/2330` 回傳含 `firstTradeDate` 與 `tradingDayCount` 的單檔資料
-- [x] `GET /api/stocks/9999`（不存在的代號）回 `404` 與 `STOCK_NOT_FOUND`
-- [x] `POST /api/stocks` 新增成功回 `201`，且新股票立即出現在 `GET /api/stocks` 結果中、`isActive` 為 `true`
-- [x] 新增已存在的代號回 `409` 與 `STOCK_ALREADY_EXISTS`，且既有股票的名稱未被覆寫
-- [x] 新增時 `market` 帶入 `TSE`／`OTC` 以外的值回 `400` 與 `INVALID_MARKET`
-- [x] 新增時 `stockName` 為空字串或純空白回 `400` 與 `INVALID_STOCK_PAYLOAD`
-- [x] `PUT /api/stocks/{stockId}` 可改名稱與市場別，回應為更新後的資料
-- [x] `PUT` 對已下市標的把 `isActive` 設為 `true` 可使其重新出現在預設清單中
-- [x] `PUT` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
-- [x] `DELETE /api/stocks/{stockId}` 後該檔 `isActive` 為 `false`，且其 `stock_daily_price` 與 `stock_daily_indicator` 列數完全不變
-- [x] 下市後該檔不出現在預設清單，帶 `includeInactive=true` 則出現
-- [x] 對已下市標的重複呼叫 `DELETE` 仍回 `200`（冪等）
-- [x] `DELETE` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
 
----
----
-
+### 清單母體（`commonStocksOnly`）
 - [x] `GET /api/stocks` 省略 `commonStocksOnly` 時視為 `true`：回應的 `total` 只計代號恰為 4 位數字且首字元非 `0` 的股票
 - [x] `commonStocksOnly: true` 時 `0050`、`00878`、`2881A`、`910322` 皆不出現在 `items` 中，也不計入 `total`
 - [x] `commonStocksOnly=false` 時回傳全部在市股票，`total` 明顯大於 `true` 時的值
 - [x] `commonStocksOnly` 與 `keyword`、`market`、`includeInactive`、分頁、排序可同時使用，彼此獨立生效
 - [x] 普通股判斷與 `specs/backend/stock-universe-import.md` 共用同一份實作，不存在第二套代號篩選邏輯
 - [x] 本參數只影響查詢結果，不寫入任何資料表：查詢前後 `stock` 的列數、內容與 `is_active` 完全不變
-- [x] `GET /api/stocks/{stockId}` 不受本參數影響：直接查 `0050` 仍正常回傳該檔資料，不因它是 ETF 而回 `404`
+
+### 單檔查詢
+- [x] `GET /api/stocks/2330` 回傳含 `firstTradeDate` 與 `tradingDayCount` 的單檔資料
+- [x] `GET /api/stocks/9999`（不存在的代號）回 `404` 與 `STOCK_NOT_FOUND`
+- [x] `GET /api/stocks/{stockId}` 不受 `commonStocksOnly` 影響：直接查 `0050` 仍正常回傳該檔資料，不因它是 ETF 而回 `404`
+
+### 新增
+- [x] `POST /api/stocks` 新增成功回 `201`，且新股票立即出現在 `GET /api/stocks` 結果中、`isActive` 為 `true`
+- [x] 新增已存在的代號回 `409` 與 `STOCK_ALREADY_EXISTS`，且既有股票的名稱未被覆寫
+- [x] 新增時 `market` 帶入 `TSE`／`OTC` 以外的值回 `400` 與 `INVALID_MARKET`
+- [x] 新增時 `stockName` 為空字串或純空白回 `400` 與 `INVALID_STOCK_PAYLOAD`
+
+### 修改
+- [x] `PUT /api/stocks/{stockId}` 可改名稱與市場別，回應為更新後的資料
+- [x] `PUT` 對已下市標的把 `isActive` 設為 `true` 可使其重新出現在預設清單中
+- [x] `PUT` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
+
+### 下市
+- [x] `DELETE /api/stocks/{stockId}` 後該檔 `isActive` 為 `false`，且其 `stock_daily_price` 與 `stock_daily_indicator` 列數完全不變
+- [x] 下市後該檔不出現在預設清單，帶 `includeInactive=true` 則出現
+- [x] 對已下市標的重複呼叫 `DELETE` 仍回 `200`（冪等）
+- [x] `DELETE` 不存在的代號回 `404` 與 `STOCK_NOT_FOUND`
 
 ## Execution Result
 - Status: DONE
