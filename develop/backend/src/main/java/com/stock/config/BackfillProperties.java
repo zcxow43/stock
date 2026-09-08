@@ -8,16 +8,20 @@ import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 
 /**
- * Rate-control settings for the per-stock backfill path. Defaults are intentionally
- * conservative (sequential execution, >=1s between requests) per
- * specs/backend/stock-price-ingestion.md — the external data source blocks callers
- * that hammer it without throttling.
+ * Rate-control settings for the per-stock backfill path. Concurrency (executorPoolSize) and the
+ * per-source request interval (rateLimit.intervalMs) are separate knobs and must stay that way
+ * (spec: 並行度與間隔管的是不同的事，不可互相替代): concurrency only bounds how many stocks are in
+ * flight at once, never how densely either external source is actually called — that density is
+ * governed solely by the shared, batch-wide {@code SourceRateLimiter}, not by the worker count.
+ * Defaults (8 in flight, >=0.5s between requests to the SAME source) come straight from
+ * specs/backend/stock-price-ingestion.md and are a deliberate trade-off, not a knob to raise
+ * without first confirming the source's actual tolerance.
  */
 @Component
 @ConfigurationProperties(prefix = "app.backfill")
 public class BackfillProperties {
 
-    private int executorPoolSize = 1;
+    private int executorPoolSize = 8;
     private int maxAttemptCount = 5;
     private final RateLimit rateLimit = new RateLimit();
     private final StartupCatchUp startupCatchUp = new StartupCatchUp();
@@ -47,7 +51,9 @@ public class BackfillProperties {
     }
 
     public static class RateLimit {
-        private long intervalMs = 1000;
+        // Per-source minimum interval, shared batch-wide across every concurrent worker (spec:
+        // 節流的單位是「來源」...每個來源各自維持至少 0.5 秒的請求間隔 — at most 2 req/s per source).
+        private long intervalMs = 500;
         private int maxRetries = 5;
         private long initialBackoffMs = 2000;
         private int backoffMultiplier = 2;

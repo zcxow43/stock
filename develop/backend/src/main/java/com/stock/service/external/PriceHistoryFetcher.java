@@ -40,15 +40,18 @@ public class PriceHistoryFetcher {
 
     private final List<PriceHistorySource> sourcesInPriorityOrder;
     private final SourceAvailabilityTracker availabilityTracker;
+    private final SourceRateLimiter rateLimiter;
     private final BackfillProperties properties;
 
     public PriceHistoryFetcher(YahooFinanceClient yahooFinanceClient, FinMindClient finMindClient,
-                                SourceAvailabilityTracker availabilityTracker, BackfillProperties properties) {
+                                SourceAvailabilityTracker availabilityTracker, SourceRateLimiter rateLimiter,
+                                BackfillProperties properties) {
         // Fixed priority order per spec (來源順位: YAHOO -> FINMIND). An explicit list, not
         // Spring's polymorphic List<PriceHistorySource> injection, so the order is obvious at the
         // call site and never depends on bean-ordering annotations.
         this.sourcesInPriorityOrder = List.of(yahooFinanceClient, finMindClient);
         this.availabilityTracker = availabilityTracker;
+        this.rateLimiter = rateLimiter;
         this.properties = properties;
     }
 
@@ -89,7 +92,12 @@ public class PriceHistoryFetcher {
         throw new AllSourcesBlockedException("No price history source is configured");
     }
 
-    /** Backoff-retries a timeout on the SAME source (spec: 非封鎖類的失敗...依既有規則退避重試). */
+    /**
+     * Backoff-retries a timeout on the SAME source (spec: 非封鎖類的失敗...依既有規則退避重試). Every actual
+     * attempt — including retries — goes through {@link SourceRateLimiter#acquire}, which is the
+     * single, batch-wide gate every concurrent worker competes for (spec: 每來源的請求間隔在並行下仍是
+     * 全批共用的節流); it is not consulted once per stock, only once per real request.
+     */
     private List<NormalizedPriceRow> fetchWithTimeoutRetry(PriceHistorySource source, String stockId, String market,
                                                              LocalDate startDate, LocalDate endDate) {
         BackfillProperties.RateLimit rateLimit = properties.getRateLimit();
@@ -97,6 +105,7 @@ public class PriceHistoryFetcher {
         int attempt = 0;
         while (true) {
             try {
+                rateLimiter.acquire(source.getCode());
                 return source.fetchDailyHistory(stockId, market, startDate, endDate);
             } catch (RateLimitedException e) {
                 attempt++;

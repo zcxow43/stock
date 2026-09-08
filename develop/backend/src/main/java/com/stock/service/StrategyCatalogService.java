@@ -25,7 +25,8 @@ public class StrategyCatalogService {
     public StrategyCatalogResponseDto getCatalog() {
         List<StrategyDto> strategies = new ArrayList<>();
         for (PatternDetector detector : detectors) {
-            strategies.add(new StrategyDto(detector.getCode(), detector.getName(), detector.getPresets()));
+            strategies.add(new StrategyDto(detector.getCode(), detector.getName(), detector.getDescription(),
+                    detector.getPresets(), detector.getParamGroups(), detector.getParams()));
         }
         return new StrategyCatalogResponseDto(strategies);
     }

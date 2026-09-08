@@ -435,13 +435,18 @@ class StockPriceIngestionIntegrationTest {
             BackfillRequest request = new BackfillRequest();
             request.setStartDate(start);
             request.setEndDate(end);
-            // stockIds omitted entirely -> ALL mode
+            // stockIds omitted entirely -> ALL mode. This test is about is_active filtering, not
+            // the commonStocksOnly population default (increment: 母體預設普通股與並行抓取) -- the
+            // synthetic "T22x" ids used here are not 4-digit codes, so they must not be filtered
+            // out by the default commonStocksOnly=true.
+            request.setCommonStocksOnly(false);
 
             ResponseEntity<BackfillResponse> response = rest.postForEntity(
                     "/api/stocks/sync/backfill", request, BackfillResponse.class);
 
             assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
             assertEquals("ALL", response.getBody().getMode());
+            assertFalse(response.getBody().isCommonStocksOnly());
 
             waitUntilProgressDone("PRICE_BACKFILL", Arrays.asList("T221"), 10_000);
             mockServer.verify(); // T222 (inactive) must never be requested

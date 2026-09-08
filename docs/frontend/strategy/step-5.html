@@ -27,14 +27,14 @@
       </div>
       <div class="btns">
         <button class="btn">更新股票清單</button>
-        <button class="btn">同步日 K 至今日</button>
+        <button class="btn" data-trigger>同步日 K 至今日</button>
       </div>
     </div>
     <div class="cond">
       <h2>掃描條件</h2>
       <div class="cards">
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
-          <select><option>嚴格</option></select><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div>
+          <select><option>嚴格</option></select><div class="desc" style="display:none">以 5 日均線為基準，左右各 3 根，需 2 段遞增，每段高過 1%</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.0"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
           <select><option>標準</option></select>
@@ -43,9 +43,13 @@
           <select><option>標準</option></select>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="3.0"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">反彈</span></div>
-          <select><option>標準</option></select>
-          <div class="desc">回看 20 日，自區間最高收盤跌幅 ≥ 15% 的最低點</div>
-          <div class="rise"><span class="rl">跌幅門檻</span><input value="15.0"><span class="pct">%</span></div></div>
+          <div class="desc">先在回看窗口內自最高收盤跌幅達門檻築出谷底，其後指定天數內自谷底反彈幅度達門檻</div>
+          <div class="rise"><span class="rl">下跌天數</span><input value="3" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">跌幅門檻</span><input value="10.0"><span class="pct">%</span></div>
+          <div class="grp on"><span class="gbox"></span><span class="gl">另外要求反彈漲幅</span></div>
+          <div class="rise"><span class="rl">反彈天數</span><input value="1" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">反彈幅度</span><input value="5.0"><span class="pct">%</span></div>
+          <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">累積上漲</span></div>
           <div class="desc">回看指定天數，自窗口內最低收盤累積漲幅達門檻的最高點</div>
           <div class="rise"><span class="rl">天數</span><input value="30" style="width:44px"><span class="pct">日</span>
@@ -72,7 +76,7 @@
           <tr><td class="code">2454</td><td>聯發科</td>
             <td class="hits"><span class="stag">上漲支撐</span><span class="sdate">2026-08-26</span></td></tr>
           <tr><td class="code">2603</td><td>長榮</td>
-            <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-25</span></td></tr>
+            <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-26</span></td></tr>
           <tr><td class="code">2317</td><td>鴻海</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span></td></tr>
         </tbody>
@@ -81,11 +85,12 @@
     <div class="res">
       <h3>底底高（嚴格）<span> — 命中 2 檔</span></h3>
       <table>
-        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th>低點序列</th><th class="r">累計漲幅</th></tr></thead>
+        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th>低點序列（MA5）</th><th>當日最低價</th><th class="r">累計漲幅</th></tr></thead>
         <tbody>
           <tr class="hover"><td class="code">2317</td><td>鴻海</td><td>2026-08-25</td>
+            <td class="lows">07-08 243.10 → 07-29 251.30 → 08-13 258.80 → 08-25 265.20</td>
             <td class="lows">07-08 240.00 → 07-29 248.50 → 08-13 256.00 → 08-25 262.50</td>
-            <td class="r up">+9.38%</td></tr>
+            <td class="r up">+9.09%</td></tr>
         </tbody>
       </table>
       <div class="note">另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>

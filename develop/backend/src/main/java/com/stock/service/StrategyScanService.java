@@ -7,10 +7,17 @@ import com.stock.dto.ScanResponseDto;
 import com.stock.dto.StrategyHitDto;
 import com.stock.dto.StrategyResultDto;
 import com.stock.dto.StrategySelectionDto;
+import com.stock.exception.DaysNotApplicableException;
 import com.stock.exception.DuplicateStrategyException;
 import com.stock.exception.InvalidDateRangeException;
+import com.stock.exception.InvalidDropDaysException;
+import com.stock.exception.InvalidDropPercentException;
+import com.stock.exception.InvalidRiseDaysException;
 import com.stock.exception.InvalidRisePercentException;
+import com.stock.exception.InvalidStrategyDaysException;
 import com.stock.exception.NoStrategySelectedException;
+import com.stock.exception.ParamNotApplicableException;
+import com.stock.exception.PresetNotApplicableException;
 import com.stock.exception.TooManyStocksException;
 import com.stock.exception.UnknownStockIdException;
 import com.stock.exception.UnknownStrategyException;
@@ -31,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * POST /api/strategies/scan — read-only pattern detection over stock_daily_price. Persists
@@ -109,7 +117,11 @@ public class StrategyScanService {
                 unknown.add(String.valueOf(selection.getCode()));
                 continue;
             }
-            if (!detector.supportsPreset(selection.getPreset())) {
+            // Preset validity only applies to the four preset-driven strategies; CUMULATIVE_RISE
+            // (usesPresets()==false) has no presets to validate against here — an explicit `preset`
+            // sent for it is its own, more specific error (PRESET_NOT_APPLICABLE), checked below
+            // once every code is confirmed known.
+            if (detector.usesPresets() && !detector.supportsPreset(selection.getPreset())) {
                 unknown.add(selection.getCode() + ":" + selection.getPreset());
                 continue;
             }
@@ -130,9 +142,121 @@ public class StrategyScanService {
         // Only reached once every code/preset is known — "strategy" in the error must name a real
         // strategy. Checked in submission order so the first offending selection is the one reported.
         for (StrategySelectionDto selection : selections) {
+            PatternDetector detector = detectorsByCode.get(selection.getCode());
+            if (detector.usesPresets()) {
+                if (selection.getDays() != null) {
+                    throw new DaysNotApplicableException(selection.getCode());
+                }
+                rejectReboundOnlyParams(selection);
+            } else {
+                if (selection.getPreset() != null) {
+                    throw new PresetNotApplicableException(selection.getCode());
+                }
+                if (detector.acceptsDaysField()) {
+                    validateDays(selection, detector);
+                } else if (selection.getDays() != null) {
+                    throw new DaysNotApplicableException(selection.getCode());
+                }
+                if (detector.acceptsReboundParams()) {
+                    validateReboundParams(selection);
+                } else {
+                    rejectReboundOnlyParams(selection);
+                }
+            }
             validateRisePercent(selection);
         }
         return selections;
+    }
+
+    /**
+     * Rejects REBOUND's own params (`requireRise`/`dropDays`/`dropPercent`/`riseDays`) when sent to
+     * a strategy that does not accept them — see specs/backend/strategy-scan.md, "對 REBOUND 以外的型態
+     * 帶了 requireRise／dropDays／dropPercent／riseDays".
+     */
+    private void rejectReboundOnlyParams(StrategySelectionDto selection) {
+        if (selection.getRequireRise() != null) {
+            throw new ParamNotApplicableException(selection.getCode(), "requireRise");
+        }
+        if (selection.getDropDays() != null) {
+            throw new ParamNotApplicableException(selection.getCode(), "dropDays");
+        }
+        if (selection.getDropPercent() != null) {
+            throw new ParamNotApplicableException(selection.getCode(), "dropPercent");
+        }
+        if (selection.getRiseDays() != null) {
+            throw new ParamNotApplicableException(selection.getCode(), "riseDays");
+        }
+    }
+
+    /**
+     * REBOUND-only validation: when `requireRise` resolves to false, `riseDays`/`risePercent` must
+     * not be sent (PARAM_NOT_APPLICABLE); `dropDays`/`riseDays`/`dropPercent` are range/scale
+     * validated. `risePercent`'s own [0, 50]/one-decimal validation is covered generically by
+     * {@link #validateRisePercent} right after this method returns.
+     */
+    private void validateReboundParams(StrategySelectionDto selection) {
+        boolean requireRise = selection.getRequireRise() == null || selection.getRequireRise();
+        if (!requireRise) {
+            if (selection.getRiseDays() != null) {
+                throw new ParamNotApplicableException(selection.getCode(), "riseDays");
+            }
+            if (selection.getRisePercent() != null) {
+                throw new ParamNotApplicableException(selection.getCode(), "risePercent");
+            }
+        }
+        validateIntInRange(selection.getDropDays(), 1, 90, () -> new InvalidDropDaysException(selection.getCode()));
+        if (requireRise) {
+            validateIntInRange(selection.getRiseDays(), 1, 90,
+                    () -> new InvalidRiseDaysException(selection.getCode()));
+        }
+        validatePercentInRange(selection.getDropPercent(), () -> new InvalidDropPercentException(selection.getCode()));
+    }
+
+    private void validateIntInRange(BigDecimal value, int min, int max,
+                                     Supplier<RuntimeException> exceptionSupplier) {
+        if (value == null) {
+            return;
+        }
+        if (value.compareTo(BigDecimal.valueOf(min)) < 0 || value.compareTo(BigDecimal.valueOf(max)) > 0) {
+            throw exceptionSupplier.get();
+        }
+        try {
+            value.setScale(0, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException e) {
+            throw exceptionSupplier.get();
+        }
+    }
+
+    private void validatePercentInRange(BigDecimal value, Supplier<RuntimeException> exceptionSupplier) {
+        if (value == null) {
+            return;
+        }
+        if (value.compareTo(RISE_PERCENT_MIN) < 0 || value.compareTo(RISE_PERCENT_MAX) > 0) {
+            throw exceptionSupplier.get();
+        }
+        try {
+            value.setScale(RISE_PERCENT_MAX_SCALE, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException e) {
+            throw exceptionSupplier.get();
+        }
+    }
+
+    private void validateDays(StrategySelectionDto selection, PatternDetector detector) {
+        BigDecimal days = selection.getDays();
+        if (days == null) {
+            return;
+        }
+        if (days.compareTo(BigDecimal.valueOf(detector.getDaysMin())) < 0
+                || days.compareTo(BigDecimal.valueOf(detector.getDaysMax())) > 0) {
+            throw new InvalidStrategyDaysException(selection.getCode());
+        }
+        try {
+            // setScale(0, UNNECESSARY) throws iff `days` carries a non-zero fractional part, i.e.
+            // is not a whole number (mirrors validateRisePercent's decimal-scale check).
+            days.setScale(0, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException e) {
+            throw new InvalidStrategyDaysException(selection.getCode());
+        }
     }
 
     private void validateRisePercent(StrategySelectionDto selection) {
@@ -219,7 +343,7 @@ public class StrategyScanService {
         int maxConfirmAfter = 0;
         for (StrategySelectionDto selection : selections) {
             PatternDetector detector = detectorsByCode.get(selection.getCode());
-            maxLookback = Math.max(maxLookback, detector.requiredLookbackTradingDays(selection.getPreset()));
+            maxLookback = Math.max(maxLookback, detector.requiredLookbackTradingDays(selection));
             maxConfirmAfter = Math.max(maxConfirmAfter,
                     detector.requiredConfirmTradingDaysAfterEndDate(selection.getPreset()));
         }
@@ -256,8 +380,7 @@ public class StrategyScanService {
 
         for (String stockId : targetIds) {
             List<StockDailyPrice> bars = seriesByStock.getOrDefault(stockId, Collections.emptyList());
-            PatternDetectionOutcome outcome = detector.detect(bars, startDate, endDate, selection.getPreset(),
-                    selection.getRisePercent());
+            PatternDetectionOutcome outcome = detector.detect(bars, startDate, endDate, selection);
             if (outcome.isInsufficientData()) {
                 insufficientData.add(stockId);
             } else if (outcome.isHit()) {
@@ -273,7 +396,10 @@ public class StrategyScanService {
 
         StrategyResultDto result = new StrategyResultDto();
         result.setStrategy(selection.getCode());
-        result.setPreset(selection.getPreset());
+        // Mutually exclusive on the wire (specs/backend/strategy-scan.md, "掃描回應中 CUMULATIVE_RISE
+        // 那一筆回 days ... 其餘四筆回 preset"): each detector knows its own header shape (preset,
+        // days, or REBOUND's requireRise/dropDays/dropPercent/riseDays/risePercent).
+        detector.populateResultParams(selection, result);
         result.setMatchedCount(items.size());
         result.setItems(items);
         result.setInsufficientData(insufficientData);

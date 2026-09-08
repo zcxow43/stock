@@ -27,7 +27,7 @@
       </div>
       <div class="btns">
         <button class="btn">更新股票清單</button>
-        <div class="syncing" data-target><span>同步中 18 / 1,032（上市普通股）</span>
+        <div class="syncing" data-target data-trigger><span>同步中 18 / 1,032（上市普通股）</span>
           <span class="bar"><i style="width:2%"></i></span>
           <button class="btn dis" disabled>同步日 K 至今日</button></div>
       </div>
@@ -37,7 +37,7 @@
       <div class="cards">
         <div class="card "><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
           <select><option>標準</option></select>
-          <div class="desc">左右各 3 根，需 2 段遞增，每段高過 1%</div>
+          <div class="desc">以 5 日均線為基準，左右各 3 根，需 2 段遞增，每段高過 1%</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.0"><span class="pct">%</span></div></div>
         <div class="card "><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
           <select><option>標準</option></select>
@@ -48,9 +48,13 @@
           <div class="desc">收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="3.0"><span class="pct">%</span></div></div>
         <div class="card "><div class="top"><span class="box"></span><span class="nm">反彈</span></div>
-          <select><option>標準</option></select>
-          <div class="desc">回看 20 日，自區間最高收盤跌幅 ≥ 15% 的最低點</div>
-          <div class="rise"><span class="rl">跌幅門檻</span><input value="15.0"><span class="pct">%</span></div></div>
+          <div class="desc">先在回看窗口內自最高收盤跌幅達門檻築出谷底，其後指定天數內自谷底反彈幅度達門檻</div>
+          <div class="rise"><span class="rl">下跌天數</span><input value="3" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">跌幅門檻</span><input value="10.0"><span class="pct">%</span></div>
+          <div class="grp on"><span class="gbox"></span><span class="gl">另外要求反彈漲幅</span></div>
+          <div class="rise"><span class="rl">反彈天數</span><input value="1" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">反彈幅度</span><input value="5.0"><span class="pct">%</span></div>
+          <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
         <div class="card "><div class="top"><span class="box"></span><span class="nm">累積上漲</span></div>
           <div class="desc">回看指定天數，自窗口內最低收盤累積漲幅達門檻的最高點</div>
           <div class="rise"><span class="rl">天數</span><input value="30" style="width:44px"><span class="pct">日</span>

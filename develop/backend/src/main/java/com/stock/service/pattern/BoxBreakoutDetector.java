@@ -3,6 +3,7 @@ package com.stock.service.pattern;
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.BoxBreakoutDetailDto;
 import com.stock.dto.PresetDto;
+import com.stock.dto.StrategySelectionDto;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -94,17 +95,17 @@ public class BoxBreakoutDetector implements PatternDetector {
     }
 
     @Override
-    public int requiredLookbackTradingDays(String presetCode) {
-        return presetParams.get(presetCode).lookback;
+    public int requiredLookbackTradingDays(StrategySelectionDto selection) {
+        return presetParams.get(selection.getPreset()).lookback;
     }
 
     @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
-                                           String presetCode, BigDecimal risePercentOverride) {
-        Params params = presetParams.get(presetCode);
+                                           StrategySelectionDto selection) {
+        Params params = presetParams.get(selection.getPreset());
         // risePercent overrides breakoutPercent (specs/backend/strategy-scan.md, 箱型突破's override
         // mapping); lookback/rangeMaxPercent/volumeMultiple/confirmBars stay preset-driven.
-        BigDecimal breakoutPercent = resolveRatio(risePercentOverride, params.breakoutPercent);
+        BigDecimal breakoutPercent = resolveRatio(selection.getRisePercent(), params.breakoutPercent);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {

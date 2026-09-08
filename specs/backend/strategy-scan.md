@@ -1,7 +1,7 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的，除累積上漲外每個策略可選三種靈敏度且漲幅門檻可自行輸入覆寫，累積上漲改為自行輸入回看天數與漲幅門檻、不再有靈敏度，掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定"
 depends_on: [stock-price-ingestion, stock-catalog]
 ---
 
@@ -19,11 +19,11 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 ### 型態定義
 
-其中四個型態（底底高、箱型突破、上漲支撐、反彈）各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
+其中三個型態（底底高、箱型突破、上漲支撐）各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
 
-**累積上漲沒有靈敏度**，它的兩個參數（回看天數 `days`、漲幅門檻 `risePercent`）都由呼叫端直接指定。理由是這個型態只有這兩個參數，靈敏度在此只是「兩個數字的三組預設組合」——一旦兩個數字都能自己填，那三段就不再表達任何判定上的差異，只是多一層要先選、選了又會被覆寫的中介。其餘四個型態的靈敏度仍決定回看長度、擺動根數、量能倍數、確認根數與盤整前提等多項參數，不能以一兩個輸入取代，因此保持不變。**反彈雖與累積上漲對稱，本次不跟進**，仍維持三段靈敏度。
+**累積上漲與反彈都沒有靈敏度**，它們的參數全部由呼叫端直接指定：累積上漲為回看天數 `days` 與漲幅門檻 `risePercent`；反彈為下跌天數 `dropDays`、跌幅門檻 `dropPercent`、反彈天數 `riseDays`、反彈幅度 `risePercent`。理由是這兩個型態的參數本身就是使用者要調的全部，靈敏度在此只是「幾個數字的三組預設組合」——一旦每個數字都能自己填，那三段就不再表達任何判定上的差異，只是多一層要先選、選了又會被覆寫的中介。其餘三個型態的靈敏度仍決定回看長度、擺動根數、量能倍數、確認根數與盤整前提等多項參數，不能以少數幾個輸入取代，因此保持不變。
 
-**有靈敏度的四個型態，其漲幅門檻可由呼叫端逐一覆寫**：請求中該策略的 `risePercent` 有值時，取代靈敏度表裡的漲幅欄位；省略時沿用靈敏度的值。靈敏度仍決定該型態的其餘參數（回看長度、擺動根數、量能倍數、確認根數、盤整前提）。各型態被覆寫的是哪一欄，註明在下方各自的參數表下。
+**有靈敏度的三個型態，其漲幅門檻可由呼叫端逐一覆寫**：請求中該策略的 `risePercent` 有值時，取代靈敏度表裡的漲幅欄位；省略時沿用靈敏度的值。靈敏度仍決定該型態的其餘參數（回看長度、擺動根數、量能倍數、確認根數、盤整前提）。各型態被覆寫的是哪一欄，註明在下方各自的參數表下。
 
 覆寫只改門檻數值，一樣不改判定邏輯——`risePercent` 為 `0` 的效果等同靈敏度表裡漲幅為 0% 的那一段（不驗證漲幅），不是關閉整個型態。
 
@@ -51,10 +51,20 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 #### 底底高 `HIGHER_LOWS`
 
-1. **擺動低點（swing low）**：某交易日 D 的最低價，嚴格低於其左右各 `swingBars` 個交易日的最低價。左右任一側資料不足 `swingBars` 根者不列入。
+**判定一律在 MA5 平滑線上進行**，不用原始最低價。MA5 為**收盤價**的 5 個交易日簡單移動平均：某交易日 D 的 MA5 是 D 之前（**含** D）連續 5 個交易日收盤價的算術平均；不足 5 根者該日無 MA5，不參與判定。
+
+1. **擺動低點（swing low）**：某交易日 D 的 **MA5**，嚴格低於其左右各 `swingBars` 個交易日的 MA5。左右任一側資料不足 `swingBars` 根、或該範圍內任一日無 MA5 者，D 不列入。
 2. 取區間內所有 swing low，依日期排序。
-3. **命中**：存在連續 `requiredRises` 段遞增，即連續 `requiredRises + 1` 個 swing low 滿足每一個都高於前一個，且 `後一個低點 ≥ 前一個低點 × (1 + risePercent)`。
+3. **命中**：存在連續 `requiredRises` 段遞增，即連續 `requiredRises + 1` 個 swing low 滿足每一個的 **MA5** 都高於前一個的 MA5，且 `後一個 MA5 ≥ 前一個 MA5 × (1 + risePercent)`。
 4. 有多組符合時，取**日期最晚**的那一組回報。
+
+**為什麼改用 MA5 而不是原始最低價**：單日最低價含大量盤中雜訊，一根長下影線就能造出一個假的擺動低點，使「底部逐步墊高」這個本來是趨勢層級的判斷被單日極端值主導。5 日均線把那層雜訊平掉，留下的谷是真的走勢轉折。代價是訊號會晚 2～3 個交易日才成形（均線本身有落後性），這是刻意接受的取捨——這個型態問的是「底部有沒有在墊高」，不是「今天有沒有觸底」。
+
+**MA5 於掃描當下由已讀入的日線即時計算，不落地任何資料表**。本型態只需要每檔多讀 4 根前置行情，而掃描本來就已批次讀入整段區間的收盤價；為此在 `stock_daily_indicator` 加一個欄位，會逼出一次全表回填、把型態掃描綁上指標運算的推進節奏，換來的只是一個五筆加總的平均值。**不得新增資料表欄位、不得改動 `stock_daily_indicator`。**
+
+**MA5 取收盤價、不取最低價**：市面通稱的 5 日均線就是收盤均線，換成最低價均線會讓同一個名詞在本系統裡代表另一條線。判定與回報一律以這條收盤 MA5 為準。
+
+**遞增幅度比較的是 MA5 值，不是原始最低價**：找點與比幅度用同一條線，否則會出現「MA5 判定為抬高、當日原始最低價卻更低」這種自相矛盾的命中。原始最低價仍會一併回報供對照（見回應欄位），但不參與任何判定。
 
 | 參數 | `STRICT` | `STANDARD` | `LOOSE` |
 |---|---|---|---|
@@ -62,9 +72,9 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `requiredRises`（遞增段數） | 3 | 2 | 2 |
 | `risePercent` | 2% | 1% | 0%（高過即可） |
 
-請求的 `risePercent` 覆寫本表的 **`risePercent`**（每段遞增的最小幅度）。`swingBars` 與 `requiredRises` 一律由靈敏度決定。
+請求的 `risePercent` 覆寫本表的 **`risePercent`**（每段遞增的最小幅度）。`swingBars` 與 `requiredRises` 一律由靈敏度決定。**平滑天數固定為 5，不隨靈敏度改變、也不開放呼叫端指定**——本型態的基準線就是 5 日均線這一條，可調的是在這條線上怎麼認定擺動與遞增。
 
-**容忍度不可省略的理由**：`risePercent` 為 0 時，高出 0.01 元也構成「底底高」，雜訊會全部變成訊號。`LOOSE` 刻意允許這件事，其餘兩段不允許。
+**容忍度不可省略的理由**：`risePercent` 為 0 時，高出 0.01 元也構成「底底高」，雜訊會全部變成訊號。`LOOSE` 刻意允許這件事，其餘兩段不允許。改用 MA5 後雜訊已大幅降低，但沒有消失——均線之間仍可能只差千分之一，因此容忍度照樣保留。
 
 #### 上漲支撐 `RISING_SUPPORT`
 
@@ -93,21 +103,35 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 #### 反彈 `REBOUND`
 
-對區間內每個交易日 D 判定。**D 是下跌段的最低點，也是回報的 `signalDate`**：
+反彈由**跌段**與**漲段**兩個條件組成。漲段是**選用**的，由 `requireRise` 開關（預設 `true`）：關閉時只以跌幅判定。
 
-1. **回看窗口**：D 之前（**含** D）連續 `lookback` 個交易日。
+**第一步 — 找出跌段的谷底 T**（對每個交易日 T 判定）：
+
+1. **回看窗口**：T 之前（**含** T）連續 `dropDays` 個交易日。
 2. **高點**：窗口內收盤價的最大值 H，其日期為 Hd。
-3. **D 必須是低點**：D 的收盤價是 Hd **之後**（不含 Hd）至 D 為止的收盤價最小值。這道限制把命中鎖在「這段下跌目前的最低那一天」，否則下跌過程中的每一天都會逐日命中一次。
-4. **跌幅**：`(H − D 收盤) ÷ H` ≥ `dropPercent`。
+3. **T 必須是低點**：T 的收盤價是 Hd **之後**（不含 Hd）至 T 為止的收盤價最小值。這道限制把谷底鎖在「這段下跌目前的最低那一天」，否則下跌過程中的每一天都會各自算成一個谷底。
+4. **跌幅**：`(H − T 收盤) ÷ H` ≥ `dropPercent`。
 
-請求的 `risePercent` 覆寫本表的 **`dropPercent`**。`lookback` 由靈敏度決定。
+**第二步 — 找出漲段的達標日 S**（`requireRise` 為 `true` 時才做）：
 
-| 參數 | `STRICT` | `STANDARD` | `LOOSE` |
+5. **反彈窗口**：T **之後**（不含 T）最多 `riseDays` 個交易日。
+6. **漲幅**：窗口內第一個滿足 `(該日收盤 − T 收盤) ÷ T 收盤` ≥ `risePercent` 的交易日即為 S。
+7. 窗口內找不到 S，該谷底就不命中。
+
+**`signalDate` 是 S**，即反彈幅度達標的那一天，不是谷底那一天。`requireRise` 為 `false` 時沒有第二步，`signalDate` 退回為谷底 T 當日。
+
+| 參數 | 預設 | 範圍 | 說明 |
 |---|---|---|---|
-| `lookback`（根） | 20 | 20 | 10 |
-| `dropPercent` | 20% | 15% | 10% |
+| `dropDays` | 3 | `1`～`90` 的整數 | 跌段回看的交易日數，**含** T 本身 |
+| `dropPercent` | 10% | `0`～`50`，最多一位小數 | 自窗口最高收盤起算的跌幅門檻 |
+| `riseDays` | 1 | `1`～`90` 的整數 | 谷底之後容許反彈達標的交易日數，**不含** T 本身 |
+| `risePercent` | 5% | `0`～`50`，最多一位小數 | 自谷底收盤起算的反彈幅度門檻 |
 
-**本型態不驗證反彈是否真的發生。** 它回報的是「跌幅已達門檻的低點」，不是「已確認落底回升」——D 之後的價格可能繼續下跌，而 D 只是目前為止的最低點。這是刻意的：要求反彈確認就必須等 D 之後的交易日，會讓最新、也最有參考價值的訊號一律落入待確認而看不到。使用者要判斷反彈是否成立，用結果表的分 K 連結自行檢視當日盤中走勢。
+**漲段窗口尚未跑滿也照樣判定。** 谷底若落在最近幾個交易日，其 `riseDays` 窗口可能只過了一部分——只要**已達標就命中**，不等窗口跑滿，也不列入 `pendingConfirm`。窗口還沒跑滿且尚未達標的，就是單純未命中，往後的掃描自然會補上。這是為了讓最新、也最有參考價值的訊號看得見：要求等窗口跑滿，會讓它們一律從畫面上消失。
+
+**漲幅以「谷底收盤 → 窗口內最高收盤」量測**，與跌幅的量測方式對稱——窗口內任何一天的收盤達標就算，不要求撐到窗口最後一天。只看最後一天會漏掉「衝上去又拉回」的反彈，而那段反彈確實發生過。
+
+**本型態仍不保證反彈會延續。** 它回報的是「跌幅達標後、反彈幅度也達標」這個已發生的事實，不是「確認落底回升」——S 之後的價格可能再跌回去。使用者要進一步判斷，用結果表的分 K 連結自行檢視當日盤中走勢。
 
 **跌幅以「窗口最高收盤 → 其後最低收盤」量測，而不是「首尾兩日收盤相減」**：後者會漏掉中間先大跌再拉回的形態——首尾恰巧相近時跌幅算出來接近 0，但那段下跌確實發生過。
 
@@ -154,7 +178,7 @@ depends_on: [stock-price-ingestion, stock-catalog]
 ### 區間與資料前置需求
 
 - `startDate` / `endDate` 皆省略時，區間為 `endDate = 今日`、`startDate = 今日往前一個日曆月`。
-- **判定所需的前置資料取自 `startDate` 之前**：箱型突破需要 `lookback` 個交易日、底底高需要 `swingBars` 個交易日、上漲支撐需要 `lookback` 個交易日、反彈需要 `lookback − 1` 個交易日、累積上漲需要 `days − 1` 個交易日（兩者的窗口皆含 D 本身）。這些資料只用於判定，不會被回報為命中。
+- **判定所需的前置資料取自 `startDate` 之前**：箱型突破需要 `lookback` 個交易日、底底高需要 `swingBars + 4` 個交易日（`swingBars` 供左側比較，另 4 根供最左那一日算出 MA5）、上漲支撐需要 `lookback` 個交易日、反彈需要 `dropDays − 1 + riseDays` 個交易日（谷底最早可落在 `startDate` 往前 `riseDays` 個交易日處，其跌段窗口再往前 `dropDays − 1` 個交易日；`requireRise` 為 `false` 時只需 `dropDays − 1`）、累積上漲需要 `days − 1` 個交易日。這些資料只用於判定，不會被回報為命中。
 - **上漲支撐的確認資料取自 `endDate` 之後**：判定 D 是否命中需要 D+1 與 D+2 的收盤。掃描時應一併讀入 `endDate` 之後最多 2 個交易日的行情；若該資料尚未存在，D 落入 `pendingConfirm`。
 - 某檔的前置資料不足以完成判定時，該檔列入該策略的 `insufficientData`，**不視為未命中**。兩者必須分開：「掃過了沒有型態」與「資料不夠所以沒掃」對使用者是完全不同的訊息。
 - 型態判定一律以**相鄰交易日**比較，不因停牌造成的日曆間隔做任何插補。此規則與 `specs/backend/stock-indicator-statistics.md` 的交叉判定一致，不得各自為政。
@@ -186,9 +210,9 @@ Response `200`：
       "code": "HIGHER_LOWS",
       "name": "底底高",
       "presets": [
-        { "code": "STRICT",   "name": "嚴格", "description": "左右各 5 根，需 3 段遞增，每段高過 2%" },
-        { "code": "STANDARD", "name": "標準", "description": "左右各 3 根，需 2 段遞增，每段高過 1%" },
-        { "code": "LOOSE",    "name": "寬鬆", "description": "左右各 2 根，需 2 段遞增，高過即計" }
+        { "code": "STRICT",   "name": "嚴格", "description": "以 5 日均線為基準，左右各 5 根，需 3 段遞增，每段高過 2%" },
+        { "code": "STANDARD", "name": "標準", "description": "以 5 日均線為基準，左右各 3 根，需 2 段遞增，每段高過 1%" },
+        { "code": "LOOSE",    "name": "寬鬆", "description": "以 5 日均線為基準，左右各 2 根，需 2 段遞增，高過即計" }
       ]
     },
     {
@@ -203,10 +227,16 @@ Response `200`：
     {
       "code": "REBOUND",
       "name": "反彈",
-      "presets": [
-        { "code": "STRICT",   "name": "嚴格", "description": "回看 20 日，自區間最高收盤跌幅 ≥ 20% 的最低點" },
-        { "code": "STANDARD", "name": "標準", "description": "回看 20 日，自區間最高收盤跌幅 ≥ 15% 的最低點" },
-        { "code": "LOOSE",    "name": "寬鬆", "description": "回看 10 日，自區間最高收盤跌幅 ≥ 10% 的最低點" }
+      "description": "先在回看窗口內自最高收盤跌幅達門檻築出谷底，其後指定天數內自谷底反彈幅度達門檻",
+      "presets": [],
+      "paramGroups": [
+        { "code": "rise", "name": "另外要求反彈漲幅", "default": true }
+      ],
+      "params": [
+        { "code": "dropDays",    "name": "下跌天數", "unit": "日", "default": 3,  "min": 1, "max": 90, "step": 1   },
+        { "code": "dropPercent", "name": "跌幅門檻", "unit": "%",  "default": 10, "min": 0, "max": 50, "step": 0.1 },
+        { "code": "riseDays",    "name": "反彈天數", "unit": "日", "default": 1,  "min": 1, "max": 90, "step": 1,   "group": "rise" },
+        { "code": "risePercent", "name": "反彈幅度", "unit": "%",  "default": 5,  "min": 0, "max": 50, "step": 0.1, "group": "rise" }
       ]
     },
     {
@@ -227,7 +257,8 @@ Response `200`：
 
 `presets` 與 `params` 的關係：
 - **有靈敏度的型態**：`presets` 為三段，`params` 為空陣列或不出現；卡片上顯示的說明文字取自目前選定那一段的 `description`。
-- **無靈敏度的型態**（目前只有累積上漲）：`presets` 為**空陣列**，`params` 列出該型態的每一個可輸入參數；卡片上顯示的說明文字取自策略層級的 `description`。
+- **無靈敏度的型態**（目前為累積上漲與反彈）：`presets` 為**空陣列**，`params` 列出該型態的每一個可輸入參數；卡片上顯示的說明文字取自策略層級的 `description`。
+- **選用參數群組**：`params` 的項目可帶 `group`，指向 `paramGroups` 中同 `code` 的一筆。同一群組的參數是一組可整組開關的選用條件，`paramGroups[].default` 是開關的預設狀態，`name` 是開關要顯示的文字。不帶 `group` 的參數一律生效、不可關閉。目前只有反彈用到（`rise` 群組），但這個機制不綁任何策略——前端依 `paramGroups` 畫開關即可，同樣不得以策略 `code` 寫死。
 
 前端據此決定卡片長什麼樣：`presets` 非空就畫靈敏度下拉，為空就依 `params` 逐一畫輸入框。**不得以策略 `code` 寫死判斷**（例如「如果是 CUMULATIVE_RISE 就畫天數」）——那會讓下一個改成無靈敏度的型態必須再改一次前端。
 
@@ -257,9 +288,13 @@ Request：
 |---|---|---|---|
 | `strategies` | array | 是 | 至少一個；同一 `code` 不得重複出現 |
 | `strategies[].code` | string | 是 | `BOX_BREAKOUT` / `HIGHER_LOWS` / `RISING_SUPPORT` / `REBOUND` / `CUMULATIVE_RISE` |
-| `strategies[].preset` | string | 視型態而定 | `STRICT` / `STANDARD` / `LOOSE`。**有靈敏度的四個型態必填；`CUMULATIVE_RISE` 不得帶**（它沒有靈敏度可選） |
+| `strategies[].preset` | string | 視型態而定 | `STRICT` / `STANDARD` / `LOOSE`。**有靈敏度的三個型態必填；`CUMULATIVE_RISE` 與 `REBOUND` 不得帶**（兩者沒有靈敏度可選） |
 | `strategies[].days` | int | 否 | **只有 `CUMULATIVE_RISE` 接受本欄位**，其餘型態帶了視為無效。回看窗口的交易日數，整數，範圍 `1`～`90`；省略時為 `20` |
-| `strategies[].risePercent` | number | 否 | 覆寫該策略的幅度門檻；省略即沿用 `preset` 的值。範圍 `0`～`50`，最多一位小數。**對 `REBOUND` 覆寫的是跌幅門檻 `dropPercent`**，欄位名沿用同一個以維持請求結構一致 |
+| `strategies[].requireRise` | boolean | 否 | **只有 `REBOUND` 接受本欄位**。是否套用漲段條件；省略時為 `true`。為 `false` 時 `riseDays` 與 `risePercent` 不得帶 |
+| `strategies[].dropDays` | int | 否 | **只有 `REBOUND` 接受本欄位**。跌段回看的交易日數，整數，範圍 `1`～`90`；省略時為 `3` |
+| `strategies[].dropPercent` | number | 否 | **只有 `REBOUND` 接受本欄位**。跌幅門檻，範圍 `0`～`50`，最多一位小數；省略時為 `10` |
+| `strategies[].riseDays` | int | 否 | **只有 `REBOUND` 接受本欄位**，且 `requireRise` 為 `true` 時才可帶。反彈窗口的交易日數，整數，範圍 `1`～`90`；省略時為 `1` |
+| `strategies[].risePercent` | number | 否 | 幅度門檻，範圍 `0`～`50`，最多一位小數。對**有靈敏度的三個型態**是覆寫該靈敏度的漲幅欄位，省略即沿用靈敏度的值；對 `CUMULATIVE_RISE` 是窗口內的累積漲幅門檻，省略時為 `15`；對 `REBOUND` 是**自谷底起算的反彈幅度門檻**，省略時為 `5`，且 `requireRise` 為 `false` 時不得帶 |
 | `stockIds` | string[] | 否 | 省略或空陣列 = 全部在市股票；上限 200 |
 | `commonStocksOnly` | boolean | 否 | **省略時視為 `true`**；只掃代號恰為 4 位數字且首字元非 `0` 的普通股。`stockIds` 有值時本欄位不生效 |
 | `startDate` | date | 否 | 預設為 `endDate` 往前一個日曆月 |
@@ -304,10 +339,10 @@ Response `200`：
           "signalDate": "2026-08-25",
           "detail": {
             "lows": [
-              { "tradeDate": "2026-07-08", "low": 240.00 },
-              { "tradeDate": "2026-07-29", "low": 248.50 },
-              { "tradeDate": "2026-08-13", "low": 256.00 },
-              { "tradeDate": "2026-08-25", "low": 262.50 }
+              { "tradeDate": "2026-07-08", "ma5": 243.10, "low": 240.00 },
+              { "tradeDate": "2026-07-29", "ma5": 251.30, "low": 248.50 },
+              { "tradeDate": "2026-08-13", "ma5": 258.80, "low": 256.00 },
+              { "tradeDate": "2026-08-25", "ma5": 265.20, "low": 262.50 }
             ]
           }
         }
@@ -341,18 +376,24 @@ Response `200`：
     },
     {
       "strategy": "REBOUND",
-      "preset": "STANDARD",
+      "requireRise": true,
+      "dropDays": 3,
+      "dropPercent": 10,
+      "riseDays": 1,
+      "risePercent": 5,
       "matchedCount": 1,
       "items": [
         {
           "stockId": "2603",
           "stockName": "長榮",
-          "signalDate": "2026-08-25",
+          "signalDate": "2026-08-26",
           "detail": {
-            "peakDate": "2026-08-10",
+            "peakDate": "2026-08-21",
             "peakClose": 120.00,
+            "troughDate": "2026-08-25",
             "troughClose": 100.00,
-            "dropPercent": 16.67
+            "dropPercent": 16.67,
+            "risePercent": 6.00
           }
         }
       ],
@@ -383,18 +424,24 @@ Response `200`：
 }
 ```
 
-- `results` 依 `strategies` 送入的順序回傳，一個策略一筆。每一筆原樣回報該策略**實際採用**的參數：有靈敏度的型態回 `preset`，累積上漲回 `days`（省略時回實際採用的預設值 `20`），兩者不同時出現。
+- `results` 依 `strategies` 送入的順序回傳，一個策略一筆。每一筆原樣回報該策略**實際採用**的參數（省略時回實際採用的預設值）：有靈敏度的型態回 `preset`；累積上漲回 `days`；反彈回 `requireRise`、`dropDays`、`dropPercent`，並在 `requireRise` 為 `true` 時另回 `riseDays` 與 `risePercent`。`preset` 與這些參數欄位不同時出現。
 - `items` 依 `signalDate` 由新到舊排序；同日則依 `stockId` 升冪。
 - `signalDate` 為該檔在區間內**最近一次**命中的日期；同一檔在區間內多次命中只回報最近一次。
-- `pendingConfirm` 可能非空的情況有二：箱型突破且 `confirmBars = 2`（已突破但確認日尚未到），以及上漲支撐（已上漲但 D+1／D+2 尚未到齊）。兩者都列出該檔的股票代號，且不計入 `matchedCount`。**反彈與累積上漲一律不產生 `pendingConfirm`**，因為兩者都不做事後確認，其 `pendingConfirm` 恆為空陣列。
+- `pendingConfirm` 可能非空的情況有二：箱型突破且 `confirmBars = 2`（已突破但確認日尚未到），以及上漲支撐（已上漲但 D+1／D+2 尚未到齊）。兩者都列出該檔的股票代號，且不計入 `matchedCount`。**反彈與累積上漲一律不產生 `pendingConfirm`**，其 `pendingConfirm` 恆為空陣列。反彈雖然有漲段條件，但採「已達標就命中、不等窗口跑滿」（見型態定義），因此不存在待確認狀態。
 - `insufficientData` 與 `matchedCount` 互斥：列在前者的股票不會出現在 `items` 中。
+- 底底高的 `detail.lows` 每筆有三個欄位：`tradeDate`、`ma5`（判定所依據的 5 日收盤均線值）、`low`（該日原始最低價，僅供對照，不參與判定）。`ma5` 與 `low` 皆為兩位小數。
 
 驗證與錯誤：
 - `strategies` 為空或缺漏 → `400`，`{"code":"NO_STRATEGY_SELECTED"}`
 - 未知的 `code` 或 `preset` → `400`，`{"code":"UNKNOWN_STRATEGY","unknown":["FOO"]}`
 - 有靈敏度的型態缺 `preset` → `400`，`{"code":"UNKNOWN_STRATEGY","unknown":["BOX_BREAKOUT"]}`
-- 對 `CUMULATIVE_RISE` 帶了 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"CUMULATIVE_RISE"}`
+- 對**沒有靈敏度的型態**（`CUMULATIVE_RISE`、`REBOUND`）帶了 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"REBOUND"}`
 - 對 `CUMULATIVE_RISE` 以外的型態帶了 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
+- 對 `REBOUND` 以外的型態帶了 `requireRise`／`dropDays`／`dropPercent`／`riseDays` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"BOX_BREAKOUT","param":"dropDays"}`。`param` 指出是哪一個欄位不適用。（`days` 沿用既有的 `DAYS_NOT_APPLICABLE` 而非併入本碼：該碼已隨累積上漲上線並有測試涵蓋，改名只是無謂的破壞性變更。）
+- 對 `REBOUND` 在 `requireRise` 為 `false` 時仍帶了 `riseDays` 或 `risePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"riseDays"}`。關掉漲段卻又送漲段參數，代表呼叫端對自己要什麼並不一致，靜默忽略會讓使用者以為那個數字有生效
+- `dropDays` 非整數、小於 `1` 或大於 `90` → `400`，`{"code":"INVALID_DROP_DAYS","strategy":"REBOUND"}`
+- `riseDays` 非整數、小於 `1` 或大於 `90` → `400`，`{"code":"INVALID_RISE_DAYS","strategy":"REBOUND"}`
+- `dropPercent` 小於 `0`、大於 `50`、或小數超過一位 → `400`，`{"code":"INVALID_DROP_PERCENT","strategy":"REBOUND"}`
 - `days` 非整數、小於 `1` 或大於 `90` → `400`，`{"code":"INVALID_DAYS","strategy":"CUMULATIVE_RISE"}`。與 `INVALID_RISE_PERCENT` 同理，`strategy` 必須指名是哪一張卡片的值不合法
 - 同一 `code` 重複出現 → `400`，`{"code":"DUPLICATE_STRATEGY","duplicated":["BOX_BREAKOUT"]}`
 - `stockIds` 含 `stock` 主檔不存在的代號 → `400`，`{"code":"UNKNOWN_STOCK_ID","unknownIds":["9999"]}`
@@ -404,7 +451,7 @@ Response `200`：
 
 ### 處理流程
 
-解析並驗證請求 → 決定目標股票清單（指定清單；或全市場在市再依 `commonStocksOnly` 過濾）→ 對每個策略取判定參數（有靈敏度者取該靈敏度那一組，累積上漲取請求的 `days` 或其預設值）、並以該策略的 `risePercent` 覆寫其漲幅門檻 → 對每檔股票讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用判定 → 收斂為每檔最近一次命中 → 組裝回應。
+解析並驗證請求 → 決定目標股票清單（指定清單；或全市場在市再依 `commonStocksOnly` 過濾）→ 對每個策略取判定參數（有靈敏度者取該靈敏度那一組、再以該策略的 `risePercent` 覆寫其漲幅門檻；累積上漲取請求的 `days`／`risePercent` 或其預設值；反彈取請求的 `requireRise`／`dropDays`／`dropPercent`／`riseDays`／`risePercent` 或其預設值） → 對每檔股票讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用判定 → 收斂為每檔最近一次命中 → 組裝回應。
 
 **行情讀取必須批次進行**，不得逐檔一次查詢：全市場掃描是 2200 檔，逐檔查詢即 2200 次往返。以單一查詢按 `(stock_id, trade_date)` 主鍵範圍取回目標區間的全部列，再在記憶體中依股票分組判定。
 
@@ -481,20 +528,79 @@ Response `200`：
 
 ### 累積上漲改為可輸入天數（本次新增）
 
-- [ ] `GET /api/strategies` 的 `CUMULATIVE_RISE` 條目 `presets` 為空陣列，並帶策略層級 `description` 與 `params`（`days`：預設 20、範圍 1～90、step 1；`risePercent`：預設 15、範圍 0～50、step 0.1）
-- [ ] 其餘四個型態的條目完全未變：`presets` 仍為三段，說明文字與本 spec 參數表一致
-- [ ] `POST /api/strategies/scan` 對 `CUMULATIVE_RISE` 送 `days: 30` 時以 30 個交易日的窗口判定，命中結果與送 `days: 10` 時不同
-- [ ] `CUMULATIVE_RISE` 省略 `days` 時以 `20` 判定，且省略 `risePercent` 時以 `15` 判定——即與本次改動前「標準」那一段的結果完全相同
-- [ ] `days` 算的是交易日不是日曆日：窗口跨越週末時，週末不佔窗口長度
-- [ ] `days: 1` 為合法請求（不回 `400`）；此時除非 `risePercent` 為 `0`，否則零命中
-- [ ] `days: 0`、`days: 91`、`days: 20.5` → `400`，`{"code":"INVALID_DAYS","strategy":"CUMULATIVE_RISE"}`
-- [ ] 對 `CUMULATIVE_RISE` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"CUMULATIVE_RISE"}`
-- [ ] 對 `REBOUND`（或其餘三個型態）帶 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
-- [ ] 有靈敏度的型態缺 `preset` 仍為 `400`，其行為未因本次改動而放寬
-- [ ] 掃描回應中 `CUMULATIVE_RISE` 那一筆回 `days`（等於實際採用值）且不含 `preset`；其餘四筆回 `preset` 且不含 `days`
-- [ ] `days` 大於某檔可用行情長度時，該檔列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
-- [ ] `risePercent` 對 `CUMULATIVE_RISE` 的行為未變：範圍仍為 `0`～`50`、最多一位小數，超出回 `INVALID_DAYS` 以外的既有 `INVALID_RISE_PERCENT`
-- [ ] 反彈維持三段靈敏度不變：其請求仍必填 `preset`、不接受 `days`，回應仍回 `preset`
+- [x] `GET /api/strategies` 的 `CUMULATIVE_RISE` 條目 `presets` 為空陣列，並帶策略層級 `description` 與 `params`（`days`：預設 20、範圍 1～90、step 1；`risePercent`：預設 15、範圍 0～50、step 0.1）
+- [x] 其餘四個型態的條目完全未變：`presets` 仍為三段，說明文字與本 spec 參數表一致
+- [x] `POST /api/strategies/scan` 對 `CUMULATIVE_RISE` 送 `days: 30` 時以 30 個交易日的窗口判定，命中結果與送 `days: 10` 時不同
+- [x] `CUMULATIVE_RISE` 省略 `days` 時以 `20` 判定，且省略 `risePercent` 時以 `15` 判定——即與本次改動前「標準」那一段的結果完全相同
+- [x] `days` 算的是交易日不是日曆日：窗口跨越週末時，週末不佔窗口長度
+- [x] `days: 1` 為合法請求（不回 `400`）；此時除非 `risePercent` 為 `0`，否則零命中
+- [x] `days: 0`、`days: 91`、`days: 20.5` → `400`，`{"code":"INVALID_DAYS","strategy":"CUMULATIVE_RISE"}`
+- [x] 對 `CUMULATIVE_RISE` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"CUMULATIVE_RISE"}`
+- [x] 對 `REBOUND`（或其餘三個型態）帶 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
+- [x] 有靈敏度的型態缺 `preset` 仍為 `400`，其行為未因本次改動而放寬
+- [x] 掃描回應中 `CUMULATIVE_RISE` 那一筆回 `days`（等於實際採用值）且不含 `preset`；其餘四筆回 `preset` 且不含 `days`
+- [x] `days` 大於某檔可用行情長度時，該檔列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
+- [x] `risePercent` 對 `CUMULATIVE_RISE` 的行為未變：範圍仍為 `0`～`50`、最多一位小數，超出回 `INVALID_DAYS` 以外的既有 `INVALID_RISE_PERCENT`
+- [x] 反彈維持三段靈敏度不變：其請求仍必填 `preset`、不接受 `days`，回應仍回 `preset`（此為**當時那次增量的範圍聲明**——反彈的靈敏度已於下一節的增量移除，見下）
+
+---
+
+### 反彈改為跌段＋選用漲段的雙段參數、移除靈敏度（本次新增）
+
+**型態目錄**
+- [x] `GET /api/strategies` 的 `REBOUND` 條目 `presets` 為空陣列，帶策略層級 `description`、`paramGroups`（一筆：`rise`，`default` 為 `true`）與四個 `params`：`dropDays`（預設 3、範圍 1～90、step 1）、`dropPercent`（預設 10、範圍 0～50、step 0.1）、`riseDays`（預設 1、範圍 1～90、step 1、`group` 為 `rise`）、`risePercent`（預設 5、範圍 0～50、step 0.1、`group` 為 `rise`）
+- [x] 底底高／箱型突破／上漲支撐三個條目完全未變，`CUMULATIVE_RISE` 條目亦完全未變
+
+**判定邏輯**
+- [x] 五個參數全部省略時，以 `dropDays: 3`、`dropPercent: 10`、`requireRise: true`、`riseDays: 1`、`risePercent: 5` 判定
+- [x] `signalDate` 是**反彈達標那天**，不是谷底那天：命中結果的 `signalDate` 與 `detail.troughDate` 不同，且兩者相隔 1～`riseDays` 個交易日
+- [x] 漲幅以「谷底收盤 → 窗口內最高收盤」量測：谷底後第 1 天衝高達標、第 2 天回落到門檻以下，`riseDays: 2` 仍命中，且 `signalDate` 為第 1 天
+- [x] 窗口內有多天達標時取**最早**那一天為 `signalDate`，不是漲幅最大的那一天
+- [x] 跌幅量測維持「窗口最高收盤 → 其後最低收盤」不變：首尾兩日收盤相近但中間曾大跌的資料仍找得出谷底
+- [x] 谷底的「T 必須是低點」限制仍生效：一段連續下跌中只有目前最低那天成為谷底
+- [x] `requireRise: false` 時只以跌幅判定，`signalDate` 等於谷底當日，`detail` 不含 `risePercent`
+- [x] 漲段窗口未跑滿仍照判：谷底落在 `endDate` 前一個交易日、`riseDays: 3` 且已達標 → 命中；同情境未達標 → 未命中，且**不**列入 `pendingConfirm`
+- [x] `REBOUND` 的 `pendingConfirm` 在所有情境下恆為空陣列
+- [x] `dropDays` 與 `riseDays` 算的都是交易日不是日曆日：窗口跨越週末時，週末不佔窗口長度
+- [x] 同一檔在區間內多次命中時仍只回報最近一次 `signalDate`
+- [x] 前置資料需求為 `dropDays − 1 + riseDays` 個交易日（`requireRise: false` 時為 `dropDays − 1`）；不足者列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
+
+**回應**
+- [x] 掃描回應中 `REBOUND` 那一筆回 `requireRise`、`dropDays`、`dropPercent`（皆為實際採用值），`requireRise` 為 `true` 時另回 `riseDays` 與 `risePercent`，且**不含** `preset`
+- [x] `detail` 為六個欄位：`peakDate`／`peakClose`／`troughDate`／`troughClose`／`dropPercent`／`risePercent`；`requireRise` 為 `false` 時不含 `risePercent`
+
+**驗證**
+- [x] 對 `REBOUND` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"REBOUND"}`
+- [x] 對 `REBOUND` 帶 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`（既有行為未變）
+- [x] 對 `REBOUND` 以外的型態帶 `requireRise`／`dropDays`／`dropPercent`／`riseDays` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"<該欄位名>"}`
+- [x] `requireRise: false` 又帶 `riseDays` 或 `risePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"<該欄位名>"}`
+- [x] `dropDays` 為 `0`、`91`、`3.5` → `400`，`{"code":"INVALID_DROP_DAYS","strategy":"REBOUND"}`
+- [x] `riseDays` 為 `0`、`91`、`1.5` → `400`，`{"code":"INVALID_RISE_DAYS","strategy":"REBOUND"}`
+- [x] `dropPercent` 為 `-1`、`50.1`、`10.55` → `400`，`{"code":"INVALID_DROP_PERCENT","strategy":"REBOUND"}`
+- [x] `risePercent` 對 `REBOUND` 超出 `0`～`50` 或小數超過一位 → `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"REBOUND"}`
+- [x] `dropDays: 1` 為合法請求（不回 `400`）；此時窗口只有 T 本身、跌幅恆為 0，除非 `dropPercent` 為 `0` 否則零命中
+- [x] 有靈敏度的三個型態缺 `preset` 仍為 `400`，其行為未因本次改動而放寬
+
+**語意變更（破壞性）**
+- [x] `risePercent` 對 `REBOUND` 的語意由「覆寫跌幅門檻 `dropPercent`」改為「自谷底起算的反彈幅度門檻」：送 `risePercent: 5` 時以 5% 反彈判定，**不是** 5% 跌幅。要調跌幅改送 `dropPercent`
+- [x] 反彈的回應欄位名與說明文字皆無「進場」「出場」「建議」「推薦」等暗示買賣操作的措辭
+
+---
+
+### 底底高改以 MA5 平滑線為判定基準（本次新增）
+
+- [x] 擺動低點改在 **MA5（5 日收盤簡單移動平均）** 上判定：某日 D 的 MA5 嚴格低於其左右各 `swingBars` 個交易日的 MA5；原始最低價不再參與選點
+- [x] MA5 取的是**收盤價**：以構造資料驗證，同一組行情下收盤均線與最低價均線的谷不同日時，命中的是收盤均線那一組
+- [x] MA5 為 D 之前（含 D）連續 5 個交易日收盤價的算術平均；不足 5 根者該日無 MA5，不參與判定
+- [x] 遞增幅度比較的是 **MA5 值**：`後一個 swing low 的 ma5 ≥ 前一個的 ma5 × (1 + risePercent)`；原始最低價即使反向變動也不影響命中與否
+- [x] `detail.lows` 每筆回三個欄位 `tradeDate`／`ma5`／`low`，`ma5` 與 `low` 皆兩位小數；筆數仍為 `requiredRises + 1`
+- [x] 平滑天數固定為 5：不隨靈敏度改變，請求也無任何欄位可指定；`GET /api/strategies` 的 `HIGHER_LOWS` 仍為三段 `presets`、無 `params`
+- [x] 三段靈敏度的 `swingBars`／`requiredRises`／`risePercent` 數值未變（5/3/2、3/2/2、2%/1%/0%），僅說明文字加上「以 5 日均線為基準」
+- [x] `risePercent` 覆寫的仍是每段遞增的最小幅度，範圍與驗證行為未變
+- [x] 前置資料需求為 `swingBars + 4` 個交易日：`swingBars` 供左側比較、另 4 根供最左那一日算出 MA5；不足者列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
+- [x] 平滑降低雜訊的效果可驗證：一段含單日長下影線的行情，以原始最低價會產生擺動低點、改用 MA5 後該日不再成為擺動低點
+- [x] MA5 以相鄰交易日計算，跨週末或停牌不做任何日曆插補，與本 spec 其餘型態的取樣規則一致
+- [x] 多組符合時仍取日期最晚的那一組回報，此規則未因改用 MA5 而改變
 
 ---
 ## Execution Result
@@ -600,3 +706,41 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
     - DB left unchanged by the scan calls themselves: `stock` row count and `is_active` distribution matched the pre-scan counts used for the `scannedStocks` assertions above; no `SS`-prefixed rows leaked from the live run (only from the JUnit suite, which cleans up in `@AfterEach`). `stock_daily_price` grew slightly during the session from the app's own independent startup price-sync job, unrelated to any scan request (the scan module issues only `SELECT`s — confirmed by code inspection of `StrategyScanService`/`StockDailyPriceMapper.xml`, and by increments 1–2's own established batched-read-only pattern, which this increment did not touch).
   - `code-quality` skill reviewed before finishing. One deliberate trade-off left as-is: `PatternDetector`'s two new constants (`PERCENT_DIVISOR`, `RATIO_SCALE`) are declared on the interface itself and are therefore implicitly `public static final`, inherited by all five implementing classes — a mild "constant interface" smell. Java interfaces cannot hold `private static` fields in any version (only `private` *methods*, since Java 9), so the only way to avoid this would be a separate tiny utility class purely to hide two numeric constants, which is more machinery than the problem warrants; left as an interface-level constant since it is internal to `com.stock.service.pattern` and never reaches the wire. One minor style fix was made during review: `commonStocksOnly` resolution in `StrategyScanService.scan()` originally called `request.getCommonStocksOnly()` twice — changed to `!Boolean.FALSE.equals(request.getCommonStocksOnly())`, a single call with the same null-means-true semantics.
   - Full suite: `mvn -f develop/backend/pom.xml test` → **224 tests, 0 failures, 0 errors** (166 pre-existing + 34 new + 24 unrelated pre-existing files unaffected). `StrategyScanIntegrationTest` alone: 65 tests, 0 failures.
+
+### Increment 4 — 2026-09-08
+
+本次執行的是「累積上漲改為自訂天數、移除三段靈敏度」增量（Acceptance Criteria 484–497），14 項全數完成。
+
+**執行前的實際狀態**：commit `35519a4`（訊息宣稱已完成本增量）經查只更動 `docs/` 與 `specs/`，`CumulativeRiseDetector`／`StrategyScanService`／相關 DTO 仍是舊的三段靈敏度形狀。本次為真正的首次實作。
+
+**完成內容**：
+- `GET /api/strategies` 的 `CUMULATIVE_RISE` 改回 `presets: []`，並帶策略層級 `description` 與 `params`（`days`：預設 20、範圍 1～90、step 1；`risePercent`：預設 15、範圍 0～50、step 0.1）。其餘四個型態的條目未變。
+- `days` 以交易日計算，窗口跨週末時週末不佔長度。省略 `days`／`risePercent` 時以 20／15 判定，結果與改動前「標準」段完全相同。
+- 驗證：`days` 為 `0`／`91`／`20.5` → `400 INVALID_DAYS`（`days` 宣告為 `BigDecimal` 而非 `Integer`，使 `20.5` 能反序列化後回這個明確錯誤，而非泛用的解析錯誤）；`CUMULATIVE_RISE` 帶 `preset` → `400 PRESET_NOT_APPLICABLE`；其餘四型帶 `days` → `400 DAYS_NOT_APPLICABLE`；其餘四型缺 `preset` 仍為 `400`，未放寬。
+- 回應形狀：`CUMULATIVE_RISE` 回 `days` 不回 `preset`，其餘四型回 `preset` 不回 `days`（`StrategyResultDto` 改 `@JsonInclude(NON_NULL)`，服務只填適用的那一個）。行情長度不足 `days` 的標的列入 `insufficientData`，不進 `items` 也不計入 `matchedCount`。
+
+**過程中發現並修正的真實邏輯錯誤**：既有的「D 必須是自谷底以來最高」檢查在 D 本身即為窗口谷底時會無條件跳過，導致 `days: 1` 即使 `risePercent` 為 `0` 也永不命中（違反 AC 489）。已於 `CumulativeRiseDetector.detect` 特判窗口長度為 1 的情形。
+
+**設計取向**：沿用既有的 `PatternDetector` Strategy seam，把 `usesPresets()`／`getDescription()`／`getParams()`／`getDaysMin/Max/Default()` 加為 **default** 介面方法，四個既有的 preset 型偵測器因此零改動，只有 `CumulativeRiseDetector` 覆寫。`StrategyScanService` 改為多型呼叫偵測器取得參數範圍，不再直接引用 `CumulativeRiseDetector` 的常數。
+
+**驗證**：`mvn -f develop/backend/pom.xml test` — 305/305 通過（`StrategyScanIntegrationTest` 由 65 增至 79）。
+
+**新增／變更檔案**：`PatternDetector`、`CumulativeRiseDetector`、`StrategyScanService`、`StrategyCatalogService`、`StrategyDto`、`StrategyResultDto`、`StrategySelectionDto`、`ErrorResponse`、`ParamDto`（新）、`PresetNotApplicableException`／`DaysNotApplicableException`／`InvalidStrategyDaysException`（新）、`GlobalExceptionHandler`、`StrategyScanIntegrationTest`。
+
+### Increment 5 — 2026-09-08
+
+本次一併執行兩個增量：反彈改為雙段參數（AC 40 項中的 28 項）與底底高改以 MA5 為判定基準（12 項），全數完成。
+
+**反彈**：`presets` 改為空陣列，改由 `description`／`paramGroups`（`rise`，預設開啟）／四個 `params` 描述。判定改為兩階段——先在 `dropDays` 窗口內以「窗口最高收盤 → 其後最低收盤」找出谷底 T（「T 必須是低點」的限制保留），再於 T 之後 `riseDays` 個交易日內找出第一個自 T 收盤反彈達 `risePercent` 的日子 S；`signalDate` 為 S，`requireRise` 為 `false` 時退回 T。漲段窗口未跑滿時，已達標即命中、未達標即未命中，不產生 `pendingConfirm`。`detail` 增為六欄含 `troughDate`。新增 `PARAM_NOT_APPLICABLE`（帶 `param`）、`INVALID_DROP_DAYS`、`INVALID_RISE_DAYS`、`INVALID_DROP_PERCENT` 四種驗證錯誤，`PRESET_NOT_APPLICABLE` 擴及反彈，`DAYS_NOT_APPLICABLE` 維持原樣。`risePercent` 對反彈的語意由「覆寫跌幅門檻」改為「反彈幅度門檻」，此破壞性變更有專屬測試。
+
+**底底高**：擺動低點與遞增幅度改在 MA5（收盤價 5 日簡單移動平均）上判定，MA5 於掃描當下由已讀入的收盤價即時計算，**未新增任何資料表欄位、未產生任何 migration**。`detail.lows` 每筆改為 `tradeDate`／`ma5`／`low` 三欄。三段靈敏度的數值完全未變，僅說明文字加上「以 5 日均線為基準」。前置資料需求改為 `swingBars + 4`。另有專屬測試以「長下影線但收盤不變」的構造資料證明該日在改用 MA5 後不再成為擺動低點。
+
+**設計取向**：`PatternDetector` 的 `detect`／`requiredLookbackTradingDays` 重構為接受單一 selection 物件，取代原本「每個選用參數加一組 overload」的形狀——反彈帶進五個彼此獨立的欄位後，舊形狀已無法維持。
+
+**過程中發現並修正的既有缺陷**：新的 `ReboundDetector` 在掃到 `close_price = 0.00` 的真實資料列時會除以零拋出 `ArithmeticException`（開發資料庫中確實存在這種列，例如代號 `1213`），已於跌幅與漲幅兩處除法加上防護。另修正 `paramGroups` 在非反彈策略上被序列化為 `[]` 而非省略的問題（介面 default 改回傳 `null`，與 `getDescription()` 一致）。
+
+**已知且未處理**：`CumulativeRiseDetector` 與 `RisingSupportDetector` 的除數（`trough`／`supportClose`）有同樣的零價格風險。此為既有問題，兩個增量都未觸及，也不在本次任何驗收項範圍內，另行處理。
+
+**驗證**：`mvn -f develop/backend/pom.xml test` — 321/321 通過（本次之前為 305/305；新增與改寫測試後淨增 16，其中包含替換掉數個驗證反彈舊靈敏度行為、已不再適用的測試）。
+
+**變更檔案**：`ReboundDetector`（重寫）、`HigherLowsDetector`（重寫）、`PatternDetector`、`CumulativeRiseDetector`、`BoxBreakoutDetector`、`RisingSupportDetector`、`StrategyScanService`、`ReboundDetailDto`、`LowPointDto`、`StrategySelectionDto`、`StrategyResultDto`、`StrategyDto`、`ParamDto`、`ParamGroupDto`（新）、四個新例外類別、`GlobalExceptionHandler`、`ErrorResponse`、`StrategyScanIntegrationTest`。

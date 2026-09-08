@@ -37,8 +37,11 @@ export interface ApiErrorBody {
   allowed?: unknown[]
   stockId?: string
   fields?: string[]
-  /** Populated for `INVALID_RISE_PERCENT` — names which strategy's `risePercent` was invalid. */
+  /** Populated for `INVALID_RISE_PERCENT` and friends — names which strategy's card the
+   * error belongs to. */
   strategy?: string
+  /** Populated for `PARAM_NOT_APPLICABLE` — names the offending request field. */
+  param?: string
 }
 
 /** Errors GlobalExceptionHandler treats as caller bugs — normal, controlled-input usage never triggers these. */
@@ -54,8 +57,10 @@ export class ApiError extends Error {
   fields: string[] | null
   /** Populated for `UNKNOWN_STOCK_ID` responses — the offending stock ids from the request. */
   unknownIds: string[] | null
-  /** Populated for `INVALID_RISE_PERCENT` responses — which strategy's card the error belongs to. */
+  /** Populated for `INVALID_RISE_PERCENT` and friends — which strategy's card the error belongs to. */
   strategy: string | null
+  /** Populated for `PARAM_NOT_APPLICABLE` — the offending request field name. */
+  param: string | null
 
   constructor(
     code: string | null,
@@ -63,12 +68,14 @@ export class ApiError extends Error {
     fields: string[] | null = null,
     unknownIds: string[] | null = null,
     strategy: string | null = null,
+    param: string | null = null,
   ) {
     super(message)
     this.code = code
     this.fields = fields
     this.unknownIds = unknownIds
     this.strategy = strategy
+    this.param = param
   }
 }
 

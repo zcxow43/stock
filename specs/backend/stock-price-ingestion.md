@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日。逐檔歷史採 Yahoo 為主、FinMind 為備援的雙來源，任一來源對本機 IP 施加封鎖時自動切換來源繼續作業，不中斷批次、不消耗重試次數。回補的全市場母體預設只含上市普通股（排除 ETF／特別股／TDR，可由 commonStocksOnly 覆寫），逐檔抓取由序列改為 8 檔並行、每來源間隔 0.5 秒"
 depends_on: []
@@ -446,22 +446,22 @@ Response `200`：
 
 ### 母體預設普通股與並行抓取（本次新增）
 
-- [ ] `POST /api/stocks/sync/backfill` 省略 `stockIds` 且省略 `commonStocksOnly` 時，`targetCount` 等於 `stock` 中 `is_active = 1` 且代號恰 4 位數字、首字非 `0` 的檔數，明顯小於 `is_active = 1` 的總檔數
-- [ ] 同上情境下，`0050`、`00878`、`2881A`、`910322` 完全不出現在本批 `PRICE_BACKFILL` 的 `stock_sync_progress` 列中，且該批作業對這些代號不發出任何外部請求
-- [ ] 帶 `commonStocksOnly: false` 時母體回到 `is_active = 1` 的全部股票，`targetCount` 等於加入本參數前的值
-- [ ] 帶 `stockIds: ["0050"]` 時該檔照常回補完成，不因普通股篩選被略過（指名優先於預設母體），且回應的 `commonStocksOnly` 為 `false`
-- [ ] `202` 回應含 `commonStocksOnly`，其值為本次實際採用的母體規則
-- [ ] 普通股判定與 `specs/backend/stock-universe-import.md`、`specs/backend/strategy-scan.md` 共用同一份實作，程式中不存在第二套代號篩選邏輯
-- [ ] 本次變更不寫入、不刪除任何資料：一次預設母體的全跑前後，`stock` 的列數與各列 `is_active` 完全不變，既有非普通股的 `stock_daily_price` 列數亦不變
-- [ ] 啟動補齊的母體同樣預設只含普通股：從空進度啟動一次，`job_type = 'PRICE_BACKFILL'` 的進度列不含任何非普通股代號
-- [ ] 逐檔抓取為並行執行：一次全跑中同時在處理的標的數達到設定的並行上限（預設 8），以進度列的 `RUNNING` 檔數或請求時間重疊斷言，非以總耗時推測
-- [ ] 同一來源的相鄰兩次請求間隔不小於設定值（預設 0.5 秒）：節流為全批共用，不因並行度而縮成設定值的 1/8
-- [ ] 兩個來源各自計算間隔：其中一個進入冷卻時，另一個的請求節奏不受影響（並行下仍成立）
-- [ ] 並行度與間隔皆取自設定，預設 8 與 0.5 秒，調整設定即生效，程式中無寫死的數值
-- [ ] 任一來源被判定封鎖後，其餘工作者取下一檔時即不再對該來源發出請求（封鎖狀態為全批共用，非每工作者一份）
-- [ ] 兩個來源同時不可用時停止領取新標的，但已在處理中的標的照常收斂完成，作業回報為正常結束，無任何標的因此被標記 `FAILED`、無任何 `attempt_count` 被累加
-- [ ] 並行不改變冪等性：同一批全跑連續執行兩次，`stock_daily_price` 列數不變
-- [ ] 並行不改變單檔語意：`catchUp` 的跳過條件、`last_synced_date` 的認定、`attempt_count` 的累加規則與序列執行時完全相同
+- [x] `POST /api/stocks/sync/backfill` 省略 `stockIds` 且省略 `commonStocksOnly` 時，`targetCount` 等於 `stock` 中 `is_active = 1` 且代號恰 4 位數字、首字非 `0` 的檔數，明顯小於 `is_active = 1` 的總檔數
+- [x] 同上情境下，`0050`、`00878`、`2881A`、`910322` 完全不出現在本批 `PRICE_BACKFILL` 的 `stock_sync_progress` 列中，且該批作業對這些代號不發出任何外部請求
+- [x] 帶 `commonStocksOnly: false` 時母體回到 `is_active = 1` 的全部股票，`targetCount` 等於加入本參數前的值
+- [x] 帶 `stockIds: ["0050"]` 時該檔照常回補完成，不因普通股篩選被略過（指名優先於預設母體），且回應的 `commonStocksOnly` 為 `false`
+- [x] `202` 回應含 `commonStocksOnly`，其值為本次實際採用的母體規則
+- [x] 普通股判定與 `specs/backend/stock-universe-import.md`、`specs/backend/strategy-scan.md` 共用同一份實作，程式中不存在第二套代號篩選邏輯
+- [x] 本次變更不寫入、不刪除任何資料：一次預設母體的全跑前後，`stock` 的列數與各列 `is_active` 完全不變，既有非普通股的 `stock_daily_price` 列數亦不變
+- [x] 啟動補齊的母體同樣預設只含普通股：從空進度啟動一次，`job_type = 'PRICE_BACKFILL'` 的進度列不含任何非普通股代號
+- [x] 逐檔抓取為並行執行：一次全跑中同時在處理的標的數達到設定的並行上限（預設 8），以進度列的 `RUNNING` 檔數或請求時間重疊斷言，非以總耗時推測
+- [x] 同一來源的相鄰兩次請求間隔不小於設定值（預設 0.5 秒）：節流為全批共用，不因並行度而縮成設定值的 1/8
+- [x] 兩個來源各自計算間隔：其中一個進入冷卻時，另一個的請求節奏不受影響（並行下仍成立）
+- [x] 並行度與間隔皆取自設定，預設 8 與 0.5 秒，調整設定即生效，程式中無寫死的數值
+- [x] 任一來源被判定封鎖後，其餘工作者取下一檔時即不再對該來源發出請求（封鎖狀態為全批共用，非每工作者一份）
+- [x] 兩個來源同時不可用時停止領取新標的，但已在處理中的標的照常收斂完成，作業回報為正常結束，無任何標的因此被標記 `FAILED`、無任何 `attempt_count` 被累加
+- [x] 並行不改變冪等性：同一批全跑連續執行兩次，`stock_daily_price` 列數不變
+- [x] 並行不改變單檔語意：`catchUp` 的跳過條件、`last_synced_date` 的認定、`attempt_count` 的累加規則與序列執行時完全相同
 - [ ] 千檔規模的全跑實測總耗時較序列每檔 1 秒的版本明顯縮短，且全程未發生 `403`／`429` 封鎖
 
 ## Execution Result
@@ -661,3 +661,19 @@ Response `200`：
   - One manual live check (no other live calls were made — the automated suite is 100% mock-driven): curl (not through the app) against the real Yahoo endpoint for a genuine OTC stock, 6488.TWO with interval=1d, confirming HTTP 200 with real quote data (GlobalWafers Co., Ltd., exchangeName: TWO) — corroborating the mocked OTC-suffix test against the real external contract without spending any requests through the batch pipeline.
   - Self-reviewed via the code-quality skill: found and fixed one DRY violation (the block-response predicate was duplicated identically in FinMindClient and YahooFinanceClient; consolidated into `RetryAfterExtractor.isBlockedResponse`), fixed a couple of test-assertion style nits (`assertEquals(false, ...)` → `assertFalse`, `assertTrue(x.equals(y))` → `assertEquals`). No null-safety, resource-lifecycle, atomicity, or performance issues found: `market` is looked up defensively (`stock != null ? stock.getMarket() : null`, safe because `YahooFinanceClient.buildSymbol` treats null as non-OTC); the price-write + progress-update transaction boundary in `PriceIngestionService.applyBackfillResult` is unchanged; `SourceAvailabilityTracker` uses a ConcurrentHashMap and never sleeps, so a blocked source's cooldown cannot slow the other source's pacing (also proven negatively by PriceHistoryFetcherTest's zero-call-count assertions on the blocked source).
 - Honest gaps / what was NOT independently timing-verified: criterion "兩個來源各自獨立計算請求間隔與退避" is verified structurally (no shared counters exist in the code, SourceAvailabilityTracker is keyed per source, and the per-stock rate-limit sleep in BackfillRunner is unconditional/source-independent) and via the zero-call-count unit test, but no separate wall-clock timing measurement was taken — consistent with this spec's own instruction that "後續標的不再對該來源發出任何請求" must be asserted by request count, not elapsed time, which by extension made a timing-based proof for the closely related "independent pacing" criterion a weaker, not a stronger, form of evidence here.
+
+### Increment 8 — 2026-09-08
+
+本次執行的是「回補母體預設只含上市普通股」與「逐檔並行抓取」兩項增量（Acceptance Criteria 449–465）。
+
+**執行前的實際狀態**：commit `31a4c35`（訊息宣稱已完成本增量）經查只更動 `docs/` 與 `specs/`，`src/main/java` 沒有任何對應變更；`5fb36ab` 則確實完成了先前的雙來源備援增量。因此本增量在程式面是完全未實作的，本次為真正的首次實作。
+
+**已完成（449–464）**：
+- 母體篩選：`StockSyncService.prepare()` 於 ALL 模式套用 `CommonStockCodeUtil`，與 `stock-universe-import`／`strategy-scan` 共用同一份判定，程式中無第二套代號篩選邏輯。`commonStocksOnly: false` 可回到全部 `is_active = 1`；指名 `stockIds` 優先於預設母體並回報 `commonStocksOnly: false`。`BackfillResponse` 新增 `commonStocksOnly` 欄位。篩選本身不寫入亦不刪除任何資料（以 `verify(..., never())` 與 `verifyNoInteractions` 斷言）。啟動補齊沿用同一母體規則。
+- 並行抓取：`BackfillRunner` 由序列迴圈改寫為 shared-cursor worker pool（`AtomicInteger` cursor + `AtomicBoolean` 停止旗標）。新增 `SourceRateLimiter`（共用 bean、per-source lock）確保節流為全批共用而非每工作者一份，兩來源各自獨立計算間隔。並行度與間隔皆取自 `BackfillProperties`（預設 8 與 500ms），測試以覆寫為 4／150ms 證明設定確實生效，程式中無寫死數值。封鎖狀態經 `SourceAvailabilityTracker` 全批共用；兩來源同時不可用時停止領取新標的，在途標的照常收斂，無 `FAILED`、無 `attempt_count` 累加。冪等性與單檔語意（`catchUp` 跳過條件、`last_synced_date` 認定、`attempt_count` 規則）未變——`processOne()` 邏輯逐字未動，並行只改變派工方式。
+
+**未完成（465，deferred）**：千檔規模的實測總耗時與零 `403`／`429` 未以真實外部 API 驗證。本次全程未對 Yahoo／FinMind 發出任何大量真實請求（刻意避免觸發封鎖）。改以 mock 來源驗證其構成機制：並行確實達到設定上限（以 DB 中 `RUNNING` 檔數斷言，非以總耗時推測）、且並行下每來源間隔仍不小於設定值。這兩點正是該指標成立的前提，但實際生產規模的計時數字仍待日後真實環境觀測。
+
+**驗證**：`mvn -f develop/backend/pom.xml test` — 291/291 通過，連續執行三次無 flakiness；`StockPriceIngestionConcurrencyIntegrationTest` 與 `SourceRateLimiterTest` 另單獨重跑五次皆綠。
+
+**新增／變更檔案**：`AsyncConfig`（worker pool 化，另加單執行緒 dispatch executor 避免協調者佔用工作者名額）、`BackfillProperties`、`BackfillRequest`、`BackfillResponse`、`BackfillRunner`、`StockSyncService`、`PriceHistoryFetcher`、`SourceRateLimiter`（新）、`application.yml`；測試 `StockSyncServiceCommonStocksOnlyTest`（新）、`StockPriceIngestionConcurrencyIntegrationTest`（新）、`SourceRateLimiterTest`（新）、`PriceHistoryFetcherTest`、`StartupCatchUpRunnerTest`、`StockPriceIngestionIntegrationTest`（其 ALL 模式測試原先隱含依賴「無篩選」的舊預設，現明確帶 `commonStocksOnly: false`）。

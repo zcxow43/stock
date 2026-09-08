@@ -283,6 +283,29 @@ for (let i = 0; i < steps.length - 1; i++) {
   arrows.push({ ...trimToBoxes(rawFrom, rawTo, boxA, boxB), boxA, boxB });
 }
 
+/**
+ * Every connector must be anchored at BOTH ends. An arrow with a missing
+ * endpoint silently degrades into a bare frame-edge line: it still says "these
+ * two frames are related", but no longer says WHAT leads to WHAT — which is the
+ * one thing the connector exists to say. Marking is cheap (`data-trigger` /
+ * `data-target`), so an unanchored arrow is always an authoring omission, never
+ * a deliberate choice. Where a transition genuinely isn't a click (a scroll, an
+ * async job finishing), mark the element the reader was last looking at and the
+ * element that changed — the same element may carry both attributes, and the
+ * rings dedupe. See the storyboard-connector standing rule in
+ * .claude/rules/frontend.md.
+ */
+const connectorProblems = [];
+for (let i = 0; i < arrows.length; i++) {
+  const from = steps[i].png, to = steps[i + 1].png;
+  if (!arrows[i].boxA) {
+    connectorProblems.push(`${from} -> ${to}: no [data-trigger] in ${from}; the arrow starts at a bare frame edge instead of an element`);
+  }
+  if (!arrows[i].boxB) {
+    connectorProblems.push(`${from} -> ${to}: no [data-target] in ${to}; the arrow ends at a bare frame edge instead of an element`);
+  }
+}
+
 
 const framesHtml = steps.map((s) => `
   <div class="frame" style="left:${s.left}px; top:${s.top}px; width:${FRAME_W}px;">
@@ -419,12 +442,13 @@ console.log(`wrote storyboard.html / storyboard.png / storyboard.pdf in ${dir}`)
 
 // ---- verdict -------------------------------------------------------------
 const badFrames = frameProblems.length;
-if (manifestProblems.length || badFrames || boardProblems.length) {
+if (manifestProblems.length || badFrames || boardProblems.length || connectorProblems.length) {
   for (const m of manifestProblems) console.error(`manifest.json: ${m}`);
   for (const m of boardProblems) console.error(`storyboard layout: ${m}`);
+  for (const m of connectorProblems) console.error(`connector: ${m}`);
   console.error(
     `SELF-CHECK FAIL — ${badFrames} of ${steps.length} frame(s), ${manifestProblems.length} manifest issue(s), ` +
-    `${boardProblems.length} board layout issue(s). ` +
+    `${boardProblems.length} board layout issue(s), ${connectorProblems.length} unanchored connector endpoint(s). ` +
     `Fix the HTML above and re-run; open storyboard.png only if a message needs eyes on it.`
   );
   process.exit(1);

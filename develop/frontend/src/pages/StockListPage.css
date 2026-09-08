@@ -626,6 +626,96 @@
   color: #93a4b8;
 }
 
+/* Generic params-driven card input — shared by 累積上漲's 天數/漲幅門檻 and 反彈's
+   下跌天數/跌幅門檻/反彈天數/反彈幅度. One row per `params` entry, driven entirely by
+   the catalogue response (see StrategyTab.tsx's renderParamRow). */
+.st-param-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-param-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-param-label,
+.st-param-suffix {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-param-input {
+  width: 70px;
+  height: 32px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.st-param-input::placeholder {
+  color: #6b7c90;
+}
+
+.st-param-input:focus {
+  border-color: #3e8fd8;
+}
+
+.st-param-input:disabled {
+  background: #16202c;
+  color: #4a5866;
+  border-color: #26333f;
+}
+
+.st-param-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d9a441;
+}
+
+.st-days-one-hint {
+  font-size: 13px;
+  color: #d9a441;
+}
+
+/* 反彈's optional 「另外要求反彈漲幅」 group toggle — same checkbox styling as a
+   strategy card's own checkbox (`## Visual Style`「選用參數群組勾選框已勾選背景／勾記」
+   uses the same value as「策略勾選框」). */
+.st-param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #26333f;
+}
+
+.st-group-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.st-group-checkbox input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
+.st-group-label {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
 .st-minute-cell {
   white-space: nowrap;
 }

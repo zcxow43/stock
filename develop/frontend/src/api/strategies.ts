@@ -12,10 +12,50 @@ export interface PresetOption {
   description: string
 }
 
+/** A single input a no-sensitivity strategy exposes (`CUMULATIVE_RISE`'s `days`/
+ * `risePercent`, `REBOUND`'s `dropDays`/`dropPercent`/`riseDays`/`risePercent`).
+ * Default/min/max/step all come from here — never hard-coded in the frontend, per
+ * specs/backend/strategy-scan.md「presets 與 params 的關係」. `code` is deliberately a
+ * plain `string`, not a fixed union — the set of param names is the backend's to grow,
+ * and the frontend must render whatever it's given without a matching code change. */
+export interface StrategyParam {
+  code: string
+  name: string
+  unit: string
+  default: number
+  min: number
+  max: number
+  step: number
+  /** When present, names an entry in the strategy's own `paramGroups` — this input is
+   * part of that optional, all-or-nothing group (see `ParamGroup`). Absent means the
+   * input always applies and can never be disabled. */
+  group?: string
+}
+
+/** One optional, all-or-nothing group of `params` entries sharing the same `group` code
+ * (currently only `REBOUND`'s `rise` group). Rendered as a single checkbox — unchecking
+ * it disables every param in the group and omits all of them from the scan request.
+ * Purely data-driven: which strategy has which groups, and which params belong to them,
+ * comes entirely from `GET /api/strategies`, never from a `code`/name branch. */
+export interface ParamGroup {
+  code: string
+  name: string
+  default: boolean
+}
+
 export interface StrategyCatalogItem {
   code: StrategyCode
   name: string
+  /** Strategy-level description, only present (and only meaningful) when `presets` is
+   * empty — the card shown for a no-sensitivity strategy uses this instead of a preset's
+   * own `description`. */
+  description?: string
+  /** `presets` empty is what decides a card has no sensitivity dropdown and draws its
+   * `params` as numeric inputs instead — never branch on `code` for this (see the same
+   * spec section). */
   presets: PresetOption[]
+  params?: StrategyParam[]
+  paramGroups?: ParamGroup[]
 }
 
 export interface StrategyCatalogResponse {
@@ -32,6 +72,11 @@ export interface BoxBreakoutDetail {
 
 export interface LowPoint {
   tradeDate: string
+  /** 5-day close moving average as of this swing low — what 底底高's rise-vs-previous
+   * comparison is actually computed on (「以 5 日均線為基準」). */
+  ma5: number
+  /** The day's raw lowest price, kept only for side-by-side comparison — never used to
+   * compute the累計漲幅 column or to decide a hit. */
   low: number
 }
 
@@ -55,8 +100,12 @@ export interface RisingSupportDetail {
 export interface ReboundDetail {
   peakDate: string
   peakClose: number
+  troughDate: string
   troughClose: number
   dropPercent: number
+  /** Absent when the scan ran with `requireRise: false` (漲段條件已取消) — the card's
+   * "反彈幅度" column must render the weak-text `—` in that case, not `0.00%`. */
+  risePercent?: number
 }
 
 export interface CumulativeRiseDetail {
@@ -82,7 +131,17 @@ export interface StrategyHit {
 
 export interface StrategyResult {
   strategy: StrategyCode
-  preset: PresetCode
+  /** `preset`/`days`/(`dropDays` etc.) are mutually exclusive — a strategy with a
+   * sensitivity dropdown reports `preset`; `CUMULATIVE_RISE` reports `days`; `REBOUND`
+   * reports `requireRise`/`dropDays`/`dropPercent` (and `riseDays`/`risePercent` when
+   * `requireRise` is `true`) instead of either. */
+  preset?: PresetCode
+  days?: number
+  requireRise?: boolean
+  dropDays?: number
+  dropPercent?: number
+  riseDays?: number
+  risePercent?: number
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -96,8 +155,23 @@ export interface ScanResponse {
   results: StrategyResult[]
 }
 
+/** One entry of `ScanRequest.strategies[]`. `preset` is mutually exclusive with the
+ * params-driven fields (`days` for `CUMULATIVE_RISE`; `dropDays`/`dropPercent`/
+ * `requireRise`/`riseDays`/`risePercent` for `REBOUND`) — a sensitivity-driven strategy
+ * sends `preset` (+ optional `risePercent` override) and never the others. */
+export interface ScanStrategySelection {
+  code: StrategyCode
+  preset?: PresetCode
+  days?: number
+  risePercent?: number
+  dropDays?: number
+  dropPercent?: number
+  requireRise?: boolean
+  riseDays?: number
+}
+
 export interface ScanRequest {
-  strategies: { code: StrategyCode; preset: PresetCode; risePercent?: number }[]
+  strategies: ScanStrategySelection[]
   stockIds?: string[]
   startDate?: string
   endDate?: string
@@ -156,6 +230,7 @@ export async function scanStrategies(payload: ScanRequest, signal?: AbortSignal)
       null,
       body?.unknownIds ?? null,
       body?.strategy ?? null,
+      body?.param ?? null,
     )
   }
 

@@ -25,9 +25,14 @@ app:
     connect-timeout-ms: 10000
     read-timeout-ms: 15000
   backfill:
-    executor-pool-size: 1
+    # Stocks processed concurrently (spec: 逐檔抓取由序列改為 8 檔並行). The per-source request
+    # interval below is a shared, batch-wide throttle (SourceRateLimiter) -- raising this does NOT
+    # multiply the request rate against either source.
+    executor-pool-size: 8
     rate-limit:
-      interval-ms: 1000
+      # Minimum interval between consecutive requests to the SAME source, shared across every
+      # concurrent worker (spec: 每個來源各自維持至少 0.5 秒的請求間隔).
+      interval-ms: 500
       max-retries: 5
       initial-backoff-ms: 2000
       backoff-multiplier: 2

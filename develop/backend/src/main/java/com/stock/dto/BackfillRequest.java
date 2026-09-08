@@ -4,9 +4,18 @@ import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * POST /api/stocks/sync/backfill request body. {@code commonStocksOnly} is nullable on the wire
+ * so omission (-> {@code true}) can be distinguished from an explicit {@code false}, mirroring
+ * {@code ScanRequestDto}/{@code MomentumController}'s handling of the same flag. It is ignored
+ * entirely whenever {@code stockIds} names an explicit list — a named target is always fetched,
+ * common stock or not (spec: 提供 stockIds 時本參數不生效).
+ */
 public class BackfillRequest {
 
     private List<String> stockIds;
+
+    private Boolean commonStocksOnly;
 
     @NotNull
     private LocalDate startDate;
@@ -24,6 +33,14 @@ public class BackfillRequest {
 
     public void setStockIds(List<String> stockIds) {
         this.stockIds = stockIds;
+    }
+
+    public Boolean getCommonStocksOnly() {
+        return commonStocksOnly;
+    }
+
+    public void setCommonStocksOnly(Boolean commonStocksOnly) {
+        this.commonStocksOnly = commonStocksOnly;
     }
 
     public LocalDate getStartDate() {

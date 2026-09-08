@@ -125,6 +125,42 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRisePercent(e.getStrategy()));
     }
 
+    @ExceptionHandler(PresetNotApplicableException.class)
+    public ResponseEntity<ErrorResponse> handlePresetNotApplicable(PresetNotApplicableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.presetNotApplicable(e.getStrategy()));
+    }
+
+    @ExceptionHandler(DaysNotApplicableException.class)
+    public ResponseEntity<ErrorResponse> handleDaysNotApplicable(DaysNotApplicableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.daysNotApplicable(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidStrategyDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStrategyDays(InvalidStrategyDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidStrategyDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(ParamNotApplicableException.class)
+    public ResponseEntity<ErrorResponse> handleParamNotApplicable(ParamNotApplicableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.paramNotApplicable(e.getStrategy(), e.getParam()));
+    }
+
+    @ExceptionHandler(InvalidDropDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDropDays(InvalidDropDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidDropDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidRiseDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRiseDays(InvalidRiseDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRiseDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidDropPercentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidDropPercent(InvalidDropPercentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidDropPercent(e.getStrategy()));
+    }
+
     @ExceptionHandler(InvalidMetricException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));

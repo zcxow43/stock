@@ -213,7 +213,7 @@ class StartupCatchUpRunnerTest {
     }
 
     private BackfillResponse dummyBackfillResponse() {
-        return new BackfillResponse("PRICE_BACKFILL", 34, 0,
+        return new BackfillResponse("PRICE_BACKFILL", 34, 0, true,
                 LocalDate.of(2026, 1, 1), LocalDate.now(), "ALL");
     }
 

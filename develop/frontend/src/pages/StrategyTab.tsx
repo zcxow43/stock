@@ -8,15 +8,19 @@ import {
   type ConfirmClosePoint,
   type CumulativeRiseDetail,
   type HigherLowsDetail,
+  type LowPoint,
+  type ParamGroup,
   type PresetCode,
   type ReboundDetail,
   type RisingSupportDetail,
   type ScanRequest,
   type ScanResponse,
+  type ScanStrategySelection,
   type StrategyCatalogItem,
   type StrategyCode,
   type StrategyDetail,
   type StrategyHit,
+  type StrategyParam,
   type StrategyResult,
 } from '../api/strategies'
 import { fetchSyncProgress, startBackfill, type ProgressResponse } from '../api/sync'
@@ -98,18 +102,11 @@ function isCumulativeRiseDetail(detail: StrategyDetail): detail is CumulativeRis
   return 'troughDate' in detail
 }
 
-/** REBOUND's 「跌幅門檻」 covers the same request field (`risePercent`) as every other
- * strategy's 「漲幅門檻」 — the label swap is cosmetic only, per
- * specs/backend/strategy-scan.md's "欄位名沿用同一個以維持請求結構一致". */
-function risePercentLabel(code: StrategyCode): string {
-  return code === 'REBOUND' ? '跌幅門檻' : '漲幅門檻'
-}
-
-/** BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT keep the original 0~20 range; REBOUND/
- * CUMULATIVE_RISE (added later) use the backend's raised 0~50 ceiling. */
-function risePercentRange(code: StrategyCode): { min: number; max: number } {
-  return code === 'REBOUND' || code === 'CUMULATIVE_RISE' ? { min: 0, max: 50 } : { min: 0, max: 20 }
-}
+/** The three remaining sensitivity-driven cards (BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT)
+ * all share the same 0~20 「漲幅門檻」 range. REBOUND and CUMULATIVE_RISE no longer reach
+ * this — both are always params-driven now, and get their range from their own `params`
+ * entries instead (see `isParamInputInvalid`). */
+const SENSITIVITY_RISE_PERCENT_RANGE = { min: 0, max: 20 }
 
 /** The catalogue (`GET /api/strategies`) carries no dedicated numeric field for a preset's
  * rise/drop threshold — only human-readable `description` text. Every preset description
@@ -133,6 +130,73 @@ function isRisePercentInputInvalid(value: string, range: { min: number; max: num
   // "最多一位小數"
   const rounded = Math.round(num * 10) / 10
   return Math.abs(rounded - num) > 1e-9
+}
+
+/** Card shape is decided purely by whether `presets` is empty — never by inspecting
+ * `code` — per specs/backend/strategy-scan.md「presets 與 params 的關係」. Today only
+ * `CUMULATIVE_RISE` is params-driven, but nothing here names it. */
+function isParamsDriven(strategy: StrategyCatalogItem | undefined): boolean {
+  return (strategy?.presets.length ?? 0) === 0
+}
+
+function getStrategyParam(strategy: StrategyCatalogItem | undefined, code: string): StrategyParam | undefined {
+  return strategy?.params?.find((p) => p.code === code)
+}
+
+function getParamGroup(strategy: StrategyCatalogItem | undefined, groupCode: string): ParamGroup | undefined {
+  return strategy?.paramGroups?.find((g) => g.code === groupCode)
+}
+
+/** Whether a param-driven card's given group is currently switched on — from the user's
+ * own toggle if they've touched it, otherwise the group's own `default`. Params without a
+ * `group` are always "on" (they have no switch to turn off). */
+function isGroupOn(
+  strategy: StrategyCatalogItem | undefined,
+  groupEnabled: Partial<Record<StrategyCode, Record<string, boolean>>>,
+  param: StrategyParam,
+): boolean {
+  if (!param.group) return true
+  const group = getParamGroup(strategy, param.group)
+  const stored = strategy ? groupEnabled[strategy.code]?.[param.group] : undefined
+  return stored ?? group?.default ?? true
+}
+
+/** A params-driven input's validity, entirely from its own `params` entry — `step === 1`
+ * means "整數" (day-count params); any other step (currently always `0.1`) means "at most
+ * that many decimal places" (percent/amount params). Nothing here is keyed by `code` or
+ * `unit`; it all comes from the numbers the API already sent. */
+function isParamInputInvalid(value: string, param: StrategyParam): boolean {
+  if (value.trim() === '') return true
+  const num = Number(value)
+  if (!Number.isFinite(num)) return true
+  if (num < param.min || num > param.max) return true
+  if (param.step === 1) return !Number.isInteger(num)
+  const decimals = String(param.step).split('.')[1]?.length ?? 0
+  const factor = 10 ** decimals
+  const rounded = Math.round(num * factor) / factor
+  return Math.abs(rounded - num) > 1e-9
+}
+
+function paramErrorMessage(param: StrategyParam): string {
+  return param.step === 1
+    ? `${param.name}需介於 ${param.min} ~ ${param.max} 的整數`
+    : `${param.name}需介於 ${param.min} ~ ${param.max}`
+}
+
+/** Maps a param group's own `code` to the boolean request field that switches it — e.g.
+ * `rise` → `requireRise`, matching specs/backend/strategy-scan.md's request field name.
+ * Derived from the group's `code` (API data), never from the strategy's `code`. */
+function requireFieldName(groupCode: string): string {
+  return `require${groupCode.charAt(0).toUpperCase()}${groupCode.slice(1)}`
+}
+
+/** The literal "窗口只有當天" hint text is spec-mandated copy that can't be derived from
+ * `params` alone (「累積漲幅」/「跌幅」aren't literally either param's `name`) — keyed by
+ * the day-count param's own `code`, not by strategy `code`, so it stays data-driven about
+ * *which* card it applies to even though the wording itself is fixed. */
+const ONE_DAY_WINDOW_HINT: Record<string, string> = {
+  days: '天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中',
+  dropDays: '下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中',
 }
 
 interface UnionHit {
@@ -173,18 +237,36 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
   })
 }
 
-function formatLowsSequence(lows: HigherLowsDetail['lows']): string {
-  return lows.map((p) => `${p.tradeDate.slice(5)} ${p.low.toFixed(2)}`).join('→')
+/** Renders one of the two low-point series (MA5 or raw low) as a table cell — `field`
+ * picks which value of each point to show, same dates and point count either way. The
+ * date part of each point gets its own span so it can carry the spec's secondary text
+ * color (`#93A4B8`) while the value stays the main table text color; the concatenated
+ * `td.textContent` still reads exactly like the plain "MM-DD value→MM-DD value" string. */
+function renderLowSeriesCell(lows: LowPoint[], field: 'ma5' | 'low') {
+  return (
+    <td>
+      {lows.map((p, idx) => (
+        <span key={p.tradeDate}>
+          {idx > 0 ? '→' : null}
+          <span className="sl-flat">{p.tradeDate.slice(5)}</span> {p[field].toFixed(2)}
+        </span>
+      ))}
+    </td>
+  )
 }
 
 function formatConfirmCloses(points: ConfirmClosePoint[]): string {
   return points.map((p) => `${p.tradeDate.slice(5)} ${p.close.toFixed(2)}`).join('→')
 }
 
-function cumulativeRise(lows: HigherLowsDetail['lows']): number | null {
+/** 累計漲幅 is computed from the MA5 series, never the raw low — MA5 is what the
+ * rising-lows judgment is actually made on (「以 5 日均線為基準」), so it's the only
+ * series a "how much did the swing lows rise" figure can honestly describe. A segment
+ * whose raw `low` dips while `ma5` still climbs is expected, not an error. */
+function cumulativeRiseFromMa5(lows: LowPoint[]): number | null {
   if (lows.length < 2) return null
-  const first = lows[0].low
-  const last = lows[lows.length - 1].low
+  const first = lows[0].ma5
+  const last = lows[lows.length - 1].ma5
   if (!first) return null
   return (last / first - 1) * 100
 }
@@ -222,13 +304,31 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   const [selectionOrder, setSelectionOrder] = useState<StrategyCode[]>([])
   const [selectedPresets, setSelectedPresets] = useState<Partial<Record<StrategyCode, PresetCode>>>({})
-  // Per-card 漲幅／跌幅門檻 input, kept as the raw string the user typed so a partial
-  // entry (e.g. "2.") isn't clobbered mid-keystroke. Populated with the current preset's
-  // parsed default the first time a card is checked, and again whenever its preset changes.
+  // Per-card 漲幅門檻 input for the three sensitivity-driven cards only, kept as the raw
+  // string the user typed so a partial entry (e.g. "2.") isn't clobbered mid-keystroke.
+  // Populated with the current preset's parsed default the first time a card is checked,
+  // and again whenever its preset changes. Params-driven cards (累積上漲／反彈) never use
+  // this — their inputs live in `paramInputs` below.
   const [risePercentInputs, setRisePercentInputs] = useState<Partial<Record<StrategyCode, string>>>({})
   // Names the one card the backend's `INVALID_RISE_PERCENT` fallback error belongs to
-  // (client-side validation already blocks this in normal use).
+  // (client-side validation already blocks this in normal use). Only for sensitivity-driven
+  // cards — params-driven cards' backend fallbacks land in `paramServerError` instead.
   const [invalidRisePercentStrategy, setInvalidRisePercentStrategy] = useState<StrategyCode | null>(null)
+  // Generic per-parameter input, raw string, keyed by strategy code then param `code` —
+  // covers every params-driven card's every input (累積上漲's `days`/`risePercent`;
+  // 反彈's `dropDays`/`dropPercent`/`riseDays`/`risePercent`). Populated once from each
+  // param's own `default` the first time its card is checked, then entirely in the user's
+  // hands (no refill mechanism — there's no preset to switch).
+  const [paramInputs, setParamInputs] = useState<Partial<Record<StrategyCode, Record<string, string>>>>({})
+  // Optional param-group toggle state (currently only 反彈's `rise` group), keyed by
+  // strategy code then group `code`. Populated from `paramGroups[].default` the first time
+  // a params-driven card with groups is checked; purely data-driven off `paramGroups`.
+  const [groupEnabled, setGroupEnabled] = useState<Partial<Record<StrategyCode, Record<string, boolean>>>>({})
+  // Names the one card + message the current params-driven backend validation fallback
+  // belongs to (INVALID_DAYS/INVALID_DROP_DAYS/INVALID_RISE_DAYS/INVALID_DROP_PERCENT/
+  // INVALID_RISE_PERCENT/PARAM_NOT_APPLICABLE) — client-side validation already blocks
+  // this in normal use.
+  const [paramServerError, setParamServerError] = useState<{ code: StrategyCode; message: string } | null>(null)
 
   // ---------- stock scope ----------
   const [scope, setScope] = useState<'ALL' | 'SELECTED'>('ALL')
@@ -261,7 +361,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // second still triggers a correct re-render instead of freezing in a half-known state.
   // Reset to `null` on every new click so a slow-to-arrive previous job's numbers can
   // never be attributed to the next job's completion.
-  const [syncMeta, setSyncMeta] = useState<{ targetCount: number; caughtUpCount: number } | null>(null)
+  const [syncMeta, setSyncMeta] = useState<{ targetCount: number; caughtUpCount: number; commonStocksOnly: boolean } | null>(
+    null,
+  )
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null)
   const [showFailedList, setShowFailedList] = useState(false)
 
@@ -387,10 +489,29 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   const toggleStrategy = (code: StrategyCode) => {
     setSelectionOrder((order) => (order.includes(code) ? order.filter((c) => c !== code) : [...order, code]))
+    const strategy = catalog.find((s) => s.code === code)
+    if (isParamsDriven(strategy)) {
+      // No sensitivity to pick a preset from — every param is populated once from its own
+      // `default` and is afterwards entirely in the user's hands (no refill mechanism,
+      // unlike changePreset below).
+      setParamInputs((inputs) => {
+        if (inputs[code] !== undefined) return inputs
+        const values: Record<string, string> = {}
+        for (const param of strategy?.params ?? []) values[param.code] = String(param.default)
+        return { ...inputs, [code]: values }
+      })
+      setGroupEnabled((state) => {
+        if (state[code] !== undefined) return state
+        const values: Record<string, boolean> = {}
+        for (const group of strategy?.paramGroups ?? []) values[group.code] = group.default
+        return { ...state, [code]: values }
+      })
+      return
+    }
     setSelectedPresets((presets) => (presets[code] ? presets : { ...presets, [code]: 'STANDARD' }))
     setRisePercentInputs((inputs) => {
       if (inputs[code] !== undefined) return inputs
-      const presetMeta = catalog.find((s) => s.code === code)?.presets.find((p) => p.code === 'STANDARD')
+      const presetMeta = strategy?.presets.find((p) => p.code === 'STANDARD')
       return { ...inputs, [code]: String(extractDefaultRisePercent(presetMeta?.description)) }
     })
   }
@@ -408,6 +529,23 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const changeRisePercentInput = (code: StrategyCode, value: string) => {
     setRisePercentInputs((inputs) => ({ ...inputs, [code]: value }))
     setInvalidRisePercentStrategy((current) => (current === code ? null : current))
+  }
+
+  const changeParamInput = (code: StrategyCode, paramCode: string, value: string) => {
+    setParamInputs((inputs) => ({ ...inputs, [code]: { ...(inputs[code] ?? {}), [paramCode]: value } }))
+    setParamServerError((current) => (current?.code === code ? null : current))
+  }
+
+  /** Toggles one param group's checkbox — resolving its *current* effective state (the
+   * user's own choice if any, else the group's own `default`) before flipping it, so the
+   * very first click always flips away from what's actually displayed. */
+  const toggleGroup = (strategy: StrategyCatalogItem, groupCode: string) => {
+    const group = getParamGroup(strategy, groupCode)
+    setGroupEnabled((state) => {
+      const current = state[strategy.code]?.[groupCode] ?? group?.default ?? true
+      return { ...state, [strategy.code]: { ...(state[strategy.code] ?? {}), [groupCode]: !current } }
+    })
+    setParamServerError((current) => (current?.code === strategy.code ? null : current))
   }
 
   const applyShortcut = (key: ShortcutKey) => {
@@ -443,13 +581,38 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   }
 
   const buildScanPayload = (): ScanRequest => ({
-    strategies: selectionOrder.map((code) => ({
-      code,
-      preset: selectedPresets[code] ?? 'STANDARD',
-      // 值與該靈敏度預設值相同時仍照送 — every selected card's current number goes out,
-      // never omitted just because it happens to match the preset's own default.
-      risePercent: Number(risePercentInputs[code] ?? '0'),
-    })),
+    strategies: selectionOrder.map((code): ScanStrategySelection => {
+      const strategy = catalog.find((s) => s.code === code)
+      if (isParamsDriven(strategy)) {
+        // 這張卡片一律不送 preset — it has no sensitivity to name. Every param's current
+        // value goes out by its own `code` as the request field name; a grouped param is
+        // omitted entirely when its group is off, and each group's own on/off state goes
+        // out under `require<Group>`. None of this branches on `code` — it all comes from
+        // this strategy's own `params`/`paramGroups`.
+        const values = paramInputs[code] ?? {}
+        const groupState = groupEnabled[code] ?? {}
+        const selection: ScanStrategySelection = { code }
+        // Every field name below comes from the API's own data (a param's `code`, or
+        // `require<Group>` derived from a group's `code`) — the object's shape can't be
+        // known statically, so this is the one narrow spot that steps outside it.
+        const bag = selection as unknown as Record<string, number | boolean>
+        for (const group of strategy?.paramGroups ?? []) {
+          bag[requireFieldName(group.code)] = groupState[group.code] ?? group.default
+        }
+        for (const param of strategy?.params ?? []) {
+          if (!isGroupOn(strategy, groupEnabled, param)) continue
+          bag[param.code] = Number(values[param.code] ?? param.default)
+        }
+        return selection
+      }
+      return {
+        code,
+        preset: selectedPresets[code] ?? 'STANDARD',
+        // 值與該靈敏度預設值相同時仍照送 — every selected card's current number goes out,
+        // never omitted just because it happens to match the preset's own default.
+        risePercent: Number(risePercentInputs[code] ?? '0'),
+      }
+    }),
     stockIds: scope === 'SELECTED' ? selectedStocks.map((s) => s.stockId) : undefined,
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
@@ -457,11 +620,21 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     commonStocksOnly: scope === 'ALL' ? commonStocksOnly : undefined,
   })
 
+  // Maps a params-driven backend validation error code to the `params` entry it names —
+  // data-driven off the strategy's own `params`, not a hard-coded per-code table.
+  const PARAM_ERROR_CODE_TO_PARAM_CODE: Record<string, string> = {
+    INVALID_DAYS: 'days',
+    INVALID_DROP_DAYS: 'dropDays',
+    INVALID_RISE_DAYS: 'riseDays',
+    INVALID_DROP_PERCENT: 'dropPercent',
+  }
+
   const runScan = (payload: ScanRequest) => {
     setScanStatus('scanning')
     setScanErrorMessage(null)
     setUnknownIds(null)
     setInvalidRisePercentStrategy(null)
+    setParamServerError(null)
     setLastScanPayload(payload)
     scanStrategies(payload)
       .then((resp) => {
@@ -476,8 +649,40 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         }
         if (err instanceof ApiError && err.code === 'INVALID_RISE_PERCENT') {
           // Backend fallback only — client-side validation already blocks this in normal
+          // use. Must name the offending card, not a page-wide generic error. `risePercent`
+          // belongs to a params-driven card's own `params` for 累積上漲/反彈, and to the
+          // dedicated 漲幅門檻 input for the three sensitivity-driven cards.
+          const code = (err.strategy as StrategyCode) ?? null
+          const strategy = code ? catalog.find((s) => s.code === code) : undefined
+          if (code && isParamsDriven(strategy)) {
+            const param = getStrategyParam(strategy, 'risePercent')
+            setParamServerError({ code, message: param ? paramErrorMessage(param) : '漲幅門檻不合法' })
+          } else {
+            setInvalidRisePercentStrategy(code)
+          }
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
+        if (
+          err instanceof ApiError &&
+          err.code !== null &&
+          Object.prototype.hasOwnProperty.call(PARAM_ERROR_CODE_TO_PARAM_CODE, err.code)
+        ) {
+          // Backend fallback only — client-side validation already blocks this in normal
           // use. Must name the offending card, not a page-wide generic error.
-          setInvalidRisePercentStrategy((err.strategy as StrategyCode) ?? null)
+          const code = (err.strategy as StrategyCode) ?? null
+          const strategy = code ? catalog.find((s) => s.code === code) : undefined
+          const param = strategy ? getStrategyParam(strategy, PARAM_ERROR_CODE_TO_PARAM_CODE[err.code]) : undefined
+          if (code) setParamServerError({ code, message: param ? paramErrorMessage(param) : '參數不合法' })
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
+        if (err instanceof ApiError && err.code === 'PARAM_NOT_APPLICABLE') {
+          // Also lands under the named card (specs/frontend/strategy.md's 反彈 increment) —
+          // normal operation never sends a param a strategy doesn't accept, so this is a
+          // backend fallback only, but it must still name the card, not go page-wide.
+          const code = (err.strategy as StrategyCode) ?? null
+          if (code) setParamServerError({ code, message: `帶入了不適用的參數：${err.param ?? '未知欄位'}` })
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
@@ -488,11 +693,27 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   const noStrategySelected = selectionOrder.length === 0
   const noStockSelected = scope === 'SELECTED' && selectedStocks.length === 0
-  const hasInvalidRisePercent = selectionOrder.some((code) =>
-    isRisePercentInputInvalid(risePercentInputs[code] ?? '', risePercentRange(code)),
-  )
+  const hasInvalidRisePercent = selectionOrder.some((code) => {
+    const strategy = catalog.find((s) => s.code === code)
+    if (isParamsDriven(strategy)) return false
+    return isRisePercentInputInvalid(risePercentInputs[code] ?? '', SENSITIVITY_RISE_PERCENT_RANGE)
+  })
+  const hasInvalidParams = selectionOrder.some((code) => {
+    const strategy = catalog.find((s) => s.code === code)
+    if (!isParamsDriven(strategy)) return false
+    const values = paramInputs[code] ?? {}
+    return (strategy?.params ?? []).some((param) => {
+      if (!isGroupOn(strategy, groupEnabled, param)) return false
+      return isParamInputInvalid(values[param.code] ?? '', param)
+    })
+  })
   const canScan =
-    !noStrategySelected && !noStockSelected && !dateInvalid && !hasInvalidRisePercent && scanStatus !== 'scanning'
+    !noStrategySelected &&
+    !noStockSelected &&
+    !dateInvalid &&
+    !hasInvalidRisePercent &&
+    !hasInvalidParams &&
+    scanStatus !== 'scanning'
 
   const handleScanClick = () => {
     if (!canScan) return
@@ -507,9 +728,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setSyncErrorMessage(null)
     setSyncMeta(null)
     setSyncStatus('running')
-    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(new Date()), catchUp: true })
+    // 沿用頁面層級的「只看上市普通股」設定 — captured from the prop at click time, not
+    // re-read later, so the completion summary always describes the population this
+    // particular request actually asked for.
+    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(new Date()), catchUp: true, commonStocksOnly })
       .then((resp) => {
-        setSyncMeta({ targetCount: resp.targetCount, caughtUpCount: resp.caughtUpCount })
+        setSyncMeta({ targetCount: resp.targetCount, caughtUpCount: resp.caughtUpCount, commonStocksOnly })
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'JOB_ALREADY_RUNNING') {
@@ -649,7 +873,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         <tr>
           <th>代號 / 名稱</th>
           <th>訊號日</th>
-          <th>低點序列</th>
+          <th>低點序列（MA5）</th>
+          <th>當日最低價</th>
           <th className="sl-r">累計漲幅</th>
         </tr>
       </thead>
@@ -663,8 +888,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 {item.stockId} {item.stockName}
               </td>
               <td>{item.signalDate}</td>
-              <td>{formatLowsSequence(lows)}</td>
-              <td className="sl-r">{formatPercent2(cumulativeRise(lows))}</td>
+              {renderLowSeriesCell(lows, 'ma5')}
+              {renderLowSeriesCell(lows, 'low')}
+              <td className="sl-r">{formatPercent2(cumulativeRiseFromMa5(lows))}</td>
             </tr>
           )
         })}
@@ -725,8 +951,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           <th>代號 / 名稱</th>
           <th>訊號日</th>
           <th>高點日 / 高點收盤</th>
-          <th className="sl-r">低點收盤</th>
+          <th>低點日 / 低點收盤</th>
           <th className="sl-r">跌幅</th>
+          <th className="sl-r">反彈幅度</th>
           <th>分 K</th>
         </tr>
       </thead>
@@ -743,8 +970,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               <td>
                 {rb?.peakDate ?? '—'} / {formatPrice2(rb?.peakClose)}
               </td>
-              <td className="sl-r">{formatPrice2(rb?.troughClose)}</td>
+              <td>
+                {rb?.troughDate ?? '—'} / {formatPrice2(rb?.troughClose)}
+              </td>
               <td className="sl-r sl-down">{formatPercent2(rb?.dropPercent)}</td>
+              <td className={`sl-r${rb?.risePercent !== undefined ? ' sl-up' : ''}`}>
+                {rb?.risePercent === undefined ? <span className="sl-muted">—</span> : formatPercent2(rb.risePercent)}
+              </td>
               {renderMinuteCell(item.stockId, item.signalDate)}
             </tr>
           )
@@ -804,9 +1036,24 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   }
 
   const renderResultBlock = (result: StrategyResult) => {
-    const title = `${strategyName(result.strategy)}（${presetName(result.strategy, result.preset)}）— 命中 ${result.matchedCount} 檔`
+    // `preset`/`days`/(REBOUND's own fields) are mutually exclusive on the response —
+    // whichever is present names what the title reads, never decided by inspecting
+    // `result.strategy`. Always sourced from the response, never from the current
+    // (possibly since-edited) card inputs, so a stale title never silently claims the
+    // current input values were used. REBOUND reports neither `preset` nor `days`, so its
+    // title carries no parenthetical — there's no single response field the spec names
+    // for it to read from.
+    const title =
+      result.preset !== undefined
+        ? `${strategyName(result.strategy)}（${presetName(result.strategy, result.preset as PresetCode)}）— 命中 ${result.matchedCount} 檔`
+        : result.days !== undefined
+          ? `${strategyName(result.strategy)}（${result.days} 日）— 命中 ${result.matchedCount} 檔`
+          : `${strategyName(result.strategy)} — 命中 ${result.matchedCount} 檔`
     return (
-      <div className="st-result-block" key={`${result.strategy}-${result.preset}`}>
+      <div
+        className="st-result-block"
+        key={`${result.strategy}-${result.preset ?? (result.days !== undefined ? `days-${result.days}` : 'params')}`}
+      >
         <h3 className="st-result-title">{title}</h3>
         {result.matchedCount === 0 ? (
           <div className="st-result-zero">
@@ -896,10 +1143,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       {syncStatus === 'idle' && syncSummary ? (
         <div className="st-sync-summary">
           {syncMeta && syncMeta.targetCount > 0 && syncMeta.caughtUpCount === syncMeta.targetCount ? (
-            <span className="st-caught-up-note">已是最新，無需更新（{syncMeta.targetCount} 檔）</span>
+            <span className="st-caught-up-note">
+              已是最新，無需更新（{syncMeta.targetCount} 檔{syncMeta.commonStocksOnly ? '上市普通股' : ''}）
+            </span>
           ) : (
             <span>
-              完成 {syncSummary.done} 檔／失敗 {syncSummary.failed} 檔／略過 {syncSummary.skipped} 檔
+              完成 {syncSummary.done} 檔{syncMeta?.commonStocksOnly ? '上市普通股' : ''}／失敗 {syncSummary.failed} 檔／略過{' '}
+              {syncSummary.skipped} 檔
               {syncMeta && syncMeta.caughtUpCount > 0 ? (
                 <span className="st-caught-up-note">，另 {syncMeta.caughtUpCount} 檔已是最新</span>
               ) : null}
@@ -933,11 +1183,104 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           <div className="st-strategy-cards">
             {catalog.map((strategy) => {
               const selected = selectionOrder.includes(strategy.code)
+              const paramsDriven = isParamsDriven(strategy)
+
+              if (paramsDriven) {
+                const values = paramInputs[strategy.code] ?? {}
+                const groups = strategy.paramGroups ?? []
+                const params = strategy.params ?? []
+                const ungrouped = params.filter((p) => !p.group)
+                // 「窗口只有當天」hint applies to the one ungrouped day-count param, paired
+                // with the one ungrouped amount param — e.g. 累積上漲's 天數/漲幅門檻,
+                // 反彈's 下跌天數/跌幅門檻. Purely derived from this strategy's own
+                // `params`, never from `code`.
+                const dayParam = ungrouped.find((p) => p.unit === '日')
+                const amountParam = ungrouped.find((p) => p !== dayParam)
+                const dayValue = dayParam ? (values[dayParam.code] ?? '') : ''
+                const amountValue = amountParam ? (values[amountParam.code] ?? '') : ''
+                const dayInvalid = !!dayParam && selected && isParamInputInvalid(dayValue, dayParam)
+                const amountInvalid = !!amountParam && selected && isParamInputInvalid(amountValue, amountParam)
+                const oneDayHintText = dayParam && ONE_DAY_WINDOW_HINT[dayParam.code]
+                const showOneDayHint =
+                  selected &&
+                  !!dayParam &&
+                  !!amountParam &&
+                  !dayInvalid &&
+                  !amountInvalid &&
+                  Number(dayValue) === 1 &&
+                  Number(amountValue) > 0 &&
+                  !!oneDayHintText
+
+                const renderParamRow = (param: StrategyParam) => {
+                  const groupOn = isGroupOn(strategy, groupEnabled, param)
+                  const disabled = !selected || !groupOn
+                  const value = values[param.code] ?? ''
+                  const invalid = selected && groupOn && isParamInputInvalid(value, param)
+                  return (
+                    <div key={param.code} className="st-param-block">
+                      <div className="st-param-input-row">
+                        <label htmlFor={`st-param-${strategy.code}-${param.code}`} className="st-param-label">
+                          {param.name}
+                        </label>
+                        <input
+                          id={`st-param-${strategy.code}-${param.code}`}
+                          type="number"
+                          className="st-param-input"
+                          disabled={disabled}
+                          min={param.min}
+                          max={param.max}
+                          step={param.step}
+                          value={value}
+                          onChange={(e) => changeParamInput(strategy.code, param.code, e.target.value)}
+                        />
+                        <span className="st-param-suffix">{param.unit}</span>
+                      </div>
+                      {param.unit === '日' ? <p className="st-param-hint">回看的交易日數，不含週末與休市日</p> : null}
+                      {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={strategy.code}
+                    className={`st-strategy-card${selected ? ' st-strategy-card-selected' : ''}`}
+                  >
+                    <label className="st-strategy-card-head">
+                      <input type="checkbox" checked={selected} onChange={() => toggleStrategy(strategy.code)} />
+                      <span className="st-strategy-name">{strategy.name}</span>
+                    </label>
+                    {ungrouped.map(renderParamRow)}
+                    {groups.map((group) => {
+                      const groupOn = groupEnabled[strategy.code]?.[group.code] ?? group.default
+                      return (
+                        <div key={group.code} className="st-param-group">
+                          <label className="st-group-checkbox">
+                            <input
+                              type="checkbox"
+                              disabled={!selected}
+                              checked={groupOn}
+                              onChange={() => toggleGroup(strategy, group.code)}
+                            />
+                            <span className="st-group-label">{group.name}</span>
+                          </label>
+                          {params.filter((p) => p.group === group.code).map(renderParamRow)}
+                        </div>
+                      )
+                    })}
+                    {showOneDayHint ? <div className="st-days-one-hint">{oneDayHintText}</div> : null}
+                    {paramServerError?.code === strategy.code ? (
+                      <div className="st-inline-error">{paramServerError.message}</div>
+                    ) : null}
+                    <p className="st-strategy-desc">{strategy.description}</p>
+                  </div>
+                )
+              }
+
               const preset = selectedPresets[strategy.code] ?? 'STANDARD'
               const presetMeta = strategy.presets.find((p) => p.code === preset)
-              const range = risePercentRange(strategy.code)
               const riseValue = risePercentInputs[strategy.code] ?? ''
-              const riseInvalid = selected && isRisePercentInputInvalid(riseValue, range)
+              const riseInvalid = selected && isRisePercentInputInvalid(riseValue, SENSITIVITY_RISE_PERCENT_RANGE)
               return (
                 <div
                   key={strategy.code}
@@ -961,15 +1304,15 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   </select>
                   <div className="st-rise-input-row">
                     <label htmlFor={`st-rise-${strategy.code}`} className="st-rise-label">
-                      {risePercentLabel(strategy.code)}
+                      漲幅門檻
                     </label>
                     <input
                       id={`st-rise-${strategy.code}`}
                       type="number"
                       className="st-rise-input"
                       disabled={!selected}
-                      min={range.min}
-                      max={range.max}
+                      min={SENSITIVITY_RISE_PERCENT_RANGE.min}
+                      max={SENSITIVITY_RISE_PERCENT_RANGE.max}
                       step="0.1"
                       value={riseValue}
                       onChange={(e) => changeRisePercentInput(strategy.code, e.target.value)}
@@ -978,7 +1321,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   </div>
                   {riseInvalid || invalidRisePercentStrategy === strategy.code ? (
                     <div className="st-inline-error">
-                      {risePercentLabel(strategy.code)}需介於 {range.min} ~ {range.max}
+                      漲幅門檻需介於 {SENSITIVITY_RISE_PERCENT_RANGE.min} ~ {SENSITIVITY_RISE_PERCENT_RANGE.max}
                     </div>
                   ) : null}
                   <p className="st-strategy-desc">{presetMeta?.description}</p>

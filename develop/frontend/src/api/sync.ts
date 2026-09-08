@@ -30,6 +30,10 @@ export interface BackfillRequest {
   endDate: string
   resume?: boolean
   catchUp?: boolean
+  /** Only meaningful for an "全市場" backfill (`stockIds` omitted) — the page-level 只看
+   * 上市普通股 setting from specs/frontend/stock-list.md. Default `true` on the backend
+   * when omitted. */
+  commonStocksOnly?: boolean
 }
 
 export interface BackfillResponse {
@@ -42,6 +46,8 @@ export interface BackfillResponse {
   startDate: string
   endDate: string
   mode: 'SELECTED' | 'ALL'
+  /** The population rule actually applied this run (`SELECTED` mode always `false`). */
+  commonStocksOnly?: boolean
 }
 
 async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> {

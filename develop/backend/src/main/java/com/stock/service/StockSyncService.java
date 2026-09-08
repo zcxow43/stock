@@ -16,6 +16,7 @@ import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import com.stock.service.external.TwseClient;
 import com.stock.service.external.dto.TwseSnapshotResult;
+import com.stock.util.CommonStockCodeUtil;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -125,6 +126,7 @@ public class StockSyncService {
         String mode = selected ? "SELECTED" : "ALL";
 
         List<String> targetIds;
+        boolean commonStocksOnly;
         if (selected) {
             targetIds = new ArrayList<>(new LinkedHashSet<>(request.getStockIds()));
             List<String> existing = stockMapper.findExistingStockIds(targetIds);
@@ -138,11 +140,28 @@ public class StockSyncService {
             if (!unknown.isEmpty()) {
                 throw new UnknownStockIdException(unknown);
             }
+            // A named stockIds list is always fetched as-is, filter or not (spec: 提供 stockIds
+            // 時本參數不生效——指名的標的一律照跑); the echoed value is therefore always false.
+            commonStocksOnly = false;
         } else {
-            targetIds = stockMapper.findActiveStockIds();
+            // Omitted -> true (spec: 省略時視為 true); same shared regex the write-side universe
+            // import and the strategy-scan/momentum-gain read-side filters already use
+            // (CommonStockCodeUtil) — no second common-stock filter implementation.
+            commonStocksOnly = !Boolean.FALSE.equals(request.getCommonStocksOnly());
+            List<String> activeIds = stockMapper.findActiveStockIds();
+            if (commonStocksOnly) {
+                targetIds = new ArrayList<>(activeIds.size());
+                for (String id : activeIds) {
+                    if (CommonStockCodeUtil.isCommonStockCode(id)) {
+                        targetIds.add(id);
+                    }
+                }
+            } else {
+                targetIds = activeIds;
+            }
         }
 
-        return new Prepared(mode, targetIds);
+        return new Prepared(mode, targetIds, commonStocksOnly);
     }
 
     /** Resolves per-stock progress rows for the already-validated target list, then hands the
@@ -177,7 +196,7 @@ public class StockSyncService {
         CompletableFuture<Void> completion = backfillRunner.run(jobType, processableIds, request.isResume());
 
         BackfillResponse response = new BackfillResponse(jobType, targetIds.size(), caughtUpCount,
-                request.getStartDate(), request.getEndDate(), prepared.mode);
+                prepared.commonStocksOnly, request.getStartDate(), request.getEndDate(), prepared.mode);
         return new BackfillOutcome(response, completion);
     }
 
@@ -185,10 +204,12 @@ public class StockSyncService {
     private static final class Prepared {
         private final String mode;
         private final List<String> targetIds;
+        private final boolean commonStocksOnly;
 
-        private Prepared(String mode, List<String> targetIds) {
+        private Prepared(String mode, List<String> targetIds, boolean commonStocksOnly) {
             this.mode = mode;
             this.targetIds = targetIds;
+            this.commonStocksOnly = commonStocksOnly;
         }
     }
 

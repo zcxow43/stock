@@ -52,9 +52,12 @@ class PriceHistoryFetcherTest {
         properties.getRateLimit().setInitialBackoffMs(1);
         properties.getRateLimit().setBackoffMultiplier(2);
         properties.getRateLimit().setDefaultBlockCooldownSeconds(600);
+        // Negligible so these pure orchestration tests (call-count assertions) stay fast; the
+        // interval value itself is covered by SourceRateLimiterTest.
+        properties.getRateLimit().setIntervalMs(1);
 
         tracker = new SourceAvailabilityTracker(properties);
-        fetcher = new PriceHistoryFetcher(yahoo, finMind, tracker, properties);
+        fetcher = new PriceHistoryFetcher(yahoo, finMind, tracker, new SourceRateLimiter(properties), properties);
     }
 
     @Test
@@ -126,9 +129,10 @@ class PriceHistoryFetcherTest {
     void missingRetryAfter_usesConfiguredDefaultCooldown_notHardcoded() {
         BackfillProperties properties = new BackfillProperties();
         properties.getRateLimit().setDefaultBlockCooldownSeconds(1); // configurable, small for the test
+        properties.getRateLimit().setIntervalMs(1);
         SourceAvailabilityTracker shortCooldownTracker = new SourceAvailabilityTracker(properties);
         PriceHistoryFetcher shortCooldownFetcher = new PriceHistoryFetcher(yahoo, finMind, shortCooldownTracker,
-                properties);
+                new SourceRateLimiter(properties), properties);
 
         when(yahoo.fetchDailyHistory(anyString(), any(), any(), any()))
                 .thenThrow(new SourceBlockedException("blocked, no retry_after", null))

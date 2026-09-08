@@ -1,7 +1,7 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）除累積上漲外各自選靈敏度與自行輸入漲幅門檻，累積上漲改為自行輸入天數與漲幅門檻、不再有靈敏度，母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；同步的母體預設只含上市普通股，沿用頁面層級的「只看上市普通股」設定"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高結果表以 MA5 序列為主、並列當日最低價；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關，取消時只以跌幅掃描，兩者皆不再有靈敏度。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；同步的母體預設只含上市普通股，沿用頁面層級的「只看上市普通股」設定"
 depends_on: [stock-list]
 ---
 
@@ -33,40 +33,46 @@ depends_on: [stock-list]
 
 | 回應形狀 | 目前適用 | 卡片內容 |
 |---|---|---|
-| `presets` 非空 | 底底高、箱型突破、上漲支撐、反彈 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅／跌幅門檻數字輸入**、目前選定靈敏度的說明文字一行 |
-| `presets` 為空陣列、帶 `params` | 累積上漲 | 勾選框、策略名稱、**依 `params` 逐一畫出的數字輸入**（天數、漲幅門檻）、策略層級 `description` 的說明文字一行。**這張卡片沒有靈敏度下拉** |
+| `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、目前選定靈敏度的說明文字一行 |
+| `presets` 為空陣列、帶 `params` | 累積上漲、反彈 | 勾選框、策略名稱、**依 `params` 逐一畫出的數字輸入**、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
 
-以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。
+以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。反彈就是這條規則的第一個實證：它從有靈敏度改成無靈敏度時，卡片的形狀應該自動跟著 API 變，前端不必為此改任何判斷。
+
+**選用參數群組**：策略條目可帶 `paramGroups`，每一筆對應卡片上的**一個勾選框**（文字取自該筆的 `name`，初始狀態取自 `default`）。`params` 中帶 `group` 的參數歸該群組管：群組勾選框取消時，該組所有輸入 disabled，且**請求中完全不帶這些欄位**；不帶 `group` 的參數一律顯示且一律送出。目前只有反彈用到（`rise` 群組：「另外要求反彈漲幅」，預設勾選，管 `riseDays` 與 `risePercent`）。**同樣不得以策略 `code` 寫死**——依 `paramGroups` 畫即可。
+
+反彈卡片因此有四格輸入：「下跌天數」「跌幅門檻」永遠可填；「反彈天數」「反彈幅度」在群組勾選框取消時 disabled。取消後掃描只以跌幅判定，這正是「先跌了就想看，還沒反彈也算」的用法。
 
 - 策略清單、靈敏度說明、以及無靈敏度型態的參數預設值與範圍（`params` 的 `default`／`min`／`max`／`step`）**一律取自 API**，不在前端寫死。參數是後端的契約，兩邊各存一份必然漂移。
 - 未勾選的卡片其所有控制項（靈敏度下拉、天數輸入、漲幅門檻輸入）皆為 disabled。
 - 一個都沒勾時「開始掃描」為 disabled，並在按鈕旁提示「請至少勾選一個策略」——不要讓使用者按了才知道。
 
-**漲幅門檻輸入**：每張卡片各有一個獨立的數字輸入，標籤「漲幅門檻」（反彈為「跌幅門檻」）、後綴 `%`。
+**漲幅門檻輸入**：有靈敏度的三張卡片各有一個獨立的數字輸入，標籤「漲幅門檻」、後綴 `%`。無靈敏度的兩張卡片（累積上漲、反彈）不走這一節，其所有輸入一律依 `params` 畫出、標籤取自各參數的 `name`、後綴取自 `unit`。
 
 | 項目 | 值 |
 |---|---|
-| 範圍 | 底底高／箱型突破／上漲支撐 `0` ～ `20`；反彈／累積上漲 `0` ～ `50`。最多一位小數 |
-| 預設 | 有靈敏度的卡片取**目前選定靈敏度**的漲幅值；累積上漲取 `params` 中 `risePercent` 的 `default`（`15`）。兩者皆由 `GET /api/strategies` 帶出 |
+| 範圍 | 底底高／箱型突破／上漲支撐 `0` ～ `20`，最多一位小數 |
+| 底底高的意義 | 每段擺動低點遞增的最小幅度，比較的是 **MA5 值**而非當日最低價 |
+| 預設 | 取**目前選定靈敏度**的漲幅值，由 `GET /api/strategies` 帶出 |
 | 送出 | 值與預設值相同時仍照送 `risePercent`；只有停用（未勾選）才不送 |
 
-**切換靈敏度會重新填入該靈敏度的漲幅值，覆蓋使用者已輸入的數字。** 靈敏度是一組預設，選它就是要那一組的值；若保留使用者輸入不動，畫面會停在「靈敏度寫著嚴格、漲幅卻是寬鬆的數字」這種半套狀態，使用者無從判斷實際送出的是什麼。累積上漲沒有靈敏度，因此不存在這個重填行為——它的兩格輸入只在進頁時填入 API 給的預設值，之後完全由使用者掌握。
+**切換靈敏度會重新填入該靈敏度的漲幅值，覆蓋使用者已輸入的數字。** 靈敏度是一組預設，選它就是要那一組的值；若保留使用者輸入不動，畫面會停在「靈敏度寫著嚴格、漲幅卻是寬鬆的數字」這種半套狀態，使用者無從判斷實際送出的是什麼。累積上漲與反彈沒有靈敏度，因此不存在這個重填行為——它們的輸入只在進頁時填入 API 給的預設值，之後完全由使用者掌握。
 
-每張卡片各有一個輸入、而不是共用一個，是因為各型態的漲幅意義不同：箱型突破是突破箱頂的幅度、底底高是每段低點遞增的幅度、上漲支撐是單日漲幅、反彈是自高點的跌幅、累積上漲是窗口內的累積漲幅。合成一格會讓同一個數字在五處代表五件事。
+每張卡片各有自己的輸入、而不是共用一個，是因為各型態的幅度意義不同：箱型突破是突破箱頂的幅度、底底高是每段低點遞增的幅度、上漲支撐是單日漲幅、反彈同時有自高點的跌幅與自谷底的反彈幅度、累積上漲是窗口內的累積漲幅。合成一格會讓同一個數字在五處代表六件事。
 
 超出範圍時前端即擋下並在該卡片下方提示「漲幅門檻需介於 0 ~ N」（N 為該卡片的上限），不送出請求；後端的 `INVALID_RISE_PERCENT` 為後備。
 
-**天數輸入（只有累積上漲這張卡片有）**：標籤「天數」、後綴「日」。
+**`params` 驅動的輸入（累積上漲、反彈這兩張卡片）**：卡片上每個參數畫一格數字輸入，標籤取自該參數的 `name`、後綴取自 `unit`（`日` 或 `%`），範圍與步進取自 `min`／`max`／`step`，初始值取自 `default`。**這些數字一個都不寫死在前端。**
 
 | 項目 | 值 |
 |---|---|
-| 範圍 | `1` ～ `90` 的**整數**（取自 `params` 中 `days` 的 `min`／`max`／`step`） |
-| 預設 | `20`，取自 `params` 中 `days` 的 `default` |
-| 送出 | 與預設值相同時仍照送 `days`；只有停用（未勾選）才不送。**這張卡片一律不送 `preset`** |
+| 範圍 | 逐參數取自其 `min`／`max`／`step`。`step` 為 `1` 者只收整數 |
+| 預設 | 逐參數取自其 `default` |
+| 送出 | 值與預設值相同時仍照送；未勾選該策略、或該參數所屬的選用群組被取消時才不送。**這兩張卡片一律不送 `preset`** |
 
-- 天數指的是**回看窗口的交易日數**，不是日曆天——標籤下方以一行次要文字說明「回看的交易日數，不含週末與休市日」，否則使用者填 30 會以為是最近一個月。
-- 非整數（`20.5`）、超出範圍（`0`、`91`）或留空時，前端即擋下並在該卡片下方提示「天數需介於 1 ~ 90 的整數」，不送出請求；後端的 `INVALID_DAYS` 為後備。
-- **填 `1` 是合法的，但畫面必須先講清楚它的結果**：窗口只有當天時累積漲幅恆為 0%，除非漲幅門檻也填 0，否則掃描一定零命中。天數輸入為 `1` 且漲幅門檻大於 `0` 時，於該卡片下方以提示色顯示「天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中」。這是提示、不是錯誤——不擋送出，使用者仍可按「開始掃描」。
+- **單位為「日」的參數指的是交易日數**，不是日曆天——這類輸入下方一律以一行次要文字說明「回看的交易日數，不含週末與休市日」，否則使用者填 30 會以為是最近一個月。
+- 非整數（`20.5`）、超出範圍（`0`、`91`）或留空時，前端即擋下並在該卡片下方提示「<參數名>需介於 <min> ~ <max> 的整數」（幅度類參數則為「<參數名>需介於 <min> ~ <max>」），不送出請求；後端的 `INVALID_DAYS`／`INVALID_DROP_DAYS`／`INVALID_RISE_DAYS`／`INVALID_DROP_PERCENT`／`INVALID_RISE_PERCENT` 為後備。
+- **累積上漲填天數 `1` 是合法的，但畫面必須先講清楚它的結果**：窗口只有當天時累積漲幅恆為 0%，除非漲幅門檻也填 0，否則掃描一定零命中。天數輸入為 `1` 且漲幅門檻大於 `0` 時，於該卡片下方以提示色顯示「天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中」。這是提示、不是錯誤——不擋送出，使用者仍可按「開始掃描」。
+- **反彈填下跌天數 `1` 同理**：窗口只有當天、跌幅恆為 0%，除非跌幅門檻也填 0，否則零命中。此時於該卡片下方以同一個提示色顯示「下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中」，同樣不擋送出。
 
 **股票範圍**：兩個互斥選項。
 
@@ -135,8 +141,11 @@ depends_on: [stock-list]
 |---|---|
 | 代號 / 名稱 | `stockId` / `stockName` |
 | 訊號日 | `signalDate` |
-| 低點序列 | `detail.lows` 逐點以「MM-DD 價格」串接，以 `→` 分隔 |
-| 累計漲幅 | 由 `lows` 首末兩點計算，兩位小數加 `%` |
+| 低點序列（MA5） | `detail.lows` 逐點以「MM-DD `ma5`」串接，以 `→` 分隔 |
+| 當日最低價 | `detail.lows` 逐點以「MM-DD `low`」串接，以 `→` 分隔 |
+| 累計漲幅 | 由 `lows` 首末兩點的 **`ma5`** 計算，兩位小數加 `%` |
+
+**兩條序列都要顯示，且 MA5 那欄在前。** 判定是在 MA5 上做的，所以它是主序列；當日最低價擺在它右邊，讓使用者一眼看出「均線認定的底」與「當天實際跌到哪」差多少。只給 MA5 會讓人以為那就是成交價，只給最低價則會讓命中結果看起來沒有根據——曾經出現 MA5 逐段抬高、原始最低價卻某一段反而更低的資料，那正是這一欄要解釋的情形，不是錯誤。
 
 **上漲支撐**的表格欄位：
 
@@ -157,11 +166,14 @@ depends_on: [stock-list]
 | 欄位 | 來源 |
 |---|---|
 | 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate`，即下跌段的最低點當日 |
+| 訊號日 | `signalDate`，即**反彈幅度達標當日**；取消「另外要求反彈漲幅」時為谷底當日 |
 | 高點日 / 高點收盤 | `detail.peakDate` / `detail.peakClose` |
-| 低點收盤 | `detail.troughClose` |
+| 低點日 / 低點收盤 | `detail.troughDate` / `detail.troughClose` |
 | 跌幅 | `detail.dropPercent`，兩位小數加 `%`，以下跌色 `#16A75C` 呈現 |
+| 反彈幅度 | `detail.risePercent`，兩位小數加 `%`，以上漲色 `#E04B45` 呈現；`detail` 不含此欄時（取消反彈漲幅條件）整欄顯示弱化色 `#6B7C90` 的「—」 |
 | 分 K | 連結文字「分 K」，導向 `/stocks/{stockId}/minute/{signalDate}` |
+
+**「低點日」必須顯示，不能只留「訊號日」。** 訊號日現在是反彈達標那天，谷底是另一天；少了低點日，使用者看得到「反彈了多少」卻不知道是從哪一天的低點起算，也無從判斷這段反彈隔了幾天才發生。
 
 **累積上漲**的表格欄位：
 
@@ -182,7 +194,7 @@ depends_on: [stock-list]
 
 **資料不足的標的必須單獨呈現**，不可混入「未命中」。在該策略區塊下方以一行摘要顯示：「另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。這是使用者判讀結果的關鍵資訊——把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
 
-反彈與累積上漲的 `pendingConfirm` 恆為空陣列（兩者不做事後確認），這兩張表下方不會出現待確認提示。箱型突破與上漲支撐則都可能產生 `pendingConfirm`，各以一行顯示，文案依型態而異：箱型突破為「另有 N 檔已突破，但確認日尚未到」，上漲支撐為「另有 N 檔已上漲，但後兩日的確認尚未完成」。兩者皆使用「資料不足／待確認提示文字」色 `#D9A441`。
+反彈與累積上漲的 `pendingConfirm` 恆為空陣列，這兩張表下方不會出現待確認提示。累積上漲不做事後確認；反彈雖有漲段條件，但採「已達標就命中、不等窗口跑滿」，所以同樣沒有待確認狀態。箱型突破與上漲支撐則都可能產生 `pendingConfirm`，各以一行顯示，文案依型態而異：箱型突破為「另有 N 檔已突破，但確認日尚未到」，上漲支撐為「另有 N 檔已上漲，但後兩日的確認尚未完成」。兩者皆使用「資料不足／待確認提示文字」色 `#D9A441`。
 
 ### 同步列
 
@@ -298,9 +310,13 @@ depends_on: [stock-list]
 | 輸入框邊框 | `#26333F` |
 | 輸入框 focus 邊框 | `#3E8FD8` |
 | 輸入框 placeholder 文字 | `#6B7C90` |
-| 天數輸入框背景／邊框／focus 邊框 | `#0F1620` / `#26333F` / `#3E8FD8`（與其他輸入框同值） |
-| 天數輸入標籤與單位文字 | `#93A4B8` |
-| 天數說明與「天數為 1」提示文字 | `#D9A441` |
+| 參數輸入框背景／邊框／focus 邊框 | `#0F1620` / `#26333F` / `#3E8FD8`（與其他輸入框同值） |
+| 參數輸入標籤與單位文字 | `#93A4B8` |
+| 參數說明與「天數為 1」／「下跌天數為 1」提示文字 | `#D9A441` |
+| 選用參數群組勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與策略勾選框同值） |
+| 選用參數群組標籤文字 | `#93A4B8` |
+| Disabled 參數輸入背景／文字／邊框 | `#16202C` / `#4A5866` / `#26333F` |
+| 反彈「反彈幅度」欄的「—」 | `#6B7C90` |
 | 已選股票標籤背景／文字／移除鈕 | `#1B2836` / `#E6EDF5` / `#93A4B8` |
 | 聯集表格策略標籤背景／文字 | `#1B2836` / `#E6EDF5` |
 | 聯集表格訊號日文字 | `#93A4B8` |
@@ -396,8 +412,8 @@ depends_on: [stock-list]
 
 - [x] 策略勾選區出現第四、第五張卡片「反彈」與「累積上漲」，名稱與三段靈敏度說明文字皆取自 `GET /api/strategies`，未在前端寫死
 - [x] 兩張新卡片的「漲幅門檻」輸入初始值為該靈敏度的幅度值（標準 15），可自行輸入，上限放寬至 50
-- [x] 反彈卡片的輸入標籤為「跌幅門檻」而非「漲幅門檻」，因為該值覆寫的是跌幅
-- [x] 反彈結果表顯示六欄：代號／名稱、訊號日、高點日／高點收盤、低點收盤、跌幅、分 K
+- [x] 反彈卡片的輸入標籤為「跌幅門檻」而非「漲幅門檻」，因為該值覆寫的是跌幅（此為**當時的卡片形狀**；反彈已於下方增量改為 `params` 驅動的四格輸入）
+- [x] 反彈結果表顯示六欄：代號／名稱、訊號日、高點日／高點收盤、低點收盤、跌幅、分 K（此為**當時的欄位組**；已於下方增量增為七欄）
 - [x] 累積上漲結果表顯示六欄：代號／名稱、訊號日、低點日／低點收盤、高點收盤、漲幅、分 K
 - [x] 反彈的「跌幅」以下跌色 `#16A75C` 呈現，累積上漲的「漲幅」以上漲色 `#E04B45` 呈現
 - [x] 兩張新表的「分 K」連結導向 `/stocks/{stockId}/minute/{signalDate}`，日期為該列的訊號日
@@ -433,27 +449,74 @@ depends_on: [stock-list]
 
 ---
 
-- [ ] 按「同步日 K 至今日」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
-- [ ] 頁面層級勾選框為預設（勾選）時，`202` 回應的 `targetCount` 小於或等於常駐顯示的「共 N 檔」，且完成摘要寫的是「完成 N 檔上市普通股」而非「完成 N」
-- [ ] 取消勾選後按同步，送出 `commonStocksOnly: false`，摘要寫「完成 N」且 `targetCount` 等於常駐的「共 N 檔」
-- [ ] 常駐顯示的「共 N 檔」不因同步母體縮小而改變（它取自 `GET /api/stocks` 的 `total`，與同步母體是兩件事）
-- [ ] `caughtUpCount` 等於 `targetCount` 時的摘要為「已是最新，無需更新（N 檔上市普通股）」，不誤報成「完成 N 檔」
+- [x] 按「同步日 K 至今日」時送出的 `commonStocksOnly` 等於頁面層級勾選框當下的狀態
+- [x] 頁面層級勾選框為預設（勾選）時，`202` 回應的 `targetCount` 小於或等於常駐顯示的「共 N 檔」，且完成摘要寫的是「完成 N 檔上市普通股」而非「完成 N」
+- [x] 取消勾選後按同步，送出 `commonStocksOnly: false`，摘要寫「完成 N」且 `targetCount` 等於常駐的「共 N 檔」
+- [x] 常駐顯示的「共 N 檔」不因同步母體縮小而改變（它取自 `GET /api/stocks` 的 `total`，與同步母體是兩件事）
+- [x] `caughtUpCount` 等於 `targetCount` 時的摘要為「已是最新，無需更新（N 檔上市普通股）」，不誤報成「完成 N 檔」
 
 ---
 
-- [ ] 累積上漲結果區塊的標題為「累積上漲（N 日）— 命中 N 檔」，N 取自回應的 `days`；掃描後改動天數輸入而未重掃時，標題維持舊值不變
-- [ ] 累積上漲卡片**沒有靈敏度下拉**，改為「天數」與「漲幅門檻」兩個數字輸入；其餘四張卡片維持靈敏度下拉不變
-- [ ] 卡片形狀由 `GET /api/strategies` 的 `presets` 是否為空決定，程式中不存在以策略 `code` 判斷要畫哪種卡片的分支
-- [ ] 天數輸入的預設 `20`、範圍 `1`～`90`、step `1` 皆取自該策略 `params` 中 `days` 的欄位，前端無寫死的數字
-- [ ] 累積上漲的漲幅門檻預設 `15` 取自 `params` 中 `risePercent` 的 `default`，不再從靈敏度說明文字解析
-- [ ] 累積上漲卡片顯示的說明文字取自策略層級的 `description`，不是任何一段靈敏度的說明
-- [ ] 天數輸入下方有一行說明「回看的交易日數，不含週末與休市日」
-- [ ] 輸入 `0`、`91` 或 `20.5` 時前端即擋下，於該卡片下方顯示「天數需介於 1 ~ 90 的整數」，且不送出請求
-- [ ] 天數為 `1` 且漲幅門檻大於 `0` 時，卡片下方以提示色 `#D9A441` 顯示「天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中」，但「開始掃描」仍可按、請求照常送出
-- [ ] 勾選累積上漲送出的請求，該筆帶 `days` 與 `risePercent`、**不帶 `preset`**；同一次請求中其餘策略仍帶 `preset`
-- [ ] 未勾選累積上漲時，天數與漲幅兩格皆為 disabled，且請求中不含該策略
-- [ ] 後端回 `INVALID_DAYS` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
-- [ ] 天數輸入的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+- [x] 累積上漲結果區塊的標題為「累積上漲（N 日）— 命中 N 檔」，N 取自回應的 `days`；掃描後改動天數輸入而未重掃時，標題維持舊值不變
+- [x] 累積上漲卡片**沒有靈敏度下拉**，改為「天數」與「漲幅門檻」兩個數字輸入；其餘四張卡片維持靈敏度下拉不變
+- [x] 卡片形狀由 `GET /api/strategies` 的 `presets` 是否為空決定，程式中不存在以策略 `code` 判斷要畫哪種卡片的分支
+- [x] 天數輸入的預設 `20`、範圍 `1`～`90`、step `1` 皆取自該策略 `params` 中 `days` 的欄位，前端無寫死的數字
+- [x] 累積上漲的漲幅門檻預設 `15` 取自 `params` 中 `risePercent` 的 `default`，不再從靈敏度說明文字解析
+- [x] 累積上漲卡片顯示的說明文字取自策略層級的 `description`，不是任何一段靈敏度的說明
+- [x] 天數輸入下方有一行說明「回看的交易日數，不含週末與休市日」
+- [x] 輸入 `0`、`91` 或 `20.5` 時前端即擋下，於該卡片下方顯示「天數需介於 1 ~ 90 的整數」，且不送出請求
+- [x] 天數為 `1` 且漲幅門檻大於 `0` 時，卡片下方以提示色 `#D9A441` 顯示「天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中」，但「開始掃描」仍可按、請求照常送出
+- [x] 勾選累積上漲送出的請求，該筆帶 `days` 與 `risePercent`、**不帶 `preset`**；同一次請求中其餘策略仍帶 `preset`
+- [x] 未勾選累積上漲時，天數與漲幅兩格皆為 disabled，且請求中不含該策略
+- [x] 後端回 `INVALID_DAYS` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
+- [x] 天數輸入的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+### 反彈改為跌段＋選用漲段的四格輸入、移除靈敏度（本次新增）
+
+**卡片形狀**
+- [x] 反彈卡片**沒有靈敏度下拉**，改為四格數字輸入：下跌天數、跌幅門檻、反彈天數、反彈幅度；底底高／箱型突破／上漲支撐三張卡片維持靈敏度下拉不變
+- [x] 反彈卡片的形狀由 `GET /api/strategies` 的 `presets` 是否為空決定——把後端回應中反彈的 `presets` 換成空陣列即自動改變卡片形狀，前端無任何以策略 `code` 判斷卡片型別的分支
+- [x] 四格輸入的標籤取自各 `params` 的 `name`、後綴取自 `unit`、預設取自 `default`、範圍與步進取自 `min`／`max`／`step`，前端無寫死的數字或標籤字串
+- [x] 反彈卡片的說明文字取自策略層級的 `description`，不是任何一段靈敏度的說明
+- [x] 「下跌天數」與「反彈天數」下方各有一行說明「回看的交易日數，不含週末與休市日」
+
+**選用群組開關**
+- [x] 反彈卡片有一個勾選框，文字取自 `paramGroups[0].name`（「另外要求反彈漲幅」），初始狀態取自其 `default`（勾選）
+- [x] 取消該勾選框時「反彈天數」與「反彈幅度」兩格 disabled，且送出的請求帶 `requireRise: false`、**不含** `riseDays` 與 `risePercent`
+- [x] 勾選狀態下送出 `requireRise: true` 與 `riseDays`／`risePercent`（值與預設相同時仍照送）
+- [x] 開關與其管轄的輸入由 `paramGroups`／`params[].group` 決定，程式中不存在以策略 `code` 或參數名寫死的分支
+- [x] 未勾選反彈這個策略時，四格輸入與群組勾選框皆為 disabled，且請求中不含該策略
+
+**送出內容**
+- [x] 勾選反彈送出的那一筆帶 `dropDays`／`dropPercent`／`requireRise`（及勾選時的 `riseDays`／`risePercent`）、**不帶 `preset`**；同一次請求中底底高／箱型突破／上漲支撐仍帶 `preset`
+- [x] 反彈的 `risePercent` 送的是**反彈幅度**（預設 `5`），不再是跌幅門檻覆寫值；跌幅改由 `dropPercent`（預設 `10`）送出
+
+**驗證與提示**
+- [x] 天數類輸入為 `0`、`91` 或 `3.5` 時前端即擋下，於該卡片下方顯示「<參數名>需介於 1 ~ 90 的整數」，且不送出請求
+- [x] 幅度類輸入超出 `0`～`50` 或小數超過一位時前端即擋下，於該卡片下方顯示「<參數名>需介於 0 ~ 50」，且不送出請求
+- [x] 下跌天數為 `1` 且跌幅門檻大於 `0` 時，卡片下方以提示色 `#D9A441` 顯示「下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中」，但「開始掃描」仍可按、請求照常送出
+- [x] 後端回 `INVALID_DROP_DAYS`／`INVALID_RISE_DAYS`／`INVALID_DROP_PERCENT`／`INVALID_RISE_PERCENT`／`PARAM_NOT_APPLICABLE` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
+
+**結果表**
+- [x] 反彈結果表為七欄：代號／名稱、訊號日、高點日／高點收盤、低點日／低點收盤、跌幅、反彈幅度、分 K
+- [x] 「訊號日」顯示的是 `signalDate`（反彈達標日），「低點日」顯示 `detail.troughDate`，兩者為不同日期時各自正確呈現
+- [x] 「跌幅」以下跌色 `#16A75C`、「反彈幅度」以上漲色 `#E04B45` 呈現
+- [x] `detail` 不含 `risePercent`（取消反彈漲幅條件的掃描）時，「反彈幅度」欄顯示弱化色 `#6B7C90` 的「—」，不顯示 `0.00%`、也不整欄消失
+- [x] 「分 K」仍導向 `/stocks/{stockId}/minute/{signalDate}`，且反彈表下方不出現待確認提示（`pendingConfirm` 恆為空）
+
+**外觀**
+- [x] 四格輸入與群組勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
+### 底底高結果表加入 MA5 與當日最低價兩條序列（本次新增）
+
+- [x] 底底高結果表為五欄：代號／名稱、訊號日、低點序列（MA5）、當日最低價、累計漲幅
+- [x] 「低點序列（MA5）」逐點取 `detail.lows[].ma5`，「當日最低價」逐點取 `detail.lows[].low`，兩欄的點數與日期完全一致且與 `detail.lows` 筆數相同
+- [x] MA5 欄排在當日最低價欄之前
+- [x] 「累計漲幅」由 `lows` 首末兩點的 `ma5` 計算，不是由 `low` 計算
+- [x] 兩欄的數值皆為兩位小數，日期格式為 `MM-DD`，各點以 `→` 分隔
+- [x] 某段的 `low` 較前一段更低、而 `ma5` 仍逐段抬高時照常呈現為命中，畫面不因此顯示任何錯誤或警示
+- [x] 底底高卡片維持靈敏度下拉，說明文字取自 `GET /api/strategies` 該靈敏度的 `description`（現含「以 5 日均線為基準」），前端不寫死
+- [x] 兩欄文字色沿用 `## Visual Style` 的主要文字 `#E6EDF5`，日期部分沿用次要文字 `#93A4B8`，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -802,3 +865,74 @@ src/pages/StrategyTab.tsx:360:7: warning react(set-state-in-effect) — pre-exis
 
 #### Deferred / not independently verifiable here
 - None for this increment's 39 criteria — every one was exercised against the real backend and real dev database in addition to the automated test suite, including a genuine `commonStocksOnly` population-size and content difference (1085 vs 1377, `0050`/`00878`/`2881A`/`910322` presence/absence) and a genuine `INVALID_RISE_PERCENT` `400` from the live backend.
+
+---
+
+### Increment 7 — 2026-09-08
+
+- Status: DONE — all 19 previously-unchecked criteria in this range implemented and covered by tests; 200/200 frontend tests pass; `npm run build` clean.
+
+### Files changed
+- `develop/frontend/src/api/strategies.ts` — `StrategyCatalogItem` gained optional `description` (strategy-level, used only when `presets` is empty) and `params?: StrategyParam[]` (new `StrategyParam` type: `code`/`name`/`unit`/`default`/`min`/`max`/`step`). `StrategyResult.preset` became optional and a new optional `days?: number` was added (mutually exclusive per `specs/backend/strategy-scan.md`). `ScanRequest.strategies[]` items now allow `preset?`/`days?` instead of requiring `preset`.
+- `develop/frontend/src/api/sync.ts` — `BackfillRequest` gained `commonStocksOnly?: boolean`; `BackfillResponse` gained the echoed `commonStocksOnly?: boolean`.
+- `develop/frontend/src/pages/StrategyTab.tsx`:
+  - Card shape now keys off `strategy.presets.length === 0` via a single `isParamsDriven()` helper — **no branch anywhere inspects `strategy.code`** to decide whether to draw a dropdown or 天數/漲幅門檻 inputs (grep-verified: the only remaining `code === 'CUMULATIVE_RISE'` conditional is inside the pre-existing, untouched `risePercentRange()` — a numeric-range business rule, not a card-shape decision, and is unreachable for `CUMULATIVE_RISE` now that it always takes the params-driven path via `risePercentRangeFor()`).
+  - New state: `daysInputs`, `invalidDaysStrategy`; new helpers `getStrategyParam`, `risePercentRangeFor`, `isDaysInputInvalid`, `changeDaysInput`.
+  - `toggleStrategy` branches once on `isParamsDriven` to seed 天數/漲幅門檻 from `params.days.default`/`params.risePercent.default` instead of a preset lookup; no refill occurs afterward (no preset-switch handler exists for this card).
+  - `buildScanPayload` sends `{code, days, risePercent}` (no `preset`) for a params-driven strategy and `{code, preset, risePercent}` for the rest, in the same request.
+  - `runScan` now also traps `INVALID_DAYS`, naming the card via the response's `strategy` field (mirrors the existing `INVALID_RISE_PERCENT` handling).
+  - `canScan` gained a `hasInvalidDays` guard alongside the existing `hasInvalidRisePercent`.
+  - Result-block title reads `result.days` when present (`累積上漲（20 日）— 命中 N 檔`), otherwise falls back to the existing `preset`-based title — decided by response field presence, not by `code`. Sourced only from the last scan response, so editing the days input post-scan does not change a displayed title.
+  - `handleSyncClick` now sends `commonStocksOnly` (the page-level prop, captured at click time) on every `POST /api/stocks/sync/backfill`; the value is stored in `syncMeta` and used to append 「上市普通股」 to both the 完成 N 檔 and 已是最新，無需更新（N 檔） summaries when `true`, and omitted when `false`. `totalStockCount` ("共 N 檔") remains wired only to `GET /api/stocks`'s `total` and is untouched by any sync response.
+  - New days-input JSX: 天數 label/input/日 suffix, help text 「回看的交易日數，不含週末與休市日」, the days-range inline error, and the 「天數為 1…」 hint (shown only when 天數=1, 漲幅門檻>0, and both inputs are currently valid — matches the spec's non-blocking-hint intent without stacking on top of a validation error).
+- `develop/frontend/src/pages/StockListPage.css` — added `.st-days-input-row`/`.st-days-label`/`.st-days-input`(+`:focus`/`:disabled`/`::placeholder`)/`.st-days-suffix`/`.st-days-hint`/`.st-days-one-hint`, all literal hex values copied from the spec's `## Visual Style` table (`#0F1620`/`#26333F`/`#3E8FD8` for the input, `#93A4B8` for label/suffix, `#D9A441` for both hint texts) — no theme variable, no `prefers-color-scheme` query.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx` — updated the shared `CATALOG` fixture's `CUMULATIVE_RISE` entry to the new contract shape (`presets: []`, strategy-level `description`, `params: [days, risePercent]`) and `cumulativeRiseScanResponse()` to return `days: 20` instead of `preset: 'STANDARD'`. Replaced the two 累積上漲-specific tests that assumed a preset dropdown with tests matching the new shape (no combobox, 天數/漲幅門檻 defaults from `params`, days-range validation, the 天數=1 hint, `INVALID_DAYS` fallback, days/risePercent-not-preset in the mixed-strategy request, disabled-when-unchecked, and the days-in-title-frozen-after-edit behavior). Added six new tests for the sync `commonStocksOnly` wiring (request field, 完成 N 檔上市普通股 vs bare 完成 N, 已是最新 with/without the suffix, and 共 N 檔 staying independent of `targetCount`).
+  - **Four pre-existing tests' literal-text assertions were updated** (not their logic/setup) because they render the sync-completion summary with the component's default `commonStocksOnly={true}` prop, which now legitimately produces the 「…上市普通股」 suffix per this increment's spec text: `完成 30 檔／失敗…` → `完成 30 檔上市普通股／失敗…`, `完成 20 檔／失敗…` → `完成 20 檔上市普通股／失敗…`, and two `已是最新，無需更新（34 檔）` → `（34 檔上市普通股）`. These are the exact strings the *new* Requirements-section prose (「commonStocksOnly 為 true 時…完成檔數因此要寫成「完成 N 檔上市普通股」」) mandates for the default-checked page state these tests already exercise; nothing about what each test structurally verifies (polling behavior, near-instant-summary persistence, 409-handling) changed.
+
+### Per-criterion verification (lines 436-440, 444-456)
+1. 送出 `commonStocksOnly` 等於頁面層級勾選框當下狀態 — **Satisfied**, tested (`sends commonStocksOnly matching the page-level setting when clicking 同步日 K 至今日`).
+2. 勾選（預設）時 `targetCount` ≤ 共 N 檔，摘要「完成 N 檔上市普通股」 — **Satisfied**, tested with `targetCount: 1051` vs `共 1400 檔`.
+3. 取消勾選送 `commonStocksOnly: false`，摘要「完成 N」、`targetCount` 等於共 N 檔 — **Satisfied**, tested.
+4. 共 N 檔不因同步母體縮小而改變 — **Satisfied**, tested explicitly with `targetCount` (1051) ≠ `共 N 檔` (1400) held simultaneously on screen.
+5. `caughtUpCount == targetCount` 時「已是最新，無需更新（N 檔上市普通股）」不誤報「完成 N 檔」 — **Satisfied**, tested.
+6. 標題「累積上漲（N 日）— 命中 N 檔」，N 取自 `days`，改動輸入未重掃時維持舊值 — **Satisfied**, tested.
+7. 累積上漲卡片無靈敏度下拉，改兩個數字輸入；其餘四張卡片仍有下拉 — **Satisfied**, tested (`queryByRole('combobox')` absent on 累積上漲, present on 反彈).
+8. 卡片形狀由 `presets` 是否為空決定，無以 `code` 判斷的分支 — **Satisfied** — verified by design (`isParamsDriven` reads only `presets.length`). `grep -n "'CUMULATIVE_RISE'" src/pages/StrategyTab.tsx` finds two remaining hits, neither a card-shape decision: `risePercentRange()`'s numeric-range table (unreachable for this card now that `risePercentRangeFor` always routes it through `params` instead) and the pre-existing, out-of-scope `renderTableForStrategy` switch that picks which *result table's columns* to render post-scan — a different, already-`[x]`-checked concern from "哪個卡片畫哪些輸入控制項".
+9. 天數輸入預設 20、範圍 1~90、step 1 皆取自 `params.days` — **Satisfied**, tested; no literal `20`/`1`/`90` appears outside the fallback-only defensive defaults in `getStrategyParam`/`buildScanPayload`, which are unreachable once the catalogue has loaded (the only path that reaches them).
+10. 漲幅門檻預設 15 取自 `params.risePercent.default`，不再解析靈敏度說明文字 — **Satisfied**, tested; `toggleStrategy`'s params-driven branch never calls `extractDefaultRisePercent`.
+11. 卡片說明文字取自策略層級 `description` — **Satisfied**, tested.
+12. 天數輸入下方說明「回看的交易日數，不含週末與休市日」 — **Satisfied**, tested.
+13. `0`/`91`/`20.5` 擋下並顯示「天數需介於 1 ~ 90 的整數」，不送出 — **Satisfied**, tested (`it.each`).
+14. 天數=1 且漲幅門檻>0 時提示色 `#D9A441` 訊息，「開始掃描」仍可按、仍送出 — **Satisfied**, tested including asserting the request body is still sent with `days: 1`.
+15. 請求帶 `days`/`risePercent` 不帶 `preset`；同批其餘策略仍帶 `preset` — **Satisfied**, tested with a mixed 箱型突破 + 累積上漲 request.
+16. 未勾選累積上漲時兩格皆 disabled，且請求不含該策略 — **Satisfied**, tested.
+17. `INVALID_DAYS` 顯示在回應 `strategy` 指名的卡片下方，非全頁錯誤 — **Satisfied**, tested.
+18. 天數輸入顏色取自 Visual Style 字面 hex，dark/light 一致 — **Satisfied** by source review: every `.st-days-*` rule in `StockListPage.css` uses a literal hex copied from the spec's table (`#0F1620`/`#26333F`/`#3E8FD8`/`#93A4B8`/`#D9A441`); `grep -n "prefers-color-scheme" src/pages/StockListPage.css` returns zero matches.
+19. (covered by #2/#5) 「已是最新」/「完成」措辭正確 — **Satisfied**, tested.
+
+### Notes / judgment calls
+- `syncMeta.commonStocksOnly` is captured from the page-level prop **at the moment `POST /api/stocks/sync/backfill` is sent**, not re-read from the `202` response body — the backend spec (`specs/backend/stock-price-ingestion.md`) guarantees the two agree for this button (it never sends `stockIds`, so it's always the `ALL` mode whose `commonStocksOnly` echoes the request), and this avoids the summary depending on an optional response field a stale/older mock might omit. `BackfillResponse.commonStocksOnly` was still added to the type for contract accuracy even though this component doesn't read it.
+- Nothing in `specs/backend/strategy-scan.md`'s catalogue JSON guarantees `params` is present when `presets` is empty, so `getStrategyParam`/day-range JSX fall back to sane literals (`20`/`1`/`90`/`0`/`15`/`50`) only in that defensive, otherwise-unreachable case — this is absence-safety, not a hidden hard-coded business default.
+
+#### Deferred / not independently verifiable here
+- None — all 19 criteria in this increment's scope were implemented and covered by an automated test; the full suite (200/200) and `npm run build` were both run clean after the change.
+
+### Increment 8 — 2026-09-08
+
+本次一併執行兩個增量：反彈卡片改為四格輸入（22 項）與底底高結果表加入 MA5／當日最低價兩條序列（8 項），30 項全數完成。
+
+**反彈卡片**：靈敏度下拉移除，改由 `params` 驅動畫出四格數字輸入，標籤取自 `name`、後綴取自 `unit`、範圍與步進取自 `min`／`max`／`step`、初始值取自 `default`，前端無寫死的數字或標籤字串。卡片形狀僅由 `presets.length === 0` 決定，程式中不存在任何以策略 `code` 判斷卡片型別的分支。
+
+**選用參數群組**：新增通用機制——依 `paramGroups` 每筆畫一個勾選框（文字取自 `name`、初始狀態取自 `default`），`params` 中帶 `group` 的參數歸該群組管；取消勾選時該組輸入 disabled 且請求完全不帶這些欄位，同時送出 `require<Group>` 為 `false`（欄位名由群組自身的 `code` 推導，非寫死）。驗證與錯誤對應亦為通用：`isParamInputInvalid`／`paramErrorMessage` 完全由各 `StrategyParam` 自己的 `min`／`max`／`step`／`name` 驅動，後端錯誤依回應的 `strategy` 落到對應卡片下方。
+
+**底底高結果表**：改為五欄，「低點序列（MA5）」取 `detail.lows[].ma5` 且排在「當日最低價」（取 `.low`）之前，累計漲幅由首末兩點的 `ma5` 計算。`low` 下降而 `ma5` 仍抬高的命中照常呈現，不顯示任何錯誤或警示。
+
+**反彈結果表**：一併補上前一增量的七欄形狀（增加「低點日／低點收盤」與「反彈幅度」，`detail` 不含 `risePercent` 時該欄以弱化色顯示「—」）。
+
+**判斷取捨（spec 未規定，已擇一並記錄）**：
+- spec 的區塊標題規則只定義了 `{preset}`／`{days}` 兩種括號形式，未涵蓋反彈改制後既無 `preset` 也無 `days` 的回應形狀。實作採「反彈 — 命中 N 檔」不加括號，而非臨時發明一個欄位來讀。本次 30 項驗收皆未斷言反彈的標題字串，屬既有規則的最小延伸。
+- `PARAM_NOT_APPLICABLE` 的顯示文字 spec 未規定（只要求落在指名的卡片下方），採「帶入了不適用的參數：<param>」，內容取自後端回應的 `param` 欄位，非逐策略寫死。
+
+**驗證**：`npx vitest run` — 225/225 通過（本次之前為 200/200，淨增 25）。`npm run build`（`tsc -b && vite build`）無錯誤。`npm run lint` 無新增警告（既有 2 則已對照 `HEAD` 確認為原有）。
+
+**變更檔案**：`src/api/strategies.ts`、`src/api/stocks.ts`、`src/pages/StrategyTab.tsx`、`src/pages/StockListPage.css`、`src/__tests__/StrategyTab.test.tsx`。
