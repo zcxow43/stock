@@ -18,6 +18,7 @@ mybatis:
 app:
   external:
     twse-daily-all-url: https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL
+    twse-mi-index-url: https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX
     twse-industry-url: https://openapi.twse.com.tw/v1/opendata/t187ap03_L
     finmind-base-url: https://api.finmindtrade.com/api/v4/data
     finmind-token: ""

@@ -87,6 +87,14 @@ public class RisingSupportDetector implements PatternDetector {
     }
 
     @Override
+    public BigDecimal getRisePercentMax() {
+        // specs/backend/strategy-scan.md, "risePercent 的上限逐型態認定" — this strategy's risePercent is
+        // a *single day's* gain, and Taiwan's daily price-limit alone caps that at 10%; 20 leaves
+        // headroom while still rejecting requests that can never match.
+        return new BigDecimal("20");
+    }
+
+    @Override
     public List<PresetDto> getPresets() {
         List<PresetDto> result = new ArrayList<>();
         for (Map.Entry<String, Params> entry : presetParams.entrySet()) {

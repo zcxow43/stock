@@ -86,6 +86,13 @@ public class BoxBreakoutDetector implements PatternDetector {
     }
 
     @Override
+    public BigDecimal getRisePercentMax() {
+        // specs/backend/strategy-scan.md, "risePercent 的上限逐型態認定" — breakoutPercent (the excess
+        // over the box top) cannot meaningfully exceed 20%.
+        return new BigDecimal("20");
+    }
+
+    @Override
     public List<PresetDto> getPresets() {
         List<PresetDto> result = new ArrayList<>();
         for (Map.Entry<String, Params> entry : presetParams.entrySet()) {

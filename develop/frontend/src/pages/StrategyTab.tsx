@@ -73,6 +73,13 @@ function formatPercent2(value: number | null | undefined): string {
   return value == null ? '—' : `${value.toFixed(2)}%`
 }
 
+/** Result-block title only (「數值格式」: 兩位小數時去掉無意義的尾數，例如 10.0 寫成 10).
+ * Table cells keep the fixed two-decimal `formatPercent2` — this is purely for the
+ * parenthetical in a strategy block's heading. */
+function formatTrimmedPercent(value: number): string {
+  return `${Number(value.toFixed(2))}`
+}
+
 function formatMultiple2(value: number | null | undefined): string {
   return value == null ? '—' : `${value.toFixed(2)}×`
 }
@@ -324,10 +331,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // strategy code then group `code`. Populated from `paramGroups[].default` the first time
   // a params-driven card with groups is checked; purely data-driven off `paramGroups`.
   const [groupEnabled, setGroupEnabled] = useState<Partial<Record<StrategyCode, Record<string, boolean>>>>({})
-  // Names the one card + message the current params-driven backend validation fallback
-  // belongs to (INVALID_DAYS/INVALID_DROP_DAYS/INVALID_RISE_DAYS/INVALID_DROP_PERCENT/
-  // INVALID_RISE_PERCENT/PARAM_NOT_APPLICABLE) — client-side validation already blocks
-  // this in normal use.
+  // Names the one card + message the current backend validation fallback belongs to.
+  // Covers params-driven fallbacks (INVALID_DAYS/INVALID_DROP_DAYS/INVALID_RISE_DAYS/
+  // INVALID_DROP_PERCENT/INVALID_RISE_PERCENT — client-side validation already blocks
+  // these in normal use) and the three "not applicable" programmer-error codes
+  // (PARAM_NOT_APPLICABLE/PRESET_NOT_APPLICABLE/DAYS_NOT_APPLICABLE), which can name
+  // *any* card regardless of shape — rendered in both the params-driven and the
+  // sensitivity-driven card branches below.
   const [paramServerError, setParamServerError] = useState<{ code: StrategyCode; message: string } | null>(null)
 
   // ---------- stock scope ----------
@@ -677,12 +687,26 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
-        if (err instanceof ApiError && err.code === 'PARAM_NOT_APPLICABLE') {
-          // Also lands under the named card (specs/frontend/strategy.md's 反彈 increment) —
-          // normal operation never sends a param a strategy doesn't accept, so this is a
-          // backend fallback only, but it must still name the card, not go page-wide.
+        if (
+          err instanceof ApiError &&
+          (err.code === 'PARAM_NOT_APPLICABLE' || err.code === 'PRESET_NOT_APPLICABLE' || err.code === 'DAYS_NOT_APPLICABLE')
+        ) {
+          // All three are treated as a programmer error: normal operation never produces
+          // them — each card only ever renders the controls/fields its own catalogue entry
+          // declares, so this combination of "selected strategy + submitted field" can't
+          // arise from user interaction. Still must land under the named card, not go
+          // page-wide, and must not clear existing results or lock 「開始掃描」 — this is a
+          // localized diagnostic, not a scan failure. `param` (when present) is echoed
+          // verbatim from the response, never hard-coded per strategy; when absent
+          // (PRESET_NOT_APPLICABLE/DAYS_NOT_APPLICABLE typically don't carry one), a
+          // generic message is shown instead.
           const code = (err.strategy as StrategyCode) ?? null
-          if (code) setParamServerError({ code, message: `帶入了不適用的參數：${err.param ?? '未知欄位'}` })
+          if (code) {
+            setParamServerError({
+              code,
+              message: err.param ? `帶入了不適用的參數：${err.param}` : '此策略不支援這次請求帶入的參數組合',
+            })
+          }
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
@@ -1036,19 +1060,29 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   }
 
   const renderResultBlock = (result: StrategyResult) => {
-    // `preset`/`days`/(REBOUND's own fields) are mutually exclusive on the response —
-    // whichever is present names what the title reads, never decided by inspecting
-    // `result.strategy`. Always sourced from the response, never from the current
-    // (possibly since-edited) card inputs, so a stale title never silently claims the
-    // current input values were used. REBOUND reports neither `preset` nor `days`, so its
-    // title carries no parenthetical — there's no single response field the spec names
-    // for it to read from.
-    const title =
-      result.preset !== undefined
-        ? `${strategyName(result.strategy)}（${presetName(result.strategy, result.preset as PresetCode)}）— 命中 ${result.matchedCount} 檔`
-        : result.days !== undefined
-          ? `${strategyName(result.strategy)}（${result.days} 日）— 命中 ${result.matchedCount} 檔`
-          : `${strategyName(result.strategy)} — 命中 ${result.matchedCount} 檔`
+    // `preset`/`days`/(REBOUND's own `dropDays`/`dropPercent`/`requireRise`/`riseDays`/
+    // `risePercent`) are mutually exclusive on the response — whichever is present names
+    // what the title reads, never decided by inspecting `result.strategy`. Always sourced
+    // from the response, never from the current (possibly since-edited) card inputs, so a
+    // stale title never silently claims the current input values were used.
+    const title = (() => {
+      const name = strategyName(result.strategy)
+      if (result.preset !== undefined) {
+        return `${name}（${presetName(result.strategy, result.preset as PresetCode)}）— 命中 ${result.matchedCount} 檔`
+      }
+      if (result.days !== undefined) {
+        return `${name}（${result.days} 日）— 命中 ${result.matchedCount} 檔`
+      }
+      if (result.dropDays !== undefined && result.dropPercent !== undefined) {
+        const dropPart = `${result.dropDays} 日跌 ${formatTrimmedPercent(result.dropPercent)}%`
+        const risePart =
+          result.requireRise === true && result.riseDays !== undefined && result.risePercent !== undefined
+            ? ` → ${result.riseDays} 日反彈 ${formatTrimmedPercent(result.risePercent)}%`
+            : ''
+        return `${name}（${dropPart}${risePart}）— 命中 ${result.matchedCount} 檔`
+      }
+      return `${name} — 命中 ${result.matchedCount} 檔`
+    })()
     return (
       <div
         className="st-result-block"
@@ -1323,6 +1357,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                     <div className="st-inline-error">
                       漲幅門檻需介於 {SENSITIVITY_RISE_PERCENT_RANGE.min} ~ {SENSITIVITY_RISE_PERCENT_RANGE.max}
                     </div>
+                  ) : null}
+                  {paramServerError?.code === strategy.code ? (
+                    <div className="st-inline-error">{paramServerError.message}</div>
                   ) : null}
                   <p className="st-strategy-desc">{presetMeta?.description}</p>
                 </div>

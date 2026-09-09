@@ -38,17 +38,20 @@ public class StockSyncService {
     private final StockSyncProgressMapper progressMapper;
     private final PriceIngestionService priceIngestionService;
     private final BackfillRunner backfillRunner;
+    private final SnapshotBackfillRunner snapshotBackfillRunner;
     private final JobRunningRegistry jobRunningRegistry;
     private final BackfillProperties backfillProperties;
 
     public StockSyncService(TwseClient twseClient, StockMapper stockMapper, StockSyncProgressMapper progressMapper,
                              PriceIngestionService priceIngestionService, BackfillRunner backfillRunner,
-                             JobRunningRegistry jobRunningRegistry, BackfillProperties backfillProperties) {
+                             SnapshotBackfillRunner snapshotBackfillRunner, JobRunningRegistry jobRunningRegistry,
+                             BackfillProperties backfillProperties) {
         this.twseClient = twseClient;
         this.stockMapper = stockMapper;
         this.progressMapper = progressMapper;
         this.priceIngestionService = priceIngestionService;
         this.backfillRunner = backfillRunner;
+        this.snapshotBackfillRunner = snapshotBackfillRunner;
         this.jobRunningRegistry = jobRunningRegistry;
         this.backfillProperties = backfillProperties;
     }
@@ -193,7 +196,14 @@ public class StockSyncService {
                     jobType, targetIds, backfillProperties.getMaxAttemptCount());
         }
 
-        CompletableFuture<Void> completion = backfillRunner.run(jobType, processableIds, request.isResume());
+        // ALL mode's fetch strategy is the day-by-day MI_INDEX snapshot, one request per candidate
+        // trading day for the whole population; SELECTED keeps the per-stock Yahoo/FinMind pipeline
+        // (spec: 逐日全市場快照為 ALL 模式主路徑 — 一年份區間的請求數在 170 次以內，且母體檔數由 34 檔改為 1,030 檔時
+        // 該請求數完全不變). Both share the exact same progress-table setup above; only which runner
+        // actually issues external requests differs.
+        CompletableFuture<Void> completion = "ALL".equals(prepared.mode)
+                ? snapshotBackfillRunner.run(jobType, processableIds, request.getEndDate())
+                : backfillRunner.run(jobType, processableIds, request.isResume());
 
         BackfillResponse response = new BackfillResponse(jobType, targetIds.size(), caughtUpCount,
                 prepared.commonStocksOnly, request.getStartDate(), request.getEndDate(), prepared.mode);

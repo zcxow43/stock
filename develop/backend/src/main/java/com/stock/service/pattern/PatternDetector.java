@@ -123,6 +123,20 @@ public interface PatternDetector {
     }
 
     /**
+     * Inclusive upper bound for the request's `risePercent` override (the lower bound is always 0
+     * for every strategy) — see specs/backend/strategy-scan.md, "risePercent 的上限逐型態認定，不是全系統一個值".
+     * Defaults to {@code 50} (REBOUND/CUMULATIVE_RISE, which measure a cumulative move across many
+     * trading days). BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT override this to {@code 20}: what
+     * `risePercent` measures for them — a breakout's excess over the box top, one swing low's rise
+     * over the previous, or (for RISING_SUPPORT) a *single day's* gain — cannot meaningfully exceed
+     * that without the request being structurally unable to ever match (Taiwan's daily price-limit
+     * alone caps a single day's move at 10%).
+     */
+    default BigDecimal getRisePercentMax() {
+        return new BigDecimal("50");
+    }
+
+    /**
      * Trading days of history required strictly before the scan's startDate for this selection —
      * drives how far back the batched lookback pre-fetch must reach (specs/backend/strategy-scan.md,
      * "區間與資料前置需求"). REBOUND/CUMULATIVE_RISE return lookback − 1, since their own window

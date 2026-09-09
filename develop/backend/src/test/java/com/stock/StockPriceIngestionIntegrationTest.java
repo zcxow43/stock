@@ -89,6 +89,9 @@ class StockPriceIngestionIntegrationTest {
     @Value("${app.external.twse-daily-all-url}")
     private String twseUrl;
 
+    @Value("${app.external.twse-mi-index-url}")
+    private String twseMiIndexUrl;
+
     @Value("${app.external.finmind-base-url}")
     private String finmindBaseUrl;
 
@@ -424,13 +427,18 @@ class StockPriceIngestionIntegrationTest {
             LocalDate start = LocalDate.of(2025, 9, 1);
             LocalDate end = LocalDate.of(2025, 9, 2);
 
-            String finmindUrl221 = finmindBaseUrl + "?dataset=TaiwanStockPrice&data_id=T221&start_date="
-                    + start + "&end_date=" + end;
-            String body221 = finmindFixture("T221", new String[]{"2025-09-01"},
-                    new String[]{"30.00"}, new String[]{"31.00"}, new String[]{"29.50"}, new String[]{"30.50"});
-
-            expectYahooNotFound("T221", start, end);
-            mockServer.expect(requestTo(finmindUrl221)).andRespond(withSuccess(body221, MediaType.APPLICATION_JSON));
+            // ALL mode's fetch strategy is the day-by-day MI_INDEX snapshot (spec: 逐日全市場快照為
+            // ALL 模式主路徑) -- one request per candidate day, never a per-stock Yahoo/FinMind call.
+            // No Yahoo/FinMind mocks registered at all here: any request to either would fail the
+            // batch's mockServer.verify() below.
+            mockServer.expect(requestTo(miIndexUrl(start)))
+                    .andRespond(withSuccess(miIndexFixture(new String[]{"T221"}, new String[]{"30.00"},
+                            new String[]{"31.00"}, new String[]{"29.50"}, new String[]{"30.50"}),
+                            MediaType.APPLICATION_JSON));
+            // Second candidate day: no per-stock quote table at all (non-trading day) -- normal,
+            // not an error, and must still advance last_synced_date to this day.
+            mockServer.expect(requestTo(miIndexUrl(end)))
+                    .andRespond(withSuccess(miIndexNonTradingDayFixture(), MediaType.APPLICATION_JSON));
 
             BackfillRequest request = new BackfillRequest();
             request.setStartDate(start);
@@ -448,12 +456,19 @@ class StockPriceIngestionIntegrationTest {
             assertEquals("ALL", response.getBody().getMode());
             assertFalse(response.getBody().isCommonStocksOnly());
 
-            waitUntilProgressDone("PRICE_BACKFILL", Arrays.asList("T221"), 10_000);
-            mockServer.verify(); // T222 (inactive) must never be requested
+            waitUntilStatus("T221", "PRICE_BACKFILL", "DONE", 10_000);
+            mockServer.verify(); // exactly the 2 MI_INDEX calls happened; nothing to Yahoo/FinMind
 
             Integer t222Progress = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM stock_sync_progress WHERE stock_id = 'T222'", Integer.class);
             assertEquals(0, t222Progress);
+
+            String t221Source = jdbc.queryForObject(
+                    "SELECT source FROM stock_daily_price WHERE stock_id = 'T221'", String.class);
+            assertEquals("TWSE", t221Source);
+
+            StockSyncProgress t221Progress = progressMapper.findOne("T221", "PRICE_BACKFILL");
+            assertEquals(end, t221Progress.getLastSyncedDate());
         } finally {
             if (!otherActiveIds.isEmpty()) {
                 jdbc.update("UPDATE stock SET is_active = 1 WHERE stock_id IN ("
@@ -1124,6 +1139,42 @@ class StockPriceIngestionIntegrationTest {
         long period1 = startDate.atStartOfDay(TAIPEI).toEpochSecond();
         long period2 = endDate.plusDays(1).atStartOfDay(TAIPEI).toEpochSecond();
         return yahooBaseUrl + "/" + stockId + ".TW?interval=1d&period1=" + period1 + "&period2=" + period2;
+    }
+
+    /** Builds the MI_INDEX request URL for one candidate trading day (spec: date=YYYYMMDD, 西元). */
+    private String miIndexUrl(LocalDate date) {
+        String yyyymmdd = date.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        return twseMiIndexUrl + "?date=" + yyyymmdd + "&type=ALL&response=json";
+    }
+
+    /**
+     * A {"tables":[...]} response with a decoy table first (so lookup-by-fields[0] must be
+     * exercised, never index 0) and the real 個股行情 table second, matching the documented field
+     * order (spec: 該表 fields 為... — 逐日全市場快照（交易所 MI_INDEX）— 已測事實).
+     */
+    private String miIndexFixture(String[] stockIds, String[] opens, String[] highs, String[] lows,
+                                   String[] closes) {
+        StringBuilder data = new StringBuilder();
+        for (int i = 0; i < stockIds.length; i++) {
+            if (i > 0) {
+                data.append(",");
+            }
+            data.append("[\"").append(stockIds[i]).append("\",\"測試股\",\"1,000,000\",\"500\",\"12,345,678\",\"")
+                    .append(opens[i]).append("\",\"").append(highs[i]).append("\",\"").append(lows[i])
+                    .append("\",\"").append(closes[i])
+                    .append("\",\"<p style='color:red'>+</p>\",\"0.50\",\"\",\"\",\"\",\"\",\"15.00\"]");
+        }
+        return "{\"tables\":["
+                + "{\"fields\":[\"指數\",\"收盤指數\"],\"data\":[[\"發行量加權股價指數\",\"17000.00\"]]},"
+                + "{\"fields\":[\"證券代號\",\"證券名稱\",\"成交股數\",\"成交筆數\",\"成交金額\",\"開盤價\",\"最高價\",\"最低價\","
+                + "\"收盤價\",\"漲跌(+/-)\",\"漲跌價差\",\"最後揭示買價\",\"最後揭示買量\",\"最後揭示賣價\",\"最後揭示賣量\",\"本益比\"],"
+                + "\"data\":[" + data + "]}"
+                + "]}";
+    }
+
+    /** Non-trading day: the 個股行情 table is entirely absent from {@code tables} (spec: 非交易日). */
+    private String miIndexNonTradingDayFixture() {
+        return "{\"tables\":[{\"fields\":[\"指數\",\"收盤指數\"],\"data\":[]}]}";
     }
 
     private void expectYahooNotFound(String stockId, LocalDate startDate, LocalDate endDate) {

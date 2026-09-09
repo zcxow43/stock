@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
 requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高結果表以 MA5 序列為主、並列當日最低價；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關，取消時只以跌幅掃描，兩者皆不再有靈敏度。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；同步的母體預設只含上市普通股，沿用頁面層級的「只看上市普通股」設定；各策略結果區塊的標題括號一律列出該次實際採用的參數，反彈亦然"
 depends_on: [stock-list]
@@ -514,13 +514,13 @@ depends_on: [stock-list]
 - [x] 底底高兩欄文字色沿用 `## Visual Style` 的主要文字 `#E6EDF5`，日期部分沿用次要文字 `#93A4B8`，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
 ### 反彈區塊標題與「不適用參數」錯誤文案（本次新增）
-- [ ] 反彈結果區塊的標題在 `requireRise` 為 `true` 時為「反彈（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）— 命中 N 檔」，四個數字皆取自回應該筆的實際採用值
-- [ ] `requireRise` 為 `false` 時標題為「反彈（{dropDays} 日跌 {dropPercent}%）— 命中 N 檔」，不出現反彈段的兩個數字，也不留空括號
-- [ ] 掃描後改動反彈的任一格輸入而未重掃時，標題維持舊值不變（取自回應，不是取自輸入框）
-- [ ] 其餘四個策略的標題格式未變：有靈敏度的三個仍為「（{靈敏度}）」，累積上漲仍為「（{days} 日）」
-- [ ] 後端回 `PARAM_NOT_APPLICABLE` 時，該卡片下方顯示「帶入了不適用的參數：{param}」，`param` 取自回應，非前端寫死
-- [ ] `PRESET_NOT_APPLICABLE` 與 `DAYS_NOT_APPLICABLE`（回應不帶 `param`）時顯示通用錯誤訊息，且同樣定位在指名的卡片下方，不是全頁通用錯誤
-- [ ] 三種「不適用」錯誤皆不清空既有掃描結果，也不把「開始掃描」鎖住
+- [x] 反彈結果區塊的標題在 `requireRise` 為 `true` 時為「反彈（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）— 命中 N 檔」，四個數字皆取自回應該筆的實際採用值
+- [x] `requireRise` 為 `false` 時標題為「反彈（{dropDays} 日跌 {dropPercent}%）— 命中 N 檔」，不出現反彈段的兩個數字，也不留空括號
+- [x] 掃描後改動反彈的任一格輸入而未重掃時，標題維持舊值不變（取自回應，不是取自輸入框）
+- [x] 其餘四個策略的標題格式未變：有靈敏度的三個仍為「（{靈敏度}）」，累積上漲仍為「（{days} 日）」
+- [x] 後端回 `PARAM_NOT_APPLICABLE` 時，該卡片下方顯示「帶入了不適用的參數：{param}」，`param` 取自回應，非前端寫死
+- [x] `PRESET_NOT_APPLICABLE` 與 `DAYS_NOT_APPLICABLE`（回應不帶 `param`）時顯示通用錯誤訊息，且同樣定位在指名的卡片下方，不是全頁通用錯誤
+- [x] 三種「不適用」錯誤皆不清空既有掃描結果，也不把「開始掃描」鎖住
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -940,3 +940,22 @@ src/pages/StrategyTab.tsx:360:7: warning react(set-state-in-effect) — pre-exis
 **驗證**：`npx vitest run` — 225/225 通過（本次之前為 200/200，淨增 25）。`npm run build`（`tsc -b && vite build`）無錯誤。`npm run lint` 無新增警告（既有 2 則已對照 `HEAD` 確認為原有）。
 
 **變更檔案**：`src/api/strategies.ts`、`src/api/stocks.ts`、`src/pages/StrategyTab.tsx`、`src/pages/StockListPage.css`、`src/__tests__/StrategyTab.test.tsx`。
+
+### Increment 9 — 2026-09-09
+
+Scope: exactly the 7 unchecked criteria under 「反彈區塊標題與「不適用參數」錯誤文案（本次新增）」. Increment 8 had left 反彈's result-block title without any parenthetical (「反彈 — 命中 N 檔」, documented there as a deliberate placeholder since the spec at the time only defined `{preset}`/`{days}` forms) and had only wired `PARAM_NOT_APPLICABLE` — this increment fills in the `dropDays`/`dropPercent`/`riseDays`/`risePercent` title format the spec now spells out explicitly, and extends the same card-scoped-error handling to `PRESET_NOT_APPLICABLE`/`DAYS_NOT_APPLICABLE`.
+
+**標題**：`renderResultBlock`'s title now branches four ways instead of three: `result.preset` → `（{preset 中文名}）`；`result.days` → `（{days} 日）`；otherwise, when `result.dropDays`/`result.dropPercent` are both present (REBOUND's shape), builds `（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）` when `result.requireRise === true` and `riseDays`/`risePercent` are both present, or `（{dropDays} 日跌 {dropPercent}%）` otherwise — no dangling arrow, no empty parenthesis. All four numbers are read off `StrategyResult` fields the response itself carries (already typed in `api/strategies.ts` from the prior increment), never off the live card inputs, so editing a 反彈 input after a scan leaves the title exactly as last scanned. A new `formatTrimmedPercent` helper (`Number(value.toFixed(2))`, stringified) implements 「數值格式」's 「兩位小數時去掉無意義的尾數」 rule for this parenthetical specifically — table cells keep the existing fixed-two-decimal `formatPercent2`, unchanged.
+
+**「不適用」三種錯誤**：the existing `PARAM_NOT_APPLICABLE`-only branch in `runScan`'s catch chain was widened to also catch `PRESET_NOT_APPLICABLE` and `DAYS_NOT_APPLICABLE`, all three sharing one behavior: locate the card via `err.strategy`, and set `paramServerError` to `帶入了不適用的參數：{err.param}` when the response carries a `param`, or a generic message when it doesn't (chose distinct wording `此策略不支援這次請求帶入的參數組合` rather than reusing the page-wide `掃描失敗，請稍後再試`, so a card-scoped fallback is never textually indistinguishable from the page-wide one in tests or for a user scanning the page). All three still call `setScanStatus(scanResult ? 'success' : 'idle')`, never `'error'` — the branch that clears/hides `scanResult` behind a full-page error view is only reached for the generic `catch` at the end, so these three continue leaving existing results on screen and `開始掃描` unlocked (`canScan` never inspected `scanStatus === 'error'` to begin with).
+
+`paramServerError` (renamed only in its doc comment, not its identifier, to avoid an unnecessary rename across the file) is now rendered in **both** card branches — previously only inside the params-driven (`isParamsDriven`) branch, since `PARAM_NOT_APPLICABLE` could only target 反彈/累積上漲 in practice. `PRESET_NOT_APPLICABLE`/`DAYS_NOT_APPLICABLE` can equally name a sensitivity-driven card (e.g. a malformed request sending `days` for 箱型突破), so the same conditional block was added after the sensitivity-driven card's existing `INVALID_RISE_PERCENT` inline error.
+
+**判斷取捨（spec 未規定，已擇一並記錄）**：
+- 通用錯誤訊息文字 spec 未規定確切字串，只要求「非全頁通用」。選用 `此策略不支援這次請求帶入的參數組合`，刻意與頁面級 `掃描失敗，請稍後再試` 不同字串，避免兩種錯誤在畫面或測試斷言中無法區分。
+
+**驗證**：`npx vitest run src/__tests__/StrategyTab.test.tsx` — 113/113 通過（本次之前為 100，淨增 13：反彈標題 requireRise=true/false 各一、掃描後改動輸入標題不變一、其餘四策略標題格式未變一、PRESET_NOT_APPLICABLE／DAYS_NOT_APPLICABLE 無 `param` 時卡片下通用訊息各一、`param` 存在時字串逐字取自回應一、三種錯誤皆不清空既有結果且不鎖按鈕一（`it.each` 三案例算一筆））。`npx vitest run`（全專案）— 235/235 通過。`npx tsc --noEmit` 無錯誤。`npm run build`（`tsc -b && vite build`）無錯誤。`npm run lint`（`oxlint`）僅原有 2 則既有警告（已對照 `git stash` 前的 `HEAD` 逐字比對，行號因新增程式碼位移但訊息與檔案相同，非本次引入）。
+
+**無法驗證的部分**：未啟動 dev server 做視覺/瀏覽器驗證（依任務指示，完成後需確保 5173/8080 兩埠不被佔用），僅以 `vitest`（jsdom）與 `tsc`/`build`/`lint` 驗證。
+
+**變更檔案**：`develop/frontend/src/pages/StrategyTab.tsx`、`develop/frontend/src/__tests__/StrategyTab.test.tsx`。

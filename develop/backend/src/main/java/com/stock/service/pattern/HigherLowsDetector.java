@@ -96,6 +96,13 @@ public class HigherLowsDetector implements PatternDetector {
     }
 
     @Override
+    public BigDecimal getRisePercentMax() {
+        // specs/backend/strategy-scan.md, "risePercent 的上限逐型態認定" — a swing low's rise over the
+        // previous one cannot meaningfully exceed 20%.
+        return new BigDecimal("20");
+    }
+
+    @Override
     public List<PresetDto> getPresets() {
         List<PresetDto> result = new ArrayList<>();
         for (Map.Entry<String, Params> entry : presetParams.entrySet()) {

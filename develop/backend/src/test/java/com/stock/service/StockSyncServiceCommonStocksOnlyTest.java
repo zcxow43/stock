@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -53,6 +54,7 @@ class StockSyncServiceCommonStocksOnlyTest {
     private StockSyncProgressMapper progressMapper;
     private PriceIngestionService priceIngestionService;
     private BackfillRunner backfillRunner;
+    private SnapshotBackfillRunner snapshotBackfillRunner;
     private StockSyncService service;
 
     @BeforeEach
@@ -64,12 +66,18 @@ class StockSyncServiceCommonStocksOnlyTest {
         backfillRunner = mock(BackfillRunner.class);
         when(backfillRunner.run(anyString(), anyList(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenReturn(CompletableFuture.completedFuture(null));
+        // ALL mode dispatches to SnapshotBackfillRunner (spec: 逐日全市場快照為 ALL 模式主路徑), not
+        // BackfillRunner -- these commonStocksOnly tests only assert target-list resolution, which
+        // is unchanged, so this mock is stubbed the same way for every ALL-mode case below.
+        snapshotBackfillRunner = mock(SnapshotBackfillRunner.class);
+        when(snapshotBackfillRunner.run(anyString(), anyList(), any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         JobRunningRegistry jobRunningRegistry = new JobRunningRegistry();
         BackfillProperties properties = new BackfillProperties();
 
         service = new StockSyncService(twseClient, stockMapper, progressMapper, priceIngestionService,
-                backfillRunner, jobRunningRegistry, properties);
+                backfillRunner, snapshotBackfillRunner, jobRunningRegistry, properties);
     }
 
     @Test
@@ -94,10 +102,13 @@ class StockSyncServiceCommonStocksOnlyTest {
                 "targetCount must be smaller than the total active count once ETF/special/TDR are excluded");
 
         verify(progressMapper).upsertPendingReset(eq(expectedCommon), eq(JOB_TYPE), eq(START), eq(END));
-        verify(backfillRunner).run(eq(JOB_TYPE), eq(expectedCommon), eq(false));
+        // ALL mode dispatches to SnapshotBackfillRunner, never BackfillRunner (spec: 逐日全市場快照為
+        // ALL 模式主路徑).
+        verify(snapshotBackfillRunner).run(eq(JOB_TYPE), eq(expectedCommon), eq(END));
+        verify(backfillRunner, never()).run(anyString(), anyList(), anyBoolean());
         // The excluded codes never reach the progress-table write or the batch runner at all --
-        // and since BackfillRunner is the ONLY thing that ever issues an external request per
-        // stock, never receiving them there IS "no external request issued for them".
+        // and since the batch runners are the ONLY things that ever issue an external request per
+        // day/stock, never receiving them there IS "no external request issued for them".
         verify(progressMapper, never()).upsertPendingReset(
                 org.mockito.ArgumentMatchers.argThat(ids -> ids.contains("0050")), anyString(), any(), any());
         // This preparation step writes/deletes nothing in `stock` or `stock_daily_price` (spec:
@@ -126,7 +137,8 @@ class StockSyncServiceCommonStocksOnlyTest {
         assertFalse(response.isCommonStocksOnly());
         assertEquals(allActive.size(), response.getTargetCount());
         verify(progressMapper).upsertPendingReset(eq(allActive), eq(JOB_TYPE), eq(START), eq(END));
-        verify(backfillRunner).run(eq(JOB_TYPE), eq(allActive), eq(false));
+        verify(snapshotBackfillRunner).run(eq(JOB_TYPE), eq(allActive), eq(END));
+        verify(backfillRunner, never()).run(anyString(), anyList(), anyBoolean());
     }
 
     @Test
@@ -149,6 +161,7 @@ class StockSyncServiceCommonStocksOnlyTest {
         assertFalse(response.isCommonStocksOnly(), "SELECTED mode never applies the common-stock filter");
         verify(stockMapper, never()).findActiveStockIds();
         verify(backfillRunner).run(eq(JOB_TYPE), eq(Collections.singletonList("0050")), eq(false));
+        verify(snapshotBackfillRunner, never()).run(anyString(), anyList(), any());
     }
 
     @Test
@@ -166,7 +179,7 @@ class StockSyncServiceCommonStocksOnlyTest {
 
         assertEquals(0, response.getTargetCount());
         assertTrue(response.isCommonStocksOnly());
-        verify(backfillRunner).run(eq(JOB_TYPE), eq(Collections.emptyList()), eq(false));
+        verify(snapshotBackfillRunner).run(eq(JOB_TYPE), eq(Collections.emptyList()), eq(END));
     }
 
     /**
@@ -194,6 +207,6 @@ class StockSyncServiceCommonStocksOnlyTest {
         assertEquals(2, outcome.getResponse().getTargetCount());
         assertTrue(outcome.getResponse().isCommonStocksOnly());
         verify(progressMapper).findCaughtUpStockIds(eq(JOB_TYPE), eq(expectedCommon), eq(END));
-        verify(backfillRunner).run(eq(JOB_TYPE), eq(expectedCommon), eq(false));
+        verify(snapshotBackfillRunner).run(eq(JOB_TYPE), eq(expectedCommon), eq(END));
     }
 }

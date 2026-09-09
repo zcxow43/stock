@@ -49,7 +49,10 @@ public class StrategyScanService {
 
     public static final int MAX_STOCK_IDS = 200;
     private static final BigDecimal RISE_PERCENT_MIN = BigDecimal.ZERO;
-    private static final BigDecimal RISE_PERCENT_MAX = new BigDecimal("50");
+    // REBOUND's dropPercent has only ever been the one strategy that owns it, so — unlike
+    // risePercent — its upper bound stays a single fixed value rather than a per-detector one
+    // (specs/backend/strategy-scan.md, "反彈的 dropPercent 維持 0~50 不變").
+    private static final BigDecimal DROP_PERCENT_MAX = new BigDecimal("50");
     private static final int RISE_PERCENT_MAX_SCALE = 1;
 
     private final StockMapper stockMapper;
@@ -163,7 +166,7 @@ public class StrategyScanService {
                     rejectReboundOnlyParams(selection);
                 }
             }
-            validateRisePercent(selection);
+            validateRisePercent(selection, detector);
         }
         return selections;
     }
@@ -209,7 +212,8 @@ public class StrategyScanService {
             validateIntInRange(selection.getRiseDays(), 1, 90,
                     () -> new InvalidRiseDaysException(selection.getCode()));
         }
-        validatePercentInRange(selection.getDropPercent(), () -> new InvalidDropPercentException(selection.getCode()));
+        validatePercentInRange(selection.getDropPercent(), DROP_PERCENT_MAX,
+                () -> new InvalidDropPercentException(selection.getCode()));
     }
 
     private void validateIntInRange(BigDecimal value, int min, int max,
@@ -227,11 +231,12 @@ public class StrategyScanService {
         }
     }
 
-    private void validatePercentInRange(BigDecimal value, Supplier<RuntimeException> exceptionSupplier) {
+    private void validatePercentInRange(BigDecimal value, BigDecimal max,
+                                         Supplier<RuntimeException> exceptionSupplier) {
         if (value == null) {
             return;
         }
-        if (value.compareTo(RISE_PERCENT_MIN) < 0 || value.compareTo(RISE_PERCENT_MAX) > 0) {
+        if (value.compareTo(RISE_PERCENT_MIN) < 0 || value.compareTo(max) > 0) {
             throw exceptionSupplier.get();
         }
         try {
@@ -259,12 +264,18 @@ public class StrategyScanService {
         }
     }
 
-    private void validateRisePercent(StrategySelectionDto selection) {
+    /**
+     * `risePercent`'s upper bound is per-strategy, not a single system-wide value — each detector
+     * declares its own via {@link PatternDetector#getRisePercentMax()} — see specs/backend/
+     * strategy-scan.md, "risePercent 的上限逐型態認定，不是全系統一個值".
+     */
+    private void validateRisePercent(StrategySelectionDto selection, PatternDetector detector) {
         BigDecimal risePercent = selection.getRisePercent();
         if (risePercent == null) {
             return;
         }
-        if (risePercent.compareTo(RISE_PERCENT_MIN) < 0 || risePercent.compareTo(RISE_PERCENT_MAX) > 0) {
+        BigDecimal max = detector.getRisePercentMax();
+        if (risePercent.compareTo(RISE_PERCENT_MIN) < 0 || risePercent.compareTo(max) > 0) {
             throw new InvalidRisePercentException(selection.getCode());
         }
         try {

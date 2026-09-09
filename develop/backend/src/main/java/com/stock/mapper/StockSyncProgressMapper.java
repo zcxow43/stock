@@ -151,4 +151,58 @@ public interface StockSyncProgressMapper {
     LocalDateTime findLastSyncedAt(@Param("jobType") String jobType);
 
     List<StockSyncProgress> findFailedItems(@Param("jobType") String jobType, @Param("limit") int limit);
+
+    /**
+     * Advances last_synced_date forward, and ONLY forward, for whichever of stockIds already have
+     * an existing {@code job_type} progress row (spec: 寫入行情的路徑都必須推進進度). Never inserts a
+     * row: a stock_id with no existing row for this jobType is silently left alone, which is
+     * exactly what keeps this safe to call from the daily snapshot path (~1,378 stocks, most of
+     * which have no PRICE_BACKFILL progress row at all under the default commonStocksOnly
+     * population) without inflating {@code total} (spec: 每日增量不新建進度列). Never touches
+     * {@code status} — a FAILED/DONE/PENDING row keeps its status exactly as it was; only the date
+     * moves. No-op when stockIds is empty; see {@link #upsertPendingReset} for why this guard exists.
+     */
+    default void advanceLastSyncedDateForExisting(List<String> stockIds, String jobType, LocalDate tradeDate) {
+        if (stockIds.isEmpty()) {
+            return;
+        }
+        advanceLastSyncedDateForExistingForNonEmptyIds(stockIds, jobType, tradeDate);
+    }
+
+    void advanceLastSyncedDateForExistingForNonEmptyIds(@Param("stockIds") List<String> stockIds,
+                                                          @Param("jobType") String jobType,
+                                                          @Param("tradeDate") LocalDate tradeDate);
+
+    /**
+     * MIN(target_start_date) among the given stockIds' {@code job_type} progress rows — the day the
+     * ALL-mode day-by-day snapshot loop ({@code SnapshotBackfillRunner}) must start iterating from.
+     * In the steady state every target shares the same target_start_date (the whole population is
+     * always advanced together — spec: 逐日快照涵蓋全母體，因此不存在...參差狀態); this takes the MIN so a
+     * newly-added target with an earlier/unset start never gets silently skipped. Returns null when
+     * stockIds is empty (caller must not query in that case; see {@link #upsertPendingReset}).
+     */
+    default LocalDate findMinTargetStartDate(String jobType, List<String> stockIds) {
+        if (stockIds.isEmpty()) {
+            return null;
+        }
+        return findMinTargetStartDateForNonEmptyIds(jobType, stockIds);
+    }
+
+    LocalDate findMinTargetStartDateForNonEmptyIds(@Param("jobType") String jobType,
+                                                    @Param("stockIds") List<String> stockIds);
+
+    /**
+     * Bulk-marks every id in stockIds DONE for jobType, without touching last_synced_date — used by
+     * {@code SnapshotBackfillRunner} once the whole day-by-day loop reaches endDate, since each
+     * day's snapshot write already advanced last_synced_date incrementally (spec: 逐日回補的處理流程
+     * step 6). No-op when stockIds is empty; see {@link #upsertPendingReset}.
+     */
+    default void markDoneForIds(String jobType, List<String> stockIds) {
+        if (stockIds.isEmpty()) {
+            return;
+        }
+        markDoneForNonEmptyIds(jobType, stockIds);
+    }
+
+    void markDoneForNonEmptyIds(@Param("jobType") String jobType, @Param("stockIds") List<String> stockIds);
 }

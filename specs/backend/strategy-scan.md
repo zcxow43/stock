@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
 requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50"
 depends_on: [stock-price-ingestion, stock-catalog]
@@ -587,14 +587,14 @@ Response `200`：
 - [x] 反彈與累積上漲的回應欄位名與說明文字皆無「進場」「出場」「建議」「推薦」等暗示買賣操作的措辭
 
 ### `risePercent` 上限改為逐型態（本次新增）
-- [ ] 箱型突破／底底高／上漲支撐送 `risePercent: 20` 為合法，送 `20.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
-- [ ] 反彈／累積上漲送 `risePercent: 50` 為合法，送 `50.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
-- [ ] 反彈／累積上漲送 `risePercent: 30` 仍為合法（上限未一併收緊）
-- [ ] 上漲支撐送 `risePercent: 30` 回 `400` 而非受理後回零命中——`strategy` 指名 `RISING_SUPPORT`
-- [ ] 同一次請求中一個策略超限、其餘合法時，回應的 `strategy` 指名的是實際超限的那一個
-- [ ] 反彈的 `dropPercent` 上限維持 `50` 不變，且其錯誤仍為 `INVALID_DROP_PERCENT`
-- [ ] `risePercent` 為 `0` 與小數位數規則（最多一位）在五個型態上皆未改變
-- [ ] `GET /api/strategies` 中 `CUMULATIVE_RISE` 與 `REBOUND` 的 `params[].max` 仍為 `50`，未因本次改動而變
+- [x] 箱型突破／底底高／上漲支撐送 `risePercent: 20` 為合法，送 `20.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
+- [x] 反彈／累積上漲送 `risePercent: 50` 為合法，送 `50.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
+- [x] 反彈／累積上漲送 `risePercent: 30` 仍為合法（上限未一併收緊）
+- [x] 上漲支撐送 `risePercent: 30` 回 `400` 而非受理後回零命中——`strategy` 指名 `RISING_SUPPORT`
+- [x] 同一次請求中一個策略超限、其餘合法時，回應的 `strategy` 指名的是實際超限的那一個
+- [x] 反彈的 `dropPercent` 上限維持 `50` 不變，且其錯誤仍為 `INVALID_DROP_PERCENT`
+- [x] `risePercent` 為 `0` 與小數位數規則（最多一位）在五個型態上皆未改變
+- [x] `GET /api/strategies` 中 `CUMULATIVE_RISE` 與 `REBOUND` 的 `params[].max` 仍為 `50`，未因本次改動而變
 
 ---
 ## Execution Result
@@ -738,3 +738,41 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
 **驗證**：`mvn -f develop/backend/pom.xml test` — 321/321 通過（本次之前為 305/305；新增與改寫測試後淨增 16，其中包含替換掉數個驗證反彈舊靈敏度行為、已不再適用的測試）。
 
 **變更檔案**：`ReboundDetector`（重寫）、`HigherLowsDetector`（重寫）、`PatternDetector`、`CumulativeRiseDetector`、`BoxBreakoutDetector`、`RisingSupportDetector`、`StrategyScanService`、`ReboundDetailDto`、`LowPointDto`、`StrategySelectionDto`、`StrategyResultDto`、`StrategyDto`、`ParamDto`、`ParamGroupDto`（新）、四個新例外類別、`GlobalExceptionHandler`、`ErrorResponse`、`StrategyScanIntegrationTest`。
+
+### Increment 6 — 2026-09-09
+
+本次執行的是「`risePercent` 上限逐型態認定」增量：箱型突破／底底高／上漲支撐由 0~50 收緊為 0~20，反彈／累積上漲維持 0~50 不變；反彈的 `dropPercent`（0~50、`INVALID_DROP_PERCENT`）未觸碰。
+
+**設計取向**：延續既有的 `PatternDetector` Strategy 介面（各實作各自宣告自己的參數表），新增一個 default 方法 `getRisePercentMax()`，預設回傳 `50`（REBOUND／CUMULATIVE_RISE 沿用預設，不覆寫）；`BoxBreakoutDetector`／`HigherLowsDetector`／`RisingSupportDetector` 三者覆寫為 `20`。`StrategyScanService.validateRisePercent` 原本用一個系統級常數 `RISE_PERCENT_MAX` 比對，改為向該次選到的 `detector` 詢問 `getRisePercentMax()`。原本身兼二職（同時撐住 `risePercent` 與 `dropPercent` 兩種驗證）的常數，拆成兩個：`risePercent` 的上限改由各 detector 決定，`dropPercent` 專屬的 `DROP_PERCENT_MAX`（固定 `50`，REBOUND 專用、不隨型態變動）留在 service 層。`validatePercentInRange` 因此多一個 `max` 參數，呼叫端（目前只有 `dropPercent`）自行傳入。
+
+**`GET /api/strategies` 端點未變動**：箱型突破／底底高／上漲支撐三型態走 `presets`（無 `params` 陣列），本來就沒有把 `risePercent` 的數值上下限放上線，因此收緊上限不需要跟著改這三筆的 wire 內容；`CUMULATIVE_RISE`／`REBOUND` 的 `params[].risePercent.max` 本來就寫死在各自 detector 建構子裡的 `ParamDto`（`"50"`），本次未觸碰，仍是 `50`（新增測試 `getStrategies_cumulativeRiseAndReboundParamMax_stillFifty` 直接對這兩筆做斷言）。因此「廣告值與實際驗證一致」對這三型態而言，實際上是「未廣告任何數值，故無不一致可言」；驗證端的收緊本身即是本增量要做的事。
+
+**新增測試（10 個，均在 `StrategyScanIntegrationTest`）**：
+- `boxBreakout_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected`
+- `higherLows_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected`
+- `risingSupport_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected`
+- `risingSupport_risePercent30Rejected_notSilentlyAcceptedThenZeroHits`（AC「上漲支撐送 30 回 400 而非受理後回零命中」）
+- `rebound_and_cumulativeRise_risePercent30StillValid_upperBoundNotTightenedAlongside`
+- `risePercent_perStrategyBound_mixedRequest_namesTheActuallyOffendingStrategy`（`HIGHER_LOWS: 15`〔合法〕排在前、`BOX_BREAKOUT: 25`〔在新制下超限、在舊制下曾經合法〕排在後，斷言回應的 `strategy` 是 `BOX_BREAKOUT`，不是先被檢查到的那筆）
+- `rebound_dropPercentUpperBoundUnchanged_50ValidRemains`（`dropPercent=50.1` 的既有測試已涵蓋上界拒絕；本測試補上 `50` 本身仍合法的邊界）
+- `risingSupport_risePercentZero_andSingleDecimalDigitRule_unchanged`
+- `cumulativeRise_risePercentMoreThanOneDecimalDigit_stillRejected`
+- `getStrategies_cumulativeRiseAndReboundParamMax_stillFifty`
+
+**驗證**：`mvn -f develop/backend/pom.xml test` — **351/351 通過**（本次之前為 341/341；`StrategyScanIntegrationTest` 由 95 增至 105，淨增 10）。`mvn -f develop/backend/pom.xml compile`／`test-compile` 皆先行確認過乾淨編譯。全程未啟動即時伺服器；執行前後皆確認 8080 埠是空的。
+
+**已驗證的驗收項對照**（供人工勾選）：
+- 箱型突破／底底高／上漲支撐送 `risePercent: 20` 合法、`20.1` 回 `400 INVALID_RISE_PERCENT` 且 `strategy` 指名該策略 —— 三個新測試各自驗證。
+- 反彈／累積上漲送 `risePercent: 50` 合法（既有測試 `risePercent_upperBoundRaisedTo50_...`／`cumulativeRise_risePercentValidationUnchanged_...` 覆蓋）、`50.1` 回 `400` 且 `strategy` 指名該策略（同上，未改動、重跑仍綠燈）。
+- 反彈／累積上漲送 `risePercent: 30` 仍合法 —— `rebound_and_cumulativeRise_risePercent30StillValid_...` 驗證。
+- 上漲支撐送 `risePercent: 30` 回 `400`、`strategy` 為 `RISING_SUPPORT` —— `risingSupport_risePercent30Rejected_...` 驗證。
+- 同一請求一個策略超限、其餘合法時，`strategy` 指名實際超限者 —— `risePercent_perStrategyBound_mixedRequest_namesTheActuallyOffendingStrategy` 驗證（刻意使用「舊制合法、新制超限」的 25，且把超限者排在合法者之後，排除「永遠回報第一筆」的假陽性）。
+- 反彈 `dropPercent` 上限維持 `50`、錯誤仍為 `INVALID_DROP_PERCENT` —— 既有測試 `rebound_invalidDropPercent_rejected`（`50.1` 拒絕）加新測試 `rebound_dropPercentUpperBoundUnchanged_50ValidRemains`（`50` 合法）共同驗證；`StrategyScanService`／`ReboundDetector` 均未改動 `dropPercent` 的驗證路徑。
+- `risePercent` 為 `0` 與小數位數規則（最多一位）在五個型態上未改變 —— `HIGHER_LOWS`／`BOX_BREAKOUT`／`REBOUND`／`CUMULATIVE_RISE` 原有測試重跑仍綠燈；新增 `risingSupport_risePercentZero_andSingleDecimalDigitRule_unchanged` 補上 `RISING_SUPPORT` 這一型態原本缺的覆蓋，`cumulativeRise_risePercentMoreThanOneDecimalDigit_stillRejected` 補上 `CUMULATIVE_RISE` 的小數規則覆蓋。
+- `GET /api/strategies` 中 `CUMULATIVE_RISE`／`REBOUND` 的 `params[].max` 仍為 `50` —— `getStrategies_cumulativeRiseAndReboundParamMax_stillFifty` 新增驗證；既有 catalog 測試（斷言 `params[].max` 為 `"50"`）亦重跑仍綠燈。
+
+**`code-quality` skill 自我審查**：檢視本次 diff（`PatternDetector` 新 default 方法、三個 detector 的覆寫、`StrategyScanService` 的參數化）——無 null 安全問題（`getRisePercentMax()` 一律回傳非 null 的 `BigDecimal`）、無資源生命週期或原子性疑慮（純讀取、無狀態變更）、無重複邏輯（上限值單一來源即各 detector 自身）。審查中順手把 `DROP_PERCENT_MAX` 常數的註解重寫一次，讓「`dropPercent` 上限固定不隨型態變動」與「`risePercent` 上限逐型態」的對比更清楚，屬單純措辭調整、無行為變更。未發現需要修正之處。
+
+**未能驗證的部分**：無。本增量純屬驗證邏輯改動，Testing constraints 要求的「100% mock-driven、不打真實 Yahoo/FinMind/TWSE」與既有 `StrategyScanIntegrationTest` 的既有慣例一致（該測試類別本身只操作測試資料庫的 `stock`/`stock_daily_price`，不涉外部 API），未新增任何違反此限制的測試。
+
+**變更檔案**：`PatternDetector`（新增 `getRisePercentMax()` default 方法）、`BoxBreakoutDetector`／`HigherLowsDetector`／`RisingSupportDetector`（各自覆寫為 `20`）、`StrategyScanService`（`validateRisePercent` 改為詢問 detector；`validatePercentInRange` 新增 `max` 參數；新增 `DROP_PERCENT_MAX` 常數取代原本身兼二職的 `RISE_PERCENT_MAX`）、`StrategyScanIntegrationTest`（新增 10 個測試）。

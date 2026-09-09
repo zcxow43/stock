@@ -1234,6 +1234,194 @@ class StrategyScanIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode(), "\"2.50\" carries only one real decimal digit; body: " + response.getBody());
     }
 
+    // ==================== Increment 6: risePercent's upper bound is per-strategy ====================
+    // specs/backend/strategy-scan.md, "risePercent 的上限逐型態認定，不是全系統一個值": BOX_BREAKOUT /
+    // HIGHER_LOWS / RISING_SUPPORT are tightened to 0~20; REBOUND / CUMULATIVE_RISE keep 0~50.
+
+    @Test
+    void boxBreakout_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected() {
+        String stockId = "SS910";
+        seedStock(stockId, "箱型突破上限收緊測試", true);
+        LocalDate start = LocalDate.now().minusDays(1);
+        LocalDate end = LocalDate.now();
+
+        ScanRequestDto twenty = scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("20"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<String> twentyResponse = rest.postForEntity("/api/strategies/scan", twenty, String.class);
+        assertEquals(HttpStatus.OK, twentyResponse.getStatusCode(), "20 must remain a valid risePercent override");
+
+        ScanRequestDto twentyPointOne = scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("20.1"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<ErrorResponse> rejectedResponse =
+                rest.postForEntity("/api/strategies/scan", twentyPointOne, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, rejectedResponse.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", rejectedResponse.getBody().getCode());
+        assertEquals("BOX_BREAKOUT", rejectedResponse.getBody().getStrategy());
+    }
+
+    @Test
+    void higherLows_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected() {
+        String stockId = "SS911";
+        seedStock(stockId, "底底高上限收緊測試", true);
+        LocalDate start = LocalDate.now().minusDays(1);
+        LocalDate end = LocalDate.now();
+
+        ScanRequestDto twenty = scanRequestFromSelections(
+                Collections.singletonList(selection("HIGHER_LOWS", "STANDARD", new BigDecimal("20"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<String> twentyResponse = rest.postForEntity("/api/strategies/scan", twenty, String.class);
+        assertEquals(HttpStatus.OK, twentyResponse.getStatusCode(), "20 must remain a valid risePercent override");
+
+        ScanRequestDto twentyPointOne = scanRequestFromSelections(
+                Collections.singletonList(selection("HIGHER_LOWS", "STANDARD", new BigDecimal("20.1"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<ErrorResponse> rejectedResponse =
+                rest.postForEntity("/api/strategies/scan", twentyPointOne, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, rejectedResponse.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", rejectedResponse.getBody().getCode());
+        assertEquals("HIGHER_LOWS", rejectedResponse.getBody().getStrategy());
+    }
+
+    @Test
+    void risingSupport_risePercentUpperBoundTightenedTo20_20ValidBut20Point1Rejected() {
+        String stockId = "SS912";
+        seedStock(stockId, "上漲支撐上限收緊測試", true);
+        LocalDate start = LocalDate.now().minusDays(1);
+        LocalDate end = LocalDate.now();
+
+        ScanRequestDto twenty = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", new BigDecimal("20"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<String> twentyResponse = rest.postForEntity("/api/strategies/scan", twenty, String.class);
+        assertEquals(HttpStatus.OK, twentyResponse.getStatusCode(), "20 must remain a valid risePercent override");
+
+        ScanRequestDto twentyPointOne = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", new BigDecimal("20.1"))),
+                Collections.singletonList(stockId), start, end);
+        ResponseEntity<ErrorResponse> rejectedResponse =
+                rest.postForEntity("/api/strategies/scan", twentyPointOne, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, rejectedResponse.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", rejectedResponse.getBody().getCode());
+        assertEquals("RISING_SUPPORT", rejectedResponse.getBody().getStrategy());
+    }
+
+    @Test
+    void risingSupport_risePercent30Rejected_notSilentlyAcceptedThenZeroHits() {
+        // Daily price-limit alone makes a 30% single-day rise structurally impossible for
+        // RISING_SUPPORT — this must be a 400, not an accepted request that quietly returns zero
+        // matches (specs/backend/strategy-scan.md, "一個永遠不可能命中的請求應該被拒絕，而不是被受理後回零命中").
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", new BigDecimal("30"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("RISING_SUPPORT", response.getBody().getStrategy());
+    }
+
+    @Test
+    void rebound_and_cumulativeRise_risePercent30StillValid_upperBoundNotTightenedAlongside() {
+        String reboundStock = "SS913";
+        String cumulativeStock = "SS914";
+        seedStock(reboundStock, "反彈上限未收緊測試", true);
+        seedStock(cumulativeStock, "累積上漲上限未收緊測試", true);
+        LocalDate start = LocalDate.now().minusDays(1);
+        LocalDate end = LocalDate.now();
+
+        ScanRequestDto reboundRequest = scanRequestFromSelections(
+                Collections.singletonList(reboundSelection(null, null, null, null, new BigDecimal("30"))),
+                Collections.singletonList(reboundStock), start, end);
+        ResponseEntity<String> reboundResponse = rest.postForEntity("/api/strategies/scan", reboundRequest, String.class);
+        assertEquals(HttpStatus.OK, reboundResponse.getStatusCode(), "REBOUND's risePercent=30 must remain valid");
+
+        ScanRequestDto cumulativeRequest = scanRequestFromSelections(
+                Collections.singletonList(selectionDays("CUMULATIVE_RISE", null, new BigDecimal("30"))),
+                Collections.singletonList(cumulativeStock), start, end);
+        ResponseEntity<String> cumulativeResponse =
+                rest.postForEntity("/api/strategies/scan", cumulativeRequest, String.class);
+        assertEquals(HttpStatus.OK, cumulativeResponse.getStatusCode(),
+                "CUMULATIVE_RISE's risePercent=30 must remain valid");
+    }
+
+    @Test
+    void risePercent_perStrategyBound_mixedRequest_namesTheActuallyOffendingStrategy() {
+        // 25 is invalid for the tightened BOX_BREAKOUT (>20) but would have been valid under the old,
+        // system-wide 50 bound — this is the value that actually distinguishes the new per-strategy
+        // enforcement from the old one. HIGHER_LOWS' 15 stays within its own (also tightened, but not
+        // exceeded) 0~20 bound, and is listed first so the response can't merely be reporting
+        // whichever selection happens to be checked first.
+        List<StrategySelectionDto> selections = Arrays.asList(
+                selection("HIGHER_LOWS", "STANDARD", new BigDecimal("15")),
+                selection("BOX_BREAKOUT", "STANDARD", new BigDecimal("25")));
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(selections);
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("BOX_BREAKOUT", response.getBody().getStrategy(),
+                "must name the strategy that actually exceeds its own bound, not the first selection submitted");
+    }
+
+    @Test
+    void rebound_dropPercentUpperBoundUnchanged_50ValidRemains() {
+        String stockId = "SS915";
+        seedStock(stockId, "反彈跌幅上限未變測試", true);
+        StrategySelectionDto dto = reboundSelection(null, new BigDecimal("50"), null, null, null);
+        ScanRequestDto request = scanRequestFromSelections(Collections.singletonList(dto),
+                Collections.singletonList(stockId), LocalDate.now().minusDays(1), LocalDate.now());
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/scan", request, String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "REBOUND's dropPercent=50 must remain valid");
+    }
+
+    @Test
+    void risingSupport_risePercentZero_andSingleDecimalDigitRule_unchanged() {
+        String stockId = "SS916";
+        seedStock(stockId, "上漲支撐零值與小數規則測試", true);
+
+        ScanRequestDto zeroRequest = scanRequestFromSelections(
+                Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", BigDecimal.ZERO)),
+                Collections.singletonList(stockId), LocalDate.now().minusDays(1), LocalDate.now());
+        ResponseEntity<String> zeroResponse = rest.postForEntity("/api/strategies/scan", zeroRequest, String.class);
+        assertEquals(HttpStatus.OK, zeroResponse.getStatusCode(), "risePercent=0 must remain a valid override");
+
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection("RISING_SUPPORT", "STANDARD", new BigDecimal("2.55"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("RISING_SUPPORT", response.getBody().getStrategy());
+    }
+
+    @Test
+    void cumulativeRise_risePercentMoreThanOneDecimalDigit_stillRejected() {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(
+                selectionDays("CUMULATIVE_RISE", null, new BigDecimal("12.55"))));
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_RISE_PERCENT", response.getBody().getCode());
+        assertEquals("CUMULATIVE_RISE", response.getBody().getStrategy());
+    }
+
+    @Test
+    void getStrategies_cumulativeRiseAndReboundParamMax_stillFifty() throws Exception {
+        // GET /api/strategies must keep advertising 50 for the two strategies whose enforced bound
+        // did not change (specs/backend/strategy-scan.md's acceptance criteria pin this explicitly) —
+        // it must not have drifted while BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT's enforced bound was
+        // tightened elsewhere in this increment.
+        ResponseEntity<String> response = rest.getForEntity("/api/strategies", String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode strategies = objectMapper.readTree(response.getBody()).get("strategies");
+
+        for (String code : new String[]{"CUMULATIVE_RISE", "REBOUND"}) {
+            JsonNode strategy = findByCode(strategies, code);
+            JsonNode params = strategy.get("params");
+            JsonNode risePercent = findByCode(params, "risePercent");
+            assertBigDecimalEquals("50", risePercent.get("max"));
+        }
+    }
+
     // ==================== Increment 3: commonStocksOnly ====================
     // Exercised against the live dataset's real ETF (0050/00878), special share (2881A) and TDR
     // (910322) rows, plus real ordinary shares — these already exist from stock-universe-import and

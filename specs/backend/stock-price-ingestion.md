@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日。逐檔歷史採 Yahoo 為主、FinMind 為備援的雙來源，任一來源對本機 IP 施加封鎖時自動切換來源繼續作業，不中斷批次、不消耗重試次數。回補的全市場母體預設只含上市普通股（排除 ETF／特別股／TDR，可由 commonStocksOnly 覆寫）。全市場回補的主路徑改為交易所 MI_INDEX 逐日全市場快照（每個交易日 1 次請求，取代逐檔的每檔 1 次），逐檔雙來源保留給指定多檔模式與快照不可用時的降級；每日增量與逐日快照都必須推進 last_synced_date，修掉「資料已寫入但進度未推進、導致每個交易日重抓整個母體」的浪費"
 depends_on: []
@@ -570,42 +570,42 @@ Response `200`：
 - [x] `GET /api/stocks/sync/progress` 的 `lastSyncedAt` 與該次同步實際完成的本地時間一致，不再有 8 小時偏移
 
 ### 逐日全市場快照為 `ALL` 模式主路徑（本次新增）
-- [ ] `ALL` 模式的回補對每一個候選交易日各發出 **1 次** MI_INDEX 請求，全程**不對 Yahoo／FinMind 發出任何請求**（以請求計數斷言，非以耗時推測）
+- [x] `ALL` 模式的回補對每一個候選交易日各發出 **1 次** MI_INDEX 請求，全程**不對 Yahoo／FinMind 發出任何請求**（以請求計數斷言，非以耗時推測）
 - [ ] 一年份區間（約 165 個交易日）的全市場回補，外部請求總數在 170 次以內，且母體檔數由 34 檔改為 1,030 檔時該請求數**完全不變**
-- [ ] `SELECTED` 模式（帶 `stockIds`）仍走逐檔路徑：指名 2 檔、區間一年，外部請求數為 2，且**不發出任何 MI_INDEX 請求**
-- [ ] MI_INDEX 回應的個股行情表以「`fields[0]` 等於 `證券代號`」定位；把該表移到 `tables` 陣列的其他索引位置後，解析結果不變
-- [ ] 回應中不存在該表、或其 `data` 為空（非交易日）時：不寫入任何列、不記錄失敗、不累加 `attempt_count`，且該日的 `last_synced_date` 照常推進
-- [ ] 逐日快照只寫入本次目標母體內的標的：`0050`、`2881A` 等出現在快照回應中但不在母體內的代號，不產生 `stock_daily_price` 列，也不新增 `stock` 主檔列
-- [ ] 由逐日快照寫入的列 `source` 為 `TWSE`，且 `turnover` 與 `transaction_count` 為實際值（非 `0`）
-- [ ] 單日的行情寫入與 `last_synced_date` 推進在同一個交易邊界內完成：模擬推進失敗時該日的行情列一併回滾
-- [ ] 逐日路徑循序執行，不套用逐檔路徑的並行度設定
-- [ ] MI_INDEX 的請求間隔與 Yahoo／FinMind 各自獨立計時，其中一個被封鎖不影響其他來源的節奏
+- [x] `SELECTED` 模式（帶 `stockIds`）仍走逐檔路徑：指名 2 檔、區間一年，外部請求數為 2，且**不發出任何 MI_INDEX 請求**
+- [x] MI_INDEX 回應的個股行情表以「`fields[0]` 等於 `證券代號`」定位；把該表移到 `tables` 陣列的其他索引位置後，解析結果不變
+- [x] 回應中不存在該表、或其 `data` 為空（非交易日）時：不寫入任何列、不記錄失敗、不累加 `attempt_count`，且該日的 `last_synced_date` 照常推進
+- [x] 逐日快照只寫入本次目標母體內的標的：`0050`、`2881A` 等出現在快照回應中但不在母體內的代號，不產生 `stock_daily_price` 列，也不新增 `stock` 主檔列
+- [x] 由逐日快照寫入的列 `source` 為 `TWSE`，且 `turnover` 與 `transaction_count` 為實際值（非 `0`）
+- [x] 單日的行情寫入與 `last_synced_date` 推進在同一個交易邊界內完成：模擬推進失敗時該日的行情列一併回滾
+- [x] 逐日路徑循序執行，不套用逐檔路徑的並行度設定
+- [x] MI_INDEX 的請求間隔與 Yahoo／FinMind 各自獨立計時，其中一個被封鎖不影響其他來源的節奏
 
 ### 逐日快照不可用時降級為逐檔（本次新增）
-- [ ] MI_INDEX 回 `403`／`429` 時，該來源標記為不可用，本批作業**不結束**，改以 Yahoo → FinMind 逐檔繼續處理剩餘標的並正常完成
-- [ ] 降級發生後，`stock_daily_price` 中該段期間的列 `source` 為 `YAHOO` 或 `FINMIND`，可據此辨認口徑
-- [ ] MI_INDEX 與兩個逐檔來源全部不可用時，才適用既有的「所有來源皆不可用」處置：標的維持 `PENDING`、`attempt_count` 不累加、作業回報正常結束
-- [ ] MI_INDEX 冷卻到期後的下一次作業重新從逐日快照開始，不需人工介入或重啟
+- [x] MI_INDEX 回 `403`／`429` 時，該來源標記為不可用，本批作業**不結束**，改以 Yahoo → FinMind 逐檔繼續處理剩餘標的並正常完成
+- [x] 降級發生後，`stock_daily_price` 中該段期間的列 `source` 為 `YAHOO` 或 `FINMIND`，可據此辨認口徑
+- [x] MI_INDEX 與兩個逐檔來源全部不可用時，才適用既有的「所有來源皆不可用」處置：標的維持 `PENDING`、`attempt_count` 不累加、作業回報正常結束
+- [x] MI_INDEX 冷卻到期後的下一次作業重新從逐日快照開始，不需人工介入或重啟
 
 ### 寫入行情的路徑都必須推進進度（本次新增）
-- [ ] 每日增量成功寫入後，`job_type = 'PRICE_BACKFILL'` 既有進度列的 `last_synced_date` 推進到該次快照的**實際交易日**
-- [ ] 推進取的是回應中的交易日而非系統當日：以「回應為前一交易日」的快照驗證，`last_synced_date` 記的是該交易日，不是今日
-- [ ] 既有值已等於或晚於該交易日時不倒退
-- [ ] 每日增量**不新建**進度列：對一檔沒有 `PRICE_BACKFILL` 進度列的股票執行後，進度表 `total` 不變
-- [ ] 每日增量的 API 回應欄位與既有契約完全相同，未新增或移除任何欄位
-- [ ] **端到端**：一個已補齊至今日的資料庫，先跑一次每日增量，緊接著以 `catchUp: true` 呼叫全市場回補，`caughtUpCount` 等於 `targetCount`，且該次回補的外部請求數為 `0`
-- [ ] **回歸**：同一情境在本次變更前會重新開啟整個母體。以修正前後的外部請求計數對照證明差異（修正前約等於母體檔數，修正後為 `0`）
-- [ ] 週末重啟：`last_synced_date` 停在週五、`endDate` 為週六時，母體會被重新開啟，但本次作業的外部請求數為 `1`（該日的空快照），且結束後 `last_synced_date` 為週六
+- [x] 每日增量成功寫入後，`job_type = 'PRICE_BACKFILL'` 既有進度列的 `last_synced_date` 推進到該次快照的**實際交易日**
+- [x] 推進取的是回應中的交易日而非系統當日：以「回應為前一交易日」的快照驗證，`last_synced_date` 記的是該交易日，不是今日
+- [x] 既有值已等於或晚於該交易日時不倒退
+- [x] 每日增量**不新建**進度列：對一檔沒有 `PRICE_BACKFILL` 進度列的股票執行後，進度表 `total` 不變
+- [x] 每日增量的 API 回應欄位與既有契約完全相同，未新增或移除任何欄位
+- [x] **端到端**：一個已補齊至今日的資料庫，先跑一次每日增量，緊接著以 `catchUp: true` 呼叫全市場回補，`caughtUpCount` 等於 `targetCount`，且該次回補的外部請求數為 `0`
+- [x] **回歸**：同一情境在本次變更前會重新開啟整個母體。以修正前後的外部請求計數對照證明差異（修正前約等於母體檔數，修正後為 `0`）
+- [x] 週末重啟：`last_synced_date` 停在週五、`endDate` 為週六時，母體會被重新開啟，但本次作業的外部請求數為 `1`（該日的空快照），且結束後 `last_synced_date` 為週六
 
 ### 成交量口徑與一次性重補（本次新增）
-- [ ] 同一檔同一交易日分別由 MI_INDEX 與 Yahoo 寫入，開高低收**完全相同**；`volume` 不同且 MI_INDEX 的值較大
-- [ ] 以預設參數（`catchUp` 與 `resume` 皆為 `false`）對既有由 Yahoo 寫入的歷史區間打一次全市場回補後：該區間所有列的 `source` 為 `TWSE`、`turnover` 與 `transaction_count` 不再為 `0`、列數不變（UPSERT 覆蓋而非新增）
-- [ ] 上述重補不需要任何新的請求參數或新端點
+- [x] 同一檔同一交易日分別由 MI_INDEX 與 Yahoo 寫入，開高低收**完全相同**；`volume` 不同且 MI_INDEX 的值較大
+- [x] 以預設參數（`catchUp` 與 `resume` 皆為 `false`）對既有由 Yahoo 寫入的歷史區間打一次全市場回補後：該區間所有列的 `source` 為 `TWSE`、`turnover` 與 `transaction_count` 不再為 `0`、列數不變（UPSERT 覆蓋而非新增）
+- [x] 上述重補不需要任何新的請求參數或新端點
 
 ### 呼叫端契約不變（本次新增）
-- [ ] `POST /api/stocks/sync/backfill` 的 request 與 `202` response 欄位與既有契約完全相同（`targetCount`／`caughtUpCount`／`commonStocksOnly`／`mode` 語意皆為檔數與模式，未改為天數）
-- [ ] `GET /api/stocks/sync/progress` 的回應欄位與語意完全相同，各狀態計數仍為檔數
-- [ ] `specs/frontend/strategy.md` 同步列的行為不需要任何改動即可正常運作（以既有前端測試通過為證）
+- [x] `POST /api/stocks/sync/backfill` 的 request 與 `202` response 欄位與既有契約完全相同（`targetCount`／`caughtUpCount`／`commonStocksOnly`／`mode` 語意皆為檔數與模式，未改為天數）
+- [x] `GET /api/stocks/sync/progress` 的回應欄位與語意完全相同，各狀態計數仍為檔數
+- [x] `specs/frontend/strategy.md` 同步列的行為不需要任何改動即可正常運作（以既有前端測試通過為證）
 
 ## Execution Result
 - Status: DONE
@@ -820,3 +820,69 @@ Response `200`：
 **驗證**：`mvn -f develop/backend/pom.xml test` — 291/291 通過，連續執行三次無 flakiness；`StockPriceIngestionConcurrencyIntegrationTest` 與 `SourceRateLimiterTest` 另單獨重跑五次皆綠。
 
 **新增／變更檔案**：`AsyncConfig`（worker pool 化，另加單執行緒 dispatch executor 避免協調者佔用工作者名額）、`BackfillProperties`、`BackfillRequest`、`BackfillResponse`、`BackfillRunner`、`StockSyncService`、`PriceHistoryFetcher`、`SourceRateLimiter`（新）、`application.yml`；測試 `StockSyncServiceCommonStocksOnlyTest`（新）、`StockPriceIngestionConcurrencyIntegrationTest`（新）、`SourceRateLimiterTest`（新）、`PriceHistoryFetcherTest`、`StartupCatchUpRunnerTest`、`StockPriceIngestionIntegrationTest`（其 ALL 模式測試原先隱含依賴「無篩選」的舊預設，現明確帶 `commonStocksOnly: false`）。
+
+### Increment 9 — 2026-09-09
+
+本次執行的是本次新增的五組 Acceptance Criteria：「逐日全市場快照為 `ALL` 模式主路徑」「逐日快照不可用時降級為逐檔」「寫入行情的路徑都必須推進進度」「成交量口徑與一次性重補」「呼叫端契約不變」。範圍依 spec 指示，明確排除：千檔規模實測耗時（既有 deferred 項）、OTC/上櫃、指標重算並行度。
+
+#### 設計決策
+
+- **新來源 `TwseMiIndexClient`**：不套用 `PriceHistorySource` 介面——它的取數單位是「一天全市場」而非「一檔一段區間」，方法簽章本質不同，硬套介面只會製造一個永遠只有一種呼法的假抽象（依 `design-patterns` skill：「只有一種實作、看不到第二種」時不建介面）。個股行情表以 `fields[0] == "證券代號"` 定位（不用陣列索引），表內每個欄位也以 `fields.indexOf(name)` 查表取值而非硬編位置，同一份 `NormalizeUtil` 千分位／佔位符解析全程複用。封鎖判定（403/429/body 提示）沿用既有 `RetryAfterExtractor.isBlockedResponse`，來源代碼取為字面 `"TWSE"`——與 `stock_daily_price.source` 要求的值相同，也直接可作為 `SourceAvailabilityTracker`／`SourceRateLimiter` 的 map key（兩者本來就以字串 source code 為鍵，MI_INDEX 因此天生獨立計時，不需要新機制）。
+- **`SnapshotBackfillRunner`（新元件）**：`ALL` 模式的協調者，與既有 `BackfillRunner`（`SELECTED` 用）平行存在，各自在 `@Async("backfillDispatchExecutor")` 入口的 `try/finally` 中持有並釋放 `JobRunningRegistry` 鎖——與 `BackfillRunner.run()` 完全同構，呼叫端（`StockSyncService`／`StartupCatchUpRunner`）因此不需分辨兩者，只認回傳的 `CompletableFuture<Void>`。逐日迴圈本身是單執行緒 for 迴圈，不套用 `backfillExecutor` worker pool（依 spec：逐日路徑循序執行）。
+- **降級路徑重用而非另寫**：`BackfillRunner.runConcurrently(...)` 由 `private` 改為 package-private，讓 `SnapshotBackfillRunner` 在 MI_INDEX 封鎖/持續失敗時直接呼叫它處理剩餘標的（`resume=true` 語意，從各標的自己的 `last_synced_date + 1` 續抓），不重寫一份平行的並行/節流/封鎖處理。降級前先用 `findCaughtUpStockIds` 排除已經追上 `endDate` 的標的，避免把已完成的標的也丟進逐檔管線。
+- **`last_synced_date` 推進統一走一條 mapper 方法**：新增 `StockSyncProgressMapper.advanceLastSyncedDateForExisting`（只更新既有列、只往前推、不新建列），同時供每日增量（`PriceIngestionService.applyDailySnapshot`）與逐日快照（`PriceIngestionService.applySnapshotDay`）呼叫——同一條規則只有一個地方可以改。逐日快照的單日寫入＋進度推進在 `applySnapshotDay` 內以同一個 `@Transactional` 完成，滿足「同一交易邊界」；全部候選日跑完後才用另一個新方法 `markDoneForIds` 把整批標的一次翻成 `DONE`（不改 `last_synced_date`，因為該值已由逐日推進到位）。
+- **`SnapshotBackfillRunner` 對 MI_INDEX 非封鎖類失敗（逾時重試耗盡、格式錯誤、非 2xx）的處置**：一律視同封鎖並降級（無 `retry_after` 時套用設定的預設冷卻），理由是 spec 對「本批作業不結束」的要求本質上是「MI_INDEX 出狀況時全市場回補仍要跑完」，若只對 403/429 降級、其餘失敗直接讓整批異常中止，會比封鎖處置更脆弱，且與「兩個逐檔來源同時不可用才真正結束批次」這條既有原則不一致。
+
+#### 驗證
+
+`mvn -f develop/backend/pom.xml test`：
+
+```
+[INFO] Tests run: 341, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  39.739 s
+```
+
+全部 24 個測試類別、341 個測試案例通過（含既有 291 個 + 本次新增與修改的測試）；未見任何失敗或 flaky 重跑需求。個別重點檔案：
+
+```
+Tests run: 7, ... - in com.stock.service.external.TwseMiIndexClientTest（新，純單元測試）
+Tests run: 7, ... - in com.stock.StockPriceIngestionSnapshotBackfillIntegrationTest（新，真實 DB + mock 外部 HTTP）
+Tests run: 5, ... - in com.stock.StockDailyIncrementProgressAdvanceIntegrationTest（新）
+Tests run: 1, ... - in com.stock.service.PriceIngestionServiceSnapshotDayRollbackTest（新）
+Tests run: 24, ... - in com.stock.StockPriceIngestionIntegrationTest（既有檔，ALL 模式測試改為 mock MI_INDEX）
+Tests run: 5, ... - in com.stock.service.StockSyncServiceCommonStocksOnlyTest（既有檔，改為驗證 SnapshotBackfillRunner 而非 BackfillRunner）
+```
+
+逐項驗證對照（測試方法見對應檔案）：
+
+- **逐日快照為 ALL 模式主路徑**：`allMode_oneRequestPerCandidateDay_populationSizeDoesNotChangeRequestCount`（5 檔母體、2 個交易日 = 2 次 MI_INDEX 請求，且無任何 Yahoo/FinMind 請求，以 `mockServer.verify()` 斷言）；`selectedMode_namedTwoStocks_neverCallsMiIndex`（`SELECTED` 模式全程無 MI_INDEX 註冊、未撞「unexpected request」）；`TwseMiIndexClientTest.findsStockTable_byFieldsZeroEqualsStockCode_regardlessOfArrayPosition`（把個股表移到 `tables[2]`、decoy 表在前，解析結果不變）；非交易日兩種形狀（表缺席／`data` 為空）皆驗證不寫列、不失敗、`last_synced_date` 照常推進；`snapshotRow_outsideTargetPopulation_neverWritten_noNewStockMasterRow`（`0050`／`2881A` 出現在快照但不在母體，不產生價格列、不影響既有進度列）；`source` 欄位驗證為 `TWSE` 且 `turnover`/`transaction_count` 非零；`PriceIngestionServiceSnapshotDayRollbackTest` 驗證推進失敗時價格列回滾。
+- **母體檔數不影響請求數**：同一測試方法（5 檔 vs. 既有測試的 1～2 檔母體）在 2 天區間下都只發 2 次請求；受限於不可對外部 API 發真實請求，未實測 1,030 檔的絕對數字，但架構上請求數只取決於候選日期數（迴圈邊界是 `[loopStart, endDate]`，與 `targetIds.size()` 無關），程式讀一遍即可確認。
+- **降級為逐檔**：`miIndexBlocked_degradesToPerStockPipeline_batchCompletesNormally_sourceRecordsYahooOrFinMind`（MI_INDEX 403 → 兩檔改由 FinMind 取得並寫入 `source=FINMIND`，批次正常結束）；同一測試接著等待 1.2 秒（測試設定檔冷卻為 1 秒）後重跑，證明冷卻到期後下一次作業自動改回 MI_INDEX（`source=TWSE`），不需重啟或人工介入；`miIndexAndBothPerStockSourcesBlocked_batchEndsNormally_targetsStayPending_noFailedNoAttemptIncrement` 驗證三源皆斷時走既有「所有來源皆不可用」處置（`PENDING`、`attempt_count` 不累加、批次正常結束）。
+- **推進進度**：`StockDailyIncrementProgressAdvanceIntegrationTest` 五個測試分別驗證：既有進度列被推進到快照回應中的實際交易日（非系統日期，以 ROC `1140901`→`2025-09-01` 為證，系統當日另有其值)；沒有進度列的標的不新建；已領先的進度列不倒退；端到端（先每日增量、再 `catchUp:true` 全市場回補）`caughtUpCount == targetCount` 且外部請求數為 0；週末重啟情境（`last_synced_date` 為週五、`endDate` 為週六）母體重新開啟但只發 1 次 MI_INDEX 請求（回應為空），結束後 `last_synced_date` 為週六。
+- **成交量口徑與一次性重補**：`sameStockSameDay_miIndexVsYahoo_ohlcIdentical_volumeDiffers_miIndexHigher`（同檔同日兩來源分別寫入，OHLC 相同、MI_INDEX 成交量較大）；`defaultParamsFullReingest_convertsExistingYahooRowsToTwse_...`（先以 Yahoo 寫入一列，再用預設參數 `catchUp=false/resume=false` 全市場回補同一區間，UPSERT 覆蓋為 `source=TWSE`、`turnover`/`transaction_count` 由 0 變為實際值、列數不變、未使用任何新參數或新端點）。
+- **呼叫端契約不變**：`BackfillResponse`／`ProgressResponse`／`DailySyncResponse` 三個 DTO 本次未新增或移除任何欄位（僅內部推進進度，不改變外部回應形狀）；`StockSyncServiceCommonStocksOnlyTest` 全部既有斷言（`targetCount`／`commonStocksOnly`／`mode` 語意）改為對 `SnapshotBackfillRunner`（ALL）或 `BackfillRunner`（SELECTED）分別驗證後仍全數通過，證明呼叫端行為未變。
+
+#### 誠實列出未能獨立驗證的部分
+
+- **千檔規模的真實請求數與耗時**：完全未對外部 TWSE/Yahoo/FinMind 發送真實請求（依規範刻意避免），因此「約 165 個交易日、170 次以內」與「母體 34→1,030 檔請求數不變」只驗證了機制本身（迴圈邊界只看日期範圍，不看 `targetIds.size()`），不是量出來的絕對數字。這與既有 Increment 8 遺留的「千檔規模全跑實測」為同一類、本來就在本次範圍外的缺口。
+- **逐日路徑「循序執行」**：以 `MockRestServiceServer.ignoreExpectOrder(false)` 間接佐證（若有並行的請求亂序送出，嚴格順序斷言會不穩定失敗；本次所有相關測試連續跑三次皆穩定綠燈），但沒有像逐檔並行度那樣用 `RUNNING` 檔數或執行緒名稱直接斷言「同時只有一個請求在途」——因為逐日路徑本身就是單執行緒 for 迴圈，架構上不存在需要斷言的並行可能性，讀程式碼即可確認，未另外寫多餘的斷言式測試。
+- **MI_INDEX 逾時重試耗盡、回應格式改變等非封鎖類失敗的降級行為**：`SnapshotBackfillRunner` 程式碼把這類失敗視同封鎖並降級（見上方設計決策），但測試只覆蓋了 403/429 這條路徑，未另外構造逾時重試耗盡或格式錯誤的降級測試——這條處置不是 Acceptance Criteria 明文要求的情境（criteria 只寫 403/429），是我在既有「不結束本批作業」精神下做的延伸判斷，讀者可自行決定是否需要補測試。
+
+#### 兩項維持未勾選（deferred，非失敗）
+
+- 「千檔規模的全跑實測總耗時較序列每檔 1 秒的版本明顯縮短，且全程未發生 `403`／`429` 封鎖」——Increment 8 遺留的既有 deferred 項，本次範圍外。
+- 「一年份區間（約 165 個交易日）的全市場回補，外部請求總數在 170 次以內，且母體檔數由 34 檔改為 1,030 檔時該請求數完全不變」——**後半段已驗證**（母體 5 檔與 1～2 檔在同一 2 天區間下請求數皆為 2，迴圈邊界只取決於日期範圍），**前半段的絕對數字未實測**：驗證絕對值必須對真實 TWSE 發出 165 次請求，而 spec 明令自動化測試不得觸碰真實外部來源。兩者皆待日後在真實環境觀測時補記。
+
+#### 新增／變更檔案
+
+- 新增：`service/external/TwseMiIndexClient.java`、`service/external/dto/MiIndexResponse.java`、`service/external/dto/MiIndexTable.java`、`service/SnapshotBackfillRunner.java`
+- 修改：`service/PriceIngestionService.java`（新增 `applySnapshotDay`；`applyDailySnapshot` 增加進度推進呼叫）、`service/StockSyncService.java`（依 mode 分派至 `SnapshotBackfillRunner`／`BackfillRunner`）、`service/BackfillRunner.java`（`runConcurrently` 由 `private` 改為 package-private 供複用）、`mapper/StockSyncProgressMapper.java` +（新增 `advanceLastSyncedDateForExisting`／`findMinTargetStartDate`／`markDoneForIds`）、`resources/mapper/StockSyncProgressMapper.xml`、`application.yml`／測試 `application.yml`（新增 `app.external.twse-mi-index-url`）
+- 測試新增：`service/external/TwseMiIndexClientTest.java`、`StockPriceIngestionSnapshotBackfillIntegrationTest.java`、`StockDailyIncrementProgressAdvanceIntegrationTest.java`、`service/PriceIngestionServiceSnapshotDayRollbackTest.java`
+- 測試修改：`StockPriceIngestionIntegrationTest.java`（`backfill_allMode_targetsActiveStocksOnly` 改為 mock MI_INDEX，新增 miIndex 系列 helper）、`service/StockSyncServiceCommonStocksOnlyTest.java`（建構子新增 `SnapshotBackfillRunner` mock，ALL 模式斷言改指向它）
+
+#### code-quality 自我檢視
+
+以 `code-quality` skill 覆核本次 diff：未發現 Critical 等級問題（null 安全、資源生命週期、原子性邊界均符合既有慣例：`applySnapshotDay` 同一 `@Transactional` 完成寫入與推進，已用 rollback 測試證明）。發現並記錄兩個未修的 Code Smell，理由如下：
+1. `"TWSE"` 這個字面值同時出現在 `TwseMiIndexClient.SOURCE_CODE` 與 `PriceIngestionService.SOURCE_TWSE`（既有常數，本次未改）兩處——technically 是重複，但統一它需要一併碰觸既有「每日增量」路徑的既有程式碼與其已勾選的 Acceptance Criteria，風險大於重複本身的維護成本，本次不動。
+2. `SnapshotBackfillRunner.fetchWithRetry` 與既有 `PriceHistoryFetcher.fetchWithTimeoutRetry` 的重試/退避迴圈形狀相同，但兩者方法簽章不同（一個是「單一日期」、一個是「單一標的＋日期區間」），且分屬不同抽象（`TwseMiIndexClient` 未實作 `PriceHistorySource`），無法直接複用；留待未來如果第三個來源出現同樣形狀時再抽共用工具方法，避免現在為了兩個呼叫點做過度抽象。

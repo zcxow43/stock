@@ -150,4 +150,34 @@
         LIMIT #{limit}
     </select>
 
+    <update id="advanceLastSyncedDateForExistingForNonEmptyIds">
+        UPDATE stock_sync_progress
+        SET last_synced_date = #{tradeDate}
+        WHERE job_type = #{jobType}
+          AND (last_synced_date IS NULL OR last_synced_date &lt; #{tradeDate})
+          AND stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <select id="findMinTargetStartDateForNonEmptyIds" resultType="java.time.LocalDate">
+        SELECT MIN(target_start_date) FROM stock_sync_progress
+        WHERE job_type = #{jobType}
+          AND stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="markDoneForNonEmptyIds">
+        UPDATE stock_sync_progress
+        SET status = 'DONE', finished_at = NOW()
+        WHERE job_type = #{jobType}
+          AND stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
 </mapper>

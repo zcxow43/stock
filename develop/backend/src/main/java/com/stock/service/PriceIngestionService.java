@@ -4,6 +4,7 @@ import com.stock.domain.Industry;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
 import com.stock.domain.StockIndustry;
+import com.stock.domain.StockSyncProgress;
 import com.stock.dto.DailySyncResponse;
 import com.stock.dto.IndustryLinkCandidate;
 import com.stock.dto.UniverseUpsertCounts;
@@ -65,12 +66,14 @@ public class PriceIngestionService {
         int inserted = 0;
         int updated = 0;
         int stockMasterUpserted = 0;
+        List<String> stockIds = new ArrayList<>(rows.size());
 
         for (TwseSnapshotRow row : rows) {
             stockMapper.upsert(new Stock(row.getStockId(), row.getStockName(), MARKET_TSE, Boolean.TRUE));
             stockMasterUpserted++;
 
             priceMapper.upsert(toDomain(row.getPrice(), SOURCE_TWSE));
+            stockIds.add(row.getStockId());
             if (existingStockIds.contains(row.getStockId())) {
                 updated++;
             } else {
@@ -78,7 +81,45 @@ public class PriceIngestionService {
             }
         }
 
+        // Every path that writes a trading day's prices must advance last_synced_date for whatever
+        // PRICE_BACKFILL progress rows already exist among today's snapshot stocks (spec: 寫入行情的
+        // 路徑都必須推進進度) — otherwise the data sits in stock_daily_price already while catchUp
+        // still thinks the whole population is behind, and reopens it every single trading day.
+        // Advances using the snapshot's OWN trade date, never today's calendar date (see method
+        // doc on applySnapshotDay for why), only forward, and never inserts a new progress row for
+        // a stock that doesn't already have one (see advanceLastSyncedDateForExisting).
+        progressMapper.advanceLastSyncedDateForExisting(
+                stockIds, StockSyncProgress.JOB_PRICE_BACKFILL, snapshot.getTradeDate());
+
         return new DailySyncResponse(snapshot.getTradeDate(), rows.size(), inserted, updated, stockMasterUpserted);
+    }
+
+    /**
+     * Writes one trading day's whole-market snapshot rows — filtered down to exactly the ALL-mode
+     * backfill's target population, per stock — and advances that same population's
+     * last_synced_date to this day, in one transaction (spec: 逐日回補的處理流程 step 4/5, 單日的行情寫入
+     * 與 last_synced_date 推進在同一個交易邊界內完成 — a simulated progress-advance failure must roll the
+     * price rows for this day back too).
+     *
+     * A code appearing in {@code rows} but outside {@code targetIds} (ETF/special share/TDR, or a
+     * ticker the target population simply never included) is silently dropped: this path is a
+     * PRICE source, never a universe source (spec: 逐日快照只寫入本次目標母體內的標的...多一條寫主檔的路徑正是
+     * 分類與 is_active 最容易悄悄不一致的成因) — no {@code stock} row is ever written here.
+     *
+     * {@code targetIds}' last_synced_date is advanced even on a day with zero rows (non-trading
+     * day) — {@link #applyDailySnapshot} of an empty {@code rows} is exactly step 3's "視為正常處理
+     * 完畢" case, and advancing last_synced_date is how that day is remembered as already handled.
+     */
+    @Transactional
+    public void applySnapshotDay(List<NormalizedPriceRow> rows, Set<String> targetIds, String jobType,
+                                  LocalDate tradeDate) {
+        for (NormalizedPriceRow row : rows) {
+            if (!targetIds.contains(row.getStockId())) {
+                continue;
+            }
+            priceMapper.upsert(toDomain(row, SOURCE_TWSE));
+        }
+        progressMapper.advanceLastSyncedDateForExisting(new ArrayList<>(targetIds), jobType, tradeDate);
     }
 
     /**

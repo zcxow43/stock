@@ -2027,6 +2027,168 @@ describe('StrategyTab', () => {
     expect(within(row).queryByText('0.00%')).not.toBeInTheDocument()
   })
 
+  it('titles the 反彈 result block with all four actually-used parameters from the response when requireRise is true', async () => {
+    scanResponder = () => reboundScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+    selectStrategy('反彈')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    // reboundScanResponse(): dropDays 3 / dropPercent 10 / riseDays 1 / risePercent 5.
+    await waitFor(() =>
+      expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument(),
+    )
+  })
+
+  it('titles the 反彈 result block with only the drop-side parameters (no empty parenthetical) when requireRise is false', async () => {
+    scanResponder = () => ({
+      startDate: '2026-06-01',
+      endDate: '2026-08-30',
+      scannedStocks: 1,
+      results: [
+        {
+          strategy: 'REBOUND',
+          requireRise: false,
+          dropDays: 3,
+          dropPercent: 10,
+          matchedCount: 1,
+          items: [
+            {
+              stockId: '2603',
+              stockName: '長榮',
+              signalDate: '2026-08-25',
+              detail: { peakDate: '2026-08-21', peakClose: 120.0, troughDate: '2026-08-25', troughClose: 100.0, dropPercent: 16.67 },
+            },
+          ],
+          insufficientData: [],
+          pendingConfirm: [],
+        },
+      ],
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+    selectStrategy('反彈')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('反彈（3 日跌 10%）— 命中 1 檔')).toBeInTheDocument())
+    // Neither the rebound-side numbers nor a dangling arrow/empty parenthetical show up.
+    expect(screen.queryByText(/反彈（3 日跌 10% →/)).not.toBeInTheDocument()
+    expect(screen.queryByText('反彈 — 命中 1 檔')).not.toBeInTheDocument()
+  })
+
+  it('keeps the 反彈 result block title at the last-scanned values (not the edited inputs) after editing any of its four fields without re-scanning', async () => {
+    scanResponder = () => reboundScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+    selectStrategy('反彈')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() =>
+      expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument(),
+    )
+
+    const card = cardFor('反彈')
+    fireEvent.change(within(card).getByLabelText('下跌天數'), { target: { value: '5' } })
+    fireEvent.change(within(card).getByLabelText('跌幅門檻'), { target: { value: '20' } })
+    fireEvent.change(within(card).getByLabelText('反彈天數'), { target: { value: '2' } })
+    fireEvent.change(within(card).getByLabelText('反彈幅度'), { target: { value: '8' } })
+
+    // Title is unchanged — it reads the scan response, not the (now-edited) inputs.
+    expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument()
+  })
+
+  it('leaves the other four strategies’ title formats unchanged (靈敏度 for three, N 日 for 累積上漲)', async () => {
+    scanResponder = () => allFiveStrategiesResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    for (const name of ['箱型突破', '底底高', '上漲支撐', '反彈', '累積上漲']) {
+      selectStrategy(name)
+    }
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('箱型突破（標準）— 命中 1 檔')).toBeInTheDocument())
+    expect(screen.getByText('底底高（嚴格）— 命中 1 檔')).toBeInTheDocument()
+    expect(screen.getByText('上漲支撐（標準）— 命中 1 檔')).toBeInTheDocument()
+    expect(screen.getByText('累積上漲（20 日）— 命中 1 檔')).toBeInTheDocument()
+    expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument()
+  })
+
+  it.each(['PRESET_NOT_APPLICABLE', 'DAYS_NOT_APPLICABLE'])(
+    'shows a generic error under the named card for backend %s when the response carries no `param`, without a page-wide error',
+    async (code) => {
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) {
+          return Promise.resolve(jsonResponse(400, { code, strategy: 'REBOUND' }))
+        }
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+      const card = cardFor('反彈')
+      selectStrategy('反彈')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      // A generic message renders inside the named card...
+      await waitFor(() => expect(within(card).getByText('此策略不支援這次請求帶入的參數組合')).toBeInTheDocument())
+      // ...never the page-wide "掃描失敗" fallback, and never the "帶入了不適用的參數"
+      // wording with a made-up field name (the response carries no `param`).
+      expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+      expect(within(card).queryByText(/帶入了不適用的參數/)).not.toBeInTheDocument()
+    },
+  )
+
+  it('shows 帶入了不適用的參數：{param} under a sensitivity-driven card when PRESET_NOT_APPLICABLE names it, with `param` echoed verbatim from the response', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/scan')) {
+        return Promise.resolve(jsonResponse(400, { code: 'DAYS_NOT_APPLICABLE', strategy: 'BOX_BREAKOUT', param: 'days' }))
+      }
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    const card = cardFor('箱型突破')
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(within(card).getByText('帶入了不適用的參數：days')).toBeInTheDocument())
+    expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+  })
+
+  it.each(['PRESET_NOT_APPLICABLE', 'DAYS_NOT_APPLICABLE', 'PARAM_NOT_APPLICABLE'])(
+    'does not clear existing scan results or disable 開始掃描 when a subsequent scan fails with %s',
+    async (code) => {
+      scanResponder = () => reboundScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+      selectStrategy('反彈')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('2454 聯發科')).toBeInTheDocument())
+
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) {
+          return Promise.resolve(jsonResponse(400, { code, strategy: 'REBOUND', param: 'dropDays' }))
+        }
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(cardFor('反彈').querySelectorAll('.st-inline-error').length).toBeGreaterThan(0))
+      // The prior result is still on screen...
+      expect(screen.getByText('2454 聯發科')).toBeInTheDocument()
+      // ...and 開始掃描 remains clickable, not locked into a failed/disabled state.
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+      expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+    },
+  )
+
   it('renders the 累積上漲 result table with six columns, an up-colored 漲幅, and no pendingConfirm note', async () => {
     scanResponder = () => cumulativeRiseScanResponse()
     renderTab()

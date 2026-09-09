@@ -102,8 +102,14 @@ public class BackfillRunner {
      * shared flag: whichever worker discovers it first stops every worker from claiming new work,
      * but does not cancel work already claimed — each worker finishes whatever stock it is
      * currently processing normally (spec: 已在處理中的標的照常跑完，全部收斂後作業才回報正常結束).
+     *
+     * Package-private (not private): also called directly by {@link SnapshotBackfillRunner} when
+     * the ALL-mode day-by-day snapshot source degrades and hands its remaining stocks off to this
+     * exact per-stock pipeline (spec: 逐日快照不可用時降級為逐檔) — reusing this method rather than a
+     * second copy of the worker-pool/cursor/stop-flag wiring. That caller does not go through
+     * {@link #run}, so it must manage the {@code jobRunningRegistry} lock itself.
      */
-    private void runConcurrently(String jobType, List<String> stockIds, boolean resume) {
+    void runConcurrently(String jobType, List<String> stockIds, boolean resume) {
         if (stockIds.isEmpty()) {
             return;
         }
