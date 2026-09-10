@@ -188,6 +188,69 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
   }
 }
 
+/** One entry of `BacktestRequest.items[]` — one stock, one signal date (specs/frontend/
+ * strategy.md: the LATEST signalDate among the strategies that stock hit). */
+export interface BacktestRequestItem {
+  stockId: string
+  signalDate: string
+}
+
+export interface BacktestRequest {
+  items: BacktestRequestItem[]
+}
+
+export interface BacktestResultItem {
+  stockId: string
+  signalDate: string
+  /** `null` when the signal date itself has no price row (see
+   * specs/backend/strategy-backtest.md「無法回測的標的」). */
+  buyPrice: number | null
+  /** `null` when the stock has no sellable trading day after its signal date — it stays
+   * in `items` and must still render, just with dashes, per the same spec section. */
+  sellDate: string | null
+  sellPrice: number | null
+  returnPercent: number | null
+  profit: number | null
+}
+
+export interface BacktestResponse {
+  asOfDate: string
+  /** Shares per lot, currently always 1000 — the frontend must read this rather than
+   * hard-code the constant (specs/frontend/strategy.md「總成本以回應的 lotSize 計算」). */
+  lotSize: number
+  totalCost: number
+  totalProfit: number
+  /** `null`, not `0`, when no item in the batch was backtestable. */
+  totalReturnPercent: number | null
+  backtestedCount: number
+  items: BacktestResultItem[]
+}
+
+/** POST /api/strategies/backtest — sends every hit stock regardless of the UI's checkbox
+ * state (checkboxes are a display/aggregation filter applied to this response afterwards,
+ * never a request filter). */
+export async function backtestStrategies(payload: BacktestRequest, signal?: AbortSignal): Promise<BacktestResponse> {
+  let response: Response
+  try {
+    response = await fetch('/api/strategies/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new ApiError(null, '網路連線失敗')
+  }
+
+  if (!response.ok) {
+    const body = await parseErrorBody(response)
+    throw new ApiError(body?.code ?? null, `請求失敗（${response.status}）`)
+  }
+
+  return (await response.json()) as BacktestResponse
+}
+
 /** GET /api/strategies — catalogue of strategies/presets, including description text.
  * Never hard-code strategy names or preset descriptions in the frontend; this is the sole source. */
 export async function fetchStrategyCatalog(signal?: AbortSignal): Promise<StrategyCatalogResponse> {

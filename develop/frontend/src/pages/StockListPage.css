@@ -964,7 +964,6 @@
   font-size: 15px;
   font-weight: 700;
   color: #e6edf5;
-  border-bottom: 1px solid #26333f;
 }
 
 .st-result-zero {
@@ -1045,6 +1044,88 @@
 
 .st-union-sep {
   color: #93a4b8;
+}
+
+/* 0-value 漲跌 (never sl-up/sl-down) — merged-table cells and the two totals share it. */
+.sl-neutral {
+  color: #93a4b8;
+}
+
+/* 本次採用參數 — one line under the merged table's title, sourced from the scan response. */
+.st-params-line {
+  margin: 0;
+  padding: 10px 18px 0;
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+/* Title + 回測 totals share one row so the two labels read as belonging to the table
+   they sit above, not as a separate section. */
+.st-union-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 18px;
+  border-bottom: 1px solid #26333f;
+}
+
+.st-union-header .st-result-title {
+  flex: 1;
+}
+
+.st-backtest-totals {
+  display: flex;
+  gap: 20px;
+  white-space: nowrap;
+}
+
+.st-total-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.st-total-label {
+  font-size: 12px;
+  color: #93a4b8;
+}
+
+.st-total-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-uncounted-notes {
+  padding: 6px 18px 0;
+}
+
+.st-uncounted-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+/* 納入計算的勾選框 — one per merged-table row, default checked. */
+.st-checkbox-col {
+  width: 1%;
+}
+
+.st-row-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
+/* Unchecked row — whole row (including its own up/down-colored 報酬率／收益) turns weak
+   text color; background stays unchanged and the row is still clickable (「反灰是『不計
+   入』的視覺表示，不是停用」). `!important` is required to win over the more specific
+   `.sl-up`/`.sl-down`/`.sl-neutral` cell classes the row's own cells still carry. */
+.sl-table tbody tr.st-row-unchecked td {
+  color: #6b7c90 !important;
 }
 
 .sl-empty,

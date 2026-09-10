@@ -231,20 +231,6 @@ function cumulativeRiseScanResponse() {
   }
 }
 
-// All three strategies, one hit each, exercising the "選滿三個策略掃描" acceptance criterion.
-function allThreeStrategiesResponse() {
-  return {
-    startDate: '2026-06-01',
-    endDate: '2026-08-30',
-    scannedStocks: 3,
-    results: [
-      { ...boxScanResponse().results[0] },
-      { ...higherLowsScanResponse().results[0] },
-      { ...risingSupportScanResponse().results[0] },
-    ],
-  }
-}
-
 // All five strategies, one hit each, in submission order.
 function allFiveStrategiesResponse() {
   return {
@@ -362,6 +348,55 @@ function zeroHitBothResponse() {
   }
 }
 
+// Matches boxScanResponse()'s single hit (2330, signalDate 2026-08-27) — the default
+// `backtestResponder` fixture for tests that don't care about the exact numbers.
+function singleBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 2420000,
+    totalProfit: 30000,
+    totalReturnPercent: 1.24,
+    backtestedCount: 1,
+    items: [
+      { stockId: '2330', signalDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2450, returnPercent: 1.24, profit: 30000 },
+    ],
+  }
+}
+
+// Matches boxScanResponse()'s single hit but with no sellable trading day — exercises the
+// "全部標的皆無法回測" (totalReturnPercent: null) path.
+function allUnbacktestableResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 0,
+    totalProfit: 0,
+    totalReturnPercent: null,
+    backtestedCount: 0,
+    items: [{ stockId: '2330', signalDate: '2026-08-27', buyPrice: 2420, sellDate: null, sellPrice: null, returnPercent: null, profit: null }],
+  }
+}
+
+// Matches unionScanResponse()'s three merged rows (2317, 2330, 2454 — in that sorted
+// order): one profitable, one losing, one unbacktestable — exercises totals, colors, and
+// both "未計入" reasons together.
+function unionBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 2500000,
+    totalProfit: -90000,
+    totalReturnPercent: -3.6,
+    backtestedCount: 2,
+    items: [
+      { stockId: '2317', signalDate: '2026-08-28', buyPrice: 100, sellDate: '2026-09-01', sellPrice: 110, returnPercent: 10, profit: 10000 },
+      { stockId: '2330', signalDate: '2026-08-28', buyPrice: 2400, sellDate: '2026-09-02', sellPrice: 2300, returnPercent: -4.17, profit: -100000 },
+      { stockId: '2454', signalDate: '2026-08-20', buyPrice: 900, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+    ],
+  }
+}
+
 function renderTab(commonStocksOnly = true) {
   return render(
     <MemoryRouter initialEntries={['/stocks?tab=strategy']}>
@@ -374,8 +409,12 @@ function renderTab(commonStocksOnly = true) {
   )
 }
 
+/** Scoped to the `.st-strategy-name` heading specifically — once a scan has run, a
+ * strategy's name can also appear as a merged-table hit tag (`.st-union-tag-name`) or a
+ * below-table note, so a bare `getByText(name)` becomes ambiguous. */
 function cardFor(name: string): HTMLElement {
-  return screen.getByText(name).closest('.st-strategy-card') as HTMLElement
+  const heading = screen.getAllByText(name).find((el) => el.className === 'st-strategy-name')
+  return heading!.closest('.st-strategy-card') as HTMLElement
 }
 
 /** Clicks a strategy card's own selection checkbox specifically — never `getByRole
@@ -386,13 +425,6 @@ function selectStrategy(name: string): void {
   fireEvent.click(within(head).getByRole('checkbox'))
 }
 
-/** Matches a `<td>` by its *full* `textContent` — the 底底高 low-series cells wrap each
- * point's date in its own `<span>` for secondary-color styling, so Testing Library's
- * default text matcher (which only looks at a node's direct text-node children) can never
- * match the whole "MM-DD value→MM-DD value" string against the `<td>` itself. */
-function getByTdText(text: string): HTMLElement {
-  return screen.getByText((_content, element) => !!element && element.tagName === 'TD' && element.textContent === text)
-}
 
 describe('StrategyTab', () => {
   let fetchMock: ReturnType<typeof vi.fn>
@@ -401,10 +433,12 @@ describe('StrategyTab', () => {
   let backfillResponder: () => { status: number; body: unknown }
   let stocksTotal: number
   let universeImportResponder: () => { status: number; body: unknown }
+  let backtestResponder: () => { status: number; body: unknown }
 
   beforeEach(() => {
     scanResponder = () => boxScanResponse()
     progressResponder = () => progressResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
     backfillResponder = () => ({
       status: 202,
       body: { jobType: 'PRICE_BACKFILL', targetCount: 34, caughtUpCount: 0, startDate: '2026-01-01', endDate: '2026-08-30', mode: 'ALL' },
@@ -431,6 +465,10 @@ describe('StrategyTab', () => {
       const method = init?.method ?? 'GET'
       if (u.startsWith('/api/strategies/scan')) {
         return Promise.resolve(jsonResponse(200, scanResponder()))
+      }
+      if (u.startsWith('/api/strategies/backtest')) {
+        const { status, body } = backtestResponder()
+        return Promise.resolve(jsonResponse(status, body))
       }
       if (u.startsWith('/api/strategies')) {
         return Promise.resolve(jsonResponse(200, CATALOG))
@@ -670,32 +708,19 @@ describe('StrategyTab', () => {
     vi.useRealTimers()
   }, 20000)
 
-  it('shows two result blocks in selection order when two strategies are scanned', async () => {
-    scanResponder = () => bothStrategiesResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(2))
-    const titles = screen.getAllByText(/命中 1 檔/).map((el) => el.textContent)
-    expect(titles[0]).toContain('箱型突破')
-    expect(titles[1]).toContain('底底高')
-  })
-
-  it('does not show a union table when only one strategy is checked', async () => {
+  it('shows a single merged hit table titled 命中彙總 — 共 N 檔 even when only one strategy is checked, not a per-strategy block', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
-    expect(screen.queryByText(/命中彙總/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
+    expect(screen.getByText('2330 台積電')).toBeInTheDocument()
+    // No per-strategy block titled with the old "策略（靈敏度）— 命中 N 檔" heading exists anymore.
+    expect(screen.queryByText(/命中 1 檔/)).not.toBeInTheDocument()
   })
 
-  it('shows a deduped union table above the strategy blocks, sorted by each stock\'s newest signalDate desc then stockId asc, once a second strategy is checked and scanned', async () => {
+  it('shows one deduped merged table, sorted by each stock\'s newest signalDate desc then stockId asc, when two strategies are scanned', async () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
@@ -706,19 +731,15 @@ describe('StrategyTab', () => {
     // 3 distinct stocks (2330 hit by both), not 2+2=4 (the sum of matchedCount)
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
 
+    // Only one heading exists — no per-strategy block titles remain.
     const resultsList = screen.getByText('命中彙總 — 共 3 檔').closest('.st-results-list') as HTMLElement
     const blockTitles = within(resultsList).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
-    // positioned above all strategy blocks
-    expect(blockTitles).toEqual([
-      '命中彙總 — 共 3 檔',
-      '箱型突破（標準）— 命中 2 檔',
-      '底底高（嚴格）— 命中 2 檔',
-    ])
+    expect(blockTitles).toEqual(['命中彙總 — 共 3 檔'])
 
     const unionTable = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
     const dataRows = within(unionTable).getAllByRole('row').slice(1)
     // 2317 and 2330 tie on the newest signalDate (2026-08-28) -> stockId asc; 2454 (2026-08-20) last
-    expect(dataRows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+    expect(dataRows.map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual([
       '2317 鴻海',
       '2330 台積電',
       '2454 聯發科',
@@ -731,24 +752,94 @@ describe('StrategyTab', () => {
     expect(within(stock2330Row).getByText('底底高')).toBeInTheDocument()
     expect(within(stock2330Row).getByText('2026-08-25')).toBeInTheDocument()
 
-    // insufficientData ('6669') / pendingConfirm ('1101') never appear in the union table
+    // insufficientData ('6669') / pendingConfirm ('1101') never appear in the merged table
     expect(within(unionTable).queryByText(/6669/)).not.toBeInTheDocument()
     expect(within(unionTable).queryByText(/1101/)).not.toBeInTheDocument()
+
+    // ...but do appear, one line per strategy, below the merged table.
+    expect(screen.getByText('箱型突破：另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument()
+    expect(screen.getByText('箱型突破：另有 1 檔已突破，但確認日尚未到')).toBeInTheDocument()
   })
 
-  it('does not show a union table when 2+ strategies are scanned but none has any hits; each block still shows its own zero-hit message', async () => {
-    scanResponder = () => zeroHitBothResponse()
+  it('shows the 「本次採用參數」line under the title, one segment per strategy joined by ・, sourced from the response', async () => {
+    scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    await waitFor(() => expect(screen.getAllByText('此區間內沒有命中的股票')).toHaveLength(2))
-    expect(screen.queryByText(/命中彙總/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('箱型突破（標準）・底底高（嚴格）')).toBeInTheDocument())
   })
 
-  it('navigates to /stocks/{stockId}/daily when a union-table row is clicked', async () => {
+  it('keeps the 「本次採用參數」 line at the last-scanned values after editing an input without re-scanning', async () => {
+    scanResponder = () => cumulativeRiseScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('累積上漲')).toBeInTheDocument())
+    selectStrategy('累積上漲')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('累積上漲（20 日）')).toBeInTheDocument())
+
+    const daysInput = within(cardFor('累積上漲')).getByLabelText('天數') as HTMLInputElement
+    fireEvent.change(daysInput, { target: { value: '30' } })
+    // No re-scan happened — the line must still read the last-scanned value (20), not 30.
+    expect(screen.getByText('累積上漲（20 日）')).toBeInTheDocument()
+  })
+
+  it('formats the 反彈 params-line segment with all four parameters when requireRise is true, and only the drop-side when false', async () => {
+    scanResponder = () => reboundScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
+    selectStrategy('反彈')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）')).toBeInTheDocument())
+
+    scanResponder = () => ({
+      startDate: '2026-06-01',
+      endDate: '2026-08-30',
+      scannedStocks: 1,
+      results: [
+        {
+          strategy: 'REBOUND',
+          requireRise: false,
+          dropDays: 3,
+          dropPercent: 10,
+          matchedCount: 1,
+          items: [
+            {
+              stockId: '2603',
+              stockName: '長榮',
+              signalDate: '2026-08-25',
+              detail: { peakDate: '2026-08-21', peakClose: 120.0, troughDate: '2026-08-25', troughClose: 100.0, dropPercent: 16.67 },
+            },
+          ],
+          insufficientData: [],
+          pendingConfirm: [],
+        },
+      ],
+    })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('反彈（3 日跌 10%）')).toBeInTheDocument())
+    expect(screen.queryByText(/反彈（3 日跌 10% →/)).not.toBeInTheDocument()
+  })
+
+  it('shows all five strategies\' params-line formats (靈敏度 for three, N 日 for 累積上漲, drop→rise for 反彈) in one line', async () => {
+    scanResponder = () => allFiveStrategiesResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    for (const name of ['箱型突破', '底底高', '上漲支撐', '反彈', '累積上漲']) {
+      selectStrategy(name)
+    }
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('箱型突破（標準）・底底高（嚴格）・上漲支撐（標準）・反彈（3 日跌 10% → 1 日反彈 5%）・累積上漲（20 日）'),
+      ).toBeInTheDocument(),
+    )
+  })
+
+  it('navigates to /stocks/{stockId}/daily when a merged-table row is clicked', async () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
@@ -759,99 +850,6 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     const unionTable = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
     fireEvent.click(within(unionTable).getByText('2454 聯發科'))
-    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
-  })
-
-  it('renders the box-breakout table with formatted range/percent/multiple, and insufficientData/pendingConfirm stay out of the hit table', async () => {
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
-    expect(screen.getByText('2250.00 ~ 2380.00')).toBeInTheDocument()
-    expect(screen.getByText('1.68%')).toBeInTheDocument()
-    expect(screen.getByText('1.82×')).toBeInTheDocument()
-
-    // insufficientData/pendingConfirm summaries appear, but their stock ids are not in the hit table
-    expect(screen.getByText('另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument()
-    expect(screen.getByText('另有 1 檔已突破，但確認日尚未到')).toBeInTheDocument()
-    expect(screen.queryByText('6669')).not.toBeInTheDocument()
-    expect(screen.queryByText('1101')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('另有 1 檔因區間前的歷史資料不足而未納入判定'))
-    expect(screen.getByText('6669')).toBeInTheDocument()
-  })
-
-  it('renders the 底底高 table with the MA5 series (before), the raw-low series, and a cumulative rise computed from MA5', async () => {
-    scanResponder = () => higherLowsScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('底底高')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2317 鴻海')).toBeInTheDocument())
-    const headerCells = screen.getAllByRole('columnheader').map((c) => c.textContent)
-    expect(headerCells).toEqual(['代號 / 名稱', '訊號日', '低點序列（MA5）', '當日最低價', '累計漲幅'])
-
-    // MA5 column comes before the raw-low column, and both carry the same dates.
-    expect(getByTdText('07-08 243.10→08-25 265.20')).toBeInTheDocument()
-    expect(getByTdText('07-08 240.00→08-25 262.50')).toBeInTheDocument()
-    // 累計漲幅 comes from the MA5 series, not the raw low: (265.20 / 243.10 - 1) * 100 ≈ 9.09%
-    // (the raw-low ratio would instead give 9.38%, which must NOT appear as this column's value).
-    expect(screen.getByText('9.09%')).toBeInTheDocument()
-  })
-
-  it('renders a 底底高 hit normally, with no error or warning, when a segment\'s raw low dips while its MA5 still rises', async () => {
-    scanResponder = () => ({
-      startDate: '2026-06-01',
-      endDate: '2026-08-30',
-      scannedStocks: 1,
-      results: [
-        {
-          strategy: 'HIGHER_LOWS',
-          preset: 'STANDARD',
-          matchedCount: 1,
-          items: [
-            {
-              stockId: '2330',
-              stockName: '台積電',
-              signalDate: '2026-08-25',
-              detail: {
-                lows: [
-                  { tradeDate: '2026-07-08', ma5: 240.0, low: 245.0 },
-                  { tradeDate: '2026-07-29', ma5: 250.0, low: 238.0 },
-                  { tradeDate: '2026-08-25', ma5: 260.0, low: 255.0 },
-                ],
-              },
-            },
-          ],
-          insufficientData: [],
-          pendingConfirm: [],
-        },
-      ],
-    })
-    renderTab()
-    await waitFor(() => expect(screen.getByText('底底高')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
-    // MA5 rises every segment (240 -> 250 -> 260) while the raw low dips mid-sequence
-    // (245 -> 238 -> 255) — still renders as a normal hit, no error/warning text anywhere.
-    expect(getByTdText('07-08 240.00→07-29 250.00→08-25 260.00')).toBeInTheDocument()
-    expect(getByTdText('07-08 245.00→07-29 238.00→08-25 255.00')).toBeInTheDocument()
-    expect(screen.queryByText(/錯誤|警示|warning|error/i)).not.toBeInTheDocument()
-  })
-
-  it('navigates to /stocks/{stockId}/daily when a result row is clicked', async () => {
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('2330 台積電'))
     await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
   })
 
@@ -1227,7 +1225,7 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(2))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 2 檔')).toBeInTheDocument())
 
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/建議|推薦|可進場/)
@@ -1494,56 +1492,6 @@ describe('StrategyTab', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the 上漲支撐 result block titled 上漲支撐（標準）— 命中 N 檔 with all seven columns and correct values', async () => {
-    scanResponder = () => risingSupportScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('上漲支撐（標準）— 命中 1 檔')).toBeInTheDocument())
-    const block = screen.getByText('上漲支撐（標準）— 命中 1 檔').closest('.st-result-block') as HTMLElement
-
-    // seven headers, in order
-    const headers = within(block).getAllByRole('columnheader').map((h) => h.textContent)
-    expect(headers).toEqual(['代號 / 名稱', '訊號日', '上漲收盤', '單日漲幅', '支撐價', '前段收盤高點', '確認兩日收盤'])
-
-    const row = within(block).getByText('2454 聯發科').closest('tr') as HTMLElement
-    const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
-    expect(cells).toEqual([
-      '2454 聯發科',
-      '2026-08-26',
-      '1296.00', // 上漲收盤 detail.riseClose
-      '8.00%', // 單日漲幅 detail.risePercent
-      '1200.00', // 支撐價 detail.supportClose — must not be dropped
-      '1236.00', // 前段收盤高點 detail.priorHighClose — must not be dropped
-      '08-27 1272.00→08-28 1248.00', // 確認兩日收盤 detail.confirmCloses
-    ])
-  })
-
-  it('renders 單日漲幅 with the up-color class (#E04B45 per Visual Style)', async () => {
-    scanResponder = () => risingSupportScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('8.00%')).toBeInTheDocument())
-    expect(screen.getByText('8.00%').className).toContain('sl-up')
-  })
-
-  it('navigates to /stocks/{stockId}/daily when clicking a 上漲支撐 result row', async () => {
-    scanResponder = () => risingSupportScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('上漲支撐')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2454 聯發科')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('2454 聯發科').closest('tr')!)
-    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
-  })
-
   it('shows the 上漲支撐-specific pendingConfirm wording, distinct from 箱型突破\'s', async () => {
     scanResponder = () => risingSupportScanResponse()
     renderTab()
@@ -1552,9 +1500,9 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() =>
-      expect(screen.getByText('另有 1 檔已上漲，但後兩日的確認尚未完成')).toBeInTheDocument(),
+      expect(screen.getByText('上漲支撐：另有 1 檔已上漲，但後兩日的確認尚未完成')).toBeInTheDocument(),
     )
-    expect(screen.queryByText('另有 1 檔已突破，但確認日尚未到')).not.toBeInTheDocument()
+    expect(screen.queryByText(/另有 1 檔已突破，但確認日尚未到/)).not.toBeInTheDocument()
   })
 
   it('shows the shared insufficientData summary wording for 上漲支撐', async () => {
@@ -1565,7 +1513,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() =>
-      expect(screen.getByText('另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument(),
+      expect(screen.getByText('上漲支撐：另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument(),
     )
   })
 
@@ -1596,25 +1544,6 @@ describe('StrategyTab', () => {
     expect(within(unionBlock).queryByText(/3008/)).not.toBeInTheDocument()
     expect(within(unionBlock).queryByText(/6669/)).not.toBeInTheDocument()
   })
-
-  it('shows three result blocks in selection order when all three strategies are checked and scanned', async () => {
-    scanResponder = () => allThreeStrategiesResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(3))
-    const titles = screen.getAllByText(/命中 1 檔/).map((el) => el.textContent)
-    expect(titles[0]).toContain('箱型突破')
-    expect(titles[1]).toContain('底底高')
-    expect(titles[2]).toContain('上漲支撐')
-  })
-
-  // ---------------- 反彈 / 累積上漲 ----------------
 
   it('shows the two params-driven strategy cards (反彈/累積上漲) with no sensitivity dropdown, each with its own strategy-level description', async () => {
     renderTab()
@@ -1914,21 +1843,6 @@ describe('StrategyTab', () => {
     expect(body.strategies.some((s: { code: string }) => s.code === 'CUMULATIVE_RISE')).toBe(false)
   })
 
-  it('shows 累積上漲（N 日）— 命中 N 檔 title from the response, keeping the old value after the days input is edited without re-scanning', async () => {
-    scanResponder = () => cumulativeRiseScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('累積上漲')).toBeInTheDocument())
-    selectStrategy('累積上漲')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('累積上漲（20 日）— 命中 1 檔')).toBeInTheDocument())
-
-    const daysInput = within(cardFor('累積上漲')).getByLabelText('天數') as HTMLInputElement
-    fireEvent.change(daysInput, { target: { value: '30' } })
-    // No re-scan happened — the title must still read the last-scanned value (20), not 30.
-    expect(screen.getByText('累積上漲（20 日）— 命中 1 檔')).toBeInTheDocument()
-  })
-
   it('shows the backend INVALID_DAYS error under the 累積上漲 card, not as a page-wide error', async () => {
     fetchMock.mockImplementation((url: string) => {
       const u = String(url)
@@ -1949,168 +1863,6 @@ describe('StrategyTab', () => {
     expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
   })
 
-  it('renders the 反彈 result table with seven columns (訊號日 ≠ 低點日), down-colored 跌幅, up-colored 反彈幅度, and a 分 K link that navigates independently of the row click', async () => {
-    scanResponder = () => reboundScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2454 聯發科')).toBeInTheDocument())
-    const headerCells = screen.getAllByRole('columnheader').map((c) => c.textContent)
-    expect(headerCells).toEqual([
-      '代號 / 名稱',
-      '訊號日',
-      '高點日 / 高點收盤',
-      '低點日 / 低點收盤',
-      '跌幅',
-      '反彈幅度',
-      '分 K',
-    ])
-
-    const row = screen.getByText('2454 聯發科').closest('tr') as HTMLElement
-    // 訊號日 (反彈達標日) and 低點日 (谷底日) are different dates, each rendered correctly.
-    expect(within(row).getByText('2026-08-26')).toBeInTheDocument()
-    expect(within(row).getByText('2026-08-10 / 120.00')).toBeInTheDocument()
-    expect(within(row).getByText('2026-08-25 / 100.00')).toBeInTheDocument()
-    const dropCell = within(row).getByText('16.67%')
-    expect(dropCell.className).toContain('sl-down')
-    const riseCell = within(row).getByText('6.00%')
-    expect(riseCell.className).toContain('sl-up')
-
-    fireEvent.click(within(row).getByRole('button', { name: '分 K' }))
-    await waitFor(() => expect(screen.getByText('minute page for the clicked row')).toBeInTheDocument())
-  })
-
-  it("renders the 反彈 result table's 反彈幅度 column as a weak-colored 「—」 (not 0.00%) when detail omits risePercent (requireRise: false)", async () => {
-    scanResponder = () => ({
-      startDate: '2026-06-01',
-      endDate: '2026-08-30',
-      scannedStocks: 1,
-      results: [
-        {
-          strategy: 'REBOUND',
-          requireRise: false,
-          dropDays: 3,
-          dropPercent: 10,
-          matchedCount: 1,
-          items: [
-            {
-              stockId: '2603',
-              stockName: '長榮',
-              signalDate: '2026-08-25',
-              detail: {
-                peakDate: '2026-08-21',
-                peakClose: 120.0,
-                troughDate: '2026-08-25',
-                troughClose: 100.0,
-                dropPercent: 16.67,
-              },
-            },
-          ],
-          insufficientData: [],
-          pendingConfirm: [],
-        },
-      ],
-    })
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2603 長榮')).toBeInTheDocument())
-    const row = screen.getByText('2603 長榮').closest('tr') as HTMLElement
-    // 訊號日 falls back to the trough day when requireRise is false.
-    expect(within(row).getByText('2026-08-25 / 100.00')).toBeInTheDocument()
-    const weakDash = within(row).getByText('—')
-    expect(weakDash.className).toContain('sl-muted')
-    expect(within(row).queryByText('0.00%')).not.toBeInTheDocument()
-  })
-
-  it('titles the 反彈 result block with all four actually-used parameters from the response when requireRise is true', async () => {
-    scanResponder = () => reboundScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    // reboundScanResponse(): dropDays 3 / dropPercent 10 / riseDays 1 / risePercent 5.
-    await waitFor(() =>
-      expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument(),
-    )
-  })
-
-  it('titles the 反彈 result block with only the drop-side parameters (no empty parenthetical) when requireRise is false', async () => {
-    scanResponder = () => ({
-      startDate: '2026-06-01',
-      endDate: '2026-08-30',
-      scannedStocks: 1,
-      results: [
-        {
-          strategy: 'REBOUND',
-          requireRise: false,
-          dropDays: 3,
-          dropPercent: 10,
-          matchedCount: 1,
-          items: [
-            {
-              stockId: '2603',
-              stockName: '長榮',
-              signalDate: '2026-08-25',
-              detail: { peakDate: '2026-08-21', peakClose: 120.0, troughDate: '2026-08-25', troughClose: 100.0, dropPercent: 16.67 },
-            },
-          ],
-          insufficientData: [],
-          pendingConfirm: [],
-        },
-      ],
-    })
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('反彈（3 日跌 10%）— 命中 1 檔')).toBeInTheDocument())
-    // Neither the rebound-side numbers nor a dangling arrow/empty parenthetical show up.
-    expect(screen.queryByText(/反彈（3 日跌 10% →/)).not.toBeInTheDocument()
-    expect(screen.queryByText('反彈 — 命中 1 檔')).not.toBeInTheDocument()
-  })
-
-  it('keeps the 反彈 result block title at the last-scanned values (not the edited inputs) after editing any of its four fields without re-scanning', async () => {
-    scanResponder = () => reboundScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() =>
-      expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument(),
-    )
-
-    const card = cardFor('反彈')
-    fireEvent.change(within(card).getByLabelText('下跌天數'), { target: { value: '5' } })
-    fireEvent.change(within(card).getByLabelText('跌幅門檻'), { target: { value: '20' } })
-    fireEvent.change(within(card).getByLabelText('反彈天數'), { target: { value: '2' } })
-    fireEvent.change(within(card).getByLabelText('反彈幅度'), { target: { value: '8' } })
-
-    // Title is unchanged — it reads the scan response, not the (now-edited) inputs.
-    expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument()
-  })
-
-  it('leaves the other four strategies’ title formats unchanged (靈敏度 for three, N 日 for 累積上漲)', async () => {
-    scanResponder = () => allFiveStrategiesResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    for (const name of ['箱型突破', '底底高', '上漲支撐', '反彈', '累積上漲']) {
-      selectStrategy(name)
-    }
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('箱型突破（標準）— 命中 1 檔')).toBeInTheDocument())
-    expect(screen.getByText('底底高（嚴格）— 命中 1 檔')).toBeInTheDocument()
-    expect(screen.getByText('上漲支撐（標準）— 命中 1 檔')).toBeInTheDocument()
-    expect(screen.getByText('累積上漲（20 日）— 命中 1 檔')).toBeInTheDocument()
-    expect(screen.getByText('反彈（3 日跌 10% → 1 日反彈 5%）— 命中 1 檔')).toBeInTheDocument()
-  })
 
   it.each(['PRESET_NOT_APPLICABLE', 'DAYS_NOT_APPLICABLE'])(
     'shows a generic error under the named card for backend %s when the response carries no `param`, without a page-wide error',
@@ -2188,72 +1940,6 @@ describe('StrategyTab', () => {
       expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
     },
   )
-
-  it('renders the 累積上漲 result table with six columns, an up-colored 漲幅, and no pendingConfirm note', async () => {
-    scanResponder = () => cumulativeRiseScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('累積上漲')).toBeInTheDocument())
-    selectStrategy('累積上漲')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getByText('2317 鴻海')).toBeInTheDocument())
-    const headerCells = screen.getAllByRole('columnheader').map((c) => c.textContent)
-    expect(headerCells).toEqual(['代號 / 名稱', '訊號日', '低點日 / 低點收盤', '高點收盤', '漲幅', '分 K'])
-
-    const row = screen.getByText('2317 鴻海').closest('tr') as HTMLElement
-    expect(within(row).getByText('2026-08-28')).toBeInTheDocument()
-    expect(within(row).getByText('2026-08-05 / 80.00')).toBeInTheDocument()
-    expect(within(row).getByText('100.00')).toBeInTheDocument()
-    const riseCell = within(row).getByText('25.00%')
-    expect(riseCell.className).toContain('sl-up')
-
-    // 反彈/累積上漲's pendingConfirm is always empty — no confirmation note should ever render.
-    expect(screen.queryByText(/確認/)).not.toBeInTheDocument()
-    // insufficientData still uses the shared wording.
-    expect(screen.getByText('另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument()
-  })
-
-  it('navigates to /stocks/{stockId}/daily when clicking a 反彈 or 累積上漲 row anywhere outside the 分 K link', async () => {
-    scanResponder = () => reboundScanResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('反彈')).toBeInTheDocument())
-    selectStrategy('反彈')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2454 聯發科')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('2454 聯發科'))
-    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
-  })
-
-  it('does not render a 分 K column for 箱型突破／底底高／上漲支撐', async () => {
-    scanResponder = () => allThreeStrategiesResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    selectStrategy('箱型突破')
-    selectStrategy('底底高')
-    selectStrategy('上漲支撐')
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(3))
-    expect(screen.queryByText('分 K')).not.toBeInTheDocument()
-  })
-
-  it('shows five result blocks in selection order when all five strategies are checked and scanned', async () => {
-    scanResponder = () => allFiveStrategiesResponse()
-    renderTab()
-    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    for (const name of ['箱型突破', '底底高', '上漲支撐', '反彈', '累積上漲']) {
-      selectStrategy(name)
-    }
-    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-
-    await waitFor(() => expect(screen.getAllByText(/命中 1 檔/)).toHaveLength(5))
-    const titles = screen.getAllByText(/命中 1 檔/).map((el) => el.textContent)
-    expect(titles[0]).toContain('箱型突破')
-    expect(titles[1]).toContain('底底高')
-    expect(titles[2]).toContain('上漲支撐')
-    expect(titles[3]).toContain('反彈')
-    expect(titles[4]).toContain('累積上漲')
-  })
 
   it('includes 反彈/累積上漲 hits in the union table', async () => {
     scanResponder = () => ({
@@ -2357,7 +2043,6 @@ describe('StrategyTab', () => {
     scanResponder = () => bothStrategiesResponse()
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    // 兩檔不同股票命中兩策略 → 聯集表格與策略表格都各有一列 "2330 台積電"，取任一個都可。
     await waitFor(() => expect(screen.getAllByText('2330 台積電').length).toBeGreaterThan(0))
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
@@ -2443,5 +2128,409 @@ describe('StrategyTab', () => {
     expect(screen.getByText('2330 台積電')).toBeInTheDocument()
     const scanCallsAfter = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).length
     expect(scanCallsAfter).toBe(scanCallsBefore)
+  })
+  // ---------------- 回測 (POST /api/strategies/backtest) ----------------
+
+  it('shows the merged zero-hit message (not a union table) when 2+ strategies are scanned but none has any hits', async () => {
+    scanResponder = () => zeroHitBothResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 0 檔')).toBeInTheDocument())
+    expect(screen.getByText('此區間內沒有命中的股票')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+  })
+
+  it('keeps 回測 disabled until scanning succeeds with at least one hit', async () => {
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+
+    selectStrategy('箱型突破')
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    // Disabled while the scan itself is in flight.
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+  })
+
+  it('keeps 回測 disabled after a zero-hit scan, and after a failed scan', async () => {
+    scanResponder = () => zeroHitResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('此區間內沒有命中的股票')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(500, {}))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('掃描失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '回測' })).toBeDisabled()
+  })
+
+  it('shows 回測中… while the request is in flight, disables only 回測 (not 開始掃描), and clears once the response arrives', async () => {
+    scanResponder = () => boxScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+
+    let resolveBacktest: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/backtest')) {
+        return new Promise((resolve) => {
+          resolveBacktest = () => resolve(jsonResponse(200, singleBacktestResponse()))
+        })
+      }
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, scanResponder()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    expect(screen.getByRole('button', { name: '回測中…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+
+    resolveBacktest(undefined)
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: '回測中…' })).not.toBeInTheDocument()
+  })
+
+  it('shows an error message and leaves the table in its un-backtested shape when 回測 fails', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled()
+    expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
+    expect(screen.queryByText('總報酬率')).not.toBeInTheDocument()
+  })
+
+  it('sends every hit stock with its latest signalDate, unaffected by checkbox state — and shows the three new columns after success', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+
+    // Uncheck a row before backtesting — must not change what gets sent.
+    fireEvent.click(screen.getByLabelText('納入 2454 計算'))
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))!
+    const body = JSON.parse((backtestCall[1] as RequestInit).body as string)
+    expect(body.items).toEqual([
+      { stockId: '2317', signalDate: '2026-08-28' },
+      { stockId: '2330', signalDate: '2026-08-28' },
+      { stockId: '2454', signalDate: '2026-08-20' },
+    ])
+
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual(['', '代號 / 名稱', '命中策略與訊號日', '賣出日', '報酬率', '收益（每檔 1 張）'])
+
+    // Row order is unchanged by the backtest — still newest-signalDate desc / stockId asc.
+    const table = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
+    const dataRows = within(table).getAllByRole('row').slice(1)
+    expect(dataRows.map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual([
+      '2317 鴻海',
+      '2330 台積電',
+      '2454 聯發科',
+    ])
+
+    // 2454 has no sellable trading day — stays on the table with weak-colored dashes.
+    const row2454 = screen.getByText('2454 聯發科').closest('tr') as HTMLElement
+    const dashCells = within(row2454).getAllByText('—')
+    expect(dashCells.length).toBeGreaterThanOrEqual(3)
+    dashCells.forEach((el) => expect(el.className).toContain('sl-muted'))
+  })
+
+  it('toggling a row checkbox issues zero network requests (asserted by request count), and updates only that row', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const callsBefore = fetchMock.mock.calls.length
+    const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    const row = checkbox.closest('tr') as HTMLElement
+    expect(row.className).not.toContain('st-row-unchecked')
+
+    fireEvent.click(checkbox)
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    expect(checkbox.checked).toBe(false)
+    expect(row.className).toContain('st-row-unchecked')
+    // The row keeps showing its own numbers, not cleared or hidden.
+    expect(within(row).getByText('2026-09-01')).toBeInTheDocument()
+    const returnCell = within(row).getByText('1.24%')
+    expect(returnCell.className).toContain('sl-up')
+
+    fireEvent.click(checkbox)
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    expect(checkbox.checked).toBe(true)
+    expect(row.className).not.toContain('st-row-unchecked')
+  })
+
+  it('still navigates to /stocks/{stockId}/daily when an unchecked row is clicked', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('納入 2330 計算'))
+    const row = screen.getByText('2330 台積電').closest('tr') as HTMLElement
+    fireEvent.click(row)
+    await waitFor(() => expect(screen.getByText('daily page for the clicked row')).toBeInTheDocument())
+  })
+
+  it("with everything checked, the displayed 總報酬率／總收益 equal the response's totalReturnPercent/totalProfit exactly", async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(totalValues).toEqual(['-3.60%', '-90,000'])
+    // 2454 has no sellable day — uncounted for that reason, never "未勾選".
+    expect(screen.getByText('另 1 檔尚無可賣出交易日，未計入')).toBeInTheDocument()
+    expect(screen.queryByText(/未勾選，未計入/)).not.toBeInTheDocument()
+  })
+
+  it('computes the total cost from the response lotSize, not a hard-coded 1000', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({
+      status: 200,
+      body: {
+        asOfDate: '2026-09-10',
+        lotSize: 500,
+        totalCost: 1210000,
+        totalProfit: 15000,
+        totalReturnPercent: 1.24,
+        backtestedCount: 1,
+        items: [
+          { stockId: '2330', signalDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2450, returnPercent: 1.24, profit: 15000 },
+        ],
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+
+    // If the frontend hard-coded lotSize=1000, totalCost would be double (2,420,000) and
+    // totalReturnPercent would come out 0.62%, not the correct (lotSize=500) 1.24%.
+    // (Both the row's own cell and the total label read 1.24% here, hence getAllByText.)
+    await waitFor(() => expect(screen.getAllByText('1.24%').length).toBeGreaterThan(0))
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(totalValues).toEqual(['1.24%', '15,000'])
+  })
+
+  it('unchecking a row updates the totals to exclude it, and rechecking restores the original totals', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+      '-3.60%',
+      '-90,000',
+    ])
+
+    // 2330 (profit -100,000) must keep showing its own value throughout.
+    const row2330 = screen.getByText('2330 台積電').closest('tr') as HTMLElement
+    expect(within(row2330).getByText('-100,000')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('納入 2317 計算'))
+    await waitFor(() =>
+      expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+        '-4.17%',
+        '-100,000',
+      ]),
+    )
+    expect(within(row2330).getByText('-100,000')).toBeInTheDocument() // unaffected by toggling a different row
+    expect(screen.getByText('另 1 檔尚無可賣出交易日，未計入')).toBeInTheDocument()
+    expect(screen.getByText('另 1 檔未勾選，未計入')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('納入 2317 計算'))
+    await waitFor(() =>
+      expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+        '-3.60%',
+        '-90,000',
+      ]),
+    )
+    expect(screen.queryByText('另 1 檔未勾選，未計入')).not.toBeInTheDocument()
+  })
+
+  it('shows 沒有可回測的標的 (not 0%) when every hit stock is unbacktestable', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: allUnbacktestableResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+
+    await waitFor(() => expect(screen.getByText('沒有可回測的標的')).toBeInTheDocument())
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(totalValues).toEqual(['—', '—'])
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.00%')).not.toBeInTheDocument()
+  })
+
+  it('shows 未勾選任何標的 (distinct from 沒有可回測的標的) when a backtestable stock exists but every row is unchecked', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('納入 2330 計算'))
+    await waitFor(() => expect(screen.getByText('未勾選任何標的')).toBeInTheDocument())
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(totalValues).toEqual(['—', '—'])
+    expect(screen.queryByText('沒有可回測的標的')).not.toBeInTheDocument()
+  })
+
+  it('counts a row that is both unbacktestable and unchecked only under 尚無可賣出交易日, never doubly under 未勾選', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('-3.60%')).toBeInTheDocument())
+
+    // 2454 is already uncounted for lacking a sellable day — unchecking it too must not
+    // add a second "未勾選" line or change the totals.
+    fireEvent.click(screen.getByLabelText('納入 2454 計算'))
+    expect(screen.getByText('另 1 檔尚無可賣出交易日，未計入')).toBeInTheDocument()
+    expect(screen.queryByText(/未勾選，未計入/)).not.toBeInTheDocument()
+    expect(screen.getByText('-3.60%')).toBeInTheDocument()
+    expect(screen.getByText('-90,000')).toBeInTheDocument()
+  })
+
+  it('colors 報酬率／收益 and the two totals up-red for positive, down-green for negative, neutral for zero', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({
+      status: 200,
+      body: {
+        asOfDate: '2026-09-10',
+        lotSize: 1000,
+        totalCost: 2420000,
+        totalProfit: 0,
+        totalReturnPercent: 0,
+        backtestedCount: 1,
+        items: [
+          { stockId: '2330', signalDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2420, returnPercent: 0, profit: 0 },
+        ],
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+
+    await waitFor(() => expect(screen.getAllByText('0.00%').length).toBeGreaterThan(0))
+    screen.getAllByText('0.00%').forEach((el) => expect(el.className).toContain('sl-neutral'))
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value'))
+    expect(totalValues.map((el) => el.textContent)).toEqual(['0.00%', '0'])
+    totalValues.forEach((el) => expect(el.className).toContain('sl-neutral'))
+  })
+
+  it('clears any backtest result and returns 回測 to its un-backtested state the moment 開始掃描 is pressed again', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    // Cleared synchronously — before the new scan response even arrives.
+    expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
+    expect(screen.queryByText('總報酬率')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '回測' })).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+  })
+
+  it('resets every row checkbox back to checked when 開始掃描 is pressed again', async () => {
+    scanResponder = () => boxScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+
+    const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    fireEvent.click(checkbox)
+    expect(checkbox.checked).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(true))
   })
 })

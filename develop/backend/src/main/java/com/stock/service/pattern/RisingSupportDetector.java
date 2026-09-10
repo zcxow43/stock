@@ -159,6 +159,9 @@ public class RisingSupportDetector implements PatternDetector {
 
             // 2. rise percent over D-1's close (the launch point / support line)
             BigDecimal supportClose = bars.get(i - 1).getClosePrice();
+            if (supportClose.compareTo(BigDecimal.ZERO) == 0) {
+                continue; // a zero support-line close makes the rise ratio undefined; skip, don't crash.
+            }
             BigDecimal riseRatio = dClose.subtract(supportClose)
                     .divide(supportClose, CALC_SCALE, RoundingMode.HALF_UP);
             if (riseRatio.compareTo(risePercent) < 0) {

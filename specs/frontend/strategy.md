@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高結果表以 MA5 序列為主、並列當日最低價；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關，取消時只以跌幅掃描，兩者皆不再有靈敏度。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票；勾選兩個以上策略時另有一張聯集表格列出所有命中股票；另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；同步的母體預設只含上市普通股，沿用頁面層級的「只看上市普通股」設定；各策略結果區塊的標題括號一律列出該次實際採用的參數，反彈亦然"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」右側新增「回測」按鈕，命中至少一檔時才可點擊：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上賣出日／報酬率／收益三欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每檔 1 張；每列另有一個預設勾選的勾選框，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
 depends_on: [stock-list]
 ---
 
@@ -24,8 +24,8 @@ depends_on: [stock-list]
 由上而下：
 
 1. **同步列** — 左側「最後同步：YYYY-MM-DD HH:mm」，右側「同步日 K 至今日」按鈕。
-2. **條件區** — 策略勾選卡片、股票範圍、區間選擇、「開始掃描」主要按鈕。
-3. **結果區** — 每個勾選的策略一個結果區塊。
+2. **條件區** — 策略勾選卡片、股票範圍、區間選擇、「開始掃描」主要按鈕與其右側的「回測」次要按鈕。
+3. **結果區** — 一張合併命中表格，不論勾了幾個策略。
 
 ### 條件區
 
@@ -91,123 +91,115 @@ depends_on: [stock-list]
 
 **區間**：起日與迄日兩個日期輸入，**預設為今日往前一個日曆月至今日**。另提供「近一個月」「近三個月」「近半年」三個快捷鈕，點擊即套用對應區間。起日晚於迄日時前端即擋下並在區間下方提示，不送出請求。
 
+#### 回測按鈕
+
+「開始掃描」的**右側**緊接一顆「回測」按鈕，**次要按鈕樣式**——本頁唯一的主要按鈕仍是「開始掃描」，回測是看完命中清單之後才決定要不要做的第二個動作，不與掃描爭視覺焦點。
+
+- **只有在本次掃描有命中標的時才可點擊。** 尚未掃描、掃描中、掃描失敗、以及掃描完成但命中 0 檔時，一律為 disabled。零命中時沒有任何標的可回測，讓按鈕可按只會換來一個必然為空的結果。
+- 按下後進入執行中狀態：按鈕 disabled 並顯示進行中，「開始掃描」不受影響仍可按。
+- 回測完成後，合併表格右側出現三個欄位、標題右側出現兩個標籤（見下方「結果區」）。
+- **重新掃描一定清空回測結果**：按下「開始掃描」的當下即移除那三個欄位與兩個標籤，回測按鈕回到未回測狀態。舊的回測是對舊那份命中清單算的，把它留在新結果旁邊會變成兩份對不起來的資料，而畫面上完全看不出來。
+- 改動條件而未重掃時，回測結果**維持不變**，與標題括號內的參數採同一條原則：眼前這份數字說明的是眼前這份結果。
+
 ### 結果區
 
-結果區由上而下是：**聯集表格**（勾選兩個以上策略時才出現），然後才是每個策略各自的區塊。
+結果區只有**一張表格**，不論勾了幾個策略。標題為「命中彙總 — 共 N 檔」，N 為去重後的股票檔數（**不是**各策略 `matchedCount` 的加總，一檔同時命中兩個策略在此只算一檔）。
 
-#### 聯集表格
+**不再依策略拆成多個區塊。** 使用者實際的下一步是逐檔去看日 K，而那份清單是聯集；分成幾張表讀，得自己心算去重，同一檔還會在不同表裡各出現一次。
 
-列出本次掃描中**任一個策略命中**的全部股票，同一檔只出現一列。標題為「命中彙總 — 共 N 檔」，N 為去重後的股票檔數（**不是**各策略 `matchedCount` 的加總，一檔同時命中兩個策略在此只算一檔）。
+#### 表格欄位
 
-它回答的問題和底下各策略的表格不同：策略區塊回答「這個型態掃出了什麼」，聯集表格回答「這次掃描總共要看哪幾檔」。使用者實際的下一步是逐檔去看日 K，而那份清單是聯集，不是兩張表分開讀再自己心算去重。
-
-| 欄位 | 來源 |
-|---|---|
-| 代號 / 名稱 | 各策略 `items` 的 `stockId` / `stockName` |
-| 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 |
-
-**「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。
-
-策略的排列順序與勾選順序一致，與策略區塊的順序相同。
-
-**排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則，讓聯集表格與底下的策略表格讀起來是同一種順序。
-
-點擊任一列導向 `/stocks/{stockId}/daily`，與策略表格一致。
-
-**只勾選一個策略時不顯示這張表格**——此時聯集等於該策略的結果，兩張表內容完全相同，重複呈現只是佔版面。勾到第二個策略時才出現。
-
-資料不足（`insufficientData`）與待確認（`pendingConfirm`）的標的**不納入聯集表格**，它們不是命中；這兩類仍只在各自的策略區塊下方以既有的一行摘要呈現。
-
-#### 各策略區塊
-
-每個策略一個區塊，標題為「{策略名稱}（{本次實際採用的參數}）— 命中 N 檔」，N 取自該策略結果的 `matchedCount`，其下為表格。
-
-**括號內一律列出該策略在回應中回報的實際採用參數**，各型態的格式如下：
-
-| 型態 | 括號內容 | 範例 |
+| 欄位 | 來源 | 出現時機 |
 |---|---|---|
-| 箱型突破／底底高／上漲支撐 | `{preset}` 的中文名 | 上漲支撐（標準） |
-| 累積上漲 | `{days} 日` | 累積上漲（30 日） |
-| 反彈（`requireRise` 為 `true`） | `{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%` | 反彈（3 日跌 10% → 1 日反彈 5%） |
-| 反彈（`requireRise` 為 `false`） | `{dropDays} 日跌 {dropPercent}%` | 反彈（3 日跌 10%） |
+| 勾選框 | 前端狀態，非回應欄位 | 一律 |
+| 代號 / 名稱 | 各策略 `items` 的 `stockId` / `stockName` | 一律 |
+| 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 | 一律 |
+| 賣出日 | 回測回應該檔的 `sellDate` | 回測後 |
+| 報酬率 | 回測回應該檔的 `returnPercent`，兩位小數加 `%` | 回測後 |
+| 收益 | 回測回應該檔的 `profit`，千分位、不帶小數 | 回測後 |
 
-只有在回應真的沒有任何參數可顯示時才省略括號，寫成「{策略名稱} — 命中 N 檔」。**參數最多的那個型態最不該省略**：反彈有四個可調參數，掃完之後光看「反彈」兩個字完全無從得知這份結果是用什麼條件算出來的。
+**「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。策略的排列順序與勾選順序一致。
 
-括號內一律取自回應而非畫面上的輸入值：使用者掃描後又改了輸入卻沒重掃時，標題必須繼續說明眼前這份結果是用什麼參數算出來的。百分比沿用「數值格式」一節的規則（兩位小數時去掉無意義的尾數，例如 `10.0` 寫成 `10`），日數為整數。
+**各型態的判定明細（箱型區間、量能倍數、低點序列、支撐價、高點日／低點收盤…）不在本表呈現。** 這五個型態的明細欄位彼此完全不同，無法疊在同一列上：橫向全攤開會是二十幾欄且大量空白，逐策略分表則違背本表存在的理由。這是**刻意接受的取捨**——本表回答「這次掃描要看哪幾檔、進場點在哪天、回測結果如何」，判定依據則到該檔的日 K 頁上看。
 
-括號內一律取自回應而非畫面上的輸入值：使用者掃描後又改了輸入卻沒重掃時，標題必須繼續說明眼前這份結果是用什麼參數算出來的。
+#### 本次採用參數
 
-**箱型突破**的表格欄位：
+標題下方以一行次要文字列出**本次各策略實際採用的參數**，逐策略以 `・` 分隔，格式沿用各型態既有的括號內容：
 
-| 欄位 | 來源 |
+| 型態 | 內容 | 範例 |
+|---|---|---|
+| 箱型突破／底底高／上漲支撐 | `{策略名稱}（{preset} 的中文名）` | 上漲支撐（標準） |
+| 累積上漲 | `{策略名稱}（{days} 日）` | 累積上漲（30 日） |
+| 反彈（`requireRise` 為 `true`） | `{策略名稱}（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）` | 反彈（3 日跌 10% → 1 日反彈 5%） |
+| 反彈（`requireRise` 為 `false`） | `{策略名稱}（{dropDays} 日跌 {dropPercent}%）` | 反彈（3 日跌 10%） |
+
+**這一行不能省。** 各策略區塊被合併掉之後，它是畫面上唯一還說得出「這份清單是用什麼條件掃出來的」的地方——而參數最多的反彈有四個可調值，光看「反彈」兩個字完全無從得知。
+
+**一律取自回應而非畫面上的輸入值**：使用者掃描後又改了輸入卻沒重掃時，這一行必須繼續說明眼前這份結果是用什麼參數算出來的。百分比沿用「數值格式」一節的規則（`10.0` 寫成 `10`），日數為整數。
+
+**排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則。**回測完成後排序不變**——回測是替既有清單補上三欄，不是重新排名；依報酬率重排會讓使用者找不到剛剛還在看的那一列。
+
+點擊任一列導向 `/stocks/{stockId}/daily`。
+
+#### 納入計算的勾選框
+
+表格最左為每列一個勾選框，**掃描完成當下即出現，預設全部勾選**。
+
+- **取消勾選只影響總計，不影響該列自己的內容。** 該列的賣出日、報酬率、收益照常顯示，只是不計入標題右側的總報酬率與總收益。使用者是先看到一檔的成績，才決定要不要把它排除——排除後就看不到數字，等於拿走了做這個決定的依據。
+- **未勾選的列整列反灰**：該列所有文字改為弱化文字色 `#6B7C90`，包含原本帶漲跌色的報酬率與收益。背景不變，仍可點擊導向 `/stocks/{stockId}/daily`。反灰是「不計入」的視覺表示，不是停用。
+- **勾選狀態的切換完全在前端完成，不重新呼叫任何端點。** 回測回應已含每檔的 `buyPrice`、`profit` 與全批共用的 `lotSize`，總計由這些值就地重算即可；為了一個勾選動作重打一次回測，換來的是同樣的數字加上一次等待。
+- **回測尚未執行時勾選框照常可切換**，只是還沒有總計可以受影響。此時的勾選狀態會被接下來的回測沿用。
+- **重新掃描時勾選狀態全部重設為勾選**，與回測結果一起清空——新的命中清單是另一批標的，沿用舊的勾選只會讓人以為某幾檔被系統排除了。
+- **標題的「共 N 檔」不受勾選影響**：它是命中檔數，取消勾選不會讓一檔股票變成沒命中。
+
+#### 回測結果的呈現
+
+回測完成後，除了上表右側三欄，**標題右側出現兩個標籤**：
+
+| 標籤 | 算法 | 格式 |
+|---|---|---|
+| 總報酬率 | `總收益 ÷ 總成本 × 100` | 兩位小數加 `%` |
+| 總收益（每檔 1 張） | 已勾選且可回測的各列 `profit` 總和 | 千分位、不帶小數 |
+
+兩個標籤的涵蓋範圍是**已勾選且可回測**的列，其中總成本為那些列的 `buyPrice × lotSize` 總和（`lotSize` 取自回應，不在前端寫死）。
+
+**全部勾選時，畫面上這兩個數字必須等於回應的 `totalReturnPercent` 與 `totalProfit`，總成本必須等於 `totalCost`。** 前端就地重算是為了讓勾選切換不必重打端點，不是為了自己定義一套算法；全勾的情形是這兩條路徑必須交會的地方，也是唯一能驗出算法走偏的地方。
+
+**漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。兩個總計標籤同此規則。
+
+**無法回測的標的照常留在表上**，其賣出日／報酬率／收益三欄皆顯示弱化色 `#6B7C90` 的「—」（回應中這三個欄位為 `null`，見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）。**不得把這些列從表格中移除**——它們確實命中了，只是還沒有可賣出的交易日；拿掉它們會讓命中檔數與表格列數對不起來。
+
+**總計標籤必須說出有幾檔沒算進去，以及為什麼。** 未計入的原因有兩種，兩者的意義不同，必須分開陳述——一個是系統算不出來，一個是使用者自己排除的：
+
+- 有標的無法回測時（回應中 `sellDate` 為 `null`），加一行「另 N 檔尚無可賣出交易日，未計入」。
+- 有標的被取消勾選時，加一行「另 M 檔未勾選，未計入」。
+- 兩者同時發生時兩行都顯示。都沒有時兩行都不顯示。
+
+兩行皆以次要文字色 `#93A4B8` 呈現，置於兩個標籤下方。少了它們，總報酬率看起來就像是全部命中檔數的成績。
+
+**一檔既無法回測、又被取消勾選時只計入「尚無可賣出交易日」那一行**，不重複計。它本來就不會被計入總計，勾不勾選都一樣。
+
+沒有任何列被計入時，兩個標籤顯示弱化色 `#6B7C90` 的「—」，**不得顯示成 `0%`**——`0%` 的意思是算過剛好打平，與「沒有東西可以算」是兩件事。其下的說明依原因而異：
+
+| 情形 | 說明文字 |
 |---|---|
-| 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate` |
-| 箱型區間 | `detail.boxLow` ~ `detail.boxHigh` |
-| 突破收盤 | `detail.breakoutClose` |
-| 突破幅度 | `detail.breakoutPercent`，兩位小數加 `%` |
-| 量能倍數 | `detail.volumeRatio`，兩位小數加 `×` |
+| 全部標的皆無法回測（回應的 `totalReturnPercent` 為 `null`） | 沒有可回測的標的 |
+| 有可回測的標的，但全被取消勾選 | 未勾選任何標的 |
 
-**底底高**的表格欄位：
+**這兩句不可互相取代。** 前者是這批標的目前算不出來，重按幾次都一樣；後者只要勾回任何一列就會有數字。顯示成同一句會讓使用者去查一個其實是自己造成的狀態。
 
-| 欄位 | 來源 |
-|---|---|
-| 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate` |
-| 低點序列（MA5） | `detail.lows` 逐點以「MM-DD `ma5`」串接，以 `→` 分隔 |
-| 當日最低價 | `detail.lows` 逐點以「MM-DD `low`」串接，以 `→` 分隔 |
-| 累計漲幅 | 由 `lows` 首末兩點的 **`ma5`** 計算，兩位小數加 `%` |
+**「收益」欄必須讓使用者知道部位假設。** 表頭寫成「收益（每檔 1 張）」，總計標籤寫成「總收益（每檔 1 張）」。少了這個說明，同一份清單裡台積電與低價股的收益差距會被誤讀成策略在不同標的上的優劣差異，而實際上那只是股價高低。
 
-**兩條序列都要顯示，且 MA5 那欄在前。** 判定是在 MA5 上做的，所以它是主序列；當日最低價擺在它右邊，讓使用者一眼看出「均線認定的底」與「當天實際跌到哪」差多少。只給 MA5 會讓人以為那就是成交價，只給最低價則會讓命中結果看起來沒有根據——曾經出現 MA5 逐段抬高、原始最低價卻某一段反而更低的資料，那正是這一欄要解釋的情形，不是錯誤。
+#### 資料不足與待確認
 
-**上漲支撐**的表格欄位：
+各策略區塊移除後，`insufficientData` 與 `pendingConfirm` 改在**合併表格下方**呈現，**逐策略各一行**，行首標明策略名稱：
 
-| 欄位 | 來源 |
-|---|---|
-| 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate`，即上漲當日 |
-| 上漲收盤 | `detail.riseClose` |
-| 單日漲幅 | `detail.risePercent`，兩位小數加 `%`，以上漲色 `#E04B45` 呈現 |
-| 支撐價 | `detail.supportClose`，即起漲前一日收盤 |
-| 前段收盤高點 | `detail.priorHighClose` |
-| 確認兩日收盤 | `detail.confirmCloses` 逐點以「MM-DD 價格」串接，以 `→` 分隔 |
+- 資料不足：「{策略名稱}：另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。
+- 待確認：箱型突破為「{策略名稱}：另有 N 檔已突破，但確認日尚未到」，上漲支撐為「{策略名稱}：另有 N 檔已上漲，但後兩日的確認尚未完成」。
 
-**「支撐價」必須顯示。** 這一欄是本型態的判定依據——沒有它，使用者只看得到「漲了多少」，看不出後兩天究竟守住了什麼價位，而「守住起漲點」正是這個策略與箱型突破的差別所在。
+兩者皆使用提示色 `#D9A441`。反彈與累積上漲的 `pendingConfirm` 恆為空陣列，不會出現待確認行。
 
-**反彈**的表格欄位：
-
-| 欄位 | 來源 |
-|---|---|
-| 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate`，即**反彈幅度達標當日**；取消「另外要求反彈漲幅」時為谷底當日 |
-| 高點日 / 高點收盤 | `detail.peakDate` / `detail.peakClose` |
-| 低點日 / 低點收盤 | `detail.troughDate` / `detail.troughClose` |
-| 跌幅 | `detail.dropPercent`，兩位小數加 `%`，以下跌色 `#16A75C` 呈現 |
-| 反彈幅度 | `detail.risePercent`，兩位小數加 `%`，以上漲色 `#E04B45` 呈現；`detail` 不含此欄時（取消反彈漲幅條件）整欄顯示弱化色 `#6B7C90` 的「—」 |
-| 分 K | 連結文字「分 K」，導向 `/stocks/{stockId}/minute/{signalDate}` |
-
-**「低點日」必須顯示，不能只留「訊號日」。** 訊號日現在是反彈達標那天，谷底是另一天；少了低點日，使用者看得到「反彈了多少」卻不知道是從哪一天的低點起算，也無從判斷這段反彈隔了幾天才發生。
-
-**累積上漲**的表格欄位：
-
-| 欄位 | 來源 |
-|---|---|
-| 代號 / 名稱 | `stockId` / `stockName` |
-| 訊號日 | `signalDate`，即上漲段的最高點當日 |
-| 低點日 / 低點收盤 | `detail.troughDate` / `detail.troughClose` |
-| 高點收盤 | `detail.peakClose` |
-| 漲幅 | `detail.risePercent`，兩位小數加 `%`，以上漲色 `#E04B45` 呈現 |
-| 分 K | 連結文字「分 K」，導向 `/stocks/{stockId}/minute/{signalDate}` |
-
-**只有這兩張表有「分 K」欄。** 這兩個型態的訊號日是一段行情的端點（最低或最高那一天），當日盤中怎麼走是判讀這個訊號最直接的補充；其餘三個型態的訊號日意義不同，硬加一欄只是讓表更擠。
-
-**「分 K」是欄內的獨立連結，不改變整列的點擊行為**——五張表一律點列導向 `/stocks/{stockId}/daily`，與聯集表格一致。若讓這兩張表改成點列進分 K，同一頁就會有兩種點擊語意，使用者得先記得自己在看哪一張表才知道會跳去哪裡。
-
-五張表都在最右保留一欄，點擊該列任一處導向 `/stocks/{stockId}/daily`。
-
-**資料不足的標的必須單獨呈現**，不可混入「未命中」。在該策略區塊下方以一行摘要顯示：「另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。這是使用者判讀結果的關鍵資訊——把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
-
-反彈與累積上漲的 `pendingConfirm` 恆為空陣列，這兩張表下方不會出現待確認提示。累積上漲不做事後確認；反彈雖有漲段條件，但採「已達標就命中、不等窗口跑滿」，所以同樣沒有待確認狀態。箱型突破與上漲支撐則都可能產生 `pendingConfirm`，各以一行顯示，文案依型態而異：箱型突破為「另有 N 檔已突破，但確認日尚未到」，上漲支撐為「另有 N 檔已上漲，但後兩日的確認尚未完成」。兩者皆使用「資料不足／待確認提示文字」色 `#D9A441`。
+**這兩類標的不納入合併表格，也不納入回測**——它們不是命中。把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
 
 ### 同步列
 
@@ -247,11 +239,13 @@ depends_on: [stock-list]
 | 狀態 | 呈現 |
 |---|---|
 | 初次進入（未掃描） | 結果區顯示「選擇策略與區間後開始掃描」，條件區可操作 |
-| 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60% |
+| 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60%；「回測」disabled |
+| 有結果、未回測 | 合併表格顯示三欄以外的欄位；「回測」可按（命中 0 檔時仍為 disabled） |
+| 回測中 | 「回測」disabled 並顯示進行中；「開始掃描」不受影響仍可按；表格內容不變 |
+| 已回測 | 表格右側三欄與標題右側兩個標籤出現 |
+| 回測失敗 | 「回測」恢復可按，其下顯示錯誤訊息；表格維持未回測的樣子，不出現三欄與兩個標籤 |
 | 有結果 | 正常表格 |
-| 某策略零命中 | 該策略區塊顯示「此區間內沒有命中的股票」，並附一行提示目前的最後同步時間 |
-| 勾選兩個以上策略且至少一檔命中 | 結果區最上方出現聯集表格，其下依序為各策略區塊 |
-| 勾選兩個以上策略但全部零命中 | 不顯示聯集表格（沒有任何命中可彙總），各策略區塊照常顯示各自的零命中訊息 |
+| 零命中 | 合併表格處顯示「此區間內沒有命中的股票」，並附一行提示目前的最後同步時間；「回測」為 disabled |
 | 掃描失敗 | 結果區顯示錯誤訊息與「重試」按鈕；不得顯示空表格假裝零命中 |
 | 同步中 | 同步按鈕為執行中狀態；不影響掃描操作，也不影響「更新股票清單」 |
 | 更新清單中 | 「更新股票清單」disabled 並顯示執行中狀態；不影響掃描與同步操作 |
@@ -269,10 +263,11 @@ depends_on: [stock-list]
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
 | 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`；累積上漲送 `code` + `days` + `risePercent`，不送 `preset`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`、`endDate` |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
+| 按「回測」 | `POST /api/strategies/backtest` — body `items[]`，每檔一筆 `{stockId, signalDate}`，**送出全部命中標的**（勾選狀態不影響請求內容），`signalDate` 取該檔命中的各策略中**最新**的一個；回應的 `items[]`（`sellDate` / `returnPercent` / `profit`）填入表格右側三欄，`buyPrice` 與 `lotSize` 供前端就地重算兩個總計，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
 
-契約見 `specs/backend/strategy-scan.md`、`specs/backend/stock-price-ingestion.md`、`specs/backend/stock-universe-import.md` 與 `specs/backend/stock-catalog.md`。
+契約見 `specs/backend/strategy-scan.md`、`specs/backend/strategy-backtest.md`、`specs/backend/stock-price-ingestion.md`、`specs/backend/stock-universe-import.md` 與 `specs/backend/stock-catalog.md`。
 
 錯誤回應處理：
 
@@ -281,7 +276,7 @@ depends_on: [stock-list]
 | `NO_STRATEGY_SELECTED` | 視為程式錯誤：正常操作不應觸發（未勾選時按鈕已 disabled），顯示通用錯誤訊息 |
 | `UNKNOWN_STRATEGY` / `DUPLICATE_STRATEGY` | 同上，視為程式錯誤 |
 | `UNKNOWN_STOCK_ID` | 於股票範圍區顯示「以下代號不存在」並列出 `unknownIds`，移除後可重新掃描 |
-| `TOO_MANY_STOCKS` | 於股票範圍區顯示「最多 200 檔」（前端已先擋，此為後備） |
+| `TOO_MANY_STOCKS` | **掃描時**：於股票範圍區顯示「最多 200 檔」（前端已先擋，此為後備）。**回測時**：視為程式錯誤，正常操作不應觸發——回測送出的是命中清單，長度由市場決定而非使用者輸入，前端無從先擋，後端的上限亦已訂在全市場規模之上（見 `specs/backend/strategy-backtest.md` 的「上限為什麼不是 200」）。**不得為此在前端截斷命中清單**：只送前 200 檔會讓總報酬率變成一份沒有說明的抽樣結果 |
 | `INVALID_DATE_RANGE` | 於區間下方顯示「起日不可晚於迄日」（前端已先擋，此為後備） |
 | `INVALID_RISE_PERCENT` | 於回應 `strategy` 指名的那張策略卡片下方顯示「漲幅門檻需介於 0 ~ N」（前端已先擋，此為後備）。必須定位到該卡片，不可顯示成全頁通用錯誤——每張卡片各有一格，通用訊息無法讓使用者知道該改哪一格 |
 | `INVALID_DAYS` | 於回應 `strategy` 指名的那張卡片下方顯示「天數需介於 1 ~ 90 的整數」（前端已先擋，此為後備），同樣必須定位到該卡片 |
@@ -297,6 +292,7 @@ depends_on: [stock-list]
 ### 數值格式
 
 - 價格兩位小數；百分比兩位小數加 `%`；倍數兩位小數加 `×`。
+- 金額（回測的「收益」與「總收益」）以千分位呈現、不帶小數，負值前置 `-`。
 - 日期一律 `YYYY-MM-DD`；同步時間 `YYYY-MM-DD HH:mm`。
 - `null` 一律顯示 `—`，不顯示 `0` 或空白。
 
@@ -331,8 +327,20 @@ depends_on: [stock-list]
 | Disabled 參數輸入背景／文字／邊框 | `#16202C` / `#4A5866` / `#26333F` |
 | 反彈「反彈幅度」欄的「—」 | `#6B7C90` |
 | 已選股票標籤背景／文字／移除鈕 | `#1B2836` / `#E6EDF5` / `#93A4B8` |
-| 聯集表格策略標籤背景／文字 | `#1B2836` / `#E6EDF5` |
-| 聯集表格訊號日文字 | `#93A4B8` |
+| 命中彙總表策略標籤背景／文字 | `#1B2836` / `#E6EDF5` |
+| 命中彙總表訊號日文字 | `#93A4B8` |
+| 本次採用參數那一行文字 | `#93A4B8` |
+| 回測按鈕背景／文字／邊框 | `#1B2836` / `#E6EDF5` / `#26333F`（與其他次要按鈕同值） |
+| 回測按鈕 hover 背景 | `#223347` |
+| Disabled 回測按鈕背景／文字 | `#16202C` / `#4A5866`（與其他 disabled 按鈕同值） |
+| 總報酬率／總收益標籤文字 | `#93A4B8` |
+| 總報酬率／總收益數值（正／負／零） | `#E04B45` / `#16A75C` / `#93A4B8` |
+| 「另 N 檔未計入」說明文字 | `#93A4B8` |
+| 回測三欄無值時的「—」 | `#6B7C90` |
+| 命中彙總表勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與策略勾選框同值） |
+| 命中彙總表勾選框未勾選邊框 | `#26333F` |
+| 未勾選列的整列文字（含報酬率與收益） | `#6B7C90` |
+| 「另 N 檔未勾選，未計入」說明文字 | `#93A4B8` |
 | 快捷區間鈕（未選）背景／文字 | `#1B2836` / `#93A4B8` |
 | 快捷區間鈕（選中）背景／文字 | `#26333F` / `#E6EDF5` |
 | 次要按鈕背景／文字／邊框 | `#1B2836` / `#E6EDF5` / `#26333F` |
@@ -412,61 +420,12 @@ depends_on: [stock-list]
 - [x] 切到「指定股票」可搜尋加入股票，已選的以可移除標籤呈現；達 200 檔時輸入框 disabled 並提示
 
 ### 掃描結果：共通
-- [x] 五個策略可同時勾選並掃描，結果區依勾選順序呈現五個策略區塊
 - [x] 點擊結果表任一列導向 `/stocks/{stockId}/daily`
 - [x] `insufficientData` 非空時單獨以一行摘要呈現並可展開看代號，且這些股票不出現在命中表格中
-- [x] 某策略零命中時顯示「此區間內沒有命中的股票」，並同時顯示最後同步時間，而非空白表格
+- [x] 零命中時顯示「此區間內沒有命中的股票」，並同時顯示最後同步時間，而非空白表格
 - [x] 掃描失敗時顯示錯誤與「重試」按鈕，不顯示空表格
 
-### 結果表：箱型突破
-- [x] 箱型突破結果表顯示箱型區間、突破收盤、突破幅度、量能倍數，數值格式符合「數值格式」一節
-
-### 結果表：底底高
-- [x] 底底高結果表為五欄：代號／名稱、訊號日、低點序列（MA5）、當日最低價、累計漲幅
-- [x] 「低點序列（MA5）」逐點取 `detail.lows[].ma5`，「當日最低價」逐點取 `detail.lows[].low`，兩欄的點數與日期完全一致且與 `detail.lows` 筆數相同
-- [x] MA5 欄排在當日最低價欄之前
-- [x] 「累計漲幅」由 `lows` 首末兩點的 `ma5` 計算，不是由 `low` 計算
-- [x] 兩欄的數值皆為兩位小數，日期格式為 `MM-DD`，各點以 `→` 分隔
-- [x] 某段的 `low` 較前一段更低、而 `ma5` 仍逐段抬高時照常呈現為命中，畫面不因此顯示任何錯誤或警示
-
-### 結果表：上漲支撐
-- [x] 勾選上漲支撐並掃描後出現該策略區塊，標題為「上漲支撐（{靈敏度}）— 命中 N 檔」，N 取自該策略的 `matchedCount`
-- [x] 上漲支撐結果表顯示七個欄位：代號／名稱、訊號日、上漲收盤、單日漲幅、支撐價、前段收盤高點、確認兩日收盤
-- [x] 「支撐價」欄顯示 `detail.supportClose`，「前段收盤高點」欄顯示 `detail.priorHighClose`，兩者皆不得省略
-- [x] 「單日漲幅」為兩位小數加 `%`，並以 `#E04B45` 呈現
-- [x] 「確認兩日收盤」逐點以「MM-DD 價格」串接、以 `→` 分隔，點數與 `detail.confirmCloses` 一致
-- [x] 點擊上漲支撐結果表任一列導向 `/stocks/{stockId}/daily`
-- [x] 上漲支撐的 `pendingConfirm` 非空時顯示「另有 N 檔已上漲，但後兩日的確認尚未完成」，文案與箱型突破的「確認日尚未到」不同
-- [x] 上漲支撐的 `insufficientData` 非空時，沿用既有的「另有 N 檔因區間前的歷史資料不足而未納入判定」一行摘要
-
-### 結果表：反彈
-- [x] 反彈結果表為七欄：代號／名稱、訊號日、高點日／高點收盤、低點日／低點收盤、跌幅、反彈幅度、分 K
-- [x] 「訊號日」顯示的是 `signalDate`（反彈達標日），「低點日」顯示 `detail.troughDate`，兩者為不同日期時各自正確呈現
-- [x] 「跌幅」以下跌色 `#16A75C`、「反彈幅度」以上漲色 `#E04B45` 呈現
-- [x] `detail` 不含 `risePercent`（取消反彈漲幅條件的掃描）時，「反彈幅度」欄顯示弱化色 `#6B7C90` 的「—」，不顯示 `0.00%`、也不整欄消失
-- [x] 「分 K」仍導向 `/stocks/{stockId}/minute/{signalDate}`，且反彈表下方不出現待確認提示（`pendingConfirm` 恆為空）
-
-### 結果表：累積上漲
-- [x] 累積上漲結果區塊的標題為「累積上漲（N 日）— 命中 N 檔」，N 取自回應的 `days`；掃描後改動天數輸入而未重掃時，標題維持舊值不變
-- [x] 累積上漲結果表顯示六欄：代號／名稱、訊號日、低點日／低點收盤、高點收盤、漲幅、分 K
-- [x] 累積上漲的「漲幅」以上漲色 `#E04B45` 呈現
-- [x] 兩張帶「分 K」欄的表，其連結導向 `/stocks/{stockId}/minute/{signalDate}`，日期為該列的訊號日
-- [x] 點擊兩張新表任一列（非「分 K」連結處）仍導向 `/stocks/{stockId}/daily`，與其餘三張表一致
-- [x] 其餘三張策略表**沒有**「分 K」欄
-- [x] 兩張新表下方不出現待確認提示（兩型態的 `pendingConfirm` 恆為空）
-
-### 聯集表格
-- [x] 勾選兩個以上策略掃描後，結果區最上方出現聯集表格，位置在所有策略區塊之上
-- [x] 只勾選一個策略時不顯示聯集表格；勾到第二個策略再掃描後才出現
-- [x] 聯集表格同一檔股票只出現一列，標題的「共 N 檔」為去重後的檔數，不等於各策略 `matchedCount` 的加總
-- [x] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期
-- [x] 聯集表格依該檔各策略中最新的 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
-- [x] 點擊聯集表格任一列導向 `/stocks/{stockId}/daily`
-- [x] `insufficientData` 與 `pendingConfirm` 的標的不出現在聯集表格中
-- [x] 勾選兩個以上策略但全部零命中時不顯示聯集表格，各策略區塊仍各自顯示零命中訊息
-- [x] 上漲支撐與另一策略同時勾選並掃描時，聯集表格納入其命中標的，「命中策略與訊號日」欄出現「上漲支撐 {signalDate}」
-- [x] 上漲支撐的 `pendingConfirm` 與 `insufficientData` 標的不出現在聯集表格中
-- [x] 反彈與累積上漲同時勾選時，聯集表格納入兩者的命中標的，「命中策略與訊號日」欄逐一列出各自名稱與 `signalDate`
+> **本節原有的「結果表：箱型突破／底底高／上漲支撐／反彈／累積上漲」與「聯集表格」六組驗收項已隨各策略區塊一併移除**，因為它們描述的表格在合併成單一命中彙總表之後不再存在。那些區塊確實建置過，記錄保留在下方 `## Execution Result` 的各次 Increment 中；此處只留下在新版面下仍然成立的四項。取代它們的是下方「命中彙總表（本次新增）」。
 
 ### 同步列：更新股票清單
 - [x] 同步列上有兩顆按鈕，「更新股票清單」在左、「同步日 K 至今日」在右，兩顆皆為次要按鈕樣式；全頁唯一的主要按鈕是「開始掃描」
@@ -513,14 +472,73 @@ depends_on: [stock-list]
 - [x] 四格輸入與群組勾選框的所有顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 - [x] 底底高兩欄文字色沿用 `## Visual Style` 的主要文字 `#E6EDF5`，日期部分沿用次要文字 `#93A4B8`，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
-### 反彈區塊標題與「不適用參數」錯誤文案（本次新增）
-- [x] 反彈結果區塊的標題在 `requireRise` 為 `true` 時為「反彈（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）— 命中 N 檔」，四個數字皆取自回應該筆的實際採用值
-- [x] `requireRise` 為 `false` 時標題為「反彈（{dropDays} 日跌 {dropPercent}%）— 命中 N 檔」，不出現反彈段的兩個數字，也不留空括號
-- [x] 掃描後改動反彈的任一格輸入而未重掃時，標題維持舊值不變（取自回應，不是取自輸入框）
-- [x] 其餘四個策略的標題格式未變：有靈敏度的三個仍為「（{靈敏度}）」，累積上漲仍為「（{days} 日）」
+### 「不適用參數」錯誤文案
 - [x] 後端回 `PARAM_NOT_APPLICABLE` 時，該卡片下方顯示「帶入了不適用的參數：{param}」，`param` 取自回應，非前端寫死
 - [x] `PRESET_NOT_APPLICABLE` 與 `DAYS_NOT_APPLICABLE`（回應不帶 `param`）時顯示通用錯誤訊息，且同樣定位在指名的卡片下方，不是全頁通用錯誤
 - [x] 三種「不適用」錯誤皆不清空既有掃描結果，也不把「開始掃描」鎖住
+
+> 本節原有的四項「反彈結果區塊標題」驗收項，其承載的區塊標題已隨各策略區塊移除。它們要保住的資訊（本次實際採用的參數必須取自回應、且四個數字都要顯示）沒有被放棄，而是轉移到合併表標題下的「本次採用參數」那一行——對應的新驗收項見下方「命中彙總表（本次新增）」。
+
+### 命中彙總表（本次新增）
+- [x] 不論勾選幾個策略，結果區只出現**一張**表格，標題為「命中彙總 — 共 N 檔」；畫面上不存在任何以單一策略為標題的結果區塊
+- [x] 只勾一個策略時同樣是這張表，不再顯示該策略自己的明細表
+- [x] 同一檔股票只出現一列，標題的「共 N 檔」為去重後的檔數，不等於各策略 `matchedCount` 的加總
+- [x] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期；策略順序與勾選順序一致
+- [x] 表格依該檔各策略中最新的 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
+- [x] 點擊任一列導向 `/stocks/{stockId}/daily`
+- [x] `insufficientData` 與 `pendingConfirm` 的標的不出現在表格中，改以表格下方逐策略各一行呈現，行首標明策略名稱，色碼 `#D9A441`
+- [x] 箱型突破與上漲支撐的待確認文案維持各自既有的兩種不同說法，未因合併而統一
+
+### 本次採用參數那一行（本次新增）
+- [x] 標題下方以 `#93A4B8` 顯示一行，逐策略以 `・` 分隔，列出本次實際採用的參數
+- [x] 反彈在 `requireRise` 為 `true` 時顯示「反彈（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）」，四個數字皆取自回應該筆的實際採用值
+- [x] 反彈在 `requireRise` 為 `false` 時顯示「反彈（{dropDays} 日跌 {dropPercent}%）」，不出現反彈段的兩個數字，也不留空括號
+- [x] 有靈敏度的三個顯示「（{靈敏度中文名}）」，累積上漲顯示「（{days} 日）」
+- [x] 掃描後改動任一格輸入而未重掃時，這一行維持舊值不變（取自回應，不是取自輸入框）
+
+### 回測按鈕（本次新增）
+- [x] 「回測」按鈕位於「開始掃描」**右側**，為次要按鈕樣式；全頁唯一的主要按鈕仍是「開始掃描」
+- [x] 尚未掃描、掃描中、掃描失敗、以及掃描完成但命中 0 檔時，「回測」皆為 disabled
+- [x] 掃描命中至少一檔後「回測」可按
+- [x] 回測進行中「回測」為 disabled 並顯示進行中，「開始掃描」不受影響仍可按
+- [x] 按下「開始掃描」的當下即清空回測結果：三個欄位與兩個標籤消失，「回測」回到未回測狀態
+- [x] 改動條件但未重掃時，既有的回測結果維持不變
+- [x] 回測失敗時「回測」恢復可按並在其下顯示錯誤訊息，表格維持未回測的樣子，不出現三欄與兩個標籤
+
+### 納入計算的勾選框（本次新增）
+- [x] 掃描完成後，命中彙總表最左出現每列一個勾選框，**全部預設為勾選**
+- [x] 勾選框在回測之前就可切換，其狀態被接下來的回測沿用
+- [x] 取消勾選某列後，該列的賣出日／報酬率／收益**照常顯示**，未被清空或隱藏
+- [x] 未勾選的列整列文字改為 `#6B7C90`，包含原本帶漲跌色的報酬率與收益；背景不變
+- [x] 未勾選的列仍可點擊導向 `/stocks/{stockId}/daily`
+- [x] 取消或恢復勾選時**不發出任何網路請求**（以請求計數斷言，非以耗時推測），總計即時重算
+- [x] 取消勾選一列後，總報酬率與總收益的值改變，且等於扣除該列後重算的結果
+- [x] 恢復勾選後兩個總計回到原值
+- [x] **全部勾選時**，畫面上的總報酬率與總收益等於回應的 `totalReturnPercent` 與 `totalProfit`，且據以計算的總成本等於 `totalCost`
+- [x] 總成本以回應的 `lotSize` 計算，前端未寫死 `1000`
+- [x] 標題的「共 N 檔」不因取消勾選而改變
+- [x] 按「開始掃描」後所有勾選狀態重設為勾選，且回測結果一併清空
+- [x] 取消勾選不影響該列以外的任何列的顯示值
+
+### 兩種未計入的說明（本次新增）
+- [x] 有標的 `sellDate` 為 `null` 時顯示「另 N 檔尚無可賣出交易日，未計入」，N 為該類檔數
+- [x] 有標的被取消勾選時顯示「另 M 檔未勾選，未計入」，M 為該類檔數
+- [x] 兩種情形同時存在時兩行都顯示；都不存在時兩行都不顯示
+- [x] 一檔同時「無法回測」且「未勾選」時只計入前者，不重複計入 M
+- [x] 兩行皆以 `#93A4B8` 呈現，位於兩個總計標籤下方
+- [x] 全部標的皆無法回測時，兩個標籤顯示 `#6B7C90` 的「—」並顯示「沒有可回測的標的」
+- [x] 有可回測標的但全被取消勾選時，兩個標籤顯示 `#6B7C90` 的「—」並顯示「**未勾選任何標的**」，與上一項的文字不同
+- [x] 上述兩種情形皆不得顯示成 `0%`
+
+### 回測結果呈現（本次新增）
+- [x] 回測完成後表格最右出現三欄，順序為「賣出日」「報酬率」「收益（每檔 1 張）」
+- [x] 三欄的值分別取自回應的 `sellDate`／`returnPercent`／`profit`；報酬率為兩位小數加 `%`，收益為千分位不帶小數
+- [x] 送出的 `items[].signalDate` 為該檔命中的各策略中**最新**的一個，與表格排序所依據的日期一致
+- [x] 標題右側出現「總報酬率」與「總收益（每檔 1 張）」兩個標籤
+- [x] 報酬率、收益與兩個總計標籤的正值為 `#E04B45`、負值為 `#16A75C`、`0` 為 `#93A4B8`
+- [x] 回應中 `sellDate` 為 `null` 的標的**仍留在表上**，其三欄皆顯示 `#6B7C90` 的「—」，未被移出表格
+- [x] 回測完成後表格排序不變，未依報酬率重排
+- [x] 全頁在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致，新增的按鈕、欄位與標籤皆取自 `## Visual Style` 的字面 hex
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -959,3 +977,49 @@ Scope: exactly the 7 unchecked criteria under 「反彈區塊標題與「不適�
 **無法驗證的部分**：未啟動 dev server 做視覺/瀏覽器驗證（依任務指示，完成後需確保 5173/8080 兩埠不被佔用），僅以 `vitest`（jsdom）與 `tsc`/`build`/`lint` 驗證。
 
 **變更檔案**：`develop/frontend/src/pages/StrategyTab.tsx`、`develop/frontend/src/__tests__/StrategyTab.test.tsx`。
+
+---
+### Increment 10 — 2026-09-10
+
+**Scope**: implemented the 49 previously-unchecked Acceptance Criteria — collapsing the per-strategy result blocks into one merged 命中彙總 table (with its 「本次採用參數」 line under the title), and adding the 回測 button, its three new columns, the two totals labels, the per-row 納入計算 checkboxes, and the two distinct "未計入" messages.
+
+**Files changed**:
+- `develop/frontend/src/pages/StrategyTab.tsx` — removed every per-strategy detail table/renderer (`renderBoxTable`/`renderHigherLowsTable`/`renderRisingSupportTable`/`renderReboundTable`/`renderCumulativeRiseTable`/`renderTableForStrategy`/`renderResultBlock`), the five `isXxxDetail` type guards, `renderLowSeriesCell`, `formatConfirmCloses`, `cumulativeRiseFromMa5`, `renderMinuteCell`（分 K link）, and `formatPrice2`/`formatMultiple2`. Added: `formatAmount`（千分位、不帶小數、負值前置 `-`）, `signColorClass`（紅漲／綠跌／中性三態）, `computeBacktestTotals`（pure client-side totals recompute from the backtest response's own `buyPrice`/`profit`/`lotSize`）, `formatStrategyParams`（the 「本次採用參數」 per-strategy segment — same mutually-exclusive `preset`/`days`/`dropDays`+`dropPercent`[+`riseDays`+`risePercent`] branching the old per-block title used, minus the now-removed 「— 命中 N 檔」 suffix）, `renderScanNotes`（insufficientData/pendingConfirm, one line per strategy, now living below the single merged table instead of inside per-strategy blocks）, `toggleRowChecked`, `handleBacktestClick`, and `UnionRow.latestSignalDate`（computed once in `buildUnionRows`, reused both for the table's sort key and for the exact `signalDate` sent per stock to `POST /api/strategies/backtest`）. `renderMergedTable` replaces the old two-path `showUnionTable ? renderUnionTable() : null; scanResult.results.map(renderResultBlock)` with a single always-rendered block.
+- `develop/frontend/src/api/strategies.ts` — added `BacktestRequestItem`/`BacktestRequest`/`BacktestResultItem`/`BacktestResponse` types and `backtestStrategies()`（`POST /api/strategies/backtest`）, mirroring `scanStrategies()`'s existing error-handling shape.
+- `develop/frontend/src/pages/StockListPage.css` — added `.sl-neutral`（0-value colour, shared by cells and totals）, `.st-params-line`, `.st-union-header`/`.st-backtest-totals`/`.st-total-item`/`.st-total-label`/`.st-total-value`（title-row totals）, `.st-uncounted-notes`/`.st-uncounted-note`, `.st-checkbox-col`/`.st-row-checkbox`, and `.sl-table tbody tr.st-row-unchecked td { color: #6b7c90 !important; }`（the `!important` is required to win over the `.sl-up`/`.sl-down`/`.sl-neutral` classes a cell still carries once its row is unchecked — reflecting "反灰是視覺表示，不是停用" rather than swapping the cell's own semantic class）. Moved `.st-result-title`'s `border-bottom` onto the new `.st-union-header` flex row so the divider still spans the totals, not just the title text.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx` — removed ~26 tests that asserted now-deleted behaviour (per-strategy detail columns, 分 K links/columns, multi-block titles with 「— 命中 N 檔」, the old "union table only shown for 2+ strategies" rule); rewrote the union/zero-hit/navigation/params-line tests for the new always-one-table contract; fixed `cardFor` (a strategy name now also appears as a merged-table hit tag once scanned, so a bare `getByText` became ambiguous — scoped to the `.st-strategy-name` heading specifically); added 3 fixture builders (`singleBacktestResponse`, `allUnbacktestableResponse`, `unionBacktestResponse`) and a `backtestResponder` hook in the shared fetch mock; added 20 new tests covering: button disabled/enabled states across every scan status, the running/error states, the exact request payload (all hit stocks, latest `signalDate` per stock, unaffected by checkbox state), the three new columns and their ordering/values/dashes, the zero-request checkbox-toggle assertion (by call-count, not timing), per-row grey-out without clearing values or navigation, the lotSize-not-hardcoded guard, the all-checked-equals-response-totals guard, both distinct "未計入" messages (including the "counted only once" double-exclusion case), both distinct zero-included messages（「沒有可回測的標的」 vs 「未勾選任何標的」, and never `0%`）, the three colour states, and the reset-on-rescan behaviour for both the backtest result and the checkboxes.
+
+**Design decisions**:
+- **"未計入" totals recomputed by iterating the response's `items`, not `unionRows`.** `computeBacktestTotals(result, checkedStockIds)` walks `backtestResult.items` directly (in the order the backend already returned them, matching `unionRows`' own order since both are built from the same stock list) rather than joining through `unionRows` again — one array, one pass. The row-render loop still needs a `Map`（`backtestItemsById`）because it also has to join in each row's `hits` from `unionRows`.
+- **A row that is both unbacktestable and unchecked is bucketed before the checked-check runs**（`if (item.sellDate === null) { uncountedNoSellDate++; continue }` precedes the `checkedStockIds.has(...)` branch）— this is the direct mechanism behind "一檔既無法回測、又被取消勾選時只計入「尚無可賣出交易日」那一行", not a separate de-dup step.
+- **The zero-included branch reads `backtestResult.totalReturnPercent === null`（the response's own field）, never a client-recomputed flag**, to decide between 「沒有可回測的標的」 and 「未勾選任何標的」 — the spec is explicit that these two must not be interchangeable, and the response already carries the authoritative "was anything in this batch backtestable at all" signal (`null` only when every item lacks a `sellDate`), independent of what the user has checked.
+- **Reset ordering**: `backtestStatus`/`backtestResult`/`backtestErrorMessage` are cleared synchronously inside `runScan`（shared by both 開始掃描 and 重試）before the new `scanStrategies` call is issued — matching "按下的當下即清空". Checkbox state（`checkedStockIds`）is instead reset inside the `.then` success handler, seeded from `buildUnionRows(resp)` — since the checkbox column only reflects rows that exist, resetting it before the new row set is known would just be resetting it to the same "all of the old rows checked" state, which is moot the instant the new rows replace them. Both effects are observably synchronous from the user's perspective (verified by the two dedicated reset tests), differing only in which internal tick they occur on.
+- **`backtestItemsById` and `computeBacktestTotals`'s result are built inline on every render**（no `useMemo`）— consistent with the rest of this component, which doesn't memoize `unionRows` either; bounded to ≤200 rows per `specs/backend/strategy-backtest.md`'s own cap, so this was judged not worth the added complexity.
+
+**Verification (real command output tails)**:
+- `npx tsc -b` — no output, exit 0.
+- `npx vitest run src/__tests__/StrategyTab.test.tsx`:
+  ```
+   Test Files  1 passed (1)
+        Tests  113 passed (113)
+  ```
+- `npx vitest run`（full frontend suite）:
+  ```
+   Test Files  9 passed (9)
+        Tests  235 passed (235)
+  ```
+  235/235 — matches the stated baseline exactly (this file's own test count also came out at 113 both before and after this increment: ~26 obsolete tests removed, 20 new backtest tests plus a handful of merged-table rewrites added).
+- `npm run build`（`tsc -b && vite build`）:
+  ```
+  ✓ 47 modules transformed.
+  dist/assets/index-BS19tMl_.css   27.38 kB │ gzip:  4.69 kB
+  dist/assets/index-SJN5Yqfy.js   312.93 kB │ gzip: 95.87 kB
+  ✓ built in 147ms
+  ```
+- `npm run lint`（`oxlint`）— same 2 warnings as the `git stash`-verified pre-existing baseline（`no-unreachable` in the test file, `react(set-state-in-effect)` in `StrategyTab.tsx`；confirmed via `git stash && npm run lint && git stash pop` that both exist on `HEAD` unchanged, only their line numbers shifted). No new warnings introduced.
+
+**code-quality self-review**: absence safety — every backtest-response field access is `?.`/`??`-guarded（`item?.sellDate ?? <dash/>`、`backtestResult?.totalReturnPercent === null`、`backtestItemsById.get(...) ?? null`）; error handling — `backtestStrategies(...).then().catch()` always has a catch (mirrors the existing `scanStrategies`/`startBackfill`/`importStockUniverse` fire-and-forget-from-an-onClick convention already used throughout this file, so this isn't a new pattern); resource lifecycle — no new subscriptions/timers; performance — `computeBacktestTotals` and the checkbox-to-totals path are both O(n) over an already-≤200-bounded list, and toggling a checkbox provably issues zero network calls (asserted by `fetchMock.mock.calls.length` before/after, not timing). Nothing flagged that needed fixing beyond what's already covered above.
+
+**Verified by the new/rewritten tests**（mapped to the spec's 49 previously-unchecked ACs, grouped by the spec's own subsection headers）: 命中彙總表（本次新增）— single-table-always, dedup count, per-strategy hit tags, sort order, row-click navigation, insufficientData/pendingConfirm moved below the table with per-strategy prefixes, 箱型突破/上漲支撐 pendingConfirm wording kept distinct; 本次採用參數那一行 — all five strategies' formats in one `・`-joined line, response-sourced (not input-sourced) after an unsaved edit; 回測按鈕 — disabled across idle/scanning/zero-hit/failed, enabled after ≥1 hit, running/error states, immediate clear-on-rescan; 納入計算的勾選框 — default-checked, zero-request toggle, per-row isolation, grey-out without hiding values, still-clickable, checkbox reset on rescan; 兩種未計入的說明 — both messages, both-present case, the no-double-count case, both zero-included messages and the `0%` prohibition; 回測結果呈現 — column order/values/formatting, response-driven `signalDate` selection, unchanged sort after backtest, three colour states, lotSize-from-response guard, and the all-checked-equals-response-totals guard. I did not check off any Acceptance Criteria boxes myself, per instructions — please verify and check them off.
+
+**Anything NOT independently verified, and why**: no browser/dev-server check was performed — the environment note says the dev server on 5173 and a backend on 8080 are already running and must not be touched/duplicated, so all verification here is via `vitest`（jsdom）, `tsc`, `vite build`, and `oxlint` only. The backend `POST /api/strategies/backtest` endpoint itself was not re-verified in this pass — `specs/backend/strategy-backtest.md`'s own `## Execution Result`（28/28 tests, already marked `DONE`）was read and trusted as-is; this increment only integrates the frontend against its documented contract, using response fixtures hand-derived from that spec's own formulas（訊號日收盤買進 / 賣出窗口最高開盤價 / 成本加權總報酬率）rather than a live call.

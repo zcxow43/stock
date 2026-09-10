@@ -176,6 +176,9 @@ public class CumulativeRiseDetector implements PatternDetector {
             }
 
             // 4. rise percent
+            if (trough.compareTo(BigDecimal.ZERO) == 0) {
+                continue; // a zero-price window low makes the rise ratio undefined; skip, don't crash.
+            }
             BigDecimal riseRatio = dClose.subtract(trough).divide(trough, CALC_SCALE, RoundingMode.HALF_UP);
             if (riseRatio.compareTo(risePercent) < 0) {
                 continue;

@@ -1394,6 +1394,37 @@ class StrategyScanIntegrationTest {
     }
 
     @Test
+    void zeroClosePrice_doesNotFailTheScan_forRisingSupportOrCumulativeRise() throws Exception {
+        String stockId = "SS930";
+        seedStock(stockId, "零收盤價防護測試", true);
+        // Real data contains close_price = 0.00 rows (ETN / warrant-class listings). This is the shape
+        // that used to divide by zero and fail the whole scan with a 500: the 0.00 close sits on
+        // RISING_SUPPORT's support line (D-1) and on CUMULATIVE_RISE's window low, with D closing far
+        // above both. Both detectors must skip that candidate day rather than crash.
+        String[] closes = {"1.00", "1.00", "1.00", "1.00", "1.00", "1.00",
+                           "1.00", "1.00", "1.00", "1.00", "0.00", "5.00"};
+        List<LocalDate> dates = seedCloseSeries(stockId, LocalDate.of(2026, 3, 1), closes, 1000);
+        LocalDate signalDate = dates.get(dates.size() - 1);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Arrays.asList(selection("RISING_SUPPORT", "STANDARD", BigDecimal.ZERO),
+                        selectionDays("CUMULATIVE_RISE", 12, BigDecimal.ZERO)),
+                Collections.singletonList(stockId), signalDate, signalDate);
+
+        JsonNode results = postScan(request).get("results");
+        // Both must have actually evaluated the stock -- if it fell into insufficientData the
+        // division would never have been reached and this test would prove nothing.
+        assertEquals(0, results.get(0).get("insufficientData").size(),
+                "RISING_SUPPORT must evaluate the stock, not skip it as insufficient data");
+        assertEquals(0, results.get(1).get("insufficientData").size(),
+                "CUMULATIVE_RISE must evaluate the stock, not skip it as insufficient data");
+        assertEquals(0, results.get(0).get("matchedCount").asInt(),
+                "RISING_SUPPORT: the 0.00 support-line day is skipped, not matched");
+        assertEquals(0, results.get(1).get("matchedCount").asInt(),
+                "CUMULATIVE_RISE: the 0.00 window-low day is skipped, not matched");
+    }
+
+    @Test
     void cumulativeRise_risePercentMoreThanOneDecimalDigit_stillRejected() {
         ScanRequestDto request = new ScanRequestDto();
         request.setStrategies(Collections.singletonList(

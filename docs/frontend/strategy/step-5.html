@@ -27,7 +27,7 @@
       </div>
       <div class="btns">
         <button class="btn">更新股票清單</button>
-        <button class="btn" data-trigger>同步日 K 至今日</button>
+        <button class="btn">同步日 K 至今日</button>
       </div>
     </div>
     <div class="cond">
@@ -61,51 +61,29 @@
       <div class="condrow"><span class="lbl">區間</span>
         <input class="date" value="2026-07-30"> <span>~</span> <input class="date" value="2026-08-30">
         <div class="seg"><button class="on">近一個月</button><button>近三個月</button><button>近半年</button></div></div>
-      <div class="actions"><button class="btn primary">開始掃描</button>
-        <span class="hint">已勾選 5 個策略</span></div>
+      <div class="actions"><button class="btn primary">開始掃描</button><button class="btn" data-trigger>回測</button>
+        <span class="hint">命中 5 檔，可回測</span></div>
     </div>
     <div class="res union" data-target>
       <h3>命中彙總<span> — 共 5 檔</span></h3>
+      <div class="params">底底高（嚴格）・箱型突破（標準）・上漲支撐（標準）・反彈（3 日跌 10% → 1 日反彈 5%）・累積上漲（30 日）</div>
       <table>
-        <thead><tr><th>代號</th><th>名稱</th><th>命中策略與訊號日</th></tr></thead>
+        <thead><tr><th class="ck"></th><th>代號</th><th>名稱</th><th>命中策略與訊號日</th></tr></thead>
         <tbody>
-          <tr class="hover"><td class="code">2330</td><td>台積電</td>
+          <tr class="hover"><td class="ck"><span class="cb on"></span></td><td class="code">3231</td><td>緯創</td>
+            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-30</span></td></tr>
+          <tr><td class="ck"><span class="cb on"></span></td><td class="code">2330</td><td>台積電</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span><span class="sep">・</span><span class="stag">箱型突破</span><span class="sdate">2026-08-27</span></td></tr>
-          <tr><td class="code">3231</td><td>緯創</td>
-            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-28</span></td></tr>
-          <tr><td class="code">2454</td><td>聯發科</td>
+          <tr><td class="ck"><span class="cb on"></span></td><td class="code">2454</td><td>聯發科</td>
             <td class="hits"><span class="stag">上漲支撐</span><span class="sdate">2026-08-26</span></td></tr>
-          <tr><td class="code">2603</td><td>長榮</td>
+          <tr><td class="ck"><span class="cb on"></span></td><td class="code">2603</td><td>長榮</td>
             <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-26</span></td></tr>
-          <tr><td class="code">2317</td><td>鴻海</td>
+          <tr><td class="ck"><span class="cb on"></span></td><td class="code">2317</td><td>鴻海</td>
             <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span></td></tr>
         </tbody>
       </table>
-    </div>
-    <div class="res">
-      <h3>底底高（嚴格）<span> — 命中 2 檔</span></h3>
-      <table>
-        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th>低點序列（MA5）</th><th>當日最低價</th><th class="r">累計漲幅</th></tr></thead>
-        <tbody>
-          <tr class="hover"><td class="code">2317</td><td>鴻海</td><td>2026-08-25</td>
-            <td class="lows">07-08 243.10 → 07-29 251.30 → 08-13 258.80 → 08-25 265.20</td>
-            <td class="lows">07-08 240.00 → 07-29 248.50 → 08-13 256.00 → 08-25 262.50</td>
-            <td class="r up">+9.09%</td></tr>
-        </tbody>
-      </table>
-      <div class="note">另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>
-    </div>
-    <div class="res">
-      <h3>箱型突破（標準）<span> — 命中 1 檔</span></h3>
-      <table>
-        <thead><tr><th>代號</th><th>名稱</th><th>訊號日</th><th class="r">箱型區間</th><th class="r">突破收盤</th><th class="r">突破幅度</th><th class="r">量能倍數</th></tr></thead>
-        <tbody>
-          <tr><td class="code">2330</td><td>台積電</td><td>2026-08-27</td>
-            <td class="r">2250.00 ~ 2380.00</td><td class="r">2420.00</td>
-            <td class="r up">+1.68%</td><td class="r">1.82×</td></tr>
-        </tbody>
-      </table>
-      <div class="note">另有 1 檔已突破，但確認日尚未到 ▸</div>
+      <div class="note">底底高：另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>
+      <div class="note">箱型突破：另有 1 檔已突破，但確認日尚未到 ▸</div>
     </div>
   </div>
 </body>

@@ -10,6 +10,7 @@
 - [stock-universe-import](backend/stock-universe-import.md) — 上市股票 universe 匯入 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [stock-minute-price](backend/stock-minute-price.md) — 分 K 隨選抓取與查詢 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [strategy-scan](backend/strategy-scan.md) — 策略型態掃描 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
+- [strategy-backtest](backend/strategy-backtest.md) — 策略命中回測 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [industry-gain-ranking](backend/industry-gain-ranking.md) — 產業別漲幅排行 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 
 ## ER Model (full schema)

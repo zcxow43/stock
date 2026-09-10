@@ -2,24 +2,18 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, fetchStocks, importStockUniverse, type StockListItem, type UniverseImportResponse } from '../api/stocks'
 import {
+  backtestStrategies,
   fetchStrategyCatalog,
   scanStrategies,
-  type BoxBreakoutDetail,
-  type ConfirmClosePoint,
-  type CumulativeRiseDetail,
-  type HigherLowsDetail,
-  type LowPoint,
+  type BacktestResponse,
+  type BacktestResultItem,
   type ParamGroup,
   type PresetCode,
-  type ReboundDetail,
-  type RisingSupportDetail,
   type ScanRequest,
   type ScanResponse,
   type ScanStrategySelection,
   type StrategyCatalogItem,
   type StrategyCode,
-  type StrategyDetail,
-  type StrategyHit,
   type StrategyParam,
   type StrategyResult,
 } from '../api/strategies'
@@ -38,6 +32,7 @@ const STOCK_ID_CAP = 200
 type ScanStatus = 'idle' | 'scanning' | 'success' | 'error'
 type SyncStatus = 'idle' | 'running'
 type ShortcutKey = '1m' | '3m' | '6m'
+type BacktestStatus = 'idle' | 'running' | 'success' | 'error'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -65,48 +60,34 @@ function defaultDateRange(): { startDate: string; endDate: string } {
   return { startDate: toIsoDate(monthsAgo(1, today)), endDate: toIsoDate(today) }
 }
 
-function formatPrice2(value: number | null | undefined): string {
-  return value == null ? '—' : value.toFixed(2)
-}
-
 function formatPercent2(value: number | null | undefined): string {
   return value == null ? '—' : `${value.toFixed(2)}%`
 }
 
-/** Result-block title only (「數值格式」: 兩位小數時去掉無意義的尾數，例如 10.0 寫成 10).
- * Table cells keep the fixed two-decimal `formatPercent2` — this is purely for the
- * parenthetical in a strategy block's heading. */
+/** Params-line only (「數值格式」: 兩位小數時去掉無意義的尾數，例如 10.0 寫成 10). Table
+ * cells keep the fixed two-decimal `formatPercent2` — this is purely for the parenthetical
+ * in the merged table's「本次採用參數」line. */
 function formatTrimmedPercent(value: number): string {
   return `${Number(value.toFixed(2))}`
 }
 
-function formatMultiple2(value: number | null | undefined): string {
-  return value == null ? '—' : `${value.toFixed(2)}×`
+/** 收益／總收益 — thousand separator, no decimals, negative sign kept (「數值格式」). */
+function formatAmount(value: number | null | undefined): string {
+  return value == null ? '—' : Math.round(value).toLocaleString('en-US')
+}
+
+/** 漲跌色一律沿用全站規則: positive `#E04B45`(sl-up)／negative `#16A75C`(sl-down)／`0`
+ * `#93A4B8`(sl-neutral, defined alongside sl-up/sl-down for the merged table + totals). */
+function signColorClass(value: number | null | undefined): string {
+  if (value == null) return 'sl-muted'
+  if (value > 0) return 'sl-up'
+  if (value < 0) return 'sl-down'
+  return 'sl-neutral'
 }
 
 function formatSyncTime(value: string | null | undefined): string {
   if (!value) return '尚未同步'
   return value.slice(0, 16).replace('T', ' ')
-}
-
-function isBoxDetail(detail: StrategyDetail): detail is BoxBreakoutDetail {
-  return 'boxHigh' in detail
-}
-
-function isHigherLowsDetail(detail: StrategyDetail): detail is HigherLowsDetail {
-  return 'lows' in detail
-}
-
-function isRisingSupportDetail(detail: StrategyDetail): detail is RisingSupportDetail {
-  return 'riseClose' in detail
-}
-
-function isReboundDetail(detail: StrategyDetail): detail is ReboundDetail {
-  return 'dropPercent' in detail
-}
-
-function isCumulativeRiseDetail(detail: StrategyDetail): detail is CumulativeRiseDetail {
-  return 'troughDate' in detail
 }
 
 /** The three remaining sensitivity-driven cards (BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT)
@@ -215,6 +196,10 @@ interface UnionRow {
   stockId: string
   stockName: string
   hits: UnionHit[]
+  /** The latest `signalDate` among this stock's hits — what the merged table sorts by,
+   * and (specs/frontend/strategy.md「送出全部命中標的...signalDate 取該檔命中的各策略中
+   * 最新的一個」) the exact date sent to `POST /api/strategies/backtest` for this stock. */
+  latestSignalDate: string
 }
 
 /** Union across every requested strategy's `items` (never `insufficientData`/`pendingConfirm` —
@@ -223,7 +208,7 @@ interface UnionRow {
  * request order — so no dependency on the component's current (possibly since-changed)
  * selection order is needed to keep "策略的排列順序與勾選順序一致". */
 function buildUnionRows(result: ScanResponse): UnionRow[] {
-  const map = new Map<string, UnionRow>()
+  const map = new Map<string, { stockId: string; stockName: string; hits: UnionHit[] }>()
   for (const strategyResult of result.results) {
     for (const item of strategyResult.items) {
       let row = map.get(item.stockId)
@@ -234,48 +219,58 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
       row.hits.push({ strategyCode: strategyResult.strategy, signalDate: item.signalDate })
     }
   }
-  const latestSignalDate = (hits: UnionHit[]) =>
-    hits.reduce((max, h) => (h.signalDate > max ? h.signalDate : max), hits[0].signalDate)
-  return Array.from(map.values()).sort((a, b) => {
-    const latestA = latestSignalDate(a.hits)
-    const latestB = latestSignalDate(b.hits)
-    if (latestA !== latestB) return latestA < latestB ? 1 : -1
+  const withLatest: UnionRow[] = Array.from(map.values()).map((row) => ({
+    ...row,
+    latestSignalDate: row.hits.reduce((max, h) => (h.signalDate > max ? h.signalDate : max), row.hits[0].signalDate),
+  }))
+  return withLatest.sort((a, b) => {
+    if (a.latestSignalDate !== b.latestSignalDate) return a.latestSignalDate < b.latestSignalDate ? 1 : -1
     return a.stockId < b.stockId ? -1 : a.stockId > b.stockId ? 1 : 0
   })
 }
 
-/** Renders one of the two low-point series (MA5 or raw low) as a table cell — `field`
- * picks which value of each point to show, same dates and point count either way. The
- * date part of each point gets its own span so it can carry the spec's secondary text
- * color (`#93A4B8`) while the value stays the main table text color; the concatenated
- * `td.textContent` still reads exactly like the plain "MM-DD value→MM-DD value" string. */
-function renderLowSeriesCell(lows: LowPoint[], field: 'ma5' | 'low') {
-  return (
-    <td>
-      {lows.map((p, idx) => (
-        <span key={p.tradeDate}>
-          {idx > 0 ? '→' : null}
-          <span className="sl-flat">{p.tradeDate.slice(5)}</span> {p[field].toFixed(2)}
-        </span>
-      ))}
-    </td>
-  )
+interface BacktestTotals {
+  /** Rows counted toward the two totals — checked, and with a non-null `sellDate`. */
+  includedCount: number
+  totalCost: number
+  totalProfit: number
+  /** `null` when `includedCount` is 0 — never `0`, per「不得顯示成 0%」. */
+  totalReturnPercent: number | null
+  /** `sellDate === null` — 「尚無可賣出交易日」, never counted regardless of checkbox state. */
+  uncountedNoSellDate: number
+  /** Checked-eligible (`sellDate` non-null) but unchecked by the user. A row that is both
+   * unbacktestable and unchecked is counted only in `uncountedNoSellDate` above, never here. */
+  uncountedUnchecked: number
 }
 
-function formatConfirmCloses(points: ConfirmClosePoint[]): string {
-  return points.map((p) => `${p.tradeDate.slice(5)} ${p.close.toFixed(2)}`).join('→')
-}
-
-/** 累計漲幅 is computed from the MA5 series, never the raw low — MA5 is what the
- * rising-lows judgment is actually made on (「以 5 日均線為基準」), so it's the only
- * series a "how much did the swing lows rise" figure can honestly describe. A segment
- * whose raw `low` dips while `ma5` still climbs is expected, not an error. */
-function cumulativeRiseFromMa5(lows: LowPoint[]): number | null {
-  if (lows.length < 2) return null
-  const first = lows[0].ma5
-  const last = lows[lows.length - 1].ma5
-  if (!first) return null
-  return (last / first - 1) * 100
+/** Recomputes the two merged-table totals client-side from the backtest response's own
+ * per-item `buyPrice`/`profit` and `lotSize` (never a hard-coded 1000) — so toggling a
+ * checkbox never has to re-call the endpoint. With every row checked this must equal the
+ * response's own `totalCost`/`totalProfit`/`totalReturnPercent` exactly (specs/frontend/
+ * strategy.md「全部勾選時…這兩條路徑必須交會」), since it excludes exactly the same
+ * `sellDate === null` rows the backend already excludes and applies the same weighted
+ * formula. */
+function computeBacktestTotals(result: BacktestResponse, checkedStockIds: Set<string>): BacktestTotals {
+  let totalCost = 0
+  let totalProfit = 0
+  let includedCount = 0
+  let uncountedNoSellDate = 0
+  let uncountedUnchecked = 0
+  for (const item of result.items) {
+    if (item.sellDate === null) {
+      uncountedNoSellDate += 1
+      continue
+    }
+    if (!checkedStockIds.has(item.stockId)) {
+      uncountedUnchecked += 1
+      continue
+    }
+    includedCount += 1
+    totalCost += (item.buyPrice ?? 0) * result.lotSize
+    totalProfit += item.profit ?? 0
+  }
+  const totalReturnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
+  return { includedCount, totalCost, totalProfit, totalReturnPercent, uncountedNoSellDate, uncountedUnchecked }
 }
 
 /** Collapsible "N 檔…" note used for both `insufficientData` and `pendingConfirm` —
@@ -358,6 +353,16 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [scanErrorMessage, setScanErrorMessage] = useState<string | null>(null)
   const [unknownIds, setUnknownIds] = useState<string[] | null>(null)
   const [lastScanPayload, setLastScanPayload] = useState<ScanRequest | null>(null)
+
+  // ---------- 納入計算的勾選框 (per hit-table row, front-end only) ----------
+  // Populated with every row checked the moment a scan succeeds; reset to "all checked"
+  // again on the next 開始掃描 click, together with the backtest result itself.
+  const [checkedStockIds, setCheckedStockIds] = useState<Set<string>>(new Set())
+
+  // ---------- 回測 ----------
+  const [backtestStatus, setBacktestStatus] = useState<BacktestStatus>('idle')
+  const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null)
+  const [backtestErrorMessage, setBacktestErrorMessage] = useState<string | null>(null)
 
   // ---------- sync ----------
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
@@ -646,10 +651,20 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setInvalidRisePercentStrategy(null)
     setParamServerError(null)
     setLastScanPayload(payload)
+    // 重新掃描一定清空回測結果，在按下的當下就做，不等新結果回來 — an old backtest is for
+    // an old hit list; leaving it next to a new one would be two datasets that no longer
+    // correspond, with nothing on screen to say so.
+    setBacktestStatus('idle')
+    setBacktestResult(null)
+    setBacktestErrorMessage(null)
     scanStrategies(payload)
       .then((resp) => {
         setScanResult(resp)
         setScanStatus('success')
+        // 掃描完成當下即出現，預設全部勾選 — a fresh hit list is a different batch of
+        // stocks, so any prior checkbox state (including which rows were unchecked) must
+        // not carry over.
+        setCheckedStockIds(new Set(buildUnionRows(resp).map((row) => row.stockId)))
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'UNKNOWN_STOCK_ID') {
@@ -748,6 +763,40 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     if (lastScanPayload) runScan(lastScanPayload)
   }
 
+  // Merged hit table — always one table regardless of how many strategies were selected.
+  const unionRows = scanResult ? buildUnionRows(scanResult) : []
+
+  const toggleRowChecked = (stockId: string) => {
+    setCheckedStockIds((ids) => {
+      const next = new Set(ids)
+      if (next.has(stockId)) next.delete(stockId)
+      else next.add(stockId)
+      return next
+    })
+  }
+
+  const canBacktest = scanStatus === 'success' && unionRows.length > 0 && backtestStatus !== 'running'
+
+  const handleBacktestClick = () => {
+    if (!canBacktest) return
+    setBacktestStatus('running')
+    setBacktestErrorMessage(null)
+    // 送出全部命中標的，勾選狀態不影響請求內容 — checkboxes are a display/aggregation
+    // filter applied to the response afterward, never a request filter. Per stock, the
+    // signalDate sent is the latest among the strategies it hit (`row.latestSignalDate`),
+    // the same date the table sorts by.
+    const items = unionRows.map((row) => ({ stockId: row.stockId, signalDate: row.latestSignalDate }))
+    backtestStrategies({ items })
+      .then((resp) => {
+        setBacktestResult(resp)
+        setBacktestStatus('success')
+      })
+      .catch(() => {
+        setBacktestStatus('error')
+        setBacktestErrorMessage('回測失敗，請稍後再試')
+      })
+  }
+
   const handleSyncClick = () => {
     setSyncErrorMessage(null)
     setSyncMeta(null)
@@ -810,9 +859,30 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const presetName = (code: StrategyCode, preset: PresetCode) =>
     catalog.find((s) => s.code === code)?.presets.find((p) => p.code === preset)?.name ?? preset
 
-  // Union table — only when 2+ strategies were requested and at least one stock was hit.
-  const unionRows = scanResult ? buildUnionRows(scanResult) : []
-  const showUnionTable = scanResult !== null && scanResult.results.length >= 2 && unionRows.length > 0
+  /** 「本次採用參數」一行的其中一段 — always sourced from the scan RESPONSE, never from
+   * the current (possibly since-edited) card inputs, so editing an input after scanning
+   * can never retroactively rewrite what the results say they were computed with.
+   * `preset`/`days`/(`dropDays`+`dropPercent`[+`riseDays`+`risePercent`]) are mutually
+   * exclusive on the response — whichever is present decides the format, never a branch on
+   * `result.strategy`. */
+  const formatStrategyParams = (result: StrategyResult): string => {
+    const name = strategyName(result.strategy)
+    if (result.preset !== undefined) {
+      return `${name}（${presetName(result.strategy, result.preset as PresetCode)}）`
+    }
+    if (result.days !== undefined) {
+      return `${name}（${result.days} 日）`
+    }
+    if (result.dropDays !== undefined && result.dropPercent !== undefined) {
+      const dropPart = `${result.dropDays} 日跌 ${formatTrimmedPercent(result.dropPercent)}%`
+      const risePart =
+        result.requireRise === true && result.riseDays !== undefined && result.risePercent !== undefined
+          ? ` → ${result.riseDays} 日反彈 ${formatTrimmedPercent(result.risePercent)}%`
+          : ''
+      return `${name}（${dropPart}${risePart}）`
+    }
+    return name
+  }
 
   const renderUnionHits = (hits: UnionHit[]) => {
     const nodes: ReactNode[] = []
@@ -832,289 +902,153 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return nodes
   }
 
-  const renderUnionTable = () => (
-    <div className="st-result-block st-union-block">
-      <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
-      <table className="sl-table st-result-table st-union-table">
-        <thead>
-          <tr>
-            <th>代號 / 名稱</th>
-            <th>命中策略與訊號日</th>
-          </tr>
-        </thead>
-        <tbody>
-          {unionRows.map((row) => (
-            <tr key={row.stockId} className="sl-row" onClick={() => navigate(`/stocks/${row.stockId}/daily`)}>
-              <td>
-                {row.stockId} {row.stockName}
-              </td>
-              <td className="st-union-hits">{renderUnionHits(row.hits)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+  const backtestItemsById = (() => {
+    const map = new Map<string, BacktestResultItem>()
+    if (backtestResult) for (const item of backtestResult.items) map.set(item.stockId, item)
+    return map
+  })()
 
-  const renderBoxTable = (items: StrategyHit[]) => (
-    <table className="sl-table st-result-table">
-      <thead>
-        <tr>
-          <th>代號 / 名稱</th>
-          <th>訊號日</th>
-          <th>箱型區間</th>
-          <th className="sl-r">突破收盤</th>
-          <th className="sl-r">突破幅度</th>
-          <th className="sl-r">量能倍數</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const detail = item.detail
-          const box = isBoxDetail(detail) ? detail : null
-          return (
-            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
-              <td>
-                {item.stockId} {item.stockName}
-              </td>
-              <td>{item.signalDate}</td>
-              <td>
-                {formatPrice2(box?.boxLow)} ~ {formatPrice2(box?.boxHigh)}
-              </td>
-              <td className="sl-r">{formatPrice2(box?.breakoutClose)}</td>
-              <td className="sl-r">{formatPercent2(box?.breakoutPercent)}</td>
-              <td className="sl-r">{formatMultiple2(box?.volumeRatio)}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
+  const backtestTotals = backtestResult ? computeBacktestTotals(backtestResult, checkedStockIds) : null
 
-  const renderHigherLowsTable = (items: StrategyHit[]) => (
-    <table className="sl-table st-result-table">
-      <thead>
-        <tr>
-          <th>代號 / 名稱</th>
-          <th>訊號日</th>
-          <th>低點序列（MA5）</th>
-          <th>當日最低價</th>
-          <th className="sl-r">累計漲幅</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const detail = item.detail
-          const lows = isHigherLowsDetail(detail) ? detail.lows : []
-          return (
-            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
-              <td>
-                {item.stockId} {item.stockName}
-              </td>
-              <td>{item.signalDate}</td>
-              {renderLowSeriesCell(lows, 'ma5')}
-              {renderLowSeriesCell(lows, 'low')}
-              <td className="sl-r">{formatPercent2(cumulativeRiseFromMa5(lows))}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-
-  const renderRisingSupportTable = (items: StrategyHit[]) => (
-    <table className="sl-table st-result-table">
-      <thead>
-        <tr>
-          <th>代號 / 名稱</th>
-          <th>訊號日</th>
-          <th className="sl-r">上漲收盤</th>
-          <th className="sl-r">單日漲幅</th>
-          <th className="sl-r">支撐價</th>
-          <th className="sl-r">前段收盤高點</th>
-          <th>確認兩日收盤</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const detail = item.detail
-          const rs = isRisingSupportDetail(detail) ? detail : null
-          return (
-            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
-              <td>
-                {item.stockId} {item.stockName}
-              </td>
-              <td>{item.signalDate}</td>
-              <td className="sl-r">{formatPrice2(rs?.riseClose)}</td>
-              <td className="sl-r sl-up">{formatPercent2(rs?.risePercent)}</td>
-              <td className="sl-r">{formatPrice2(rs?.supportClose)}</td>
-              <td className="sl-r">{formatPrice2(rs?.priorHighClose)}</td>
-              <td>{rs ? formatConfirmCloses(rs.confirmCloses) : '—'}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-
-  /** Independent "分 K" link inside its own cell — stops the click before it reaches the
-   * row's own onClick (which navigates to /daily), so the two navigation targets never
-   * collide into one ambiguous click. */
-  const renderMinuteCell = (stockId: string, signalDate: string) => (
-    <td className="st-minute-cell" onClick={(e) => e.stopPropagation()}>
-      <button type="button" className="st-minute-link" onClick={() => navigate(`/stocks/${stockId}/minute/${signalDate}`)}>
-        分 K
-      </button>
-    </td>
-  )
-
-  const renderReboundTable = (items: StrategyHit[]) => (
-    <table className="sl-table st-result-table">
-      <thead>
-        <tr>
-          <th>代號 / 名稱</th>
-          <th>訊號日</th>
-          <th>高點日 / 高點收盤</th>
-          <th>低點日 / 低點收盤</th>
-          <th className="sl-r">跌幅</th>
-          <th className="sl-r">反彈幅度</th>
-          <th>分 K</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const detail = item.detail
-          const rb = isReboundDetail(detail) ? detail : null
-          return (
-            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
-              <td>
-                {item.stockId} {item.stockName}
-              </td>
-              <td>{item.signalDate}</td>
-              <td>
-                {rb?.peakDate ?? '—'} / {formatPrice2(rb?.peakClose)}
-              </td>
-              <td>
-                {rb?.troughDate ?? '—'} / {formatPrice2(rb?.troughClose)}
-              </td>
-              <td className="sl-r sl-down">{formatPercent2(rb?.dropPercent)}</td>
-              <td className={`sl-r${rb?.risePercent !== undefined ? ' sl-up' : ''}`}>
-                {rb?.risePercent === undefined ? <span className="sl-muted">—</span> : formatPercent2(rb.risePercent)}
-              </td>
-              {renderMinuteCell(item.stockId, item.signalDate)}
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-
-  const renderCumulativeRiseTable = (items: StrategyHit[]) => (
-    <table className="sl-table st-result-table">
-      <thead>
-        <tr>
-          <th>代號 / 名稱</th>
-          <th>訊號日</th>
-          <th>低點日 / 低點收盤</th>
-          <th className="sl-r">高點收盤</th>
-          <th className="sl-r">漲幅</th>
-          <th>分 K</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const detail = item.detail
-          const cr = isCumulativeRiseDetail(detail) ? detail : null
-          return (
-            <tr key={item.stockId} className="sl-row" onClick={() => navigate(`/stocks/${item.stockId}/daily`)}>
-              <td>
-                {item.stockId} {item.stockName}
-              </td>
-              <td>{item.signalDate}</td>
-              <td>
-                {cr?.troughDate ?? '—'} / {formatPrice2(cr?.troughClose)}
-              </td>
-              <td className="sl-r">{formatPrice2(cr?.peakClose)}</td>
-              <td className="sl-r sl-up">{formatPercent2(cr?.risePercent)}</td>
-              {renderMinuteCell(item.stockId, item.signalDate)}
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-
-  const renderTableForStrategy = (result: StrategyResult) => {
-    switch (result.strategy) {
-      case 'BOX_BREAKOUT':
-        return renderBoxTable(result.items)
-      case 'HIGHER_LOWS':
-        return renderHigherLowsTable(result.items)
-      case 'RISING_SUPPORT':
-        return renderRisingSupportTable(result.items)
-      case 'REBOUND':
-        return renderReboundTable(result.items)
-      case 'CUMULATIVE_RISE':
-        return renderCumulativeRiseTable(result.items)
-    }
-  }
-
-  const renderResultBlock = (result: StrategyResult) => {
-    // `preset`/`days`/(REBOUND's own `dropDays`/`dropPercent`/`requireRise`/`riseDays`/
-    // `risePercent`) are mutually exclusive on the response — whichever is present names
-    // what the title reads, never decided by inspecting `result.strategy`. Always sourced
-    // from the response, never from the current (possibly since-edited) card inputs, so a
-    // stale title never silently claims the current input values were used.
-    const title = (() => {
-      const name = strategyName(result.strategy)
-      if (result.preset !== undefined) {
-        return `${name}（${presetName(result.strategy, result.preset as PresetCode)}）— 命中 ${result.matchedCount} 檔`
-      }
-      if (result.days !== undefined) {
-        return `${name}（${result.days} 日）— 命中 ${result.matchedCount} 檔`
-      }
-      if (result.dropDays !== undefined && result.dropPercent !== undefined) {
-        const dropPart = `${result.dropDays} 日跌 ${formatTrimmedPercent(result.dropPercent)}%`
-        const risePart =
-          result.requireRise === true && result.riseDays !== undefined && result.risePercent !== undefined
-            ? ` → ${result.riseDays} 日反彈 ${formatTrimmedPercent(result.risePercent)}%`
-            : ''
-        return `${name}（${dropPart}${risePart}）— 命中 ${result.matchedCount} 檔`
-      }
-      return `${name} — 命中 ${result.matchedCount} 檔`
-    })()
-    return (
-      <div
-        className="st-result-block"
-        key={`${result.strategy}-${result.preset ?? (result.days !== undefined ? `days-${result.days}` : 'params')}`}
-      >
-        <h3 className="st-result-title">{title}</h3>
-        {result.matchedCount === 0 ? (
-          <div className="st-result-zero">
-            <p>此區間內沒有命中的股票</p>
-            <p className="st-last-sync-hint">最後同步：{formatSyncTime(lastSyncedAt)}</p>
-          </div>
-        ) : (
-          renderTableForStrategy(result)
-        )}
-        {result.insufficientData.length > 0 ? (
+  /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
+   * 名稱。這些標的不是命中，因此永遠不進入 `unionRows` 或回測請求。 */
+  const renderScanNotes = () =>
+    (scanResult?.results ?? []).flatMap((result) => {
+      const notes: ReactNode[] = []
+      if (result.insufficientData.length > 0) {
+        notes.push(
           <ExpandableNote
-            label={`另有 ${result.insufficientData.length} 檔因區間前的歷史資料不足而未納入判定`}
+            key={`${result.strategy}-insufficient`}
+            label={`${strategyName(result.strategy)}：另有 ${result.insufficientData.length} 檔因區間前的歷史資料不足而未納入判定`}
             ids={result.insufficientData}
-          />
-        ) : null}
-        {result.strategy === 'BOX_BREAKOUT' && result.pendingConfirm.length > 0 ? (
-          <ExpandableNote label={`另有 ${result.pendingConfirm.length} 檔已突破，但確認日尚未到`} ids={result.pendingConfirm} />
-        ) : null}
-        {result.strategy === 'RISING_SUPPORT' && result.pendingConfirm.length > 0 ? (
+          />,
+        )
+      }
+      if (result.strategy === 'BOX_BREAKOUT' && result.pendingConfirm.length > 0) {
+        notes.push(
           <ExpandableNote
-            label={`另有 ${result.pendingConfirm.length} 檔已上漲，但後兩日的確認尚未完成`}
+            key={`${result.strategy}-pending`}
+            label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔已突破，但確認日尚未到`}
             ids={result.pendingConfirm}
-          />
+          />,
+        )
+      }
+      if (result.strategy === 'RISING_SUPPORT' && result.pendingConfirm.length > 0) {
+        notes.push(
+          <ExpandableNote
+            key={`${result.strategy}-pending`}
+            label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔已上漲，但後兩日的確認尚未完成`}
+            ids={result.pendingConfirm}
+          />,
+        )
+      }
+      return notes
+    })
+
+  const renderMergedTable = () => (
+    <div className="st-result-block st-union-block">
+      <div className="st-union-header">
+        <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
+        {backtestTotals ? (
+          <div className="st-backtest-totals">
+            <div className="st-total-item">
+              <span className="st-total-label">總報酬率</span>
+              <span className={`st-total-value ${signColorClass(backtestTotals.totalReturnPercent)}`}>
+                {formatPercent2(backtestTotals.totalReturnPercent)}
+              </span>
+            </div>
+            <div className="st-total-item">
+              <span className="st-total-label">總收益（每檔 1 張）</span>
+              <span
+                className={`st-total-value ${signColorClass(backtestTotals.includedCount > 0 ? backtestTotals.totalProfit : null)}`}
+              >
+                {backtestTotals.includedCount === 0 ? '—' : formatAmount(backtestTotals.totalProfit)}
+              </span>
+            </div>
+          </div>
         ) : null}
       </div>
-    )
-  }
+      {scanResult && scanResult.results.length > 0 ? (
+        <p className="st-params-line">{scanResult.results.map(formatStrategyParams).join('・')}</p>
+      ) : null}
+      {backtestTotals ? (
+        <div className="st-uncounted-notes">
+          {backtestTotals.includedCount === 0 ? (
+            <p className="st-uncounted-note">
+              {backtestResult?.totalReturnPercent === null ? '沒有可回測的標的' : '未勾選任何標的'}
+            </p>
+          ) : (
+            <>
+              {backtestTotals.uncountedNoSellDate > 0 ? (
+                <p className="st-uncounted-note">另 {backtestTotals.uncountedNoSellDate} 檔尚無可賣出交易日，未計入</p>
+              ) : null}
+              {backtestTotals.uncountedUnchecked > 0 ? (
+                <p className="st-uncounted-note">另 {backtestTotals.uncountedUnchecked} 檔未勾選，未計入</p>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+      {unionRows.length === 0 ? (
+        <div className="st-result-zero">
+          <p>此區間內沒有命中的股票</p>
+          <p className="st-last-sync-hint">最後同步：{formatSyncTime(lastSyncedAt)}</p>
+        </div>
+      ) : (
+        <table className="sl-table st-result-table st-union-table">
+          <thead>
+            <tr>
+              <th className="st-checkbox-col" aria-label="納入計算"></th>
+              <th>代號 / 名稱</th>
+              <th>命中策略與訊號日</th>
+              {backtestResult ? <th>賣出日</th> : null}
+              {backtestResult ? <th className="sl-r">報酬率</th> : null}
+              {backtestResult ? <th className="sl-r">收益（每檔 1 張）</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {unionRows.map((row) => {
+              const checked = checkedStockIds.has(row.stockId)
+              const item = backtestItemsById.get(row.stockId) ?? null
+              return (
+                <tr
+                  key={row.stockId}
+                  className={`sl-row${checked ? '' : ' st-row-unchecked'}`}
+                  onClick={() => navigate(`/stocks/${row.stockId}/daily`)}
+                >
+                  <td className="st-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="st-row-checkbox"
+                      checked={checked}
+                      onChange={() => toggleRowChecked(row.stockId)}
+                      aria-label={`納入 ${row.stockId} 計算`}
+                    />
+                  </td>
+                  <td>
+                    {row.stockId} {row.stockName}
+                  </td>
+                  <td className="st-union-hits">{renderUnionHits(row.hits)}</td>
+                  {backtestResult ? <td>{item?.sellDate ?? <span className="sl-muted">—</span>}</td> : null}
+                  {backtestResult ? (
+                    <td className={`sl-r ${signColorClass(item?.returnPercent)}`}>
+                      {item?.returnPercent == null ? <span className="sl-muted">—</span> : formatPercent2(item.returnPercent)}
+                    </td>
+                  ) : null}
+                  {backtestResult ? (
+                    <td className={`sl-r ${signColorClass(item?.profit)}`}>
+                      {item?.profit == null ? <span className="sl-muted">—</span> : formatAmount(item.profit)}
+                    </td>
+                  ) : null}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+      {renderScanNotes()}
+    </div>
+  )
 
   return (
     <div className="strategy-tab">
@@ -1455,11 +1389,19 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           <button type="button" className="sl-btn sl-btn-primary" disabled={!canScan} onClick={handleScanClick}>
             {scanStatus === 'scanning' ? '掃描中…' : '開始掃描'}
           </button>
+          {/* 回測 — 次要按鈕樣式，全頁唯一的主要按鈕仍是「開始掃描」。只有本次掃描命中至少
+              一檔時才可點擊；尚未掃描／掃描中／掃描失敗／零命中一律 disabled。 */}
+          <button type="button" className="sl-btn" disabled={!canBacktest} onClick={handleBacktestClick}>
+            {backtestStatus === 'running' ? '回測中…' : '回測'}
+          </button>
           {noStrategySelected ? <span className="st-inline-hint">請至少勾選一個策略</span> : null}
           {!noStrategySelected && noStockSelected ? (
             <span className="st-inline-hint">請至少選擇一檔股票</span>
           ) : null}
         </div>
+        {backtestStatus === 'error' && backtestErrorMessage ? (
+          <div className="st-inline-error">{backtestErrorMessage}</div>
+        ) : null}
       </div>
 
       {/* ---------- results area ---------- */}
@@ -1481,8 +1423,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           </div>
         ) : (
           <div className={scanStatus === 'scanning' ? 'st-results-list st-results-dimmed' : 'st-results-list'}>
-            {showUnionTable ? renderUnionTable() : null}
-            {scanResult.results.map(renderResultBlock)}
+            {renderMergedTable()}
           </div>
         )}
       </div>
