@@ -257,12 +257,23 @@
   color: #3e8fd8;
 }
 
+/* No `color` here on purpose: `.sl-up`/`.sl-down`/`.sl-flat`/`.sl-neutral`/`.sl-muted`
+   are put directly on these `<td>`s and each has specificity (0,1,0) — a
+   `.sl-table tbody td { color: ... }` rule would be (0,1,2) and would always win
+   over them regardless of source order, which is exactly the bug this comment
+   replaces (every 漲跌/漲跌幅 cell rendered #E6EDF5 instead of red/green). Instead,
+   the default #E6EDF5 text color comes from inheritance — `.stock-list-page`
+   (this file, top) declares `color: #e6edf5` and nothing between it and these
+   `<td>`s sets `color`, so an unstyled cell (代號/名稱/收盤價/etc.) still renders
+   #E6EDF5, while a cell that also carries a color class gets that class's color
+   instead, because an explicit declaration on the element always beats an
+   inherited value. This is the one shared fix `strategy.md`'s 回測 columns and
+   `momentum.md`'s 漲幅 column also rely on — do not reintroduce `color` here. */
 .sl-table tbody td {
   padding: 11px 16px;
   border-bottom: 1px solid #26333f;
   font-size: 14px;
   white-space: nowrap;
-  color: #e6edf5;
 }
 
 .sl-table tbody tr:last-child td {
@@ -1122,8 +1133,11 @@
 
 /* Unchecked row — whole row (including its own up/down-colored 報酬率／收益) turns weak
    text color; background stays unchanged and the row is still clickable (「反灰是『不計
-   入』的視覺表示，不是停用」). `!important` is required to win over the more specific
-   `.sl-up`/`.sl-down`/`.sl-neutral` cell classes the row's own cells still carry. */
+   入』的視覺表示，不是停用」). This selector (2 classes + 3 elements) is already more
+   specific than `.sl-up`/`.sl-down`/`.sl-neutral` (1 class each) and wins on
+   specificity alone; `!important` is kept anyway as a deliberate belt-and-braces
+   guard so this row-level override can never again be silently outranked by a
+   future higher-specificity color rule added elsewhere on these cells. */
 .sl-table tbody tr.st-row-unchecked td {
   color: #6b7c90 !important;
 }

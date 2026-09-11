@@ -276,6 +276,16 @@ depends_on: []
 - [x] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
 - [x] 所有新增元素（頁籤、對話框、成功訊息、破壞性按鈕）的顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
 
+
+### 漲跌色實際生效（本次新增）
+
+既有驗收項「漲跌與漲跌幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`、為 0 時顯示 `#93A4B8`」已勾選，但在瀏覽器中量測，這兩欄實際渲染的文字色三種情況都是主要文字色 `#E6EDF5`：表格儲存格的預設文字色以較高的權重宣告，蓋過了掛在同一格上的漲跌色類別。當時的驗證只檢查了類別名稱，沒有檢查畫出來的顏色。
+
+- [x] 總覽表「漲跌」與「漲跌幅」兩欄在瀏覽器中**實際渲染的文字色**：正值 `#E04B45`、負值 `#16A75C`、`0` 為 `#93A4B8`；以讀取儲存格計算後樣式（computed color）的方式驗證，不得只驗證儲存格上掛了哪個樣式類別
+- [x] 修正落在共用表格樣式的權重本身，與 `specs/frontend/strategy.md` 回測欄位、`specs/frontend/momentum.md` 漲幅欄位共用同一個修正，不為本表另加覆寫
+- [x] 表格其他欄位（代號、名稱、收盤價等）仍為主要文字色 `#E6EDF5`，未被修正連帶改色
+- [x] 以上顏色在 `prefers-color-scheme: dark` 與 `light` 下完全一致
+
 ## Execution Result
 - Status: DONE
 - Files changed:
@@ -361,3 +371,15 @@ Adds the page-level "只看上市普通股" setting per the spec's 10 previously
   - `npm test` → 155/155 passing (148 pre-existing + 7 new). `npm run build` (`tsc -b && vite build`) clean. `npx oxlint .` surfaces exactly the same 2 pre-existing warnings as before this increment (`StrategyTab.tsx:306` `set-state-in-effect`, `StrategyTab.test.tsx:354` `no-unreachable`) — confirmed via `git diff` that neither touched line is part of this increment's changes; left as-is, out of scope.
   - Reviewed against `code-quality` before reporting done: no absence-safety gaps (the new field is a plain non-nullable `boolean` throughout, no optional chaining needed); no floating promises or swallowed errors introduced; no new subscriptions/timers requiring cleanup; the one dependency-array change (`StockOverviewTab`'s fetch effect) was necessary and intentional, not an omission; no N+1 or loop-based request pattern introduced. No issues found beyond the latent bug already described and fixed above.
   - Left unfixed / deliberately out of scope: the two pre-existing `oxlint` warnings noted above; `momentum.md`'s own remaining unchecked ACs (sort options, 尚未查詢過 state, etc.) and `strategy.md`'s own remaining unchecked ACs are untouched — this increment only added the shared value's consumption at the two call sites this spec's own body explicitly describes (`buildScanPayload`, `buildParams`), not any other behavior belonging to those specs.
+
+### Increment 5 — 2026-09-11
+
+修正「漲跌色」在表格儲存格上從未實際生效的缺陷（本增量 4 項）。
+
+**根因**：共用樣式 `.sl-table tbody td` 宣告了 `color: #e6edf5`，權重為 (0,1,2)；漲跌色類別 `.sl-up`／`.sl-down`／`.sl-neutral`／`.sl-flat` 只有 (0,1,0)。總覽表把漲跌色類別直接掛在 `<td>` 上，於是表格的預設文字色勝出，漲跌與漲跌幅兩欄三種情況都畫成白字 `#E6EDF5`。既有驗收項當時被勾選，是因為測試只檢查類別名稱，沒有檢查畫出來的顏色。同一條規則同時讓策略分頁回測欄與動態分頁漲幅欄失效。
+
+**修正**：移除 `.sl-table tbody td` 上的 `color` 宣告，儲存格的預設 `#E6EDF5` 改由上層 `.stock-list-page` 繼承而來。元素自身的類別永遠勝過繼承值，與權重無關，因此漲跌色得以生效；這是一處共用修正，三張表同時受益，未為任何一張表另加覆寫。另更正了未勾選列反灰規則上的錯誤註解（它原本聲稱 `.sl-up` 等類別權重較高，實際相反）；反灰規則本就以權重勝出，`!important` 保留作為防護。
+
+**驗證**：新增 `StockListPage.cellColorCascade.test.ts`，在真實 Chromium 中載入實際的 `StockListPage.css`，以 `getComputedStyle` 讀取儲存格計算後的顏色，涵蓋漲／跌／平、未勾選列反灰、以及無漲跌類別的一般欄位維持 `#E6EDF5`，並於 `prefers-color-scheme: dark` 與 `light` 各跑一次。已實證「修正前失敗、修正後通過」：暫時還原樣式後 2/4 失敗（`expected 'rgb(230, 237, 245)' to be 'rgb(224, 75, 69)'`），恢復修正後 4/4 通過。為此將 `playwright@1.62.1` 加為前端 devDependency（與 `docs/frontend/_scripts` 已解析的版本相同，未重新下載瀏覽器）。`npm test` 239/239、`npm run build` 無錯誤。
+
+**變更檔案**：`src/pages/StockListPage.css`、`src/__tests__/StockListPage.cellColorCascade.test.ts`（新）、`package.json`、`package-lock.json`。

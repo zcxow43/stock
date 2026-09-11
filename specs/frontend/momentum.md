@@ -305,6 +305,16 @@ depends_on: [stock-list]
 - [x] 所有顏色取自 `## Visual Style` 的字面 hex；在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面配色完全相同、文字皆清晰可讀
 - [x] 新增元素的顏色皆取自 `## Visual Style`，平均值採與表格「漲幅」欄相同的紅綠色值
 
+
+### 漲幅欄漲跌色實際生效（本次新增）
+
+既有驗收項「漲幅為正值時顯示紅色 `#E04B45`、負值顯示綠色 `#16A75C`」已勾選，但在瀏覽器中量測，表格「漲幅」欄實際渲染的文字色是主要文字色 `#E6EDF5`：表格儲存格的預設文字色以較高的權重宣告，蓋過了掛在同一格上的漲跌色類別。當時的驗證只檢查了類別名稱，沒有檢查畫出來的顏色。
+
+- [x] 表格「漲幅」欄在瀏覽器中**實際渲染的文字色**：正值 `#E04B45`、負值 `#16A75C`、`0` 或無值為 `#93A4B8`；以讀取儲存格計算後樣式（computed color）的方式驗證，不得只驗證儲存格上掛了哪個樣式類別
+- [x] 修正落在共用表格樣式的權重本身，與 `specs/frontend/strategy.md` 回測欄位、`specs/frontend/stock-list.md` 漲跌欄位共用同一個修正，不為本表另加覆寫
+- [x] 產業別區塊標題的平均漲幅顏色維持正確（該值原本就不在表格儲存格內，不受影響，修正後亦不得改變）
+- [x] 以上顏色在 `prefers-color-scheme: dark` 與 `light` 下完全一致
+
 ## Execution Result
 - Status: DONE
 - Files changed:
@@ -374,3 +384,15 @@ Increment 2 當下無法執行的瀏覽器驗證，已在同一次 `/dev` 執行
 - **`prefers-color-scheme` 固定配色**：於同一頁面分別模擬 `light` 與 `dark`，比對 `body`／`th`／`td`／`button`／`label` 的 computed `color` 與 `background-color`，兩者完全相同（例：`td` 皆為 `rgb(230,237,245)`、`th` 皆為 `rgb(147,164,184)` on `rgb(27,40,54)`），確認第 267 項驗收條件成立。
 
 兩個 dev server 於驗證後皆已停止。
+
+### Increment 3 — 2026-09-11
+
+驗證「漲幅」欄的漲跌色在共用修正後實際生效（本增量 4 項），**本增量未修改任何程式或樣式**。
+
+**根因與修正**：共用樣式 `.sl-table tbody td` 原本宣告的文字色權重高於掛在同一格上的 `.sl-up`／`.sl-down`／`.sl-flat`，使本表漲幅欄一律畫成白字。此問題已由同一輪先執行的 `specs/frontend/stock-list.md` 增量在共用樣式層修正一次。本表的漲幅儲存格位於同一個頁面容器下，`MomentumTab.css` 也沒有自己的 `td` 文字色宣告，因此修正直接生效，無需為本表另加覆寫。
+
+**驗證**：擴充 `StockListPage.cellColorCascade.test.ts`，同時載入 `StockListPage.css` 與 `MomentumTab.css`，並依 `MomentumTab.tsx` 的實際輸出建構標記，在真實 Chromium 中讀取計算後顏色：漲幅欄正值 `#E04B45`、負值 `#16A75C`、零與無值 `#93A4B8`，代號等一般欄位維持 `#E6EDF5`。產業別區塊標題的平均漲幅不在表格儲存格內，從未受此問題影響，一併驗證其顏色正確。以上於 dark／light 兩種 `prefers-color-scheme` 各驗一次，結果一致。
+
+**驗證結果**：`npm test` 255/255 通過（本增量前 251/251）。`npm run build` 無錯誤。
+
+**變更檔案**：`src/__tests__/StockListPage.cellColorCascade.test.ts`。

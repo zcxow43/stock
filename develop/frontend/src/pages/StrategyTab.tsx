@@ -998,7 +998,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         <table className="sl-table st-result-table st-union-table">
           <thead>
             <tr>
-              <th className="st-checkbox-col" aria-label="納入計算"></th>
+              {backtestResult ? <th className="st-checkbox-col" aria-label="納入計算"></th> : null}
               <th>代號 / 名稱</th>
               <th>命中策略與訊號日</th>
               {backtestResult ? <th>賣出日</th> : null}
@@ -1016,15 +1016,17 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   className={`sl-row${checked ? '' : ' st-row-unchecked'}`}
                   onClick={() => navigate(`/stocks/${row.stockId}/daily`)}
                 >
-                  <td className="st-checkbox-col" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      className="st-row-checkbox"
-                      checked={checked}
-                      onChange={() => toggleRowChecked(row.stockId)}
-                      aria-label={`納入 ${row.stockId} 計算`}
-                    />
-                  </td>
+                  {backtestResult ? (
+                    <td className="st-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="st-row-checkbox"
+                        checked={checked}
+                        onChange={() => toggleRowChecked(row.stockId)}
+                        aria-label={`納入 ${row.stockId} 計算`}
+                      />
+                    </td>
+                  ) : null}
                   <td>
                     {row.stockId} {row.stockName}
                   </td>

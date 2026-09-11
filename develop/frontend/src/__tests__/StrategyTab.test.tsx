@@ -738,8 +738,9 @@ describe('StrategyTab', () => {
 
     const unionTable = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
     const dataRows = within(unionTable).getAllByRole('row').slice(1)
+    // No checkbox column pre-回測, so 代號/名稱 is the first cell.
     // 2317 and 2330 tie on the newest signalDate (2026-08-28) -> stockId asc; 2454 (2026-08-20) last
-    expect(dataRows.map((r) => within(r).getAllByRole('cell')[1].textContent)).toEqual([
+    expect(dataRows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
       '2317 鴻海',
       '2330 台積電',
       '2454 聯發科',
@@ -2227,7 +2228,7 @@ describe('StrategyTab', () => {
     expect(screen.queryByText('總報酬率')).not.toBeInTheDocument()
   })
 
-  it('sends every hit stock with its latest signalDate, unaffected by checkbox state — and shows the three new columns after success', async () => {
+  it('sends every hit stock with its latest signalDate regardless of the (not-yet-existing) checkbox — and shows the checkbox column + three new columns together after success', async () => {
     scanResponder = () => unionScanResponse()
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
@@ -2237,11 +2238,16 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
 
-    // Uncheck a row before backtesting — must not change what gets sent.
-    fireEvent.click(screen.getByLabelText('納入 2454 計算'))
+    // Pre-回測: no checkbox column at all — only 代號/名稱 and 命中策略與訊號日.
+    expect(screen.queryByLabelText('納入 2454 計算')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['代號 / 名稱', '命中策略與訊號日'])
 
     fireEvent.click(screen.getByRole('button', { name: '回測' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    // Checkbox column appears at the same moment as the three backtest columns, all checked.
+    expect(screen.getByLabelText('納入 2454 計算')).toBeInTheDocument()
+    ;(screen.getAllByLabelText(/^納入 \d+ 計算$/) as HTMLInputElement[]).forEach((cb) => expect(cb.checked).toBe(true))
 
     const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))!
     const body = JSON.parse((backtestCall[1] as RequestInit).body as string)
@@ -2517,7 +2523,9 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
   })
 
-  it('resets every row checkbox back to checked when 開始掃描 is pressed again', async () => {
+  // ---------------- 勾選框改為回測後才出現 ----------------
+
+  it('shows no checkbox column at all right after a scan, and none while 回測 is in flight', async () => {
     scanResponder = () => boxScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
@@ -2525,12 +2533,148 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
 
-    const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
-    expect(checkbox.checked).toBe(true)
-    fireEvent.click(checkbox)
-    expect(checkbox.checked).toBe(false)
+    expect(screen.queryByLabelText('納入 2330 計算')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['代號 / 名稱', '命中策略與訊號日'])
 
+    let resolveBacktest: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/backtest')) {
+        return new Promise((resolve) => {
+          resolveBacktest = () => resolve(jsonResponse(200, singleBacktestResponse()))
+        })
+      }
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, boxScanResponse()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    expect(screen.getByRole('button', { name: '回測中…' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('納入 2330 計算')).not.toBeInTheDocument()
+
+    resolveBacktest(undefined)
+    await waitFor(() => expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument())
+  })
+
+  it('does not show a checkbox column when 回測 fails', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.queryByLabelText('納入 2330 計算')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['代號 / 名稱', '命中策略與訊號日'])
+  })
+
+  it('keeps the checkbox column and the checked state through a re-run of 回測 against the same scan result, recomputing totals with the new numbers', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+      '1.24%',
+      '30,000',
+    ])
+
+    // User excludes the only row before re-running 回測.
+    fireEvent.click(screen.getByLabelText('納入 2330 計算'))
+    expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(false)
+
+    let resolveBacktest: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/backtest')) {
+        return new Promise((resolve) => {
+          resolveBacktest = () =>
+            resolve(
+              jsonResponse(200, {
+                asOfDate: '2026-09-11',
+                lotSize: 1000,
+                totalCost: 2420000,
+                totalProfit: 60000,
+                totalReturnPercent: 2.48,
+                backtestedCount: 1,
+                items: [
+                  { stockId: '2330', signalDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-02', sellPrice: 2480, returnPercent: 2.48, profit: 60000 },
+                ],
+              }),
+            )
+        })
+      }
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, boxScanResponse()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    // 回測中: checkbox column stays visible, checked state unchanged (still unchecked).
+    expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument()
+    expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(false)
+
+    resolveBacktest(undefined)
+    await waitFor(() => expect(screen.getByText('2.48%')).toBeInTheDocument())
+    // Prior exclusion carried over — new numbers, same (unchecked) selection, so nothing
+    // is counted.
+    expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByText('未勾選任何標的')).toBeInTheDocument()
+    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual(['—', '—'])
+  })
+
+  it('removes the checkbox column together with the backtest columns on 開始掃描, and shows it all-checked again (never carrying over the old selection) on the next successful 回測', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '回測' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('納入 2330 計算'))
+    expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(false)
+
+    // 重新掃描: checkbox column, three columns and two totals all disappear together.
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByLabelText('納入 2330 計算')).not.toBeInTheDocument()
+    expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
+    expect(screen.queryByText('總報酬率')).not.toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    expect(screen.queryByLabelText('納入 2330 計算')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
     await waitFor(() => expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(true))
+  })
+
+  it('still sends every hit stock to 回測 whether or not the checkbox column currently exists', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+
+    // No checkbox column exists yet — 回測 must still send all three hits.
+    fireEvent.click(screen.getByRole('button', { name: '回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))!
+    const body = JSON.parse((backtestCall[1] as RequestInit).body as string)
+    expect(body.items.map((i: { stockId: string }) => i.stockId).sort()).toEqual(['2317', '2330', '2454'])
   })
 })

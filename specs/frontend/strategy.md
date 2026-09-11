@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」右側新增「回測」按鈕，命中至少一檔時才可點擊：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上賣出日／報酬率／收益三欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每檔 1 張；每列另有一個預設勾選的勾選框，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」右側新增「回測」按鈕，命中至少一檔時才可點擊：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上賣出日／報酬率／收益三欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每檔 1 張；每列另有一個預設勾選的勾選框，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現"
 depends_on: [stock-list]
 ---
 
@@ -111,7 +111,7 @@ depends_on: [stock-list]
 
 | 欄位 | 來源 | 出現時機 |
 |---|---|---|
-| 勾選框 | 前端狀態，非回應欄位 | 一律 |
+| 勾選框 | 前端狀態，非回應欄位 | 回測後 |
 | 代號 / 名稱 | 各策略 `items` 的 `stockId` / `stockName` | 一律 |
 | 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 | 一律 |
 | 賣出日 | 回測回應該檔的 `sellDate` | 回測後 |
@@ -143,13 +143,16 @@ depends_on: [stock-list]
 
 #### 納入計算的勾選框
 
-表格最左為每列一個勾選框，**掃描完成當下即出現，預設全部勾選**。
+表格最左為每列一個勾選框，**回測完成時才出現**——與賣出日／報酬率／收益三欄同時出現、同時消失，出現時預設全部勾選。尚未回測時表格沒有這一欄。
+
+**為什麼要等到回測後才出現**：勾選框唯一的作用是決定哪些列計入總報酬率與總收益，而這兩個數字只在回測後才存在。回測前就擺出一排勾選框，使用者勾掉幾檔卻看不到任何東西改變，只會納悶自己剛剛做了什麼；等到有總計可以受影響時才讓它出現，勾選框一出現就有明確的用途。
 
 - **取消勾選只影響總計，不影響該列自己的內容。** 該列的賣出日、報酬率、收益照常顯示，只是不計入標題右側的總報酬率與總收益。使用者是先看到一檔的成績，才決定要不要把它排除——排除後就看不到數字，等於拿走了做這個決定的依據。
 - **未勾選的列整列反灰**：該列所有文字改為弱化文字色 `#6B7C90`，包含原本帶漲跌色的報酬率與收益。背景不變，仍可點擊導向 `/stocks/{stockId}/daily`。反灰是「不計入」的視覺表示，不是停用。
 - **勾選狀態的切換完全在前端完成，不重新呼叫任何端點。** 回測回應已含每檔的 `buyPrice`、`profit` 與全批共用的 `lotSize`，總計由這些值就地重算即可；為了一個勾選動作重打一次回測，換來的是同樣的數字加上一次等待。
-- **回測尚未執行時勾選框照常可切換**，只是還沒有總計可以受影響。此時的勾選狀態會被接下來的回測沿用。
-- **重新掃描時勾選狀態全部重設為勾選**，與回測結果一起清空——新的命中清單是另一批標的，沿用舊的勾選只會讓人以為某幾檔被系統排除了。
+- **回測失敗時勾選框不出現**，與「回測失敗時表格維持未回測的樣子」同一條原則。
+- **對同一份掃描結果再按一次「回測」時，勾選框與目前的勾選狀態都保留**：回測中表格內容不變（見「狀態」），完成後以新的回測數字重算總計，使用者先前排除的列仍維持排除——命中清單沒變，排除的理由也沒變。
+- **重新掃描時勾選框與回測結果一起移除**，下一次回測完成時再以全部勾選重新出現——新的命中清單是另一批標的，沿用舊的勾選只會讓人以為某幾檔被系統排除了。
 - **標題的「共 N 檔」不受勾選影響**：它是命中檔數，取消勾選不會讓一檔股票變成沒命中。
 
 #### 回測結果的呈現
@@ -165,7 +168,7 @@ depends_on: [stock-list]
 
 **全部勾選時，畫面上這兩個數字必須等於回應的 `totalReturnPercent` 與 `totalProfit`，總成本必須等於 `totalCost`。** 前端就地重算是為了讓勾選切換不必重打端點，不是為了自己定義一套算法；全勾的情形是這兩條路徑必須交會的地方，也是唯一能驗出算法走偏的地方。
 
-**漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。兩個總計標籤同此規則。
+**漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。兩個總計標籤同此規則。**這指的是畫面上實際呈現的顏色**，不是儲存格上有沒有掛對應的樣式類別——表格儲存格的預設文字色若以更高的權重宣告，會把漲跌色蓋回主要文字色 `#E6EDF5`，類別掛對了畫面照樣是白字。驗收一律以實際渲染出的顏色為準。
 
 **無法回測的標的照常留在表上**，其賣出日／報酬率／收益三欄皆顯示弱化色 `#6B7C90` 的「—」（回應中這三個欄位為 `null`，見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）。**不得把這些列從表格中移除**——它們確實命中了，只是還沒有可賣出的交易日；拿掉它們會讓命中檔數與表格列數對不起來。
 
@@ -240,10 +243,10 @@ depends_on: [stock-list]
 |---|---|
 | 初次進入（未掃描） | 結果區顯示「選擇策略與區間後開始掃描」，條件區可操作 |
 | 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60%；「回測」disabled |
-| 有結果、未回測 | 合併表格顯示三欄以外的欄位；「回測」可按（命中 0 檔時仍為 disabled） |
+| 有結果、未回測 | 合併表格只有代號／名稱與命中策略與訊號日兩欄，**沒有勾選框欄**，也沒有回測三欄；「回測」可按（命中 0 檔時仍為 disabled） |
 | 回測中 | 「回測」disabled 並顯示進行中；「開始掃描」不受影響仍可按；表格內容不變 |
-| 已回測 | 表格右側三欄與標題右側兩個標籤出現 |
-| 回測失敗 | 「回測」恢復可按，其下顯示錯誤訊息；表格維持未回測的樣子，不出現三欄與兩個標籤 |
+| 已回測 | 表格最左的勾選框欄（預設全部勾選）、右側三欄與標題右側兩個標籤同時出現 |
+| 回測失敗 | 「回測」恢復可按，其下顯示錯誤訊息；表格維持未回測的樣子，不出現勾選框欄、三欄與兩個標籤 |
 | 有結果 | 正常表格 |
 | 零命中 | 合併表格處顯示「此區間內沒有命中的股票」，並附一行提示目前的最後同步時間；「回測」為 disabled |
 | 掃描失敗 | 結果區顯示錯誤訊息與「重試」按鈕；不得顯示空表格假裝零命中 |
@@ -539,6 +542,26 @@ depends_on: [stock-list]
 - [x] 回應中 `sellDate` 為 `null` 的標的**仍留在表上**，其三欄皆顯示 `#6B7C90` 的「—」，未被移出表格
 - [x] 回測完成後表格排序不變，未依報酬率重排
 - [x] 全頁在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致，新增的按鈕、欄位與標籤皆取自 `## Visual Style` 的字面 hex
+
+
+### 勾選框改為回測後才出現、報酬率與收益的漲跌色實際生效（本次新增）
+
+**勾選框**
+- [x] 掃描完成、尚未回測時，合併表格**沒有勾選框欄**：表頭與每一列都不存在勾選框，表格只有代號／名稱與命中策略與訊號日兩欄
+- [x] 按下「回測」、回測進行中時，勾選框欄仍不出現
+- [x] 回測成功完成時，勾選框欄與賣出日／報酬率／收益三欄、標題右側兩個標籤**同時**出現，且每一列預設為勾選
+- [x] 回測失敗時勾選框欄不出現，表格維持未回測的樣子
+- [x] 對同一份掃描結果再按一次「回測」：回測中勾選框欄仍顯示且勾選狀態不變，完成後維持使用者先前的勾選狀態，總計依新數字與既有勾選重算
+- [x] 按「開始掃描」重新掃描時，勾選框欄與回測三欄、兩個標籤同時移除；下一次回測完成時勾選框以全部勾選重新出現，不沿用前一次的勾選
+- [x] 「回測」送出的 `items[]` 仍為全部命中標的，與勾選框是否存在無關
+- [x] 取消勾選的整列反灰、只影響總計而不影響該列內容等既有行為，在勾選框出現後照常成立
+
+**漲跌色實際生效**
+- [x] 報酬率與收益兩欄在瀏覽器中**實際渲染的文字色**：正值為 `#E04B45`、負值為 `#16A75C`、`0` 為 `#93A4B8`；以讀取儲存格計算後樣式（computed color）的方式驗證，不得只驗證儲存格上掛了哪個樣式類別
+- [x] 表格儲存格的預設文字色規則不再蓋過漲跌色：修正落在共用樣式的權重本身，而非針對本表另加一條覆寫——同一條規則也是總覽頁漲跌欄與動態分頁漲幅欄失效的原因（見 `specs/frontend/stock-list.md`、`specs/frontend/momentum.md` 本次新增的驗收項）
+- [x] 未勾選的列仍整列呈現弱化色 `#6B7C90`，包含報酬率與收益——修正漲跌色的權重後，反灰規則必須依然勝出
+- [x] 無法回測的列其三欄「—」仍為弱化色 `#6B7C90`
+- [x] 以上顏色在 `prefers-color-scheme: dark` 與 `light` 下完全一致
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -1023,3 +1046,19 @@ Scope: exactly the 7 unchecked criteria under 「反彈區塊標題與「不適�
 **Verified by the new/rewritten tests**（mapped to the spec's 49 previously-unchecked ACs, grouped by the spec's own subsection headers）: 命中彙總表（本次新增）— single-table-always, dedup count, per-strategy hit tags, sort order, row-click navigation, insufficientData/pendingConfirm moved below the table with per-strategy prefixes, 箱型突破/上漲支撐 pendingConfirm wording kept distinct; 本次採用參數那一行 — all five strategies' formats in one `・`-joined line, response-sourced (not input-sourced) after an unsaved edit; 回測按鈕 — disabled across idle/scanning/zero-hit/failed, enabled after ≥1 hit, running/error states, immediate clear-on-rescan; 納入計算的勾選框 — default-checked, zero-request toggle, per-row isolation, grey-out without hiding values, still-clickable, checkbox reset on rescan; 兩種未計入的說明 — both messages, both-present case, the no-double-count case, both zero-included messages and the `0%` prohibition; 回測結果呈現 — column order/values/formatting, response-driven `signalDate` selection, unchanged sort after backtest, three colour states, lotSize-from-response guard, and the all-checked-equals-response-totals guard. I did not check off any Acceptance Criteria boxes myself, per instructions — please verify and check them off.
 
 **Anything NOT independently verified, and why**: no browser/dev-server check was performed — the environment note says the dev server on 5173 and a backend on 8080 are already running and must not be touched/duplicated, so all verification here is via `vitest`（jsdom）, `tsc`, `vite build`, and `oxlint` only. The backend `POST /api/strategies/backtest` endpoint itself was not re-verified in this pass — `specs/backend/strategy-backtest.md`'s own `## Execution Result`（28/28 tests, already marked `DONE`）was read and trusted as-is; this increment only integrates the frontend against its documented contract, using response fixtures hand-derived from that spec's own formulas（訊號日收盤買進 / 賣出窗口最高開盤價 / 成本加權總報酬率）rather than a live call.
+
+### Increment 11 — 2026-09-11
+
+本次執行「勾選框改為回測後才出現、報酬率與收益的漲跌色實際生效」增量，13 項全數完成。
+
+**勾選框**：合併表格的勾選框欄（表頭與每列）改由與賣出日／報酬率／收益三欄相同的回測結果狀態驅動，未另立一個可能與之漂移的旗標。因此掃描後、首次回測中、回測失敗時皆不存在；回測成功時與三欄及兩個總計標籤同時出現、預設全部勾選；對同一份掃描結果重跑回測時勾選框與勾選狀態保留；重新掃描時與回測結果一併移除，下次回測以全部勾選重新出現。「回測」送出的 `items[]` 本來就不看勾選狀態，未變。除了把渲染條件接到回測結果上，其餘邏輯（掃描時將勾選狀態重設為全選、重跑回測時不動勾選狀態）原本就符合新行為，無需改動。
+
+**漲跌色**：根因（共用 `.sl-table tbody td` 的文字色權重高於漲跌色類別）已由緊接在前執行的 `specs/frontend/stock-list.md` 增量於共用樣式修正，本增量未再動任何樣式。改以真實 Chromium 讀取計算後顏色，驗證本表的報酬率／收益在正／負／零時分別為 `#E04B45`／`#16A75C`／`#93A4B8`、未勾選列整列為 `#6B7C90`、無法回測列的「—」為 `#6B7C90`，並於 dark／light 兩種 `prefers-color-scheme` 各驗一次。測試用的標記依 `StrategyTab.tsx` 實際輸出的結構撰寫——過程中發現「—」的顏色類別掛在內層 `<span class="sl-muted">` 而非 `<td>` 上，已將斷言對準實際的 DOM。
+
+**移除的舊測試**：斷言「回測前即可見勾選框」與「回測前的勾選會帶入回測」的兩項測試，其行為已自 spec 移除，改以新的生命週期測試取代；另修正一處假設勾選框欄恆存在的欄位索引斷言。
+
+**已知但未處理（不在本增量範圍）**：先有一次成功的回測、再重跑回測卻失敗時，畫面保留前一次的成功結果（連同勾選框欄）。「狀態」表的「回測失敗 → 表格維持未回測的樣子」在重跑情境下語意未定——是回到未回測的外觀，還是保留失敗前的畫面——本增量的 13 項驗收皆未涵蓋。由於勾選框欄與三欄共用同一狀態，兩者在此情境下一致，不會出現只剩勾選框或只剩三欄的畫面。
+
+**驗證**：`npm test` — 251/251 通過（本增量前為 239/239，淨增 12）。`npm run build` 無錯誤。
+
+**變更檔案**：`src/pages/StrategyTab.tsx`、`src/__tests__/StrategyTab.test.tsx`、`src/__tests__/StockListPage.cellColorCascade.test.ts`。
