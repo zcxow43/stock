@@ -14,3 +14,9 @@
 - If the user explicitly asks to push, push the resulting commit to the current branch without asking again.
 - Do not repeatedly request verbal confirmation for an action the user has already explicitly authorized.
 - Preserve unrelated user changes, and never use destructive Git commands unless the user explicitly requests them.
+
+## Docker startup checks
+
+- A request to start the project (including `/start` or `/infra start`) already authorizes the read-only `docker info` availability check. Run it directly under the existing execution permissions; do not ask the user to confirm this check again.
+- Do not proactively request execution outside the sandbox for `docker info`. Use the default sandbox first and reuse an existing applicable approval when available.
+- Repository instructions do not override platform-enforced permissions. If the platform requires approval, follow that requirement without adding a separate conversational confirmation or claiming that this file disables the approval dialog.

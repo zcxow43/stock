@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日"
 depends_on: [stock-price-ingestion, stock-catalog]
 ---
 
@@ -330,6 +330,7 @@ Response `200`：
           "stockId": "2330",
           "stockName": "台積電",
           "signalDate": "2026-08-27",
+          "buyDate": "2026-08-27",
           "detail": {
             "boxHigh": 2380.00,
             "boxLow": 2250.00,
@@ -351,6 +352,7 @@ Response `200`：
           "stockId": "2317",
           "stockName": "鴻海",
           "signalDate": "2026-08-25",
+          "buyDate": "2026-08-25",
           "detail": {
             "lows": [
               { "tradeDate": "2026-07-08", "ma5": 243.10, "low": 240.00 },
@@ -373,6 +375,7 @@ Response `200`：
           "stockId": "2454",
           "stockName": "聯發科",
           "signalDate": "2026-08-26",
+          "buyDate": "2026-08-28",
           "detail": {
             "supportClose": 1200.00,
             "riseClose": 1296.00,
@@ -401,6 +404,7 @@ Response `200`：
           "stockId": "2603",
           "stockName": "長榮",
           "signalDate": "2026-08-26",
+          "buyDate": "2026-08-26",
           "detail": {
             "peakDate": "2026-08-21",
             "peakClose": 120.00,
@@ -423,6 +427,7 @@ Response `200`：
           "stockId": "3231",
           "stockName": "緯創",
           "signalDate": "2026-08-28",
+          "buyDate": "2026-08-28",
           "detail": {
             "troughDate": "2026-08-05",
             "troughClose": 80.00,
@@ -441,6 +446,9 @@ Response `200`：
 - `results` 依 `strategies` 送入的順序回傳，一個策略一筆。每一筆原樣回報該策略**實際採用**的參數（省略時回實際採用的預設值）：有靈敏度的型態回 `preset`；累積上漲回 `days`；反彈回 `requireRise`、`dropDays`、`dropPercent`，並在 `requireRise` 為 `true` 時另回 `riseDays` 與 `risePercent`。`preset` 與這些參數欄位不同時出現。
 - `items` 依 `signalDate` 由新到舊排序；同日則依 `stockId` 升冪。
 - `signalDate` 為該檔在區間內**最近一次**命中的日期；同一檔在區間內多次命中只回報最近一次。
+- `buyDate` 為**這一次命中的進場日**：型態確認成立、可以不使用未來資料買進的那一個交易日，回測以其**收盤價**買進（見 `specs/backend/strategy-backtest.md`）。**上漲支撐為 D+2**——D 之後的第二個交易日，即該筆 `detail.confirmCloses` 最後一筆的 `tradeDate`；箱型突破、底底高、反彈、累積上漲的 `buyDate` 等於 `signalDate`。「交易日」依相鄰的資料列認定，停牌缺列不計，不以日曆日推算。
+
+**上漲支撐的訊號日與進場日刻意不同。** `signalDate` 維持為上漲日 D——它回答「型態是哪一天起漲的」，排序與畫面上的「命中策略與訊號日」都依它。但這個型態要到 D+2 收盤、D+1 與 D+2 都守住起漲收盤才成立，在 D 收盤時根本還不知道它會不會成立；在 D 收盤買進，等於用 D+1、D+2 兩天的未來收盤價挑股票，回測會系統性美化。**進場日由掃描回報，而不是由呼叫端或回測端推算**：「型態何時確認成立」是型態定義的一部分，放到別處推算，就等於在掃描之外再寫第二份型態規則，兩份遲早會對不起來。
 - `pendingConfirm` 可能非空的情況有二：箱型突破且 `confirmBars = 2`（已突破但確認日尚未到），以及上漲支撐（已上漲但 D+1／D+2 尚未到齊）。兩者都列出該檔的股票代號，且不計入 `matchedCount`。**反彈與累積上漲一律不產生 `pendingConfirm`**，其 `pendingConfirm` 恆為空陣列。反彈雖然有漲段條件，但採「已達標就命中、不等窗口跑滿」（見型態定義），因此不存在待確認狀態。
 - `insufficientData` 與 `matchedCount` 互斥：列在前者的股票不會出現在 `items` 中。
 - 底底高的 `detail.lows` 每筆有三個欄位：`tradeDate`、`ma5`（判定所依據的 5 日收盤均線值）、`low`（該日原始最低價，僅供對照，不參與判定）。`ma5` 與 `low` 皆為兩位小數。
@@ -529,6 +537,11 @@ Response `200`：
 - [x] 上漲支撐前置資料不足（`startDate` 前不足 `lookback` 個交易日）的股票列於 `insufficientData`
 - [x] 上漲支撐不驗證量能：僅成交量不同、價格完全相同的兩組資料判定結果一致
 - [x] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日 D+2
+- [x] 每一筆命中的 `items[]` 皆含 `buyDate`（date），五個型態皆然
+- [x] `RISING_SUPPORT` 的 `buyDate` 為 D+2，且等於該筆 `detail.confirmCloses` 最後一筆的 `tradeDate`；以前述 1296／1272／1248 構造資料驗證 `buyDate` 為 D+2 那一列的交易日，同時 `signalDate` 仍為 D
+- [x] D 與 D+2 之間有停牌（缺列）時，`RISING_SUPPORT` 的 `buyDate` 為 D 之後第二個**有資料列**的交易日，不以日曆日加 2 推算
+- [x] D 為 `endDate` 且 D+1／D+2 取自 `endDate` 之後時，`buyDate` 可晚於 `endDate`，照常回報
+- [x] `BOX_BREAKOUT`／`HIGHER_LOWS`／`REBOUND`／`CUMULATIVE_RISE` 的 `buyDate` 等於 `signalDate`
 
 ### 反彈
 - [x] 五個參數全部省略時，以 `dropDays: 3`、`dropPercent: 10`、`requireRise: true`、`riseDays: 1`、`risePercent: 5` 判定
@@ -776,3 +789,24 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
 **未能驗證的部分**：無。本增量純屬驗證邏輯改動，Testing constraints 要求的「100% mock-driven、不打真實 Yahoo/FinMind/TWSE」與既有 `StrategyScanIntegrationTest` 的既有慣例一致（該測試類別本身只操作測試資料庫的 `stock`/`stock_daily_price`，不涉外部 API），未新增任何違反此限制的測試。
 
 **變更檔案**：`PatternDetector`（新增 `getRisePercentMax()` default 方法）、`BoxBreakoutDetector`／`HigherLowsDetector`／`RisingSupportDetector`（各自覆寫為 `20`）、`StrategyScanService`（`validateRisePercent` 改為詢問 detector；`validatePercentInRange` 新增 `max` 參數；新增 `DROP_PERCENT_MAX` 常數取代原本身兼二職的 `RISE_PERCENT_MAX`）、`StrategyScanIntegrationTest`（新增 10 個測試）。
+
+### Increment 7 — 2026-09-13
+
+本次執行的是「每一筆命中回報 `buyDate`（進場日）」增量：上漲支撐 `Acceptance Criteria` 表中的 5 項未勾選項目（每筆 `items[]` 皆含 `buyDate`；上漲支撐 `buyDate` 為 D+2 且等於 `confirmCloses` 最後一筆的 `tradeDate`；停牌缺列時仍以相鄰交易列認定 D+2，不以日曆日加 2；`buyDate` 可晚於 `endDate`；其餘四型 `buyDate` 等於 `signalDate`）全數完成。未觸碰回測端點（`StrategyBacktestService` 及其 DTO／測試），依 scope boundary 保留給後續 spec。
+
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetectionOutcome.java` — 新增 `buyDate` 欄位與 `getBuyDate()`；原本的 `hit(LocalDate signalDate, Object detail)` 保留為「`buyDate` 等於 `signalDate`」的便利多載（BOX_BREAKOUT／HIGHER_LOWS／REBOUND／CUMULATIVE_RISE 四個既有呼叫點因此零改動），新增 `hit(LocalDate signalDate, LocalDate buyDate, Object detail)` 供 RISING_SUPPORT 明確回報兩個不同日期
+  - `develop/backend/src/main/java/com/stock/service/pattern/RisingSupportDetector.java` — 在既有迴圈中新增 `lastBuyDate`，取 `confirmCloses` 最後一筆（即 `bars.get(i + confirmBars)`）的 `tradeDate`；由於 `confirmCloses` 本身已經是依相鄰交易日列（`bars` 的 list index）取值、從不做日曆日運算，`buyDate` 自然滿足「停牌缺列時仍取相鄰交易列」與「可晚於 `endDate`」兩項規則，不需額外程式碼
+  - `develop/backend/src/main/java/com/stock/dto/StrategyHitDto.java` — 新增 `buyDate` 欄位、建構子參數與 getter/setter
+  - `develop/backend/src/main/java/com/stock/service/StrategyScanService.java` — `runStrategy` 建立 `StrategyHitDto` 時多傳入 `outcome.getBuyDate()`
+  - `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java` — 新增 8 個測試（對應 5 項驗收項；其中「其餘四型 `buyDate` 等於 `signalDate`」拆成四個獨立測試）：
+    - `risingSupport_buyDateIsDPlus2_equalsLastConfirmCloseTradeDate_signalDateStaysD` — 沿用 spec 本身的 1296/1272/1248 手算構造資料，驗證 `buyDate` 為 D+2 那一列的交易日且等於 `confirmCloses` 最後一筆的 `tradeDate`，同時 `signalDate` 仍為 D
+    - `risingSupport_buyDateSkipsSuspensionGap_usesAdjacentTradingRowNotCalendarArithmetic` — D+1 之後刻意留一個日曆缺列（停牌），D+2 落在 D+1 之後 3 個日曆日而非 1 個；驗證 `buyDate` 仍等於該相鄰交易列的實際日期，且明確斷言不等於 `d.plusDays(2)`
+    - `risingSupport_buyDateCanBeAfterEndDate_reportedNormally` — `endDate` 設為 D 當日，D+1／D+2 取自資料庫中 `endDate` 之後已存在的列；驗證 `buyDate`（= D+2）晚於 `endDate` 仍正常回報
+    - `boxBreakout_buyDateEqualsSignalDate`／`higherLows_buyDateEqualsSignalDate`／`rebound_buyDateEqualsSignalDate`／`cumulativeRise_buyDateEqualsSignalDate` — 各自沿用該型態既有的手算命中構造資料，斷言 `buyDate` 與 `signalDate` 相等
+- Notes:
+  - 未使用 `design-patterns` skill：本次是既有 `PatternDetector`/`PatternDetectionOutcome` seam 上加一個欄位，不是新增可替換的實作或多變體行為，屬於「plain field addition」，不構成該 skill 觸發條件所述的擴充點。
+  - `buyDate` 的「等於 `signalDate`」預設走便利多載，`RISING_SUPPORT` 走明確雙日期多載——兩者在型別層級就區分開，不會有第三個型態不小心漏設 `buyDate` 而序列化出 `null`（`hit(...)` 是建立命中結果的唯一入口，兩個多載都保證回傳非 null 的 `buyDate`）。
+  - `code-quality` skill 自我審查（詳見流程）：`buyDate` 在 `RisingSupportDetector` 中讀自已建好、保證非空的 `confirmCloses` 清單最後一筆，無 null 風險；`StrategyHitDto` 只新增一個欄位與對應 getter/setter，未變動既有欄位語意；純記憶體運算，無資源生命週期、原子性或效能疑慮（不新增查詢、不在迴圈內做重複工作）。唯一既有呼叫點（`StrategyScanService.runStrategy`）已同步更新。未發現需要修正之處，也沒有刻意留下未處理的問題。
+  - 驗證：先跑 `mvn -f develop/backend/pom.xml test -Dtest=StrategyScanIntegrationTest` → **113 tests, 0 failures, 0 errors**（105 既有 + 8 新增）；再跑全量 `mvn -f develop/backend/pom.xml -o test` → **400 tests, 0 failures, 0 errors**。過程中僅執行測試，未啟動即時伺服器；回測端點（`StrategyBacktestService`/`StrategyBacktestIntegrationTest`）完全未觸碰，其既有 41 個測試在全量跑中原樣通過。

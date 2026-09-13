@@ -166,15 +166,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("NO_BACKTEST_ITEMS"));
     }
 
-    @ExceptionHandler(DuplicateStockIdException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateStockId(DuplicateStockIdException e) {
+    @ExceptionHandler(DuplicateBacktestItemException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateBacktestItem(DuplicateBacktestItemException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.duplicateStockId(e.getDuplicatedIds()));
+                .body(ErrorResponse.duplicateBacktestItem(e.getDuplicatedItems()));
     }
 
-    @ExceptionHandler(InvalidSignalDateException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidSignalDate(InvalidSignalDateException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSignalDate(e.getStockId()));
+    @ExceptionHandler(InvalidBuyDateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBuyDate(InvalidBuyDateException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyDate(e.getStockId()));
     }
 
     @ExceptionHandler(InvalidMetricException.class)

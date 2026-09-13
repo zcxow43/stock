@@ -144,3 +144,32 @@
 .page-strategy tr.off td, .page-strategy tr.off td.up, .page-strategy tr.off td.down,
 .page-strategy tr.off .stag, .page-strategy tr.off .sdate, .page-strategy tr.off .sep { color:#6B7C90; }
 .page-strategy tr.off .stag { border-color:#26333F; background:#16202C; }
+
+/* 一檔多訊號日：展開鈕、子列、父列合計、半選勾選框 */
+.page-strategy td.exp { width:26px; padding-right:0; text-align:center; }
+.page-strategy td.exp .caret { display:inline-block; width:18px; height:18px; line-height:18px;
+  border-radius:3px; color:#93A4B8; font-size:10px; cursor:pointer; }
+.page-strategy tr.open td.exp .caret { color:#E6EDF5; background:#1D2A38; }
+.page-strategy td.ck .cb.ind { background:#1B2836; border-color:#26333F; }
+.page-strategy td.ck .cb.ind::after { content:""; position:absolute; left:2px; top:5px; width:8px; height:2px;
+  background:#3E8FD8; border:0; transform:none; }
+.page-strategy tr.sub > td { background:#131C27; }
+.page-strategy tr.sub td.exp { border-left:2px solid #26333F; }
+.page-strategy tr.sub td.code { padding-left:14px; color:#93A4B8; }
+.page-strategy .cnt2 { color:#93A4B8; }
+
+/* 「取消全選」勾選框（標題右側，總報酬率左邊） */
+.page-strategy .allclear { display:inline-flex; align-items:center; gap:5px; color:#93A4B8; font-size:12px; align-self:center; }
+.page-strategy .allclear .acb { position:relative; width:14px; height:14px; border-radius:3px; background:#0F1620; border:1px solid #26333F; box-sizing:border-box; }
+.page-strategy .allclear .acb.on { background:#3E8FD8; border-color:#3E8FD8; }
+.page-strategy .allclear .acb.on::after { content:""; position:absolute; left:4px; top:1px; width:3px; height:7px; border:solid #FFFFFF; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.page-strategy .tot b.none { color:#6B7C90; }
+
+/* 父列逐筆列出的買進日／賣出日 */
+.page-strategy td.dates span { display:block; line-height:1.35; color:#E6EDF5; }
+.page-strategy td.dates span.dim { color:#6B7C90; }
+
+/* 以週選擇區間 */
+.page-strategy .week { display:inline-block; background:#0F1620; color:#E6EDF5; border:1px solid #26333F;
+  border-radius:4px; padding:5px 10px; font-size:13px; }
+.page-strategy .rangehint { color:#93A4B8; font-size:12px; margin:2px 0 6px; }

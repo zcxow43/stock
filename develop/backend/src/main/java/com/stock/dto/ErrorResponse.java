@@ -29,10 +29,12 @@ public class ErrorResponse {
     // PARAM_NOT_APPLICABLE's "param" key — names the one REBOUND-only field that was sent to a
     // strategy that does not accept it (or sent alongside requireRise=false).
     private final String param;
-    // strategy-backtest.md wire contract: DUPLICATE_STOCK_ID uses key "duplicatedIds" — distinct
-    // from "duplicated" (DUPLICATE_STRATEGY, a different endpoint's error for a different kind of
-    // duplicate) and from "unknownIds" (UNKNOWN_STOCK_ID).
-    private final List<String> duplicatedIds;
+    // strategy-backtest.md wire contract: DUPLICATE_BACKTEST_ITEM uses key "duplicatedItems", each
+    // element a {stockId, buyDate} pair — distinct from "duplicated" (DUPLICATE_STRATEGY, a
+    // different endpoint's error for a different kind of duplicate) and from "unknownIds"
+    // (UNKNOWN_STOCK_ID). The uniqueness key here is the (stockId, buyDate) combination, not
+    // stockId alone (specs/backend/strategy-backtest.md, "一筆＝一個買進日").
+    private final List<BacktestDuplicateItemDto> duplicatedItems;
 
     public ErrorResponse(String code) {
         this(code, null, null, null, null, null, null, null, null, null, null);
@@ -56,7 +58,7 @@ public class ErrorResponse {
                            @JsonProperty("duplicated") List<String> duplicated,
                            @JsonProperty("strategy") String strategy,
                            @JsonProperty("param") String param,
-                           @JsonProperty("duplicatedIds") List<String> duplicatedIds) {
+                           @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -67,7 +69,7 @@ public class ErrorResponse {
         this.duplicated = duplicated;
         this.strategy = strategy;
         this.param = param;
-        this.duplicatedIds = duplicatedIds;
+        this.duplicatedItems = duplicatedItems;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
@@ -149,14 +151,14 @@ public class ErrorResponse {
                 null);
     }
 
-    public static ErrorResponse invalidSignalDate(String stockId) {
-        return new ErrorResponse("INVALID_SIGNAL_DATE", null, null, null, stockId, null, null, null, null, null,
+    public static ErrorResponse invalidBuyDate(String stockId) {
+        return new ErrorResponse("INVALID_BUY_DATE", null, null, null, stockId, null, null, null, null, null,
                 null);
     }
 
-    public static ErrorResponse duplicateStockId(List<String> duplicatedIds) {
-        return new ErrorResponse("DUPLICATE_STOCK_ID", null, null, null, null, null, null, null, null, null,
-                duplicatedIds);
+    public static ErrorResponse duplicateBacktestItem(List<BacktestDuplicateItemDto> duplicatedItems) {
+        return new ErrorResponse("DUPLICATE_BACKTEST_ITEM", null, null, null, null, null, null, null, null, null,
+                duplicatedItems);
     }
 
     public String getCode() {
@@ -199,7 +201,7 @@ public class ErrorResponse {
         return param;
     }
 
-    public List<String> getDuplicatedIds() {
-        return duplicatedIds;
+    public List<BacktestDuplicateItemDto> getDuplicatedItems() {
+        return duplicatedItems;
     }
 }

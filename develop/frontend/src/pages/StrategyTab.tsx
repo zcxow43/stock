@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, fetchStocks, importStockUniverse, type StockListItem, type UniverseImportResponse } from '../api/stocks'
 import {
   backtestStrategies,
   fetchStrategyCatalog,
   scanStrategies,
+  type BacktestRequestItem,
   type BacktestResponse,
   type BacktestResultItem,
   type ParamGroup,
@@ -55,13 +55,128 @@ function monthsAgo(months: number, from: Date): Date {
   return new Date(from.getFullYear(), targetMonthIndex, day)
 }
 
-function defaultDateRange(): { startDate: string; endDate: string } {
-  const today = new Date()
-  return { startDate: toIsoDate(monthsAgo(1, today)), endDate: toIsoDate(today) }
+/** The one notion of "today" this page uses anywhere a default/quick range or an upper
+ * bound needs the current local date — every other call site reuses this instead of its
+ * own `new Date()`, so there's never a second, subtly different definition of "now". */
+function today(): Date {
+  return new Date()
+}
+
+function parseIsoDate(value: string): Date {
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function shiftDays(d: Date, days: number): Date {
+  const result = new Date(d)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+type WeekInfo = { isoYear: number; isoWeek: number; monday: Date; sunday: Date }
+
+/** ISO 8601 week info (Monday…Sunday, week 1 is the week containing the year's first
+ * Thursday) for the week containing `date`. Computed via UTC-midnight arithmetic purely
+ * to sidestep local DST transitions while walking day-by-day — the returned `monday`/
+ * `sunday` are plain local-midnight `Date`s carrying the same calendar Y/M/D throughout,
+ * so cross-year weeks (e.g. 2027-01-01 → ISO 2026 week 53, spanning 12/28–01/03) fall out
+ * of the same formula as any other week with no special-casing. */
+function isoWeekInfo(date: Date): WeekInfo {
+  const utcMidnight = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const isoWeekday = utcMidnight.getUTCDay() || 7 // Mon=1 … Sun=7 (getUTCDay()'s Sun=0 becomes 7)
+  const monday = new Date(utcMidnight)
+  monday.setUTCDate(monday.getUTCDate() - (isoWeekday - 1))
+  const sunday = new Date(monday)
+  sunday.setUTCDate(sunday.getUTCDate() + 6)
+  // The Thursday of a week always falls in the ISO week-year that week belongs to, and is
+  // exactly `isoWeek` whole weeks after that year's own Jan-1-Thursday-block start.
+  const thursday = new Date(monday)
+  thursday.setUTCDate(thursday.getUTCDate() + 3)
+  const isoYear = thursday.getUTCFullYear()
+  const yearStart = Date.UTC(isoYear, 0, 1)
+  const isoWeek = Math.floor((thursday.getTime() - yearStart) / 86400000 / 7) + 1
+  return {
+    isoYear,
+    isoWeek,
+    monday: new Date(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate()),
+    sunday: new Date(sunday.getUTCFullYear(), sunday.getUTCMonth(), sunday.getUTCDate()),
+  }
+}
+
+function formatMonthDay(d: Date): string {
+  return `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+}
+
+/** 「{年} 第 {週次} 週（{MM/DD}–{MM/DD}）」— the one exact string every week selector must
+ * show. A native `<input type="week">`'s own rendered value is locale-dependent and can't
+ * be trusted to match this, so the label is built from `isoWeekInfo` and shown separately. */
+function formatWeekLabel(info: WeekInfo): string {
+  return `${info.isoYear} 第 ${info.isoWeek} 週（${formatMonthDay(info.monday)}–${formatMonthDay(info.sunday)}）`
+}
+
+type WeekRange = { startMonday: string; endMonday: string }
+
+/** Start week = the ISO week containing (今日 minus N calendar months); end week = this
+ * week — the shared formula behind both the default range and all three shortcut buttons
+ * (default is just this called with `months=1`). */
+function quickWeekRange(months: number): WeekRange {
+  const now = today()
+  return {
+    startMonday: toIsoDate(isoWeekInfo(monthsAgo(months, now)).monday),
+    endMonday: toIsoDate(isoWeekInfo(now).monday),
+  }
+}
+
+function defaultWeekRange(): WeekRange {
+  return quickWeekRange(1)
+}
+
+/** The 週選擇 control itself — two step buttons around a caption that always reads the
+ * exact spec'd label text, never a native input's locale-formatted value. Stepping by a
+ * week is the only way to move it, so there is no control anywhere on the page that can
+ * land on a single day. */
+function WeekSelector({
+  ariaLabel,
+  monday,
+  onPrev,
+  onNext,
+  nextDisabled,
+}: {
+  ariaLabel: string
+  monday: Date
+  onPrev: () => void
+  onNext: () => void
+  nextDisabled?: boolean
+}) {
+  const info = isoWeekInfo(monday)
+  return (
+    <div className="st-week-select">
+      <button type="button" className="st-week-step" aria-label={`${ariaLabel}往前一週`} onClick={onPrev}>
+        ‹
+      </button>
+      <span className="st-week-caption">{formatWeekLabel(info)}</span>
+      <button
+        type="button"
+        className="st-week-step"
+        aria-label={`${ariaLabel}往後一週`}
+        onClick={onNext}
+        disabled={nextDisabled}
+      >
+        ›
+      </button>
+    </div>
+  )
 }
 
 function formatPercent2(value: number | null | undefined): string {
   return value == null ? '—' : `${value.toFixed(2)}%`
+}
+
+/** 買進價／賣出價／父列成本加權均價 — two decimals (「數值格式」). Callers still branch on
+ * `null` explicitly (matching `formatPercent2`'s call sites) so the muted-`—` span can
+ * carry its own class; this only formats the non-null case. */
+function formatPrice2(value: number): string {
+  return value.toFixed(2)
 }
 
 /** Params-line only (「數值格式」: 兩位小數時去掉無意義的尾數，例如 10.0 寫成 10). Table
@@ -192,23 +307,42 @@ interface UnionHit {
   signalDate: string
 }
 
+/** One distinct buy date for a stock — 「以買進日去重，不以策略、也不以訊號日去重」. A
+ * position is `(stockId, buyDate)`, not `(stockId, signalDate)`: for RISING_SUPPORT the
+ * `buyDate` is D+2 while `signalDate` stays D, so two hits with the same `signalDate` but
+ * different `buyDate`s are two positions, while two hits with different `signalDate`s that
+ * land on the same `buyDate` are one. `hits` holds every strategy (with its OWN
+ * `signalDate`) that landed on this buy date. This is also the unit a backtest position is
+ * computed on: one group = one `POST /api/strategies/backtest` item = one row when the
+ * parent is expanded. */
+interface BuyDateGroup {
+  buyDate: string
+  hits: UnionHit[]
+}
+
 interface UnionRow {
   stockId: string
   stockName: string
+  /** Every hit across every distinct buy date — what the collapsed row's「命中策略與
+   * 訊號日」cell renders (unaffected by expand/collapse, see「摺疊與展開都不改變...」). */
   hits: UnionHit[]
-  /** The latest `signalDate` among this stock's hits — what the merged table sorts by,
-   * and (specs/frontend/strategy.md「送出全部命中標的...signalDate 取該檔命中的各策略中
-   * 最新的一個」) the exact date sent to `POST /api/strategies/backtest` for this stock. */
+  /** The latest `signalDate` among this stock's hits — what the merged table sorts by.
+   * Sorting stays keyed on `signalDate`, not `buyDate` — 父列排序不變. */
   latestSignalDate: string
+  /** This stock's distinct buy dates, newest first. Length 1 → no expand caret, the
+   * single group IS the row. Length ≥ 2 → an expand caret reveals one child row per
+   * group (specs/frontend/strategy.md「一檔多筆的展開列」). */
+  buyDateGroups: BuyDateGroup[]
 }
 
 /** Union across every requested strategy's `items` (never `insufficientData`/`pendingConfirm` —
- * those never appear in `items` per specs/backend/strategy-scan.md), deduped by `stockId`.
- * Hits are appended in `result.results` array order, which the backend already returns in
- * request order — so no dependency on the component's current (possibly since-changed)
- * selection order is needed to keep "策略的排列順序與勾選順序一致". */
+ * those never appear in `items` per specs/backend/strategy-scan.md), deduped by `stockId`,
+ * then regrouped by each hit's `buyDate` (not `signalDate` — see `BuyDateGroup`). Hits are
+ * appended in `result.results` array order, which the backend already returns in request
+ * order — so no dependency on the component's current (possibly since-changed) selection
+ * order is needed to keep "策略的排列順序與勾選順序一致". */
 function buildUnionRows(result: ScanResponse): UnionRow[] {
-  const map = new Map<string, { stockId: string; stockName: string; hits: UnionHit[] }>()
+  const map = new Map<string, { stockId: string; stockName: string; hits: (UnionHit & { buyDate: string })[] }>()
   for (const strategyResult of result.results) {
     for (const item of strategyResult.items) {
       let row = map.get(item.stockId)
@@ -216,41 +350,79 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
         row = { stockId: item.stockId, stockName: item.stockName, hits: [] }
         map.set(item.stockId, row)
       }
-      row.hits.push({ strategyCode: strategyResult.strategy, signalDate: item.signalDate })
+      row.hits.push({ strategyCode: strategyResult.strategy, signalDate: item.signalDate, buyDate: item.buyDate })
     }
   }
-  const withLatest: UnionRow[] = Array.from(map.values()).map((row) => ({
-    ...row,
-    latestSignalDate: row.hits.reduce((max, h) => (h.signalDate > max ? h.signalDate : max), row.hits[0].signalDate),
-  }))
-  return withLatest.sort((a, b) => {
+  const withGroups: UnionRow[] = Array.from(map.values()).map((row) => {
+    const byBuyDate = new Map<string, UnionHit[]>()
+    for (const hit of row.hits) {
+      const plainHit: UnionHit = { strategyCode: hit.strategyCode, signalDate: hit.signalDate }
+      const bucket = byBuyDate.get(hit.buyDate)
+      if (bucket) bucket.push(plainHit)
+      else byBuyDate.set(hit.buyDate, [plainHit])
+    }
+    const buyDateGroups = Array.from(byBuyDate.entries())
+      .map(([buyDate, hits]) => ({ buyDate, hits }))
+      .sort((a, b) => (a.buyDate < b.buyDate ? 1 : a.buyDate > b.buyDate ? -1 : 0))
+    const latestSignalDate = row.hits.reduce((max, h) => (h.signalDate > max ? h.signalDate : max), row.hits[0].signalDate)
+    return {
+      stockId: row.stockId,
+      stockName: row.stockName,
+      hits: row.hits.map((h) => ({ strategyCode: h.strategyCode, signalDate: h.signalDate })),
+      latestSignalDate,
+      buyDateGroups,
+    }
+  })
+  return withGroups.sort((a, b) => {
     if (a.latestSignalDate !== b.latestSignalDate) return a.latestSignalDate < b.latestSignalDate ? 1 : -1
     return a.stockId < b.stockId ? -1 : a.stockId > b.stockId ? 1 : 0
   })
 }
 
+/** Composite key for `checkedItemKeys`/`backtestItemsByKey` — one `(stockId, buyDate)`
+ * position, matching the backend's own uniqueness key for a backtest item. */
+function itemKey(stockId: string, buyDate: string): string {
+  return `${stockId}::${buyDate}`
+}
+
+/** 送出全部命中標的的全部相異買進日，勾選狀態與展開狀態都不影響請求內容 — one item per
+ * distinct `(stockId, buyDate)`, `buyDate` taken verbatim from the scan response (never
+ * recomputed). Shared by the auto-triggered backtest and 「重試回測」 so the two always send
+ * identically-shaped payloads for the same `unionRows` (specs/frontend/strategy.md「自動
+ * 回測與「重試回測」送出的 items[] 完全相同」). */
+function buildBacktestItems(rows: UnionRow[]): BacktestRequestItem[] {
+  return rows.flatMap((row) => row.buyDateGroups.map((group) => ({ stockId: row.stockId, buyDate: group.buyDate })))
+}
+
 interface BacktestTotals {
-  /** Rows counted toward the two totals — checked, and with a non-null `sellDate`. */
+  /** Positions (筆, not 檔) counted toward the two totals — checked, and with a non-null
+   * `sellDate`. Includes every checked child of an expanded-or-not multi-signal-date stock;
+   * unaffected by which rows are currently expanded (specs/frontend/strategy.md「摺疊狀態
+   * 不影響總計」). */
   includedCount: number
   totalCost: number
   totalProfit: number
   /** `null` when `includedCount` is 0 — never `0`, per「不得顯示成 0%」. */
   totalReturnPercent: number | null
-  /** `sellDate === null` — 「尚無可賣出交易日」, never counted regardless of checkbox state. */
+  /** `sellDate === null` — 「尚無可賣出交易日」, never counted regardless of checkbox state.
+   * Counts 筆 (positions), not 檔. */
   uncountedNoSellDate: number
-  /** Checked-eligible (`sellDate` non-null) but unchecked by the user. A row that is both
-   * unbacktestable and unchecked is counted only in `uncountedNoSellDate` above, never here. */
+  /** Checked-eligible (`sellDate` non-null) but unchecked by the user. Counts 筆. A position
+   * that is both unbacktestable and unchecked is counted only in `uncountedNoSellDate`
+   * above, never here. */
   uncountedUnchecked: number
 }
 
 /** Recomputes the two merged-table totals client-side from the backtest response's own
  * per-item `buyPrice`/`profit` and `lotSize` (never a hard-coded 1000) — so toggling a
- * checkbox never has to re-call the endpoint. With every row checked this must equal the
- * response's own `totalCost`/`totalProfit`/`totalReturnPercent` exactly (specs/frontend/
- * strategy.md「全部勾選時…這兩條路徑必須交會」), since it excludes exactly the same
- * `sellDate === null` rows the backend already excludes and applies the same weighted
- * formula. */
-function computeBacktestTotals(result: BacktestResponse, checkedStockIds: Set<string>): BacktestTotals {
+ * checkbox never has to re-call the endpoint. Iterates `result.items` directly (one entry
+ * per `(stockId, buyDate)` position already, per the current backend contract) rather
+ * than the union rows' grouping, so the totals are exactly「已勾選且可回測的各筆」regardless
+ * of expand/collapse state. With every row checked this must equal the response's own
+ * `totalCost`/`totalProfit`/`totalReturnPercent` exactly (specs/frontend/strategy.md「全部
+ * 勾選時…這兩條路徑必須交會」), since it excludes exactly the same `sellDate === null`
+ * items the backend already excludes and applies the same weighted formula. */
+function computeBacktestTotals(result: BacktestResponse, checkedItemKeys: Set<string>): BacktestTotals {
   let totalCost = 0
   let totalProfit = 0
   let includedCount = 0
@@ -261,7 +433,7 @@ function computeBacktestTotals(result: BacktestResponse, checkedStockIds: Set<st
       uncountedNoSellDate += 1
       continue
     }
-    if (!checkedStockIds.has(item.stockId)) {
+    if (!checkedItemKeys.has(itemKey(item.stockId, item.buyDate))) {
       uncountedUnchecked += 1
       continue
     }
@@ -271,6 +443,89 @@ function computeBacktestTotals(result: BacktestResponse, checkedStockIds: Set<st
   }
   const totalReturnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
   return { includedCount, totalCost, totalProfit, totalReturnPercent, uncountedNoSellDate, uncountedUnchecked }
+}
+
+interface ParentAggregate {
+  checkedChildren: number
+  totalChildren: number
+  /** Checked AND backtestable (`sellDate` non-null) children — what「{N} 筆」counts. */
+  includedCount: number
+  /** Cost-weighted average buy price across `includedCount` children, `null` when 0
+   * (specs/frontend/strategy.md「該檔的子筆全被取消勾選時…顯示「—」」). */
+  avgBuyPrice: number | null
+  /** Sum of `profit` across `includedCount` children — `0` is a real, displayable value
+   * (only meaningful when `includedCount > 0`; callers check that before rendering it). */
+  totalProfit: number
+  /** Cost-weighted (`已勾選收益總和 ÷ 已勾選成本總和 × 100`) — the SAME formula as the two
+   * header totals, never an arithmetic mean of the children's own return percentages
+   * (specs/frontend/strategy.md「父列的算法必須與標題兩個總計同一套」). `null` when 0. */
+  returnPercent: number | null
+}
+
+/** A multi-buy-date stock's collapsed-row aggregate, recomputed client-side from its
+ * checked children only — never a network call (specs/frontend/strategy.md「父列隨子列的
+ * 勾選即時重算，不重打端點」). */
+function computeParentAggregate(
+  stockId: string,
+  groups: BuyDateGroup[],
+  backtestItemsByKey: Map<string, BacktestResultItem>,
+  checkedItemKeys: Set<string>,
+  lotSize: number,
+): ParentAggregate {
+  let checkedChildren = 0
+  let includedCount = 0
+  let totalCost = 0
+  let totalProfit = 0
+  for (const group of groups) {
+    const checked = checkedItemKeys.has(itemKey(stockId, group.buyDate))
+    if (checked) checkedChildren += 1
+    const item = backtestItemsByKey.get(itemKey(stockId, group.buyDate))
+    if (!checked || !item || item.sellDate === null) continue
+    includedCount += 1
+    totalCost += (item.buyPrice ?? 0) * lotSize
+    totalProfit += item.profit ?? 0
+  }
+  const avgBuyPrice = includedCount > 0 ? totalCost / (lotSize * includedCount) : null
+  const returnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
+  return { checkedChildren, totalChildren: groups.length, includedCount, avgBuyPrice, totalProfit, returnPercent }
+}
+
+/** A checkbox that can additionally render the browser's native indeterminate (半選) glyph
+ * — React has no JSX prop for `indeterminate` (it isn't a real DOM attribute), so it has to
+ * be poked onto the element imperatively. Used for every merged-table row checkbox (both
+ * the tri-state parent and the plain checked/unchecked child/single-group cases) so the
+ * imperative-ref plumbing lives in exactly one place. */
+function RowCheckbox({
+  checked,
+  indeterminate = false,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean
+  indeterminate?: boolean
+  onChange: (checked: boolean) => void
+  ariaLabel: string
+}) {
+  const ref = (el: HTMLInputElement | null) => {
+    if (el) el.indeterminate = indeterminate
+  }
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="st-row-checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      // 點選列＝點選該列勾選框：the row body above this checkbox also carries an onClick
+      // that performs the exact same toggle. Without stopping propagation here, a click on
+      // the checkbox itself would both fire this `onChange` AND bubble up to the row's own
+      // `onClick`, toggling twice and visibly cancelling itself out. This keeps "click the
+      // checkbox" and "click the row" as two paths to the same single toggle, not two
+      // stacked toggles.
+      onClick={(e) => e.stopPropagation()}
+      aria-label={ariaLabel}
+    />
+  )
 }
 
 /** Collapsible "N 檔…" note used for both `insufficientData` and `pendingConfirm` —
@@ -298,8 +553,6 @@ export interface StrategyTabProps {
 }
 
 export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProps) {
-  const navigate = useNavigate()
-
   // ---------- strategy catalogue ----------
   const [catalog, setCatalog] = useState<StrategyCatalogItem[]>([])
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -342,10 +595,31 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const debouncedStockSearch = useDebouncedValue(stockSearch, 300)
   const [stockSuggestions, setStockSuggestions] = useState<StockListItem[]>([])
 
-  // ---------- date range ----------
-  const [dateRange, setDateRange] = useState(defaultDateRange())
-  const [activeShortcut, setActiveShortcut] = useState<ShortcutKey | null>('1m')
-  const dateInvalid = dateRange.startDate > dateRange.endDate
+  // ---------- date range (以週選擇區間 — every control here only ever lands on a whole
+  // ISO week, never a single day) ----------
+  const [weekRange, setWeekRange] = useState<WeekRange>(defaultWeekRange())
+  const [dateRangeServerError, setDateRangeServerError] = useState(false)
+  const currentWeekMonday = toIsoDate(isoWeekInfo(today()).monday)
+  // Monday strings sort chronologically exactly like the weeks they represent, so this
+  // plain string compare is equivalent to comparing the two weeks themselves.
+  const dateInvalid = weekRange.startMonday > weekRange.endMonday
+  const scanStartDate = weekRange.startMonday
+  // 結束週為本週時 endDate 為今日；否則為結束週的週日。No future date can ever come out of
+  // this: every other end week is by construction no later than 本週 (stepping past it is
+  // clamped in `shiftWeek`, and every quick-range result's end week literally is 本週).
+  const scanEndDate =
+    weekRange.endMonday === currentWeekMonday
+      ? toIsoDate(today())
+      : toIsoDate(isoWeekInfo(parseIsoDate(weekRange.endMonday)).sunday)
+  // 起、迄週恰等於某個快捷鈕的結果時，該鈕呈選中樣式 — derived every render from the current
+  // weeks themselves, not a separately-tracked flag, so stepping back to a week pair that
+  // happens to match a shortcut highlights it even without clicking the button, and any
+  // edit away from a match un-highlights it automatically.
+  const activeShortcut: ShortcutKey | null =
+    (['1m', '3m', '6m'] as ShortcutKey[]).find((key) => {
+      const result = quickWeekRange(key === '1m' ? 1 : key === '3m' ? 3 : 6)
+      return result.startMonday === weekRange.startMonday && result.endMonday === weekRange.endMonday
+    }) ?? null
 
   // ---------- scan ----------
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle')
@@ -354,15 +628,36 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [unknownIds, setUnknownIds] = useState<string[] | null>(null)
   const [lastScanPayload, setLastScanPayload] = useState<ScanRequest | null>(null)
 
-  // ---------- 納入計算的勾選框 (per hit-table row, front-end only) ----------
-  // Populated with every row checked the moment a scan succeeds; reset to "all checked"
-  // again on the next 開始掃描 click, together with the backtest result itself.
-  const [checkedStockIds, setCheckedStockIds] = useState<Set<string>>(new Set())
+  // ---------- 納入計算的勾選框 (per position — parent+child both key off this, front-end
+  // only) ----------
+  // Keyed by `itemKey(stockId, buyDate)`, one entry per distinct buy date. Populated
+  // with every position checked the moment a scan succeeds; reset to "all checked" again on
+  // the next 開始掃描 click, together with the backtest result itself.
+  const [checkedItemKeys, setCheckedItemKeys] = useState<Set<string>>(new Set())
 
-  // ---------- 回測 ----------
+  // ---------- 展開狀態 (per stock, front-end only, never reset by 回測 — only by 開始掃描
+  // implicitly starting a new scanResult) ----------
+  // Default collapsed. Only meaningful for a stock with ≥ 2 distinct buy dates; toggling
+  // it never re-fetches anything.
+  const [expandedStockIds, setExpandedStockIds] = useState<Set<string>>(new Set())
+
+  // ---------- 回測 (auto-triggered after a successful scan with ≥1 hit — no button) ----------
   const [backtestStatus, setBacktestStatus] = useState<BacktestStatus>('idle')
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null)
   const [backtestErrorMessage, setBacktestErrorMessage] = useState<string | null>(null)
+  // Distinguishes a running 重試回測 from the initial auto-backtest — both share
+  // `backtestStatus === 'running'`, but only the retry keeps the failure message on screen
+  // and swaps its own button label to 回測中… (the auto-backtest has no button at all, just
+  // the 「開始掃描」-adjacent hint). Reset on every terminal outcome (success or failure).
+  const [isRetryingBacktest, setIsRetryingBacktest] = useState(false)
+  // Generation counter + in-flight AbortController — 「開始掃描」bumps the generation and
+  // aborts whatever backtest was in flight the instant it's clicked (before the new scan
+  // even starts), and every backtest response checks its own generation before applying
+  // itself. Together these guarantee a stale backtest response (one started against an
+  // older hit list) can never overwrite a newer one, however the two happen to race
+  // (specs/frontend/strategy.md「回測進行中『開始掃描』仍可按…一律丟棄」).
+  const backtestGenerationRef = useRef(0)
+  const backtestAbortControllerRef = useRef<AbortController | null>(null)
 
   // ---------- sync ----------
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
@@ -387,6 +682,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [universeImportStatus, setUniverseImportStatus] = useState<SyncStatus>('idle')
   const [universeImportSummary, setUniverseImportSummary] = useState<UniverseImportResponse | null>(null)
   const [universeImportErrorMessage, setUniverseImportErrorMessage] = useState<string | null>(null)
+
+  // Aborts whatever backtest request is still in flight if this component unmounts —
+  // otherwise its `.then`/`.catch` would try to set state on an unmounted component.
+  useEffect(() => () => backtestAbortControllerRef.current?.abort(), [])
 
   // Catalogue — the sole source of strategy names / preset names / description text.
   useEffect(() => {
@@ -564,20 +863,21 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   }
 
   const applyShortcut = (key: ShortcutKey) => {
-    const months = key === '1m' ? 1 : key === '3m' ? 3 : 6
-    const today = new Date()
-    setDateRange({ startDate: toIsoDate(monthsAgo(months, today)), endDate: toIsoDate(today) })
-    setActiveShortcut(key)
+    setWeekRange(quickWeekRange(key === '1m' ? 1 : key === '3m' ? 3 : 6))
+    setDateRangeServerError(false)
   }
 
-  const setStartDate = (value: string) => {
-    setDateRange((r) => ({ ...r, startDate: value }))
-    setActiveShortcut(null)
-  }
-
-  const setEndDate = (value: string) => {
-    setDateRange((r) => ({ ...r, endDate: value }))
-    setActiveShortcut(null)
+  /** Steps one side of the range by one whole week. `end` is clamped so it can never move
+   * past 本週 — the only bound either side has; a start week that ends up after the end
+   * week is left as-is and simply blocks the scan (see `dateInvalid`), not silently fixed. */
+  const shiftWeek = (side: 'start' | 'end', deltaWeeks: number) => {
+    setWeekRange((r) => {
+      if (side === 'start') return { ...r, startMonday: toIsoDate(shiftDays(parseIsoDate(r.startMonday), deltaWeeks * 7)) }
+      const next = toIsoDate(shiftDays(parseIsoDate(r.endMonday), deltaWeeks * 7))
+      const max = toIsoDate(isoWeekInfo(today()).monday)
+      return { ...r, endMonday: next > max ? max : next }
+    })
+    setDateRangeServerError(false)
   }
 
   const addStock = (stock: StockListItem) => {
@@ -629,8 +929,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       }
     }),
     stockIds: scope === 'SELECTED' ? selectedStocks.map((s) => s.stockId) : undefined,
-    startDate: dateRange.startDate,
-    endDate: dateRange.endDate,
+    // 起始週週一／結束週週日（本週時為今日）— never the week selectors' own values directly.
+    startDate: scanStartDate,
+    endDate: scanEndDate,
     // 使用者明確指名的代號不代為過濾 — only sent for a 全市場 scan.
     commonStocksOnly: scope === 'ALL' ? commonStocksOnly : undefined,
   })
@@ -642,6 +943,40 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_DROP_DAYS: 'dropDays',
     INVALID_RISE_DAYS: 'riseDays',
     INVALID_DROP_PERCENT: 'dropPercent',
+  }
+
+  /** Sends `POST /api/strategies/backtest` — called automatically once right after a scan
+   * succeeds with ≥1 hit, and again (with the SAME `items`, re-derived from the same
+   * `unionRows`) whenever「重試回測」is pressed. `isRetry` only changes what's displayed
+   * while it's running (重試 keeps the failure message on screen and swaps its own button
+   * label; the auto-backtest has neither) — the request itself is identical either way. */
+  const runBacktest = (items: BacktestRequestItem[], isRetry: boolean) => {
+    backtestGenerationRef.current += 1
+    const generation = backtestGenerationRef.current
+    backtestAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    backtestAbortControllerRef.current = controller
+    setBacktestStatus('running')
+    setIsRetryingBacktest(isRetry)
+    if (!isRetry) setBacktestErrorMessage(null)
+    backtestStrategies({ items }, controller.signal)
+      .then((resp) => {
+        // 回測進行中「開始掃描」仍可按，其回應若在新掃描之後才到，一律丟棄 — a newer scan
+        // (or a newer retry) bumps the generation before this one's response can arrive, so
+        // an outdated response can never overwrite a result it no longer corresponds to.
+        if (backtestGenerationRef.current !== generation) return
+        setBacktestResult(resp)
+        setBacktestStatus('success')
+        setBacktestErrorMessage(null)
+        setIsRetryingBacktest(false)
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (backtestGenerationRef.current !== generation) return
+        setBacktestStatus('error')
+        setBacktestErrorMessage('回測失敗，請稍後再試')
+        setIsRetryingBacktest(false)
+      })
   }
 
   const runScan = (payload: ScanRequest) => {
@@ -657,18 +992,43 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestStatus('idle')
     setBacktestResult(null)
     setBacktestErrorMessage(null)
+    setIsRetryingBacktest(false)
+    // 進行中的那次回測隨即作廢 — bump the generation and abort the in-flight request (if
+    // any) the instant 開始掃描 is clicked, before the new scan itself even starts, so its
+    // eventual response can never land in the new hit list.
+    backtestGenerationRef.current += 1
+    backtestAbortControllerRef.current?.abort()
+    backtestAbortControllerRef.current = null
     scanStrategies(payload)
       .then((resp) => {
         setScanResult(resp)
         setScanStatus('success')
         // 掃描完成當下即出現，預設全部勾選 — a fresh hit list is a different batch of
-        // stocks, so any prior checkbox state (including which rows were unchecked) must
-        // not carry over.
-        setCheckedStockIds(new Set(buildUnionRows(resp).map((row) => row.stockId)))
+        // positions, so any prior checkbox state (including which rows were unchecked) must
+        // not carry over. One key per distinct signal date, not per stock.
+        const rows = buildUnionRows(resp)
+        const initiallyChecked = new Set<string>()
+        for (const row of rows) {
+          for (const group of row.buyDateGroups) initiallyChecked.add(itemKey(row.stockId, group.buyDate))
+        }
+        setCheckedItemKeys(initiallyChecked)
+        // 重新掃描時展開狀態沒有規定要保留或清空——新清單是不同的一批股票，沿用舊的展開
+        // 對應不到新的列，乾脆重置回全部摺疊（預設狀態）。
+        setExpandedStockIds(new Set())
+        // 掃描成功且命中至少一檔時，不需任何使用者動作即自動送出一次回測；掃描失敗或命中
+        // 0 檔時不送——沒有命中清單就沒有東西可以回測。
+        if (rows.length > 0) runBacktest(buildBacktestItems(rows), false)
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'UNKNOWN_STOCK_ID') {
           setUnknownIds(err.unknownIds ?? [])
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
+        if (err instanceof ApiError && err.code === 'INVALID_DATE_RANGE') {
+          // Backend fallback only — client-side validation already blocks this in normal
+          // use (`dateInvalid`). Same message, same place: below the range.
+          setDateRangeServerError(true)
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
@@ -766,8 +1126,36 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // Merged hit table — always one table regardless of how many strategies were selected.
   const unionRows = scanResult ? buildUnionRows(scanResult) : []
 
-  const toggleRowChecked = (stockId: string) => {
-    setCheckedStockIds((ids) => {
+  /** Toggles a single position (single-group row, or one child of an expanded parent). */
+  const toggleItemChecked = (stockId: string, buyDate: string) => {
+    const key = itemKey(stockId, buyDate)
+    setCheckedItemKeys((keys) => {
+      const next = new Set(keys)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  /** Parent checkbox click — 「點擊半選狀態的父列勾選框，一律變成全部勾選」falls out of
+   * this for free: the controlled `checked` prop is only `true` when every child is already
+   * checked, so a half-checked (indeterminate) parent's native click event always reports
+   * `newChecked === true` (browser toggles off the *checked* value, not off `indeterminate`),
+   * landing in the "check every child" branch below rather than "uncheck every child". */
+  const toggleParentChecked = (stockId: string, groups: BuyDateGroup[], newChecked: boolean) => {
+    setCheckedItemKeys((keys) => {
+      const next = new Set(keys)
+      for (const group of groups) {
+        const key = itemKey(stockId, group.buyDate)
+        if (newChecked) next.add(key)
+        else next.delete(key)
+      }
+      return next
+    })
+  }
+
+  const toggleExpanded = (stockId: string) => {
+    setExpandedStockIds((ids) => {
       const next = new Set(ids)
       if (next.has(stockId)) next.delete(stockId)
       else next.add(stockId)
@@ -775,26 +1163,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     })
   }
 
-  const canBacktest = scanStatus === 'success' && unionRows.length > 0 && backtestStatus !== 'running'
-
-  const handleBacktestClick = () => {
-    if (!canBacktest) return
-    setBacktestStatus('running')
-    setBacktestErrorMessage(null)
-    // 送出全部命中標的，勾選狀態不影響請求內容 — checkboxes are a display/aggregation
-    // filter applied to the response afterward, never a request filter. Per stock, the
-    // signalDate sent is the latest among the strategies it hit (`row.latestSignalDate`),
-    // the same date the table sorts by.
-    const items = unionRows.map((row) => ({ stockId: row.stockId, signalDate: row.latestSignalDate }))
-    backtestStrategies({ items })
-      .then((resp) => {
-        setBacktestResult(resp)
-        setBacktestStatus('success')
-      })
-      .catch(() => {
-        setBacktestStatus('error')
-        setBacktestErrorMessage('回測失敗，請稍後再試')
-      })
+  /** 「重試回測」— only rendered while `backtestStatus === 'error'` (see JSX below); re-sends
+   * ONLY the backtest, with the exact same `items[]` `buildBacktestItems` would derive from
+   * this same `unionRows` (the scan itself is never re-run). */
+  const handleRetryBacktest = () => {
+    if (backtestStatus !== 'error') return
+    runBacktest(buildBacktestItems(unionRows), true)
   }
 
   const handleSyncClick = () => {
@@ -804,7 +1178,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     // 沿用頁面層級的「只看上市普通股」設定 — captured from the prop at click time, not
     // re-read later, so the completion summary always describes the population this
     // particular request actually asked for.
-    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(new Date()), catchUp: true, commonStocksOnly })
+    startBackfill({ startDate: BACKFILL_START_DATE, endDate: toIsoDate(today()), catchUp: true, commonStocksOnly })
       .then((resp) => {
         setSyncMeta({ targetCount: resp.targetCount, caughtUpCount: resp.caughtUpCount, commonStocksOnly })
       })
@@ -902,13 +1276,29 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return nodes
   }
 
-  const backtestItemsById = (() => {
+  const backtestItemsByKey = (() => {
     const map = new Map<string, BacktestResultItem>()
-    if (backtestResult) for (const item of backtestResult.items) map.set(item.stockId, item)
+    if (backtestResult) for (const item of backtestResult.items) map.set(itemKey(item.stockId, item.buyDate), item)
     return map
   })()
 
-  const backtestTotals = backtestResult ? computeBacktestTotals(backtestResult, checkedStockIds) : null
+  const backtestTotals = backtestResult ? computeBacktestTotals(backtestResult, checkedItemKeys) : null
+
+  // ---------- 「取消全選」勾選框 ----------
+  // Every position (筆) across every row — single-buy-date rows, every child of every
+  // multi-buy-date stock, including unbacktestable positions and positions currently
+  // hidden inside a collapsed parent. `checkedItemKeys` already tracks exactly this set
+  // (populated in full the moment a scan succeeds, see `runScan`), so "全部的筆都沒有勾選"
+  // is just "the tracked set is empty" — no separate derivation is needed.
+  const allItemKeys = unionRows.flatMap((row) => row.buyDateGroups.map((group) => itemKey(row.stockId, group.buyDate)))
+  // 打勾代表「目前全部的筆都沒有勾選」——一個從各筆推導出來的值，不是獨立記住的旗標。
+  const cancelAllChecked = backtestResult !== null && allItemKeys.length > 0 && checkedItemKeys.size === 0
+
+  /** 勾選「取消全選」→ 全部取消；取消勾選「取消全選」→ 全部勾回。完全在前端完成，不重新
+   * 呼叫任何端點——`allItemKeys` 已含表上（含摺疊中的子列與無法回測的筆）的每一筆。 */
+  const toggleCancelAll = (turnOn: boolean) => {
+    setCheckedItemKeys(turnOn ? new Set() : new Set(allItemKeys))
+  }
 
   /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
    * 名稱。這些標的不是命中，因此永遠不進入 `unionRows` 或回測請求。 */
@@ -945,12 +1335,40 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       return notes
     })
 
+  /** The six 買進日／買進價／賣出日／賣出價／報酬率／收益 cells for one position — shared by
+   * a single-buy-date row (parent acting as its own only child) and every expanded child
+   * row, so the null-dash handling and formatting live in exactly one place. */
+  const renderPositionCells = (buyDate: string, item: BacktestResultItem | null) => (
+    <>
+      <td>{buyDate}</td>
+      <td className="sl-r">{item?.buyPrice != null ? formatPrice2(item.buyPrice) : <span className="sl-muted">—</span>}</td>
+      <td>{item?.sellDate ?? <span className="sl-muted">—</span>}</td>
+      <td className="sl-r">{item?.sellPrice != null ? formatPrice2(item.sellPrice) : <span className="sl-muted">—</span>}</td>
+      <td className={`sl-r ${signColorClass(item?.returnPercent)}`}>
+        {item?.returnPercent == null ? <span className="sl-muted">—</span> : formatPercent2(item.returnPercent)}
+      </td>
+      <td className={`sl-r ${signColorClass(item?.profit)}`}>
+        {item?.profit == null ? <span className="sl-muted">—</span> : formatAmount(item.profit)}
+      </td>
+    </>
+  )
+
   const renderMergedTable = () => (
     <div className="st-result-block st-union-block">
       <div className="st-union-header">
         <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
         {backtestTotals ? (
           <div className="st-backtest-totals">
+            <label className="st-total-item st-selectall-item">
+              <input
+                type="checkbox"
+                className="st-row-checkbox"
+                checked={cancelAllChecked}
+                onChange={(e) => toggleCancelAll(e.target.checked)}
+                aria-label="取消全選"
+              />
+              <span className="st-total-label">取消全選</span>
+            </label>
             <div className="st-total-item">
               <span className="st-total-label">總報酬率</span>
               <span className={`st-total-value ${signColorClass(backtestTotals.totalReturnPercent)}`}>
@@ -958,7 +1376,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               </span>
             </div>
             <div className="st-total-item">
-              <span className="st-total-label">總收益（每檔 1 張）</span>
+              <span className="st-total-label">總收益（每筆 1 張）</span>
               <span
                 className={`st-total-value ${signColorClass(backtestTotals.includedCount > 0 ? backtestTotals.totalProfit : null)}`}
               >
@@ -980,10 +1398,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           ) : (
             <>
               {backtestTotals.uncountedNoSellDate > 0 ? (
-                <p className="st-uncounted-note">另 {backtestTotals.uncountedNoSellDate} 檔尚無可賣出交易日，未計入</p>
+                <p className="st-uncounted-note">另 {backtestTotals.uncountedNoSellDate} 筆尚無可賣出交易日，未計入</p>
               ) : null}
               {backtestTotals.uncountedUnchecked > 0 ? (
-                <p className="st-uncounted-note">另 {backtestTotals.uncountedUnchecked} 檔未勾選，未計入</p>
+                <p className="st-uncounted-note">另 {backtestTotals.uncountedUnchecked} 筆未勾選，未計入</p>
               ) : null}
             </>
           )}
@@ -995,55 +1413,196 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           <p className="st-last-sync-hint">最後同步：{formatSyncTime(lastSyncedAt)}</p>
         </div>
       ) : (
-        <table className="sl-table st-result-table st-union-table">
+        <table className={`sl-table st-result-table st-union-table${backtestResult ? ' st-union-table-backtested' : ''}`}>
+
           <thead>
             <tr>
+              <th className="st-expand-col" aria-label="展開"></th>
               {backtestResult ? <th className="st-checkbox-col" aria-label="納入計算"></th> : null}
               <th>代號 / 名稱</th>
               <th>命中策略與訊號日</th>
+              {backtestResult ? <th>買進日</th> : null}
+              {backtestResult ? <th className="sl-r">買進價</th> : null}
               {backtestResult ? <th>賣出日</th> : null}
+              {backtestResult ? <th className="sl-r">賣出價</th> : null}
               {backtestResult ? <th className="sl-r">報酬率</th> : null}
-              {backtestResult ? <th className="sl-r">收益（每檔 1 張）</th> : null}
+              {backtestResult ? <th className="sl-r">收益（每筆 1 張）</th> : null}
             </tr>
           </thead>
           <tbody>
-            {unionRows.map((row) => {
-              const checked = checkedStockIds.has(row.stockId)
-              const item = backtestItemsById.get(row.stockId) ?? null
-              return (
+            {unionRows.flatMap((row) => {
+              const groups = row.buyDateGroups
+              const hasChildren = groups.length >= 2
+              const isExpanded = hasChildren && expandedStockIds.has(row.stockId)
+              const lotSize = backtestResult?.lotSize ?? 0
+
+              // ---- parent/single-group row's own backtest cells ----
+              let backtestCells: ReactNode = null
+              let parentChecked = true
+              let parentIndeterminate = false
+              if (backtestResult) {
+                if (hasChildren) {
+                  const agg = computeParentAggregate(row.stockId, groups, backtestItemsByKey, checkedItemKeys, lotSize)
+                  parentChecked = agg.checkedChildren === agg.totalChildren && agg.totalChildren > 0
+                  parentIndeterminate = agg.checkedChildren > 0 && agg.checkedChildren < agg.totalChildren
+                  backtestCells = (
+                    <>
+                      {/* 買進日：該檔每一筆的 buyDate，由新到舊逐行列出，一行一筆；已勾選
+                          為主要文字色（繼承 td 預設值），未勾選為弱化色（重用 sl-muted）。 */}
+                      <td>
+                        {groups.map((group) => {
+                          const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                          return (
+                            <div key={group.buyDate} className={checked ? undefined : 'sl-muted'}>
+                              {group.buyDate}
+                            </div>
+                          )
+                        })}
+                      </td>
+                      <td className="sl-r">
+                        {agg.avgBuyPrice != null ? formatPrice2(agg.avgBuyPrice) : <span className="sl-muted">—</span>}
+                      </td>
+                      {/* 賣出日：與買進日欄同一順序、同一行數，第 k 行屬於同一筆；無法回測的
+                          那一筆該行為弱化色「—」，已勾選／未勾選的配色同買進日欄。 */}
+                      <td>
+                        {groups.map((group) => {
+                          const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                          const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
+                          const sellDate = item?.sellDate ?? null
+                          const muted = !checked || sellDate == null
+                          return (
+                            <div key={group.buyDate} className={muted ? 'sl-muted' : undefined}>
+                              {sellDate ?? '—'}
+                            </div>
+                          )
+                        })}
+                      </td>
+                      {/* 賣出價：恆為弱化色「—」（多筆各有各的賣出價，沒有單一合計值），且
+                          需與同欄其他列的賣出價同樣靠右對齊（sl-r，過去這裡漏掉，造成錯位）。 */}
+                      <td className="sl-r">
+                        <span className="sl-muted">—</span>
+                      </td>
+                      <td className={`sl-r ${agg.includedCount > 0 ? signColorClass(agg.returnPercent) : 'sl-muted'}`}>
+                        {agg.includedCount > 0 && agg.returnPercent != null ? (
+                          formatPercent2(agg.returnPercent)
+                        ) : (
+                          <span className="sl-muted">—</span>
+                        )}
+                      </td>
+                      <td className={`sl-r ${agg.includedCount > 0 ? signColorClass(agg.totalProfit) : 'sl-muted'}`}>
+                        {agg.includedCount > 0 ? formatAmount(agg.totalProfit) : <span className="sl-muted">—</span>}
+                      </td>
+                    </>
+                  )
+                } else {
+                  const group = groups[0]
+                  const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
+                  parentChecked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                  backtestCells = renderPositionCells(group.buyDate, item)
+                }
+              }
+              // 父列只在其全部子筆都未勾選時才整列反灰，半選狀態下不反灰 — 單訊號日的列則
+              // 直接看自己的勾選狀態，行為與過去一致。
+              const rowUnchecked = backtestResult ? !parentChecked && !parentIndeterminate : false
+
+              // 點選列＝點選該列勾選框：before a successful 回測 there is no checkbox column
+              // at all, so the row body does nothing — no handler is attached. After 回測,
+              // clicking anywhere in the row body toggles exactly what clicking its own
+              // checkbox would: a plain single-group row flips that one position, and a
+              // multi-buy-date parent flips its whole group (checking everything when
+              // fully unchecked OR half-checked, unchecking everything only when fully
+              // checked — the same `!parentChecked` a native click on the (possibly
+              // indeterminate-but-`checked=false`) checkbox itself would report).
+              const handleParentRowClick = backtestResult
+                ? () => {
+                    if (hasChildren) toggleParentChecked(row.stockId, groups, !parentChecked)
+                    else toggleItemChecked(row.stockId, groups[0].buyDate)
+                  }
+                : undefined
+
+              const parentRow = (
                 <tr
                   key={row.stockId}
-                  className={`sl-row${checked ? '' : ' st-row-unchecked'}`}
-                  onClick={() => navigate(`/stocks/${row.stockId}/daily`)}
+                  className={`sl-row${rowUnchecked ? ' st-row-unchecked' : ''}`}
+                  onClick={handleParentRowClick}
                 >
+                  <td className="st-expand-col">
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className={`st-expand-btn${isExpanded ? ' st-expand-btn-open' : ''}`}
+                        onClick={(e) => {
+                          // 展開鈕只展開／收合，不切換勾選 — stop the click from also
+                          // reaching the row's own onClick above, which would otherwise
+                          // toggle the checkbox on every expand/collapse.
+                          e.stopPropagation()
+                          toggleExpanded(row.stockId)
+                        }}
+                        aria-label={`${isExpanded ? '收合' : '展開'} ${row.stockId} 的訊號日明細`}
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? '▾' : '▸'}
+                      </button>
+                    ) : null}
+                  </td>
                   {backtestResult ? (
-                    <td className="st-checkbox-col" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        className="st-row-checkbox"
-                        checked={checked}
-                        onChange={() => toggleRowChecked(row.stockId)}
-                        aria-label={`納入 ${row.stockId} 計算`}
-                      />
+                    <td className="st-checkbox-col">
+                      {hasChildren ? (
+                        <RowCheckbox
+                          checked={parentChecked}
+                          indeterminate={parentIndeterminate}
+                          onChange={(next) => toggleParentChecked(row.stockId, groups, next)}
+                          ariaLabel={`納入 ${row.stockId} 全部計算`}
+                        />
+                      ) : (
+                        <RowCheckbox
+                          checked={parentChecked}
+                          onChange={() => toggleItemChecked(row.stockId, groups[0].buyDate)}
+                          ariaLabel={`納入 ${row.stockId} 計算`}
+                        />
+                      )}
                     </td>
                   ) : null}
                   <td>
                     {row.stockId} {row.stockName}
                   </td>
                   <td className="st-union-hits">{renderUnionHits(row.hits)}</td>
-                  {backtestResult ? <td>{item?.sellDate ?? <span className="sl-muted">—</span>}</td> : null}
-                  {backtestResult ? (
-                    <td className={`sl-r ${signColorClass(item?.returnPercent)}`}>
-                      {item?.returnPercent == null ? <span className="sl-muted">—</span> : formatPercent2(item.returnPercent)}
-                    </td>
-                  ) : null}
-                  {backtestResult ? (
-                    <td className={`sl-r ${signColorClass(item?.profit)}`}>
-                      {item?.profit == null ? <span className="sl-muted">—</span> : formatAmount(item.profit)}
-                    </td>
-                  ) : null}
+                  {backtestCells}
                 </tr>
               )
+
+              if (!isExpanded) return [parentRow]
+
+              const childRows = groups.map((group) => {
+                const key = itemKey(row.stockId, group.buyDate)
+                const childChecked = checkedItemKeys.has(key)
+                const item = backtestItemsByKey.get(key) ?? null
+                return (
+                  <tr
+                    key={key}
+                    className={`sl-row st-child-row${childChecked ? '' : ' st-row-unchecked'}`}
+                    onClick={backtestResult ? () => toggleItemChecked(row.stockId, group.buyDate) : undefined}
+                  >
+                    <td className="st-expand-col"></td>
+                    {backtestResult ? (
+                      <td className="st-checkbox-col">
+                        <RowCheckbox
+                          checked={childChecked}
+                          onChange={() => toggleItemChecked(row.stockId, group.buyDate)}
+                          ariaLabel={`納入 ${row.stockId} ${group.buyDate} 計算`}
+                        />
+                      </td>
+                    ) : null}
+                    <td className="st-child-indent">
+                      {row.stockId} {row.stockName}
+                    </td>
+                    <td className="st-union-hits">{renderUnionHits(group.hits)}</td>
+                    {backtestResult ? renderPositionCells(group.buyDate, item) : null}
+                  </tr>
+                )
+              })
+
+              return [parentRow, ...childRows]
             })}
           </tbody>
         </table>
@@ -1360,9 +1919,20 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
         <div className="st-section-label">區間</div>
         <div className="st-date-range">
-          <input type="date" value={dateRange.startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <WeekSelector
+            ariaLabel="起始週"
+            monday={parseIsoDate(weekRange.startMonday)}
+            onPrev={() => shiftWeek('start', -1)}
+            onNext={() => shiftWeek('start', 1)}
+          />
           <span className="st-date-sep">至</span>
-          <input type="date" value={dateRange.endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <WeekSelector
+            ariaLabel="結束週"
+            monday={parseIsoDate(weekRange.endMonday)}
+            onPrev={() => shiftWeek('end', -1)}
+            onNext={() => shiftWeek('end', 1)}
+            nextDisabled={weekRange.endMonday >= currentWeekMonday}
+          />
           <button
             type="button"
             className={`st-shortcut${activeShortcut === '1m' ? ' st-shortcut-active' : ''}`}
@@ -1385,25 +1955,34 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
             近半年
           </button>
         </div>
-        {dateInvalid ? <div className="st-inline-error">起日不可晚於迄日</div> : null}
+        <div className="st-range-hint">
+          實際區間 {scanStartDate} ~ {scanEndDate}
+        </div>
+        {dateInvalid || dateRangeServerError ? <div className="st-inline-error">起始週不可晚於結束週</div> : null}
 
         <div className="st-scan-row">
           <button type="button" className="sl-btn sl-btn-primary" disabled={!canScan} onClick={handleScanClick}>
             {scanStatus === 'scanning' ? '掃描中…' : '開始掃描'}
           </button>
-          {/* 回測 — 次要按鈕樣式，全頁唯一的主要按鈕仍是「開始掃描」。只有本次掃描命中至少
-              一檔時才可點擊；尚未掃描／掃描中／掃描失敗／零命中一律 disabled。 */}
-          <button type="button" className="sl-btn" disabled={!canBacktest} onClick={handleBacktestClick}>
-            {backtestStatus === 'running' ? '回測中…' : '回測'}
-          </button>
+          {/* 本頁沒有「回測」按鈕：掃描成功且命中至少一檔時自動送出回測，這裡只呈現其狀態。
+              自動回測進行中（非重試）— 沒有訊息、沒有按鈕，只有這行次要文字色的提示，
+              「開始掃描」本身仍可按（未 disabled）。 */}
+          {backtestStatus === 'running' && !isRetryingBacktest ? <span className="st-backtest-hint">回測中…</span> : null}
+          {/* 自動回測失敗，或「重試回測」進行中 — 錯誤訊息保留至重試有結果為止，其右緊接
+              「重試回測」按鈕；重試進行中按鈕 disabled 並顯示「回測中…」。 */}
+          {backtestStatus === 'error' || (backtestStatus === 'running' && isRetryingBacktest) ? (
+            <>
+              <span className="st-inline-error">{backtestErrorMessage}</span>
+              <button type="button" className="sl-btn" disabled={backtestStatus === 'running'} onClick={handleRetryBacktest}>
+                {backtestStatus === 'running' ? '回測中…' : '重試回測'}
+              </button>
+            </>
+          ) : null}
           {noStrategySelected ? <span className="st-inline-hint">請至少勾選一個策略</span> : null}
           {!noStrategySelected && noStockSelected ? (
             <span className="st-inline-hint">請至少選擇一檔股票</span>
           ) : null}
         </div>
-        {backtestStatus === 'error' && backtestErrorMessage ? (
-          <div className="st-inline-error">{backtestErrorMessage}</div>
-        ) : null}
       </div>
 
       {/* ---------- results area ---------- */}

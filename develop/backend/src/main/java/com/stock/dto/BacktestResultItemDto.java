@@ -5,14 +5,16 @@ import java.time.LocalDate;
 
 /**
  * One stock's backtest outcome within POST /api/strategies/backtest's `items` response array. All
- * fields but `stockId`/`signalDate` are null when the stock could not be backtested — see
+ * fields but `stockId`/`buyDate` are null when the stock could not be backtested — see
  * specs/backend/strategy-backtest.md, "無法回測的標的". The stock still appears in `items` in that
- * case; it is simply excluded from the response-level totals.
+ * case; it is simply excluded from the response-level totals. `buyDate` is returned verbatim from
+ * the request; the response never carries a `signalDate` field (specs/backend/strategy-backtest.md,
+ * "買進日由請求指定，本端點不推算").
  */
 public class BacktestResultItemDto {
 
     private String stockId;
-    private LocalDate signalDate;
+    private LocalDate buyDate;
     private BigDecimal buyPrice;
     private LocalDate sellDate;
     private BigDecimal sellPrice;
@@ -30,12 +32,12 @@ public class BacktestResultItemDto {
         this.stockId = stockId;
     }
 
-    public LocalDate getSignalDate() {
-        return signalDate;
+    public LocalDate getBuyDate() {
+        return buyDate;
     }
 
-    public void setSignalDate(LocalDate signalDate) {
-        this.signalDate = signalDate;
+    public void setBuyDate(LocalDate buyDate) {
+        this.buyDate = buyDate;
     }
 
     public BigDecimal getBuyPrice() {

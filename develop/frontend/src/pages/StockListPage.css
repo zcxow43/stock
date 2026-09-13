@@ -288,6 +288,21 @@
   background: #1d2a38;
 }
 
+/* 命中彙總表的列不導向任何頁面，但回測完成後點選一列等同點選該列的勾選框 — the cursor must
+   track whether a click actually does anything: before 回測 (no checkbox column yet) the
+   row body does nothing and gets the default arrow; after 回測 it toggles that row's
+   checkbox and gets the pointer. Scoped to this table only — `.sl-row` is shared with 總覽
+   tab's own (still-clickable) stock list, whose row navigation this must not touch.
+   Three-/four-class selectors so each reliably outranks the shared
+   `.sl-table tbody tr.sl-row { cursor: pointer }` rule above regardless of source order. */
+.st-union-table.sl-table tbody tr.sl-row {
+  cursor: default;
+}
+
+.st-union-table.st-union-table-backtested.sl-table tbody tr.sl-row {
+  cursor: pointer;
+}
+
 .sl-table td.sl-r {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -857,25 +872,64 @@
   flex-wrap: wrap;
 }
 
-.st-date-range input[type='date'] {
+.st-week-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   height: 38px;
   background: #0f1620;
   border: 1px solid #26333f;
   border-radius: 6px;
   color: #e6edf5;
-  padding: 0 10px;
+  padding: 0 6px;
   font-size: 14px;
   font-family: inherit;
-  outline: none;
 }
 
-.st-date-range input[type='date']:focus {
+.st-week-select:focus-within {
   border-color: #3e8fd8;
+}
+
+.st-week-caption {
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+.st-week-step {
+  height: 26px;
+  width: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #93a4b8;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.st-week-step:hover {
+  background: #1d2a38;
+}
+
+.st-week-step:disabled {
+  color: #4a5866;
+  cursor: default;
+  background: transparent;
 }
 
 .st-date-sep {
   color: #93a4b8;
   font-size: 13px;
+}
+
+.st-range-hint {
+  font-size: 13px;
+  color: #93a4b8;
+  margin-top: 4px;
 }
 
 .st-shortcut {
@@ -905,6 +959,14 @@
 .st-inline-hint {
   font-size: 13px;
   color: #6b7c90;
+}
+
+/* 「回測中…」— shown beside 開始掃描 while the auto-triggered 回測 (not a 重試回測) is in
+   flight; 重試回測's own "回測中…" reuses the button's own disabled-state text color
+   instead (see .sl-btn:disabled), so this class is only ever the bare hint text. */
+.st-backtest-hint {
+  font-size: 13px;
+  color: #93a4b8;
 }
 
 .st-inline-error {
@@ -1098,6 +1160,16 @@
   gap: 2px;
 }
 
+/* 「取消全選」勾選框 — a literal switch, not a stat display like its two siblings, so it
+   lays out as a row (checkbox beside its own always-「取消全選」label) rather than the
+   label-over-value column the totals use. */
+.st-selectall-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
 .st-total-label {
   font-size: 12px;
   color: #93a4b8;
@@ -1119,16 +1191,58 @@
   color: #93a4b8;
 }
 
-/* 納入計算的勾選框 — one per merged-table row, default checked. */
+/* 納入計算的勾選框 — one per merged-table row (parent and child alike), default checked. A
+   custom (appearance: none) box is used instead of a bare native checkbox + accent-color so
+   the 半選 (indeterminate) state can carry its own distinct background/mark — Chromium's
+   native `accent-color` paints a solid fill for both the checked and indeterminate states,
+   which can't reproduce the spec's "半選 = 深底 + 藍橫槓 vs. 已勾選 = 藍底 + 白勾" distinction
+   (`## Visual Style`「命中彙總表勾選框半選背景／橫槓」). */
 .st-checkbox-col {
   width: 1%;
 }
 
 .st-row-checkbox {
+  appearance: none;
+  position: relative;
   width: 16px;
   height: 16px;
-  accent-color: #3e8fd8;
+  margin: 0;
+  border: 1px solid #26333f;
+  border-radius: 3px;
+  background: #0f1620;
   cursor: pointer;
+}
+
+.st-row-checkbox:checked {
+  background: #3e8fd8;
+  border-color: #3e8fd8;
+}
+
+.st-row-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.st-row-checkbox:indeterminate {
+  background: #1b2836;
+  border-color: #3e8fd8;
+}
+
+.st-row-checkbox:indeterminate::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6.5px;
+  width: 8px;
+  height: 2px;
+  background: #3e8fd8;
 }
 
 /* Unchecked row — whole row (including its own up/down-colored 報酬率／收益) turns weak
@@ -1137,9 +1251,60 @@
    specific than `.sl-up`/`.sl-down`/`.sl-neutral` (1 class each) and wins on
    specificity alone; `!important` is kept anyway as a deliberate belt-and-braces
    guard so this row-level override can never again be silently outranked by a
-   future higher-specificity color rule added elsewhere on these cells. */
+   future higher-specificity color rule added elsewhere on these cells. Never applied to a
+   half-checked (indeterminate) parent row — it still has筆 counted toward the totals. */
 .sl-table tbody tr.st-row-unchecked td {
   color: #6b7c90 !important;
+}
+
+/* 展開鈕 — always present as a column (even before 回測), only rendered inside for a stock
+   with ≥ 2 distinct signal dates. */
+.st-expand-col {
+  width: 1%;
+}
+
+.st-expand-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: #93a4b8;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.st-expand-btn:hover {
+  background: #1d2a38;
+}
+
+.st-expand-btn.st-expand-btn-open {
+  color: #e6edf5;
+}
+
+/* 展開後的子列 — its own background, and a left indent guide line so it reads as nested
+   under its parent rather than as another top-level row. */
+.sl-table tbody tr.st-child-row td {
+  background: #131c27;
+}
+
+.sl-table tbody tr.st-child-row:hover td {
+  background: #1d2a38;
+}
+
+.st-child-indent {
+  position: relative;
+  padding-left: 28px !important;
+}
+
+.st-child-indent::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #26333f;
 }
 
 .sl-empty,

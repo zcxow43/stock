@@ -396,7 +396,7 @@ public class StrategyScanService {
                 insufficientData.add(stockId);
             } else if (outcome.isHit()) {
                 items.add(new StrategyHitDto(stockId, stockNames.get(stockId), outcome.getSignalDate(),
-                        outcome.getDetail()));
+                        outcome.getBuyDate(), outcome.getDetail()));
             } else if (outcome.isPendingConfirm()) {
                 pendingConfirm.add(stockId);
             }

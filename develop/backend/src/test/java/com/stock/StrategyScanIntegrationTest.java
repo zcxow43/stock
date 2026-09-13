@@ -1009,6 +1009,173 @@ class StrategyScanIntegrationTest {
         assertNoAdviceWording(response.getBody());
     }
 
+    // ==================== buyDate (增量: 上漲支撐 buyDate = D+2，其餘四型 = signalDate) ====================
+
+    // AC: every item[] carries buyDate; RISING_SUPPORT's buyDate is D+2 and equals the last
+    // confirmCloses entry's tradeDate, while signalDate stays D. Reuses the spec's own
+    // 1296/1272/1248 hand-calculated fixture.
+    @Test
+    void risingSupport_buyDateIsDPlus2_equalsLastConfirmCloseTradeDate_signalDateStaysD() throws Exception {
+        String stockId = "SS520";
+        seedStock(stockId, "上漲支撐buyDate測試", true);
+        LocalDate lookbackStart = LocalDate.of(2027, 2, 1);
+        String[] lookbackCloses = {
+                "1100.00", "1100.00", "1100.00", "1100.00", "1100.00",
+                "1236.00", "1100.00", "1100.00", "1100.00", "1200.00"
+        };
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, lookbackCloses, 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1296.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1272.00", 1000);
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1248.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(d.toString(), item.get("signalDate").asText(), "signalDate must stay D");
+        assertEquals(d2.toString(), item.get("buyDate").asText(),
+                "buyDate must be D+2, equal to the last confirmCloses entry's tradeDate");
+        JsonNode confirmCloses = item.get("detail").get("confirmCloses");
+        assertEquals(d2.toString(), confirmCloses.get(confirmCloses.size() - 1).get("tradeDate").asText());
+    }
+
+    // AC: a suspension gap (missing calendar row) between D and D+2 must not shift buyDate off the
+    // adjacent *trading*-day row — buyDate is never computed as D + 2 calendar days.
+    @Test
+    void risingSupport_buyDateSkipsSuspensionGap_usesAdjacentTradingRowNotCalendarArithmetic() throws Exception {
+        String stockId = "SS521";
+        seedStock(stockId, "上漲支撐buyDate停牌測試", true);
+        LocalDate lookbackStart = LocalDate.of(2027, 3, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000); // 5% rise, breaks the 1000 lookback high
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000);
+        // Deliberate suspension: no row at d1+1; the next *trading* day (D+2) lands 3 calendar days
+        // after d1, not 1.
+        LocalDate d2 = d1.plusDays(3);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(d.toString(), item.get("signalDate").asText());
+        assertEquals(d2.toString(), item.get("buyDate").asText(),
+                "buyDate must be the next *trading*-day row despite the calendar gap, not d + 2 calendar days");
+        assertNotEquals(d.plusDays(2).toString(), item.get("buyDate").asText());
+    }
+
+    // AC: when D is endDate and D+1/D+2 come from data stored after endDate, buyDate may fall after
+    // endDate and is reported normally (same fixture shape as
+    // risingSupport_confirmDataAfterEndDate_matchesNormallyNotPendingConfirm above).
+    @Test
+    void risingSupport_buyDateCanBeAfterEndDate_reportedNormally() throws Exception {
+        String stockId = "SS522";
+        seedStock(stockId, "上漲支撐buyDate晚於endDate測試", true);
+        LocalDate lookbackStart = LocalDate.of(2027, 4, 1);
+        List<LocalDate> lookbackDates = seedCloseSeries(stockId, lookbackStart, repeat("1000.00", 10), 1000);
+        LocalDate d = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertCloseOnlyRow(stockId, d, "1050.00", 1000);
+        LocalDate d1 = d.plusDays(1);
+        insertCloseOnlyRow(stockId, d1, "1060.00", 1000); // stored after endDate
+        LocalDate d2 = d1.plusDays(1);
+        insertCloseOnlyRow(stockId, d2, "1070.00", 1000); // stored after endDate
+
+        // endDate = d itself; D+1/D+2 already exist in the DB even though they fall after endDate.
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"RISING_SUPPORT", "STANDARD"}),
+                Collections.singletonList(stockId), d, d);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertTrue(d2.isAfter(d), "the fixture's D+2 must genuinely fall after endDate for this AC to mean anything");
+        assertEquals(d2.toString(), item.get("buyDate").asText(),
+                "buyDate may be later than endDate and must be reported normally, not omitted or clamped");
+    }
+
+    // AC: BOX_BREAKOUT/HIGHER_LOWS/REBOUND/CUMULATIVE_RISE all report buyDate == signalDate.
+    @Test
+    void boxBreakout_buyDateEqualsSignalDate() throws Exception {
+        String stockId = "SS523";
+        seedStock(stockId, "箱型突破buyDate測試", true);
+        LocalDate start = LocalDate.of(2027, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.06", 1800);
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"BOX_BREAKOUT", "STANDARD"}),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate);
+        JsonNode item = postScan(request).get("results").get(0).get("items").get(0);
+        assertEquals(breakoutDate.toString(), item.get("signalDate").asText());
+        assertEquals(item.get("signalDate").asText(), item.get("buyDate").asText());
+    }
+
+    @Test
+    void higherLows_buyDateEqualsSignalDate() throws Exception {
+        String stockId = "SS524";
+        seedStock(stockId, "底底高buyDate測試", true);
+        LocalDate day0 = LocalDate.of(2027, 6, 1);
+        List<LocalDate> dates = seedHigherLowsFixture(stockId, day0,
+                new String[]{"100.00", "102.00", "104.50"});
+
+        ScanRequestDto request = scanRequest(
+                Collections.singletonList(new String[]{"HIGHER_LOWS", "STANDARD"}),
+                Collections.singletonList(stockId), dates.get(10), dates.get(dates.size() - 1));
+        JsonNode item = postScan(request).get("results").get(0).get("items").get(0);
+        assertEquals(dates.get(higherLowsSignalIndex(2)).toString(), item.get("signalDate").asText());
+        assertEquals(item.get("signalDate").asText(), item.get("buyDate").asText());
+    }
+
+    @Test
+    void rebound_buyDateEqualsSignalDate() throws Exception {
+        String stockId = "SS525";
+        seedStock(stockId, "反彈buyDate測試", true);
+        LocalDate filler = LocalDate.of(2027, 7, 1);
+        seedRamp(stockId, filler, 130.00, 130.00, 3, 1000);
+        LocalDate peakDate = filler.plusDays(3);
+        insertCloseOnlyRow(stockId, peakDate, "120.00", 1000);
+        LocalDate mid = peakDate.plusDays(1);
+        insertCloseOnlyRow(stockId, mid, "110.00", 1000);
+        LocalDate troughDate = mid.plusDays(1);
+        insertCloseOnlyRow(stockId, troughDate, "100.00", 1000);
+        LocalDate reboundDate = troughDate.plusDays(1);
+        insertCloseOnlyRow(stockId, reboundDate, "106.00", 1000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(reboundSelection(null, null, null, null, null)),
+                Collections.singletonList(stockId), peakDate, reboundDate);
+        JsonNode item = postScan(request).get("results").get(0).get("items").get(0);
+        assertEquals(reboundDate.toString(), item.get("signalDate").asText());
+        assertEquals(item.get("signalDate").asText(), item.get("buyDate").asText());
+    }
+
+    @Test
+    void cumulativeRise_buyDateEqualsSignalDate() throws Exception {
+        String stockId = "SS526";
+        seedStock(stockId, "累積上漲buyDate測試", true);
+        LocalDate troughDate = LocalDate.of(2027, 8, 5);
+        insertCloseOnlyRow(stockId, troughDate, "80.00", 1000);
+        seedRamp(stockId, troughDate.plusDays(1), 81.00, 99.00, 18, 1000);
+        LocalDate d = LocalDate.of(2027, 8, 28);
+        insertCloseOnlyRow(stockId, d, "100.00", 1000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(selectionDays("CUMULATIVE_RISE", null, null)),
+                Collections.singletonList(stockId), d, d);
+        JsonNode item = postScan(request).get("results").get(0).get("items").get(0);
+        assertEquals(d.toString(), item.get("signalDate").asText());
+        assertEquals(item.get("signalDate").asText(), item.get("buyDate").asText());
+    }
+
     // ==================== Increment 3: risePercent override ====================
 
     @Test

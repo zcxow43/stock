@@ -126,6 +126,12 @@ export interface StrategyHit {
   stockId: string
   stockName: string
   signalDate: string
+  /** The entry date this hit reports for backtesting — for `RISING_SUPPORT` this is the
+   * confirmation-complete day D+2 (`signalDate` stays D); every other strategy's `buyDate`
+   * equals its `signalDate`. The frontend never recomputes this itself — it's a strategy
+   * definition detail owned by the backend (specs/backend/strategy-scan.md「buyDate 為
+   * 這一次命中的進場日」). */
+  buyDate: string
   detail: StrategyDetail
 }
 
@@ -188,11 +194,18 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
   }
 }
 
-/** One entry of `BacktestRequest.items[]` — one stock, one signal date (specs/frontend/
- * strategy.md: the LATEST signalDate among the strategies that stock hit). */
+/** One entry of `BacktestRequest.items[]` — one `(stockId, buyDate)` position. `buyDate` is
+ * taken verbatim from the scan response's own `buyDate` for that hit (for `RISING_SUPPORT`
+ * this is D+2, not the `signalDate`) — the frontend never recomputes an entry date itself.
+ * Several hits (even from different strategies, even with different `signalDate`s) that
+ * land on the SAME `buyDate` send exactly one item for that day (dedupe key is the pair,
+ * not the stock, and not the signal date); a stock with several distinct buy dates sends
+ * one item per distinct date. The frontend is responsible for this dedupe before sending —
+ * the backend rejects a duplicate `(stockId, buyDate)` pair with `DUPLICATE_BACKTEST_ITEM`
+ * (specs/frontend/strategy.md「一檔多筆的展開列」/「API 整合」). */
 export interface BacktestRequestItem {
   stockId: string
-  signalDate: string
+  buyDate: string
 }
 
 export interface BacktestRequest {
@@ -201,11 +214,13 @@ export interface BacktestRequest {
 
 export interface BacktestResultItem {
   stockId: string
-  signalDate: string
-  /** `null` when the signal date itself has no price row (see
+  /** Echoed verbatim from the request's own `buyDate` — the response never carries a
+   * `signalDate` field (specs/backend/strategy-backtest.md「回應不含 signalDate」). */
+  buyDate: string
+  /** `null` when the buy date itself has no price row (see
    * specs/backend/strategy-backtest.md「無法回測的標的」). */
   buyPrice: number | null
-  /** `null` when the stock has no sellable trading day after its signal date — it stays
+  /** `null` when the stock has no sellable trading day after its buy date — it stays
    * in `items` and must still render, just with dashes, per the same spec section. */
   sellDate: string | null
   sellPrice: number | null

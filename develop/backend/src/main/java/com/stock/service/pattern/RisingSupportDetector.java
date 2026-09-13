@@ -130,6 +130,7 @@ public class RisingSupportDetector implements PatternDetector {
         }
 
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         RisingSupportDetailDto lastDetail = null;
         boolean pendingConfirm = false;
 
@@ -192,6 +193,12 @@ public class RisingSupportDetector implements PatternDetector {
                     .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
             lastSignalDate = d.getTradeDate();
+            // buyDate is D+2 — the entry day this hit can actually be bought on without using future
+            // data (specs/backend/strategy-scan.md, "上漲支撐的訊號日與進場日刻意不同"). It equals the last
+            // confirmCloses entry's tradeDate, i.e. bars.get(i + confirmBars): trading-day adjacency,
+            // never calendar-day arithmetic, so a suspension gap between D and D+2 is naturally
+            // skipped the same way the confirmation check itself skips it.
+            lastBuyDate = confirmCloses.get(confirmCloses.size() - 1).getTradeDate();
             lastDetail = new RisingSupportDetailDto(
                     supportClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     dClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
@@ -201,7 +208,7 @@ public class RisingSupportDetector implements PatternDetector {
         }
 
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
         return PatternDetectionOutcome.noMatch(pendingConfirm);
     }

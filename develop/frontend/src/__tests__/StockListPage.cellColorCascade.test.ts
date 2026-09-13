@@ -45,6 +45,18 @@ const GREEN_DOWN = 'rgb(22, 167, 92)' // #16A75C
 const FLAT = 'rgb(147, 164, 184)' // #93A4B8
 const PRIMARY_TEXT = 'rgb(230, 237, 245)' // #E6EDF5
 const WEAK_TEXT = 'rgb(107, 124, 144)' // #6B7C90
+const CHECKED_BG = 'rgb(62, 143, 216)' // #3E8FD8
+const CHECK_MARK_WHITE = 'rgb(255, 255, 255)' // #FFFFFF
+const UNCHECKED_BG = 'rgb(15, 22, 32)' // #0F1620
+const UNCHECKED_BORDER = 'rgb(38, 51, 63)' // #26333F
+const LABEL_TEXT = 'rgb(147, 164, 184)' // #93A4B8
+// specs/frontend/strategy.md「掃描後自動回測」— 「重試回測」reuses the page's shared
+// secondary/disabled button colors (`## Visual Style`「次要按鈕背景／文字／邊框」/
+// 「Disabled 按鈕背景／文字」), not a bespoke color of its own.
+const SECONDARY_BTN_BG = 'rgb(27, 40, 54)' // #1B2836
+const SECONDARY_BTN_BORDER = 'rgb(38, 51, 63)' // #26333F
+const DISABLED_BTN_BG = 'rgb(22, 32, 44)' // #16202C
+const DISABLED_BTN_TEXT = 'rgb(74, 88, 102)' // #4A5866
 
 function pageHtml(): string {
   return `<!doctype html>
@@ -75,9 +87,19 @@ function pageHtml(): string {
          null-value 「—」 wrapped in a nested <span class="sl-muted">, and the unchecked-row
          class on <tr>), not a hand-simplified stand-in. -->
     <div class="strategy-tab">
+      <!-- specs/frontend/strategy.md「滑鼠游標」— 回測前（沒有勾選框欄）沒有 st-union-table-
+           backtested 這個修飾 class，列本體維持預設箭頭；hover 背景規則不受影響。 -->
       <table class="sl-table st-result-table st-union-table">
         <tbody>
-          <tr class="sl-row">
+          <tr class="sl-row" id="cursor-row-pre-backtest">
+            <td>2330 台積電</td>
+            <td class="st-union-hits">箱型突破 2026-08-27</td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="sl-table st-result-table st-union-table st-union-table-backtested">
+        <tbody>
+          <tr class="sl-row" id="cursor-row-post-backtest">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td id="st-cell-plain">2330 台積電</td>
             <td class="st-union-hits">箱型突破 2026-08-27</td>
@@ -115,6 +137,61 @@ function pageHtml(): string {
       <span class="st-total-value sl-up" id="st-total-up">2.48%</span>
       <span class="st-total-value sl-down" id="st-total-down">-3.60%</span>
       <span class="st-total-value sl-neutral" id="st-total-neutral">0.00%</span>
+      <!-- specs/frontend/strategy.md「取消全選」勾選框 — markup lifted from
+           StrategyTab.tsx's renderMergedTable: reuses .st-row-checkbox verbatim (no
+           second custom-checkbox look invented), label text in .st-total-label. -->
+      <label class="st-total-item st-selectall-item">
+        <input type="checkbox" class="st-row-checkbox" id="selectall-checked" checked />
+        <span class="st-total-label" id="selectall-label-checked">取消全選</span>
+      </label>
+      <label class="st-total-item st-selectall-item">
+        <input type="checkbox" class="st-row-checkbox" id="selectall-unchecked" />
+        <span class="st-total-label" id="selectall-label-unchecked">取消全選</span>
+      </label>
+      <!-- specs/frontend/strategy.md「掃描後自動回測」— 回測中… hint text beside 開始掃描
+           (auto-backtest in flight), and the 「重試回測」button (secondary style, in its
+           enabled and its disabled/回測中… states). Markup lifted verbatim from
+           StrategyTab.tsx's own JSX for these three elements. -->
+      <span class="st-backtest-hint" id="backtest-hint">回測中…</span>
+      <button type="button" class="sl-btn" id="retry-btn-enabled">重試回測</button>
+      <button type="button" class="sl-btn" id="retry-btn-disabled" disabled>回測中…</button>
+      <!-- specs/frontend/strategy.md「父列逐筆日期」— one line per position in the parent
+           row's 買進日/賣出日 cells (checked inherits the default primary text color,
+           unchecked reuses .sl-muted verbatim), plus the parent row's always-muted-dash
+           賣出價 cell compared against a normal row's own 賣出價 in the same column, to
+           verify the two right-align identically (「與同欄其他列的賣出價同樣靠右對齊」). -->
+      <table class="sl-table st-result-table st-union-table st-union-table-backtested">
+        <tbody>
+          <tr class="sl-row">
+            <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
+            <td>2330 台積電</td>
+            <td class="st-union-hits">箱型突破 2026-08-27・底底高 2026-08-25</td>
+            <td>
+              <div id="parent-buydate-checked">2026-08-27</div>
+              <div class="sl-muted" id="parent-buydate-unchecked">2026-08-20</div>
+            </td>
+            <td class="sl-r">5,050.00</td>
+            <td>
+              <div id="parent-selldate-checked">2026-08-28</div>
+              <div class="sl-muted" id="parent-selldate-unchecked">2026-08-25</div>
+            </td>
+            <td class="sl-r" id="parent-sellprice-cell"><span class="sl-muted">—</span></td>
+            <td class="sl-r sl-down">-9.80%</td>
+            <td class="sl-r sl-down">-990,000</td>
+          </tr>
+          <tr class="sl-row">
+            <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
+            <td>2317 鴻海</td>
+            <td class="st-union-hits">底底高 2026-08-28</td>
+            <td>2026-08-28</td>
+            <td class="sl-r">100.00</td>
+            <td>2026-09-01</td>
+            <td class="sl-r" id="normal-sellprice-cell">110.00</td>
+            <td class="sl-r sl-up">10.00%</td>
+            <td class="sl-r sl-up">10,000</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <!-- specs/frontend/momentum.md「漲幅欄漲跌色實際生效」— markup lifted from
          MomentumTab.tsx's renderIndustryBlock: the 產業別區塊標題 avgGain span (not a
@@ -232,6 +309,12 @@ describe.each(['dark', 'light'] as const)(
           'mt-cell-plain',
           'mt-title-avg-up',
           'mt-title-avg-flat',
+          // specs/frontend/strategy.md「掃描後自動回測」/「父列逐筆日期」
+          'backtest-hint',
+          'parent-buydate-checked',
+          'parent-buydate-unchecked',
+          'parent-selldate-checked',
+          'parent-selldate-unchecked',
         ] as const
         return await page.evaluate((cellIds) => {
           const out: Record<string, string> = {}
@@ -321,6 +404,140 @@ describe.each(['dark', 'light'] as const)(
       const colors = await computedColors()
       expect(colors['mt-title-avg-up']).toBe(RED_UP)
       expect(colors['mt-title-avg-flat']).toBe(FLAT)
+    })
+
+    // specs/frontend/strategy.md「取消全選」勾選框 — reuses .st-row-checkbox verbatim, so
+    // this pins down the same rendered colors the merged table's own row checkboxes
+    // already rely on, plus the always-「取消全選」label text color.
+    // specs/frontend/strategy.md「滑鼠游標」— jsdom does not apply real CSS
+    // cascade/specificity from an imported stylesheet, so this must be verified the same
+    // way as the color checks above: load the real stylesheet into a real Chromium page
+    // and read the genuinely-computed `cursor`, not just which class the `<tr>` carries.
+    it('renders cursor: default on a merged-table row before 回測, and cursor: pointer once the checkbox column exists after 回測', async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const preRow = document.getElementById('cursor-row-pre-backtest')!
+          const postRow = document.getElementById('cursor-row-post-backtest')!
+          return {
+            preCursor: getComputedStyle(preRow).cursor,
+            postCursor: getComputedStyle(postRow).cursor,
+          }
+        })
+        expect(result.preCursor).toBe('default')
+        expect(result.postCursor).toBe('pointer')
+      } finally {
+        await context.close()
+      }
+    })
+
+    // specs/frontend/strategy.md「掃描後自動回測」— the 回測中… hint text beside 開始掃描
+    // (auto-backtest in flight, no button) must actually paint at the secondary text
+    // color, not the primary text color it would inherit without its own class.
+    it('colors the 回測中… hint text at the secondary text color', async () => {
+      const colors = await computedColors()
+      expect(colors['backtest-hint']).toBe(FLAT)
+    })
+
+    // specs/frontend/strategy.md「父列逐筆日期」— each line in the parent row's collapsed
+    // 買進日／賣出日 cells is either the default primary text color (checked, inherited —
+    // no class of its own) or the reused .sl-muted weak text color (unchecked), verified by
+    // actual computed color rather than by which class the line's own `<div>` carries.
+    it('colors each parent-row date line by its own checked state: primary text when checked, weak text (.sl-muted) when unchecked', async () => {
+      const colors = await computedColors()
+      expect(colors['parent-buydate-checked']).toBe(PRIMARY_TEXT)
+      expect(colors['parent-buydate-unchecked']).toBe(WEAK_TEXT)
+      expect(colors['parent-selldate-checked']).toBe(PRIMARY_TEXT)
+      expect(colors['parent-selldate-unchecked']).toBe(WEAK_TEXT)
+    })
+
+    // specs/frontend/strategy.md「父列賣出價恆顯示 #6B7C90 的「—」，且與同欄其他列的賣出價
+    // 同樣靠右對齊」— the bug this guards against: the live app rendered this cell
+    // left-aligned (missing the `sl-r` class), a real layout defect only visible at the
+    // actually-painted position, not from source alone. Verified by comparing the two
+    // cells' genuinely-rendered right edge (`getBoundingClientRect().right`), not just
+    // that both carry the same class name.
+    it("right-aligns the parent row's muted 賣出價 dash exactly like a normal row's own 賣出價 in the same column", async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const parentCell = document.getElementById('parent-sellprice-cell')!
+          const normalCell = document.getElementById('normal-sellprice-cell')!
+          return {
+            parentTextAlign: getComputedStyle(parentCell).textAlign,
+            parentRight: parentCell.getBoundingClientRect().right,
+            normalRight: normalCell.getBoundingClientRect().right,
+          }
+        })
+        expect(result.parentTextAlign).toBe('right')
+        expect(result.parentRight).toBe(result.normalRight)
+      } finally {
+        await context.close()
+      }
+    })
+
+    // specs/frontend/strategy.md「掃描後自動回測」— 「重試回測」reuses the shared secondary
+    // button look in its clickable state, and the shared disabled-button look while a retry
+    // is in flight (回測中…) — verified by actual computed `backgroundColor`/`color`/
+    // `borderColor`, not by which class the `<button>` carries.
+    it('renders 「重試回測」with the secondary button colors when enabled, and the disabled button colors while retrying (回測中…)', async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const enabled = document.getElementById('retry-btn-enabled')!
+          const disabled = document.getElementById('retry-btn-disabled')!
+          return {
+            enabledBg: getComputedStyle(enabled).backgroundColor,
+            enabledText: getComputedStyle(enabled).color,
+            enabledBorder: getComputedStyle(enabled).borderTopColor,
+            disabledBg: getComputedStyle(disabled).backgroundColor,
+            disabledText: getComputedStyle(disabled).color,
+          }
+        })
+        expect(result.enabledBg).toBe(SECONDARY_BTN_BG)
+        expect(result.enabledText).toBe(PRIMARY_TEXT)
+        expect(result.enabledBorder).toBe(SECONDARY_BTN_BORDER)
+        expect(result.disabledBg).toBe(DISABLED_BTN_BG)
+        expect(result.disabledText).toBe(DISABLED_BTN_TEXT)
+      } finally {
+        await context.close()
+      }
+    })
+
+    it("renders the 「取消全選」checkbox's actual painted colors: checked (#3E8FD8 bg / white mark), unchecked (#0F1620 bg / #26333F border), and #93A4B8 label text", async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const checked = document.getElementById('selectall-checked') as HTMLInputElement
+          const unchecked = document.getElementById('selectall-unchecked') as HTMLInputElement
+          const labelChecked = document.getElementById('selectall-label-checked')!
+          const labelUnchecked = document.getElementById('selectall-label-unchecked')!
+          return {
+            checkedBg: getComputedStyle(checked).backgroundColor,
+            checkedMark: getComputedStyle(checked, '::after').borderRightColor,
+            uncheckedBg: getComputedStyle(unchecked).backgroundColor,
+            uncheckedBorder: getComputedStyle(unchecked).borderTopColor,
+            labelCheckedColor: getComputedStyle(labelChecked).color,
+            labelUncheckedColor: getComputedStyle(labelUnchecked).color,
+          }
+        })
+        expect(result.checkedBg).toBe(CHECKED_BG)
+        expect(result.checkedMark).toBe(CHECK_MARK_WHITE)
+        expect(result.uncheckedBg).toBe(UNCHECKED_BG)
+        expect(result.uncheckedBorder).toBe(UNCHECKED_BORDER)
+        expect(result.labelCheckedColor).toBe(LABEL_TEXT)
+        expect(result.labelUncheckedColor).toBe(LABEL_TEXT)
+      } finally {
+        await context.close()
+      }
     })
   },
 )

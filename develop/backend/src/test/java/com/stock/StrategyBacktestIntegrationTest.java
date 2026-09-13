@@ -2,6 +2,7 @@ package com.stock;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stock.dto.BacktestDuplicateItemDto;
 import com.stock.dto.BacktestItemRequestDto;
 import com.stock.dto.BacktestRequestDto;
 import com.stock.dto.ErrorResponse;
@@ -24,9 +25,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,42 +76,42 @@ class StrategyBacktestIntegrationTest {
     // ==================== 回測規則 ====================
 
     @Test
-    void buyPrice_equalsClosePriceAtSignalDate() throws Exception {
+    void buyPrice_equalsClosePriceAtBuyDate() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT001", "買進價測試", true);
-        seedBaseWindow("BT001", signalDate, today);
+        seedBaseWindow("BT001", buyDate, today);
 
-        JsonNode item = singleItemResult("BT001", signalDate);
+        JsonNode item = singleItemResult("BT001", buyDate);
         assertEquals(0, new BigDecimal("100.00").compareTo(item.get("buyPrice").decimalValue()));
     }
 
     @Test
     void sellPrice_isMaxOpenInWindow_sellDateIsThatTradeDate() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT002", "賣出價測試", true);
-        seedBaseWindow("BT002", signalDate, today);
+        seedBaseWindow("BT002", buyDate, today);
 
-        JsonNode item = singleItemResult("BT002", signalDate);
+        JsonNode item = singleItemResult("BT002", buyDate);
         assertEquals(0, new BigDecimal("110.00").compareTo(item.get("sellPrice").decimalValue()));
-        assertEquals(signalDate.plusDays(2).toString(), item.get("sellDate").asText());
+        assertEquals(buyDate.plusDays(2).toString(), item.get("sellDate").asText());
     }
 
     @Test
-    void signalDayOwnOpen_notIncludedInSellWindow() throws Exception {
+    void buyDateOwnOpen_notIncludedInSellWindow() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
-        seedStock("BT003", "訊號日開盤排除測試", true);
-        // Signal day's own open (200.00) is far higher than every later open — must never be picked.
-        insertPriceRow("BT003", signalDate, "200.00", "205.00", "95.00", "50.00", 1000);
-        insertPriceRow("BT003", signalDate.plusDays(1), "60.00", "61.00", "59.00", "60.00", 1000);
-        insertPriceRow("BT003", signalDate.plusDays(2), "55.00", "56.00", "54.00", "55.00", 1000);
-        insertPriceRow("BT003", signalDate.plusDays(3), "58.00", "59.00", "57.00", "58.00", 1000);
+        LocalDate buyDate = today.minusDays(5);
+        seedStock("BT003", "買進日開盤排除測試", true);
+        // Buy day's own open (200.00) is far higher than every later open — must never be picked.
+        insertPriceRow("BT003", buyDate, "200.00", "205.00", "95.00", "50.00", 1000);
+        insertPriceRow("BT003", buyDate.plusDays(1), "60.00", "61.00", "59.00", "60.00", 1000);
+        insertPriceRow("BT003", buyDate.plusDays(2), "55.00", "56.00", "54.00", "55.00", 1000);
+        insertPriceRow("BT003", buyDate.plusDays(3), "58.00", "59.00", "57.00", "58.00", 1000);
         insertPriceRow("BT003", today, "59.00", "60.00", "58.00", "59.00", 1000);
 
-        JsonNode item = singleItemResult("BT003", signalDate);
-        assertNotEquals(signalDate.toString(), item.get("sellDate").asText());
+        JsonNode item = singleItemResult("BT003", buyDate);
+        assertNotEquals(buyDate.toString(), item.get("sellDate").asText());
         assertEquals(0, new BigDecimal("60.00").compareTo(item.get("sellPrice").decimalValue()));
         assertNotEquals(0, new BigDecimal("200.00").compareTo(item.get("sellPrice").decimalValue()));
     }
@@ -115,28 +119,28 @@ class StrategyBacktestIntegrationTest {
     @Test
     void tiedMaxOpen_resolvesToEarliestTradeDate() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT004", "同值取最早測試", true);
-        insertPriceRow("BT004", signalDate, "90.00", "91.00", "89.00", "100.00", 1000);
-        insertPriceRow("BT004", signalDate.plusDays(1), "105.00", "106.00", "104.00", "105.00", 1000);
+        insertPriceRow("BT004", buyDate, "90.00", "91.00", "89.00", "100.00", 1000);
+        insertPriceRow("BT004", buyDate.plusDays(1), "105.00", "106.00", "104.00", "105.00", 1000);
         // Two ties at 110.00 — the earlier one (day+2) must win, not day+4.
-        insertPriceRow("BT004", signalDate.plusDays(2), "110.00", "111.00", "109.00", "110.00", 1000);
-        insertPriceRow("BT004", signalDate.plusDays(3), "95.00", "96.00", "94.00", "95.00", 1000);
+        insertPriceRow("BT004", buyDate.plusDays(2), "110.00", "111.00", "109.00", "110.00", 1000);
+        insertPriceRow("BT004", buyDate.plusDays(3), "95.00", "96.00", "94.00", "95.00", 1000);
         insertPriceRow("BT004", today, "110.00", "111.00", "109.00", "110.00", 1000);
 
-        JsonNode item = singleItemResult("BT004", signalDate);
-        assertEquals(signalDate.plusDays(2).toString(), item.get("sellDate").asText());
+        JsonNode item = singleItemResult("BT004", buyDate);
+        assertEquals(buyDate.plusDays(2).toString(), item.get("sellDate").asText());
         assertEquals(0, new BigDecimal("110.00").compareTo(item.get("sellPrice").decimalValue()));
     }
 
     @Test
     void returnPercent_matchesFormula_roundedToTwoDecimals() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT005", "報酬率測試", true);
-        seedBaseWindow("BT005", signalDate, today);
+        seedBaseWindow("BT005", buyDate, today);
 
-        JsonNode item = singleItemResult("BT005", signalDate);
+        JsonNode item = singleItemResult("BT005", buyDate);
         // (110.00 - 100.00) / 100.00 * 100 = 10.00
         assertEquals(0, new BigDecimal("10.00").compareTo(item.get("returnPercent").decimalValue()));
     }
@@ -144,12 +148,12 @@ class StrategyBacktestIntegrationTest {
     @Test
     void profit_matchesFormula_roundedToYuan_andLotSizeIs1000() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT006", "收益測試", true);
-        seedBaseWindow("BT006", signalDate, today);
+        seedBaseWindow("BT006", buyDate, today);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT006", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT006", buyDate))), String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
         assertEquals(1000, root.get("lotSize").asInt());
@@ -159,18 +163,18 @@ class StrategyBacktestIntegrationTest {
     }
 
     @Test
-    void declineAfterSignal_returnPercentAndProfitAreNegative_notClampedOrRedirected() throws Exception {
+    void declineAfterBuyDate_returnPercentAndProfitAreNegative_notClampedOrRedirected() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(5);
+        LocalDate buyDate = today.minusDays(5);
         seedStock("BT007", "負報酬測試", true);
-        insertPriceRow("BT007", signalDate, "50.00", "51.00", "49.00", "100.00", 1000);
-        insertPriceRow("BT007", signalDate.plusDays(1), "90.00", "91.00", "89.00", "89.00", 1000);
-        insertPriceRow("BT007", signalDate.plusDays(2), "85.00", "86.00", "84.00", "84.00", 1000);
-        insertPriceRow("BT007", signalDate.plusDays(3), "80.00", "81.00", "79.00", "79.00", 1000);
+        insertPriceRow("BT007", buyDate, "50.00", "51.00", "49.00", "100.00", 1000);
+        insertPriceRow("BT007", buyDate.plusDays(1), "90.00", "91.00", "89.00", "89.00", 1000);
+        insertPriceRow("BT007", buyDate.plusDays(2), "85.00", "86.00", "84.00", "84.00", 1000);
+        insertPriceRow("BT007", buyDate.plusDays(3), "80.00", "81.00", "79.00", "79.00", 1000);
         insertPriceRow("BT007", today, "70.00", "71.00", "69.00", "69.00", 1000);
 
-        JsonNode item = singleItemResult("BT007", signalDate);
-        // Highest open after signal day is 90.00 (day+1); buy was 100.00 -> -10.00% / -10000
+        JsonNode item = singleItemResult("BT007", buyDate);
+        // Highest open after buy day is 90.00 (day+1); buy was 100.00 -> -10.00% / -10000
         assertEquals(0, new BigDecimal("90.00").compareTo(item.get("sellPrice").decimalValue()));
         assertEquals(0, new BigDecimal("-10.00").compareTo(item.get("returnPercent").decimalValue()));
         assertEquals(0, new BigDecimal("-10000").compareTo(item.get("profit").decimalValue()));
@@ -179,17 +183,17 @@ class StrategyBacktestIntegrationTest {
     @Test
     void suspensionGap_neverBecomesSellDate_maxIsComputedFromExistingRowsOnly() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(6);
+        LocalDate buyDate = today.minusDays(6);
         seedStock("BT008", "停牌缺列測試", true);
-        insertPriceRow("BT008", signalDate, "90.00", "91.00", "89.00", "100.00", 1000);
-        insertPriceRow("BT008", signalDate.plusDays(1), "80.00", "81.00", "79.00", "80.00", 1000);
-        // signalDate.plusDays(2) intentionally has no row at all — a suspended trading day.
-        insertPriceRow("BT008", signalDate.plusDays(3), "130.00", "131.00", "129.00", "130.00", 1000);
-        // signalDate.plusDays(4) also missing.
+        insertPriceRow("BT008", buyDate, "90.00", "91.00", "89.00", "100.00", 1000);
+        insertPriceRow("BT008", buyDate.plusDays(1), "80.00", "81.00", "79.00", "80.00", 1000);
+        // buyDate.plusDays(2) intentionally has no row at all — a suspended trading day.
+        insertPriceRow("BT008", buyDate.plusDays(3), "130.00", "131.00", "129.00", "130.00", 1000);
+        // buyDate.plusDays(4) also missing.
         insertPriceRow("BT008", today, "90.00", "91.00", "89.00", "90.00", 1000);
 
-        JsonNode item = singleItemResult("BT008", signalDate);
-        assertEquals(signalDate.plusDays(3).toString(), item.get("sellDate").asText());
+        JsonNode item = singleItemResult("BT008", buyDate);
+        assertEquals(buyDate.plusDays(3).toString(), item.get("sellDate").asText());
         assertEquals(0, new BigDecimal("130.00").compareTo(item.get("sellPrice").decimalValue()));
     }
 
@@ -198,20 +202,20 @@ class StrategyBacktestIntegrationTest {
     @Test
     void totals_costWeighted_notArithmeticMean_ofTwoWidelyDifferingPricedStocks() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT101", "高價股", true);
         seedStock("BT102", "低價股", true);
         // BT101: buy 1000.00 -> sell 1200.00 (return 20.00%, profit 200000)
-        insertPriceRow("BT101", signalDate, "990.00", "1000.00", "980.00", "1000.00", 1000);
-        insertPriceRow("BT101", signalDate.plusDays(1), "1200.00", "1210.00", "1190.00", "1200.00", 1000);
+        insertPriceRow("BT101", buyDate, "990.00", "1000.00", "980.00", "1000.00", 1000);
+        insertPriceRow("BT101", buyDate.plusDays(1), "1200.00", "1210.00", "1190.00", "1200.00", 1000);
         insertPriceRow("BT101", today, "1100.00", "1110.00", "1090.00", "1100.00", 1000);
         // BT102: buy 20.00 -> sell 20.20 (return 1.00%, profit 200)
-        insertPriceRow("BT102", signalDate, "19.80", "20.00", "19.70", "20.00", 1000);
-        insertPriceRow("BT102", signalDate.plusDays(1), "20.20", "20.30", "20.10", "20.20", 1000);
+        insertPriceRow("BT102", buyDate, "19.80", "20.00", "19.70", "20.00", 1000);
+        insertPriceRow("BT102", buyDate.plusDays(1), "20.20", "20.30", "20.10", "20.20", 1000);
         insertPriceRow("BT102", today, "20.10", "20.15", "20.05", "20.10", 1000);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT101", signalDate), item("BT102", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT101", buyDate), item("BT102", buyDate))), String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
 
@@ -230,16 +234,16 @@ class StrategyBacktestIntegrationTest {
     @Test
     void totalCost_equalsSumOfBuyPriceTimes1000_forBacktestableItemsOnly() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT103", "成本彙總A", true);
         seedStock("BT104", "成本彙總B", true);
-        insertPriceRow("BT103", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT103", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT103", today, "55.00", "56.00", "54.00", "55.00", 1000);
-        insertPriceRow("BT104", signalDate, "60.00", "61.00", "59.00", "60.00", 1000);
+        insertPriceRow("BT104", buyDate, "60.00", "61.00", "59.00", "60.00", 1000);
         insertPriceRow("BT104", today, "65.00", "66.00", "64.00", "65.00", 1000);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT103", signalDate), item("BT104", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT103", buyDate), item("BT104", buyDate))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         // 50*1000 + 60*1000
         assertEquals(0, new BigDecimal("110000").compareTo(root.get("totalCost").decimalValue()));
@@ -248,16 +252,16 @@ class StrategyBacktestIntegrationTest {
     @Test
     void totalProfit_equalsSumOfProfit_forBacktestableItemsOnly() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT105", "收益彙總A", true);
         seedStock("BT106", "收益彙總B", true);
-        insertPriceRow("BT105", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT105", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT105", today, "55.00", "56.00", "54.00", "55.00", 1000);
-        insertPriceRow("BT106", signalDate, "60.00", "61.00", "59.00", "60.00", 1000);
+        insertPriceRow("BT106", buyDate, "60.00", "61.00", "59.00", "60.00", 1000);
         insertPriceRow("BT106", today, "65.00", "66.00", "64.00", "65.00", 1000);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT105", signalDate), item("BT106", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT105", buyDate), item("BT106", buyDate))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         // (55-50)*1000 + (65-60)*1000 = 5000 + 5000
         assertEquals(0, new BigDecimal("10000").compareTo(root.get("totalProfit").decimalValue()));
@@ -266,16 +270,16 @@ class StrategyBacktestIntegrationTest {
     @Test
     void backtestedCount_countsOnlyItemsWithSellDate_lessThanItemsLengthWhenSomeUnbacktestable() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT107", "可回測", true);
         seedStock("BT108", "不可回測", true);
-        insertPriceRow("BT107", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT107", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT107", today, "55.00", "56.00", "54.00", "55.00", 1000);
-        // BT108's only row is on today, and its "signal date" is today itself -> no day after it.
+        // BT108's only row is on today, and its "buy date" is today itself -> no day after it.
         insertPriceRow("BT108", today, "70.00", "71.00", "69.00", "70.00", 1000);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT107", signalDate), item("BT108", today))), String.class);
+                backtestRequest(Arrays.asList(item("BT107", buyDate), item("BT108", today))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         assertEquals(1, root.get("backtestedCount").asInt());
         assertEquals(2, root.get("items").size());
@@ -285,7 +289,7 @@ class StrategyBacktestIntegrationTest {
     // ==================== 無法回測的標的 ====================
 
     @Test
-    void signalDayIsLatestTradeDate_buyPriceSet_restNull_returns200() throws Exception {
+    void buyDateIsLatestTradeDate_buyPriceSet_restNull_returns200() throws Exception {
         LocalDate today = LocalDate.now();
         seedStock("BT201", "無後續交易日", true);
         insertPriceRow("BT201", today, "88.00", "89.00", "87.00", "88.00", 1000);
@@ -299,13 +303,13 @@ class StrategyBacktestIntegrationTest {
     }
 
     @Test
-    void signalDayHasNoPriceRow_buyPriceAlsoNull_returns200() throws Exception {
+    void buyDateHasNoPriceRow_buyPriceAlsoNull_returns200() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
-        seedStock("BT202", "無訊號日資料", true);
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT202", "無買進日資料", true);
         // No price rows at all for BT202.
 
-        JsonNode item = singleItemResult("BT202", signalDate);
+        JsonNode item = singleItemResult("BT202", buyDate);
         assertTrue(item.get("buyPrice").isNull());
         assertTrue(item.get("sellDate").isNull());
         assertTrue(item.get("sellPrice").isNull());
@@ -316,15 +320,15 @@ class StrategyBacktestIntegrationTest {
     @Test
     void unbacktestableItems_stillAppearInItems_notRemoved() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT203", "可回測", true);
         seedStock("BT204", "無後續交易日不可回測", true);
-        insertPriceRow("BT203", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT203", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT203", today, "55.00", "56.00", "54.00", "55.00", 1000);
         insertPriceRow("BT204", today, "70.00", "71.00", "69.00", "70.00", 1000);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT203", signalDate), item("BT204", today))), String.class);
+                backtestRequest(Arrays.asList(item("BT203", buyDate), item("BT204", today))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         List<String> ids = new ArrayList<>();
         for (JsonNode item : root.get("items")) {
@@ -338,22 +342,22 @@ class StrategyBacktestIntegrationTest {
     @Test
     void unbacktestableItems_excludedFromTotals_totalCostEqualsBacktestableAlone() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT205", "可回測", true);
         seedStock("BT206", "不可回測", true);
-        insertPriceRow("BT205", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT205", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT205", today, "55.00", "56.00", "54.00", "55.00", 1000);
         insertPriceRow("BT206", today, "999.00", "999.00", "999.00", "999.00", 1000);
 
         // Backtestable stock alone.
         ResponseEntity<String> aloneResponse = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT205", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT205", buyDate))), String.class);
         JsonNode aloneRoot = objectMapper.readTree(aloneResponse.getBody());
         BigDecimal aloneCost = aloneRoot.get("totalCost").decimalValue();
 
         // Combined with the unbacktestable stock.
         ResponseEntity<String> combinedResponse = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT205", signalDate), item("BT206", today))), String.class);
+                backtestRequest(Arrays.asList(item("BT205", buyDate), item("BT206", today))), String.class);
         JsonNode combinedRoot = objectMapper.readTree(combinedResponse.getBody());
 
         assertEquals(0, aloneCost.compareTo(combinedRoot.get("totalCost").decimalValue()));
@@ -362,14 +366,14 @@ class StrategyBacktestIntegrationTest {
     @Test
     void allItemsUnbacktestable_totalsZero_totalReturnPercentNull_backtestedCountZero() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT207", "無後續交易日", true);
-        seedStock("BT208", "無訊號日資料", true);
+        seedStock("BT208", "無買進日資料", true);
         insertPriceRow("BT207", today, "70.00", "71.00", "69.00", "70.00", 1000);
         // BT208 has no price rows at all.
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT207", today), item("BT208", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT207", today), item("BT208", buyDate))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         assertEquals(0, BigDecimal.ZERO.compareTo(root.get("totalCost").decimalValue()));
         assertEquals(0, BigDecimal.ZERO.compareTo(root.get("totalProfit").decimalValue()));
@@ -382,17 +386,17 @@ class StrategyBacktestIntegrationTest {
     @Test
     void items_orderMatchesRequestOrder_notReordered() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT301", "順序C", true);
         seedStock("BT302", "順序A", true);
         seedStock("BT303", "順序B", true);
         for (String id : new String[]{"BT301", "BT302", "BT303"}) {
-            insertPriceRow(id, signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+            insertPriceRow(id, buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
             insertPriceRow(id, today, "55.00", "56.00", "54.00", "55.00", 1000);
         }
 
         List<BacktestItemRequestDto> requestItems =
-                Arrays.asList(item("BT303", signalDate), item("BT301", signalDate), item("BT302", signalDate));
+                Arrays.asList(item("BT303", buyDate), item("BT301", buyDate), item("BT302", buyDate));
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
                 backtestRequest(requestItems), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
@@ -447,9 +451,12 @@ class StrategyBacktestIntegrationTest {
     void itemsOverCap_returns400TooManyStocks() {
         LocalDate today = LocalDate.now();
         // The size check runs before the existence check, so these ids need no seeding.
+        // MAX_ITEMS is now 20000 and counts ITEMS (stockId, buyDate pairs) — use distinct
+        // buyDates on the same synthetic id to build the oversized list cheaply, without
+        // needing MAX_ITEMS+1 distinct stock ids.
         List<BacktestItemRequestDto> overCap = new ArrayList<>();
         for (int i = 0; i <= StrategyBacktestService.MAX_ITEMS; i++) {
-            overCap.add(item(String.format("BT8%05d", i), today));
+            overCap.add(item("BT800000", today.minusDays(i)));
         }
         assertEquals(StrategyBacktestService.MAX_ITEMS + 1, overCap.size());
 
@@ -457,6 +464,25 @@ class StrategyBacktestIntegrationTest {
                 rest.postForEntity("/api/strategies/backtest", backtestRequest(overCap), ErrorResponse.class);
         assertEquals(HttpStatus.BAD_REQUEST, rejectedResponse.getStatusCode());
         assertEquals("TOO_MANY_STOCKS", rejectedResponse.getBody().getCode());
+    }
+
+    /** 2000 items must remain legal now that the cap is 20000 — this is a plain sanity check that
+     *  the old 2000-item ceiling did not silently survive as a second, lower bound. */
+    @Test
+    void items2000_isLegal_doesNotTriggerTooManyStocks() {
+        LocalDate today = LocalDate.now();
+        List<BacktestItemRequestDto> items = new ArrayList<>();
+        for (int i = 0; i < 2000; i++) {
+            items.add(item("BT800001", today.minusDays(i)));
+        }
+        assertEquals(2000, items.size());
+        seedStock("BT800001", "2000筆合法性測試", true);
+
+        ResponseEntity<String> response =
+                rest.postForEntity("/api/strategies/backtest", backtestRequest(items), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "2000 items must be legal; body: " + response.getBody());
+
+        jdbc.update("DELETE FROM stock WHERE stock_id = 'BT800001'");
     }
 
     /** The cap must stay decoupled from strategy-scan's typed-list limit — re-aliasing them is
@@ -478,41 +504,194 @@ class StrategyBacktestIntegrationTest {
     }
 
     @Test
-    void duplicateStockId_returns400DuplicateStockId_withDuplicatedIds() {
+    void sameStockId_sameBuyDate_twice_returns400DuplicateBacktestItem_withDuplicatedItems() {
         LocalDate today = LocalDate.now();
-        seedStock("BT401", "重複代號測試", true);
+        seedStock("BT401", "重複組合測試", true);
         insertPriceRow("BT401", today, "50.00", "51.00", "49.00", "50.00", 1000);
 
         ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT401", today), item("BT401", today.minusDays(1)))),
+                backtestRequest(Arrays.asList(item("BT401", today), item("BT401", today))),
                 ErrorResponse.class);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("DUPLICATE_STOCK_ID", response.getBody().getCode());
-        assertTrue(response.getBody().getDuplicatedIds().contains("BT401"));
+        assertEquals("DUPLICATE_BACKTEST_ITEM", response.getBody().getCode());
+        List<BacktestDuplicateItemDto> duplicatedItems = response.getBody().getDuplicatedItems();
+        assertEquals(1, duplicatedItems.size());
+        assertEquals("BT401", duplicatedItems.get(0).getStockId());
+        assertEquals(today, duplicatedItems.get(0).getBuyDate());
     }
 
     @Test
-    void signalDateAfterToday_returns400InvalidSignalDate_withStockId() {
+    void sameStockId_differentBuyDates_doesNotTriggerDuplicateError() throws Exception {
         LocalDate today = LocalDate.now();
-        seedStock("BT402", "未來訊號日測試", true);
+        LocalDate earlierBuyDate = today.minusDays(5);
+        seedStock("BT409", "同代號不同買進日測試", true);
+        insertPriceRow("BT409", earlierBuyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT409", earlierBuyDate.plusDays(1), "52.00", "53.00", "51.00", "52.00", 1000);
+        insertPriceRow("BT409", today.minusDays(1), "54.00", "55.00", "53.00", "54.00", 1000);
+        insertPriceRow("BT409", today, "56.00", "57.00", "55.00", "56.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT409", earlierBuyDate), item("BT409", today.minusDays(1)))),
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        assertEquals(2, root.get("items").size());
+    }
+
+    // ==================== 一檔多買進日 ====================
+
+    @Test
+    void sameStockId_twoDifferentBuyDates_returns200WithTwoIndependentItems() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate firstBuyDate = today.minusDays(6);
+        LocalDate secondBuyDate = today.minusDays(3);
+        seedStock("BT410", "一檔多買進日測試", true);
+        // First buy-date window (firstBuyDate, secondBuyDate] area: max open right after firstBuyDate.
+        insertPriceRow("BT410", firstBuyDate, "100.00", "101.00", "99.00", "100.00", 1000);
+        insertPriceRow("BT410", firstBuyDate.plusDays(1), "130.00", "131.00", "129.00", "125.00", 1000);
+        insertPriceRow("BT410", secondBuyDate, "120.00", "121.00", "119.00", "120.00", 1000);
+        insertPriceRow("BT410", secondBuyDate.plusDays(1), "150.00", "151.00", "149.00", "145.00", 1000);
+        insertPriceRow("BT410", today, "140.00", "141.00", "139.00", "140.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT410", firstBuyDate), item("BT410", secondBuyDate))),
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        assertEquals(2, root.get("items").size());
+
+        JsonNode first = root.get("items").get(0);
+        assertEquals("BT410", first.get("stockId").asText());
+        assertEquals(firstBuyDate.toString(), first.get("buyDate").asText());
+        assertEquals(0, new BigDecimal("100.00").compareTo(first.get("buyPrice").decimalValue()));
+
+        JsonNode second = root.get("items").get(1);
+        assertEquals("BT410", second.get("stockId").asText());
+        assertEquals(secondBuyDate.toString(), second.get("buyDate").asText());
+        assertEquals(0, new BigDecimal("120.00").compareTo(second.get("buyPrice").decimalValue()));
+
+        // Each item must have its own independently-computed outcome.
+        assertTrue(first.get("sellPrice").decimalValue().compareTo(BigDecimal.ZERO) > 0);
+        assertTrue(second.get("sellPrice").decimalValue().compareTo(BigDecimal.ZERO) > 0);
+    }
+
+    @Test
+    void sameStockId_twoBuyDates_eachSellDateOnlyPicksFromItsOwnWindow() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate firstBuyDate = today.minusDays(6);
+        LocalDate secondBuyDate = today.minusDays(3);
+        seedStock("BT411", "獨立視窗測試", true);
+        // A very high open right after firstBuyDate but BEFORE secondBuyDate — only the first
+        // item's window (firstBuyDate, asOfDate] should ever see it; but since the query window is
+        // shared, what matters is that the SECOND item's own buyDate boundary excludes it from
+        // consideration as a "later" occurrence, and that the second item picks from strictly
+        // after its OWN buy date.
+        insertPriceRow("BT411", firstBuyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT411", firstBuyDate.plusDays(1), "999.00", "999.00", "998.00", "300.00", 1000);
+        insertPriceRow("BT411", secondBuyDate, "60.00", "61.00", "59.00", "60.00", 1000);
+        insertPriceRow("BT411", secondBuyDate.plusDays(1), "70.00", "71.00", "69.00", "70.00", 1000);
+        insertPriceRow("BT411", today, "80.00", "81.00", "79.00", "80.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT411", firstBuyDate), item("BT411", secondBuyDate))),
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+
+        JsonNode first = root.get("items").get(0);
+        // First item's window (firstBuyDate, asOfDate] includes the 999.00 open the day after —
+        // that is the max in its own window.
+        assertEquals(0, new BigDecimal("999.00").compareTo(first.get("sellPrice").decimalValue()));
+        assertEquals(firstBuyDate.plusDays(1).toString(), first.get("sellDate").asText());
+
+        JsonNode second = root.get("items").get(1);
+        // Second item's window is (secondBuyDate, asOfDate] — the 999.00 open is BEFORE
+        // secondBuyDate and must never be a candidate for it; its max is 80.00 (today).
+        assertEquals(0, new BigDecimal("80.00").compareTo(second.get("sellPrice").decimalValue()));
+        assertEquals(today.toString(), second.get("sellDate").asText());
+        assertNotEquals(0, new BigDecimal("999.00").compareTo(second.get("sellPrice").decimalValue()));
+    }
+
+    @Test
+    void sameStockId_twoBuyDates_eachCountsOnceInTotals() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate firstBuyDate = today.minusDays(6);
+        LocalDate secondBuyDate = today.minusDays(3);
+        seedStock("BT412", "彙總各計一次測試", true);
+        insertPriceRow("BT412", firstBuyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT412", firstBuyDate.plusDays(1), "60.00", "61.00", "59.00", "55.00", 1000);
+        insertPriceRow("BT412", secondBuyDate, "62.00", "63.00", "61.00", "62.00", 1000);
+        insertPriceRow("BT412", secondBuyDate.plusDays(1), "70.00", "71.00", "69.00", "65.00", 1000);
+        insertPriceRow("BT412", today, "75.00", "76.00", "74.00", "70.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT412", firstBuyDate), item("BT412", secondBuyDate))),
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        // totalCost = 50*1000 (first) + 62*1000 (second) = 112000
+        assertEquals(0, new BigDecimal("112000").compareTo(root.get("totalCost").decimalValue()));
+        assertEquals(2, root.get("backtestedCount").asInt());
+    }
+
+    @Test
+    void sameStockId_multipleItems_orderPreservedAsSentInRequest() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate firstBuyDate = today.minusDays(6);
+        LocalDate secondBuyDate = today.minusDays(3);
+        seedStock("BT413", "多筆順序測試", true);
+        insertPriceRow("BT413", firstBuyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT413", firstBuyDate.plusDays(1), "60.00", "61.00", "59.00", "55.00", 1000);
+        insertPriceRow("BT413", secondBuyDate, "62.00", "63.00", "61.00", "62.00", 1000);
+        insertPriceRow("BT413", secondBuyDate.plusDays(1), "70.00", "71.00", "69.00", "65.00", 1000);
+        insertPriceRow("BT413", today, "75.00", "76.00", "74.00", "70.00", 1000);
+
+        // Send the LATER buyDate first — the response must preserve that same order, not sort
+        // by date.
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT413", secondBuyDate), item("BT413", firstBuyDate))),
+                String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        assertEquals(secondBuyDate.toString(), root.get("items").get(0).get("buyDate").asText());
+        assertEquals(firstBuyDate.toString(), root.get("items").get(1).get("buyDate").asText());
+    }
+
+    @Test
+    void responseItems_containBuyDateField_neverSignalDate() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT414", "buyDate欄位測試", true);
+        insertPriceRow("BT414", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT414", today, "55.00", "56.00", "54.00", "55.00", 1000);
+
+        JsonNode item = singleItemResult("BT414", buyDate);
+        assertEquals(buyDate.toString(), item.get("buyDate").asText(), "response items must carry buyDate");
+        assertTrue(item.get("signalDate") == null, "response items must never carry a signalDate field");
+    }
+
+    @Test
+    void buyDateAfterToday_returns400InvalidBuyDate_withStockId() {
+        LocalDate today = LocalDate.now();
+        seedStock("BT402", "未來買進日測試", true);
         insertPriceRow("BT402", today, "50.00", "51.00", "49.00", "50.00", 1000);
 
         ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/backtest",
                 backtestRequest(Arrays.asList(item("BT402", today.plusDays(1)))), ErrorResponse.class);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("INVALID_SIGNAL_DATE", response.getBody().getCode());
+        assertEquals("INVALID_BUY_DATE", response.getBody().getCode());
         assertEquals("BT402", response.getBody().getStockId());
     }
 
     @Test
     void delistedStock_backtestsNormally_notRejectedOrExcluded() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT403", "已下市股票", false);
-        insertPriceRow("BT403", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT403", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT403", today, "55.00", "56.00", "54.00", "55.00", 1000);
 
-        JsonNode item = singleItemResult("BT403", signalDate);
+        JsonNode item = singleItemResult("BT403", buyDate);
         assertEquals(0, new BigDecimal("50.00").compareTo(item.get("buyPrice").decimalValue()));
         assertEquals(0, new BigDecimal("55.00").compareTo(item.get("sellPrice").decimalValue()));
     }
@@ -520,9 +699,9 @@ class StrategyBacktestIntegrationTest {
     @Test
     void backtest_writesNothing_rowCountsAndContentUnchangedAcrossAllThreeTables() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT404", "無寫入測試", true);
-        insertPriceRow("BT404", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT404", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT404", today, "55.00", "56.00", "54.00", "55.00", 1000);
 
         long stockCountBefore = countAll("stock");
@@ -530,7 +709,7 @@ class StrategyBacktestIntegrationTest {
         long progressCountBefore = countAll("stock_sync_progress");
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT404", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT404", buyDate))), String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
         assertEquals(stockCountBefore, countAll("stock"));
@@ -540,16 +719,16 @@ class StrategyBacktestIntegrationTest {
         // Content check for the rows this test itself owns: still exactly what was seeded.
         BigDecimal closeAfter = jdbc.queryForObject(
                 "SELECT close_price FROM stock_daily_price WHERE stock_id = 'BT404' AND trade_date = ?",
-                BigDecimal.class, signalDate);
+                BigDecimal.class, buyDate);
         assertEquals(0, new BigDecimal("50.00").compareTo(closeAfter));
     }
 
     @Test
     void backtest_ignoresSyncProgressLock_runningPriceBackfillDoesNotBlock_returns200Not409() throws Exception {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
         seedStock("BT405", "併發鎖無關測試", true);
-        insertPriceRow("BT405", signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT405", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
         insertPriceRow("BT405", today, "55.00", "56.00", "54.00", "55.00", 1000);
 
         LocalDateTime now = LocalDateTime.now();
@@ -557,10 +736,10 @@ class StrategyBacktestIntegrationTest {
                         + "(stock_id, job_type, status, target_start_date, target_end_date, last_synced_date, "
                         + "attempt_count, last_error, started_at, finished_at) "
                         + "VALUES ('BT405', 'PRICE_BACKFILL', 'RUNNING', ?, ?, NULL, 0, NULL, ?, NULL)",
-                signalDate, today, now);
+                buyDate, today, now);
 
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item("BT405", signalDate))), String.class);
+                backtestRequest(Arrays.asList(item("BT405", buyDate))), String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode(), "backtest must not be blocked by a running "
                 + "PRICE_BACKFILL job; body: " + response.getBody());
     }
@@ -570,15 +749,15 @@ class StrategyBacktestIntegrationTest {
     @Test
     void queryCount_doesNotScaleWithNumberOfStocks() {
         LocalDate today = LocalDate.now();
-        LocalDate signalDate = today.minusDays(3);
+        LocalDate buyDate = today.minusDays(3);
 
         List<BacktestItemRequestDto> fewItems = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             String id = "BT5" + String.format("%02d", i);
             seedStock(id, "查詢次數少量", true);
-            insertPriceRow(id, signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+            insertPriceRow(id, buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
             insertPriceRow(id, today, "55.00", "56.00", "54.00", "55.00", 1000);
-            fewItems.add(item(id, signalDate));
+            fewItems.add(item(id, buyDate));
         }
 
         queryCountInterceptor.reset(MAPPER_NAMESPACE);
@@ -589,9 +768,9 @@ class StrategyBacktestIntegrationTest {
         for (int i = 0; i < 50; i++) {
             String id = "BT6" + String.format("%02d", i);
             seedStock(id, "查詢次數大量", true);
-            insertPriceRow(id, signalDate, "50.00", "51.00", "49.00", "50.00", 1000);
+            insertPriceRow(id, buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
             insertPriceRow(id, today, "55.00", "56.00", "54.00", "55.00", 1000);
-            manyItems.add(item(id, signalDate));
+            manyItems.add(item(id, buyDate));
         }
 
         queryCountInterceptor.reset(MAPPER_NAMESPACE);
@@ -605,31 +784,232 @@ class StrategyBacktestIntegrationTest {
         jdbc.update("DELETE FROM stock WHERE stock_id LIKE 'BT5%' OR stock_id LIKE 'BT6%'");
     }
 
+    // ---------- 價格為 0 的日子不是行情 (specs/backend/strategy-backtest.md) ----------
+
+    /**
+     * Regression: 1,044 rows across 63 stocks carry a 0.00 close (a no-trade day recorded as zero).
+     * A buy landing on one used to divide by zero in computeReturnPercent and 500 the whole
+     * batch — observed live on 2026-09-12 from the 策略 page's 回測 button.
+     */
+    @Test
+    void zeroClosePriceOnBuyDate_isUnbacktestable_returns200Not500() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(5);
+        seedStock("BT6ZC", "買進日未成交", true);
+        insertPriceRow("BT6ZC", buyDate, "0.00", "0.00", "0.00", "0.00", 0);
+        insertPriceRow("BT6ZC", buyDate.plusDays(1), "120.00", "121.00", "119.00", "120.00", 1000);
+
+        JsonNode item = singleItemResult("BT6ZC", buyDate);
+        assertTrue(item.get("buyPrice").isNull(), "0 close is not a buy price");
+        assertTrue(item.get("sellDate").isNull());
+        assertTrue(item.get("sellPrice").isNull());
+        assertTrue(item.get("returnPercent").isNull());
+        assertTrue(item.get("profit").isNull());
+    }
+
+    @Test
+    void zeroOpenPrice_isNotASellCandidate() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(5);
+        seedStock("BT6ZO", "最高開盤那天未成交", true);
+        insertPriceRow("BT6ZO", buyDate, "90.00", "91.00", "89.00", "100.00", 1000);
+        // The only "highest" open in the window is a 0 no-trade day — it must not win.
+        insertPriceRow("BT6ZO", buyDate.plusDays(1), "0.00", "0.00", "0.00", "0.00", 0);
+        insertPriceRow("BT6ZO", buyDate.plusDays(2), "105.00", "106.00", "104.00", "105.00", 1000);
+
+        JsonNode item = singleItemResult("BT6ZO", buyDate);
+        assertEquals(buyDate.plusDays(2).toString(), item.get("sellDate").asText());
+        assertEquals(0, new BigDecimal("105.00").compareTo(item.get("sellPrice").decimalValue()));
+    }
+
+    @Test
+    void allZeroOpensInWindow_isTreatedAsNoSellableTradingDay() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(5);
+        seedStock("BT6ZW", "窗口內全未成交", true);
+        insertPriceRow("BT6ZW", buyDate, "90.00", "91.00", "89.00", "100.00", 1000);
+        insertPriceRow("BT6ZW", buyDate.plusDays(1), "0.00", "0.00", "0.00", "0.00", 0);
+        insertPriceRow("BT6ZW", buyDate.plusDays(2), "0.00", "0.00", "0.00", "0.00", 0);
+
+        JsonNode item = singleItemResult("BT6ZW", buyDate);
+        assertEquals(0, new BigDecimal("100.00").compareTo(item.get("buyPrice").decimalValue()),
+                "buyPrice stays — only the sell side is missing");
+        assertTrue(item.get("sellDate").isNull());
+        assertTrue(item.get("sellPrice").isNull());
+        assertTrue(item.get("returnPercent").isNull());
+        assertTrue(item.get("profit").isNull());
+    }
+
+    @Test
+    void zeroPriceItems_stayInItemsButAreExcludedFromTotals() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(5);
+        seedStock("BT6ZA", "正常可回測", true);
+        seedBaseWindow("BT6ZA", buyDate, today);
+        seedStock("BT6ZB", "買進日未成交", true);
+        insertPriceRow("BT6ZB", buyDate, "0.00", "0.00", "0.00", "0.00", 0);
+        insertPriceRow("BT6ZB", buyDate.plusDays(1), "120.00", "121.00", "119.00", "120.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT6ZA", buyDate), item("BT6ZB", buyDate))), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+
+        assertEquals(2, root.get("items").size(), "the zero-price item must stay in items");
+        assertEquals(1, root.get("backtestedCount").asInt());
+        // Only BT6ZA's 100.00 x 1000 is counted.
+        assertEquals(0, new BigDecimal("100000").compareTo(root.get("totalCost").decimalValue()));
+    }
+
+    // ==================== 以進場日買進（上漲支撐 D+2） ====================
+
+    @Test
+    void signalDateOnlyRequest_missingBuyDate_returns400InvalidBuyDate() {
+        LocalDate today = LocalDate.now();
+        seedStock("BT415", "只帶signalDate測試", true);
+        insertPriceRow("BT415", today, "50.00", "51.00", "49.00", "50.00", 1000);
+
+        Map<String, Object> rawItem = new LinkedHashMap<>();
+        rawItem.put("stockId", "BT415");
+        rawItem.put("signalDate", today.toString());
+        // Deliberately no "buyDate" key at all — this request shape is what the OLD contract sent.
+
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/backtest",
+                rawBody(Arrays.asList(rawItem)), ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_BUY_DATE", response.getBody().getCode());
+        assertEquals("BT415", response.getBody().getStockId());
+    }
+
+    /**
+     * D close 100 / D+1 close 102 / D+2 close 104 / D+3 open 110 — buyDate is D+2 (the day
+     * RISING_SUPPORT's confirmation completes, specs/backend/strategy-scan.md), so the buy price
+     * must be D+2's close (104), never D's close (100), and the sell window must start at D+3, not
+     * at D+1 (specs/backend/strategy-backtest.md, "以進場日買進（上漲支撐 D+2）").
+     */
+    @Test
+    void buyAnchoredOnBuyDate_notEarlierSignalDay_risingSupportD2Fixture() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3); // D+2
+        LocalDate d = buyDate.minusDays(2);
+        LocalDate d1 = buyDate.minusDays(1);
+        LocalDate d3 = buyDate.plusDays(1);
+        seedStock("BT420", "上漲支撐D2買進測試", true);
+        insertPriceRow("BT420", d, "99.00", "101.00", "98.00", "100.00", 1000);
+        insertPriceRow("BT420", d1, "101.00", "103.00", "100.00", "102.00", 1000);
+        insertPriceRow("BT420", buyDate, "90.00", "105.00", "89.00", "104.00", 1000);
+        insertPriceRow("BT420", d3, "110.00", "112.00", "109.00", "111.00", 1000);
+        insertPriceRow("BT420", today, "95.00", "96.00", "94.00", "95.00", 1000);
+
+        JsonNode item = singleItemResult("BT420", buyDate);
+        assertEquals(0, new BigDecimal("104.00").compareTo(item.get("buyPrice").decimalValue()),
+                "buyPrice must be the buyDate (D+2) close (104), not D's close (100)");
+        LocalDate sellDate = LocalDate.parse(item.get("sellDate").asText());
+        assertFalse(sellDate.isBefore(d3), "sellDate must not be earlier than D+3");
+        assertEquals(d3, sellDate);
+        assertEquals(0, new BigDecimal("110.00").compareTo(item.get("sellPrice").decimalValue()));
+    }
+
+    @Test
+    void duplicateBuyDate_ignoresOriginatingStrategyOrSignalDate() {
+        LocalDate today = LocalDate.now();
+        seedStock("BT421", "重複買進日無關策略測試", true);
+        insertPriceRow("BT421", today, "50.00", "51.00", "49.00", "50.00", 1000);
+
+        // Same (stockId, buyDate) reported by two different (hypothetical) origins — one carrying
+        // a RISING_SUPPORT-style signalDate two days earlier, the other a same-day signal from a
+        // different pattern. Neither field exists on the request DTO; both must be ignored and the
+        // pair must still collide as ONE duplicate.
+        Map<String, Object> fromRisingSupport = new LinkedHashMap<>();
+        fromRisingSupport.put("stockId", "BT421");
+        fromRisingSupport.put("buyDate", today.toString());
+        fromRisingSupport.put("signalDate", today.minusDays(2).toString());
+        fromRisingSupport.put("strategyCode", "RISING_SUPPORT");
+
+        Map<String, Object> fromRebound = new LinkedHashMap<>();
+        fromRebound.put("stockId", "BT421");
+        fromRebound.put("buyDate", today.toString());
+        fromRebound.put("signalDate", today.toString());
+        fromRebound.put("strategyCode", "REBOUND");
+
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/backtest",
+                rawBody(Arrays.asList(fromRisingSupport, fromRebound)), ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("DUPLICATE_BACKTEST_ITEM", response.getBody().getCode());
+        List<BacktestDuplicateItemDto> duplicatedItems = response.getBody().getDuplicatedItems();
+        assertEquals(1, duplicatedItems.size());
+        assertEquals("BT421", duplicatedItems.get(0).getStockId());
+        assertEquals(today, duplicatedItems.get(0).getBuyDate());
+    }
+
+    @Test
+    void sameStockAndBuyDate_identicalResponse_regardlessOfOriginatingStrategyOrSignalDate() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT422", "來源無關回應一致測試", true);
+        insertPriceRow("BT422", buyDate, "50.00", "51.00", "49.00", "50.00", 1000);
+        insertPriceRow("BT422", buyDate.plusDays(1), "60.00", "61.00", "59.00", "55.00", 1000);
+        insertPriceRow("BT422", today, "58.00", "59.00", "57.00", "58.00", 1000);
+
+        Map<String, Object> plain = new LinkedHashMap<>();
+        plain.put("stockId", "BT422");
+        plain.put("buyDate", buyDate.toString());
+
+        Map<String, Object> withOrigin = new LinkedHashMap<>();
+        withOrigin.put("stockId", "BT422");
+        withOrigin.put("buyDate", buyDate.toString());
+        withOrigin.put("signalDate", buyDate.minusDays(2).toString());
+        withOrigin.put("strategyCode", "RISING_SUPPORT");
+
+        ResponseEntity<String> responseA = rest.postForEntity("/api/strategies/backtest",
+                rawBody(Arrays.asList(plain)), String.class);
+        ResponseEntity<String> responseB = rest.postForEntity("/api/strategies/backtest",
+                rawBody(Arrays.asList(withOrigin)), String.class);
+
+        assertEquals(HttpStatus.OK, responseA.getStatusCode(), "body: " + responseA.getBody());
+        assertEquals(HttpStatus.OK, responseB.getStatusCode(), "body: " + responseB.getBody());
+        JsonNode itemA = objectMapper.readTree(responseA.getBody()).get("items").get(0);
+        JsonNode itemB = objectMapper.readTree(responseB.getBody()).get("items").get(0);
+        assertEquals(itemA, itemB,
+                "identical (stockId, buyDate) must produce an identical item regardless of origin");
+    }
+
     // ==================== helpers ====================
 
-    /** 5 close-only opening bars: signal day close=100.00; +1d open=105, +2d open=110 (max),
+    /** 5 close-only opening bars: buy day close=100.00; +1d open=105, +2d open=110 (max),
      *  +3d open=95, today open=98. Used by the plain-vanilla buy/sell/return/profit tests. */
-    private void seedBaseWindow(String stockId, LocalDate signalDate, LocalDate today) {
-        insertPriceRow(stockId, signalDate, "90.00", "91.00", "89.00", "100.00", 1000);
-        insertPriceRow(stockId, signalDate.plusDays(1), "105.00", "106.00", "104.00", "105.00", 1000);
-        insertPriceRow(stockId, signalDate.plusDays(2), "110.00", "111.00", "109.00", "110.00", 1000);
-        insertPriceRow(stockId, signalDate.plusDays(3), "95.00", "96.00", "94.00", "95.00", 1000);
+    private void seedBaseWindow(String stockId, LocalDate buyDate, LocalDate today) {
+        insertPriceRow(stockId, buyDate, "90.00", "91.00", "89.00", "100.00", 1000);
+        insertPriceRow(stockId, buyDate.plusDays(1), "105.00", "106.00", "104.00", "105.00", 1000);
+        insertPriceRow(stockId, buyDate.plusDays(2), "110.00", "111.00", "109.00", "110.00", 1000);
+        insertPriceRow(stockId, buyDate.plusDays(3), "95.00", "96.00", "94.00", "95.00", 1000);
         insertPriceRow(stockId, today, "98.00", "99.00", "97.00", "98.00", 1000);
     }
 
-    private JsonNode singleItemResult(String stockId, LocalDate signalDate) throws Exception {
+    private JsonNode singleItemResult(String stockId, LocalDate buyDate) throws Exception {
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
-                backtestRequest(Arrays.asList(item(stockId, signalDate))), String.class);
+                backtestRequest(Arrays.asList(item(stockId, buyDate))), String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
         JsonNode root = objectMapper.readTree(response.getBody());
         return root.get("items").get(0);
     }
 
-    private BacktestItemRequestDto item(String stockId, LocalDate signalDate) {
+    private BacktestItemRequestDto item(String stockId, LocalDate buyDate) {
         BacktestItemRequestDto dto = new BacktestItemRequestDto();
         dto.setStockId(stockId);
-        dto.setSignalDate(signalDate);
+        dto.setBuyDate(buyDate);
         return dto;
+    }
+
+    /**
+     * A raw, untyped request body — used only by the "以進場日買進" tests that must send fields
+     * (`signalDate`, `strategyCode`) which {@link BacktestItemRequestDto} deliberately has no
+     * property for, to prove the endpoint ignores them rather than 400ing on an unknown field.
+     */
+    private Map<String, Object> rawBody(List<Map<String, Object>> rawItems) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("items", rawItems);
+        return body;
     }
 
     private BacktestRequestDto backtestRequest(List<BacktestItemRequestDto> items) {
