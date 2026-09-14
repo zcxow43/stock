@@ -560,6 +560,7 @@ function rowSortValue(
     return column === 'buyPrice' ? agg.avgBuyPrice : agg.returnPercent
   }
   const group = row.buyDateGroups[0]
+  if (!group) return null
   const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
   return column === 'buyPrice' ? (item?.buyPrice ?? null) : (item?.returnPercent ?? null)
 }
@@ -715,6 +716,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // once on mount, ever sets it back to '500'. Kept as a string (not a number) so a partial
   // keystroke like "1." is never silently clobbered, matching `risePercentInputs`'s shape.
   const [priceThresholdInput, setPriceThresholdInput] = useState('500')
+  const [priceThresholdChecked, setPriceThresholdChecked] = useState(false)
+  const [hideIncomplete, setHideIncomplete] = useState(false)
 
   // ---------- 總計浮動跟隨 ----------
   // `totalsAnchorRef`/`tableEndRef`/`unionBlockRef` are attached in `renderMergedTable`
@@ -1068,6 +1071,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         // an outdated response can never overwrite a result it no longer corresponds to.
         if (backtestGenerationRef.current !== generation) return
         setBacktestResult(resp)
+        setPriceThresholdChecked(false)
+        setHideIncomplete(resp.items.some((item) => item.sellDate === null))
         setBacktestStatus('success')
         setBacktestErrorMessage(null)
         setIsRetryingBacktest(false)
@@ -1093,6 +1098,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     // correspond, with nothing on screen to say so.
     setBacktestStatus('idle')
     setBacktestResult(null)
+    setPriceThresholdChecked(false)
+    setHideIncomplete(false)
     setBacktestErrorMessage(null)
     setIsRetryingBacktest(false)
     // 重新掃描時排序回到預設，指示一併消失 — sorting only ever makes sense against the hit
@@ -1484,8 +1491,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     const order = [...unionRows]
       .sort((a, b) =>
         compareBySortDirection(
-          rowSortValue(a, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
-          rowSortValue(b, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
+          rowSortValue({ ...a, buyDateGroups: visibleGroups(a) }, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
+          rowSortValue({ ...b, buyDateGroups: visibleGroups(b) }, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
           nextState.direction,
         ),
       )
@@ -1508,6 +1515,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * 呼叫任何端點——`allItemKeys` 已含表上（含摺疊中的子列與無法回測的筆）的每一筆。 */
   const toggleCancelAll = (turnOn: boolean) => {
     setCheckedItemKeys(turnOn ? new Set() : new Set(allItemKeys))
+    setPriceThresholdChecked(false)
+    setHideIncomplete(false)
   }
 
   // ---------- 「取消買進價高於 N 元」勾選框 ----------
@@ -1524,10 +1533,6 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           const buyPrice = backtestItemsByKey.get(key)?.buyPrice
           return buyPrice != null && buyPrice > priceThresholdAmount
         })
-  // 勾選狀態從各筆推導，不是獨立記住的旗標（與「取消全選」同一條原則）：高價組非空且其中
-  // 每一筆都未勾選時呈勾選，其餘情形（含部分取消）呈未勾選、不呈半選。
-  const priceThresholdChecked =
-    backtestResult !== null && highPriceGroupKeys.length > 0 && highPriceGroupKeys.every((key) => !checkedItemKeys.has(key))
   // 高價組為空、或金額本身不合法時 disabled（未勾選）——沒有東西可以作用，或連範圍都算不出來。
   const priceThresholdDisabled = backtestResult === null || priceThresholdInvalid || highPriceGroupKeys.length === 0
 
@@ -1535,6 +1540,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * 全不動。完全在前端完成，不重新呼叫任何端點；**修改金額本身從不呼叫這個函式**——只有點
    * 擊勾選框才會，金額變動只改變 `highPriceGroupKeys` 這個推導範圍。 */
   const togglePriceThreshold = (turnOn: boolean) => {
+    setPriceThresholdChecked(turnOn)
     setCheckedItemKeys((keys) => {
       const next = new Set(keys)
       for (const key of highPriceGroupKeys) {
@@ -1544,6 +1550,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       return next
     })
   }
+
+  const incompleteGroupKeys = allItemKeys.filter((key) => backtestItemsByKey.get(key)?.sellDate === null)
+  const hiddenItemKeys = new Set([
+    ...(priceThresholdChecked ? highPriceGroupKeys : []),
+    ...(hideIncomplete ? incompleteGroupKeys : []),
+  ])
+  const visibleGroups = (row: UnionRow) => row.buyDateGroups.filter((group) => !hiddenItemKeys.has(itemKey(row.stockId, group.buyDate)))
 
   /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
    * 名稱。這些標的不是命中，因此永遠不進入 `unionRows` 或回測請求。 */
@@ -1633,6 +1646,18 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
         {backtestTotals ? (
           <div className="st-backtest-totals">
+            <div className="st-totals-anchor" ref={totalsAnchorRef}>
+              {renderTotalsTriplet(backtestTotals)}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div className="st-result-details">
+        {scanResult && scanResult.results.length > 0 ? (
+          <p className="st-params-line">{scanResult.results.map(formatStrategyParams).join('・')}</p>
+        ) : null}
+        {backtestTotals ? (
+          <div className="st-batch-controls">
             <label className="st-total-item st-selectall-item">
               <input
                 type="checkbox"
@@ -1662,6 +1687,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   step="0.01"
                   className="st-price-threshold-input"
                   value={priceThresholdInput}
+                  disabled={priceThresholdChecked}
                   onChange={(e) => setPriceThresholdInput(e.target.value)}
                   aria-label="取消買進價高於的金額"
                 />
@@ -1671,31 +1697,34 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 <p className="st-inline-error st-price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
               ) : null}
             </div>
-            <div className="st-totals-anchor" ref={totalsAnchorRef}>
-              {renderTotalsTriplet(backtestTotals)}
-            </div>
+            <label className="st-selectall-item st-incomplete-item">
+              <input
+                type="checkbox"
+                className="st-row-checkbox"
+                checked={hideIncomplete}
+                disabled={incompleteGroupKeys.length === 0}
+                onChange={(e) => setHideIncomplete(e.target.checked)}
+                aria-label="隱藏資料不齊（無賣出日）"
+              />
+              <span className={`st-total-label${incompleteGroupKeys.length === 0 ? ' st-total-label-disabled' : ''}`}>隱藏資料不齊（無賣出日）</span>
+            </label>
           </div>
         ) : null}
       </div>
-      {scanResult && scanResult.results.length > 0 ? (
-        <p className="st-params-line">{scanResult.results.map(formatStrategyParams).join('・')}</p>
-      ) : null}
       {backtestTotals ? (
         <div className="st-uncounted-notes">
           {backtestTotals.includedCount === 0 ? (
             <p className="st-uncounted-note">
               {backtestResult?.totalReturnPercent === null ? '沒有可回測的標的' : '未勾選任何標的'}
             </p>
-          ) : (
-            <>
-              {backtestTotals.uncountedNoSellDate > 0 ? (
-                <p className="st-uncounted-note">另 {backtestTotals.uncountedNoSellDate} 筆尚無可賣出交易日，未計入</p>
-              ) : null}
-              {backtestTotals.uncountedUnchecked > 0 ? (
-                <p className="st-uncounted-note">另 {backtestTotals.uncountedUnchecked} 筆未勾選，未計入</p>
-              ) : null}
-            </>
-          )}
+          ) : null}
+          {backtestTotals.uncountedNoSellDate > 0 ? (
+            <p className="st-uncounted-note">另 {backtestTotals.uncountedNoSellDate} 筆尚無可賣出交易日，未計入</p>
+          ) : null}
+          {backtestTotals.uncountedUnchecked > 0 ? (
+            <p className="st-uncounted-note">另 {backtestTotals.uncountedUnchecked} 筆未勾選，未計入</p>
+          ) : null}
+          {hiddenItemKeys.size > 0 ? <p className="st-uncounted-note">另 {hiddenItemKeys.size} 筆已隱藏</p> : null}
         </div>
       ) : null}
       {unionRows.length === 0 ? (
@@ -1722,7 +1751,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           </thead>
           <tbody>
             {displayRows.flatMap((row) => {
-              const groups = row.buyDateGroups
+              const groups = visibleGroups(row)
+              if (groups.length === 0) return []
               const hasChildren = groups.length >= 2
               const isExpanded = hasChildren && expandedStockIds.has(row.stockId)
               const lotSize = backtestResult?.lotSize ?? 0
@@ -1857,7 +1887,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   <td>
                     {row.stockId} {row.stockName}
                   </td>
-                  <td className="st-union-hits">{renderUnionHits(row.hits)}</td>
+                  <td className="st-union-hits">{renderUnionHits(groups.flatMap((group) => group.hits))}</td>
                   {backtestCells}
                 </tr>
               )

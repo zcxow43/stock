@@ -1451,3 +1451,32 @@
   margin: 0;
   font-size: 14px;
 }
+
+/* Batch controls share one 28px row; hints occupy their own space below it. */
+.st-result-details {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.st-result-details .st-params-line { flex: 1; margin: 0; }
+.st-batch-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-left: auto;
+}
+.st-batch-controls .st-selectall-item,
+.st-batch-controls .st-price-threshold-row {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  white-space: nowrap;
+}
+.st-price-threshold-input:disabled {
+  background: #16202c;
+  color: #4a5866;
+  border-color: #26333f;
+  opacity: 1;
+}
