@@ -1,7 +1,7 @@
 ---
 status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設近一個月）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日（上漲支撐為確認完成日 D+2，其餘型態等於訊號日），落在同一買進日的命中視為同一筆；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日（上漲支撐為確認完成日 D+2，其餘型態等於訊號日），落在同一買進日的命中視為同一筆；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」"
 depends_on: [stock-list]
 ---
 
@@ -94,7 +94,8 @@ depends_on: [stock-list]
 - **送出掃描時**，`startDate` 為起始週的**週一**，`endDate` 為結束週的**週日**；結束週是本週時 `endDate` 為**今日**，不得送出未來日期。結束週不可選到本週之後的週。
 - **區間列下方以次要文字顯示實際區間**「實際區間 {startDate} ~ {endDate}」，改變任一週或按快捷鈕時即時更新。週換算成日期的規則在畫面上看不到；少了這一行，使用者無從確認掃描實際涵蓋的是哪幾天。
 - **「近一個月」「近三個月」「近半年」三個快捷鈕保留**：起始週為「今日往前一個／三個／六個日曆月」那一天所在的週，結束週為本週。起、迄週恰等於某個快捷鈕的結果時，該鈕呈選中樣式；手動改週後不再符合即取消選中。
-- **預設**為「近一個月」快捷鈕的結果。
+- **預設**：起始週為**上週**、結束週為**本週**，送出 `startDate` 為上週一、`endDate` 為今日。進頁時看的是最近兩週的訊號——一週的前幾天單看本週交易日太少，往回多帶一整週才有東西可看。
+  - 這個預設**不對應任何快捷鈕**（「近一個月」的起始週是約四週前那一週，不會等於上週），因此進頁時三個快捷鈕**都不呈選中**。按任一快捷鈕後依既有規則選中。
 - 起始週晚於結束週時前端即擋下，並在區間下方提示「起始週不可晚於結束週」，不送出請求。
 
 #### 掃描後自動回測
@@ -102,13 +103,13 @@ depends_on: [stock-list]
 **本頁沒有「回測」按鈕。** 按下「開始掃描」、掃描成功且命中至少一檔時，前端**立刻自動**送出 `POST /api/strategies/backtest`（請求內容見「API 整合」），使用者不需要再做任何動作。回測結果（買進／賣出、報酬率、收益）就是看命中清單時真正要的資訊；掃描完還得再按一次按鈕，等於每一次掃描都多一個必做的步驟。
 
 - **掃描失敗或命中 0 檔時不送回測**：沒有命中清單就沒有東西可以回測。
-- **命中彙總表不等回測**：掃描回應一到，命中彙總表就照常出現（此時沒有勾選框欄與回測六欄），「開始掃描」右側同時顯示次要文字色的「回測中…」。全市場的回測要算上千筆，命中清單本身已經有用，不該陪著等。回測完成時，勾選框欄、六欄、兩個標籤與「取消全選」**一次同時**出現，「回測中…」消失。
+- **命中彙總表不等回測**：掃描回應一到，命中彙總表就照常出現（此時沒有勾選框欄與回測六欄），「開始掃描」右側同時顯示次要文字色的「回測中…」。全市場的回測要算上千筆，命中清單本身已經有用，不該陪著等。回測完成時，勾選框欄、六欄、三個總計標籤（總成本、總報酬率、總收益）與「取消全選」**一次同時**出現，「回測中…」消失。
 - **回測進行中「開始掃描」仍可按**：重新掃描時，進行中的那次回測隨即作廢——它的回應若在新掃描之後才到，**一律丟棄**，不得填進新的命中清單。舊回測算的是舊清單，填進新清單會變成對不起來的數字，而畫面上完全看不出來。
 - **自動回測失敗時**，「開始掃描」右側顯示「回測失敗，請稍後再試」，其右緊接一顆**「重試回測」**次要按鈕。命中彙總表照常保留。
   - 「重試回測」**只重送回測**——同一份命中清單、同一份 `items[]`——**不重新掃描**。失敗的是回測，重跑一次全市場掃描只是讓使用者多等。
   - 重試進行中按鈕 disabled 並顯示「回測中…」；重試成功時錯誤訊息與按鈕一起消失，回測結果照常出現；重試再失敗時兩者維持顯示，按鈕恢復可按。
   - **「重試回測」只在回測失敗時存在**，其餘任何狀態下頁面上都沒有可以觸發回測的按鈕。
-- **重新掃描一定清空回測結果**：按下「開始掃描」的當下即移除六個欄位、兩個標籤、「取消全選」勾選框，以及回測失敗訊息與「重試回測」。舊的回測是對舊那份命中清單算的，把它留在新結果旁邊會變成兩份對不起來的資料，而畫面上完全看不出來。
+- **重新掃描一定清空回測結果**：按下「開始掃描」的當下即移除六個欄位、三個總計標籤、「取消全選」勾選框，以及回測失敗訊息與「重試回測」，排序也回到預設（見「買進價與報酬率欄排序」）。舊的回測是對舊那份命中清單算的，把它留在新結果旁邊會變成兩份對不起來的資料，而畫面上完全看不出來。
 - 改動條件而未重掃時，回測結果**維持不變**，與標題括號內的參數採同一條原則：眼前這份數字說明的是眼前這份結果。
 
 ### 結果區
@@ -157,7 +158,7 @@ depends_on: [stock-list]
 
 **一律取自回應而非畫面上的輸入值**：使用者掃描後又改了輸入卻沒重掃時，這一行必須繼續說明眼前這份結果是用什麼參數算出來的。百分比沿用「數值格式」一節的規則（`10.0` 寫成 `10`），日數為整數。
 
-**排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則。**回測完成後排序不變**——回測是替既有清單補上六欄，不是重新排名；依報酬率重排會讓使用者找不到剛剛還在看的那一列。
+**預設排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則。**回測完成本身不改變排序**——回測是替既有清單補上六欄，不是重新排名；自動依報酬率重排會讓使用者找不到剛剛還在看的那一列。要依買進價或報酬率排序，由使用者自己點表頭（見「買進價與報酬率欄排序」），而且隨時可以點回預設排序。
 
 **命中彙總表的列不導向任何頁面；回測完成後，點選一列等同點選該列的勾選框。** 網址永遠不變。
 
@@ -173,7 +174,29 @@ depends_on: [stock-list]
 - **回測前沒有勾選框，點列不發生任何事**：勾選框欄在回測完成時才出現（見「納入計算的勾選框」），在那之前列本體沒有對應的勾選框可以「等同」。
 - **滑鼠游標**：回測完成、勾選框存在時，列本體為**手指游標**——點下去確實會發生事情；回測前（沒有勾選框時）維持預設箭頭。游標必須與「點下去會不會發生事情」一致。
 - **hover 背景 `#1D2A38` 保留**，回測前後皆同：它是橫跨十一欄時對齊同一列數字的閱讀輔助。
-- 點列切換與點勾選框切換走同一條路徑：父列合計、兩個總計與「取消全選」的推導狀態同步重算，**不重新呼叫任何端點**。
+- 點列切換與點勾選框切換走同一條路徑：父列合計、三個總計與「取消全選」的推導狀態同步重算，**不重新呼叫任何端點**。
+
+#### 買進價與報酬率欄排序
+
+回測完成後，**「買進價」與「報酬率」兩欄的表頭可以點選排序**。其他欄位的表頭不可點選排序；回測前這兩欄根本不存在，因此也沒有排序可點。
+
+| 對同一欄連續點選 | 排序 |
+|---|---|
+| 第 1 次 | 依該欄**降冪**（大到小） |
+| 第 2 次 | 依該欄**升冪**（小到大） |
+| 第 3 次 | **還原預設排序**（最新 `signalDate` 由新到舊、同日 `stockId` 升冪），再點即回到第 1 次 |
+
+- **同一時間只有一欄在排序。** 正在依「買進價」排序時點「報酬率」，改為依報酬率**降冪**（從循環的第 1 步開始），「買進價」的排序指示消失。
+- **「—」視為最小值。** 買進價為 `null`、報酬率為 `null`（無法回測），或父列因子筆全被取消勾選而顯示「—」的列：降冪時排在最後，升冪時排在最前。
+- **值相同時依預設排序決定先後**（含兩列同為「—」），讓同一份資料每次點出來的順序都一樣。
+- **單筆列**以該筆的 `buyPrice`／`returnPercent` 排序。
+- **一檔多筆的父列以它畫面上顯示的值排序**：買進價為已勾選各子筆的成本加權均價，報酬率為已勾選各子筆的成本加權報酬率（見「父列在摺疊時顯示什麼」）。排序依據必須是使用者眼睛看到的那個數字，否則會出現「父列顯示 5%，卻排在 3% 下面」這種無法從畫面解釋的順序。
+- **排序後切換勾選，列的位置不動。** 父列合計會隨勾選即時重算，但表格不因此自動重排——使用者正在逐列排除標的時，列在手下跳走會讓他點錯列。排序只在**點表頭的那一刻**依當下顯示的值決定；下一次點表頭時，才依那時的值、以循環的下一個狀態重排。
+- **子列在父列內部依同一欄、同一方向排序**（「—」同樣視為最小值，值相同依買進日由新到舊）；還原預設排序時，子列回到依買進日由新到舊。父列摺疊時逐行列出的買進日／賣出日**不隨排序改變順序**，恆為依買進日由新到舊——那是日期清單，不是這兩欄的值。
+- **排序不影響其他任何狀態**：勾選狀態、展開狀態、「共 N 檔」、三個總計與兩行「未計入」說明都不因排序改變。
+- **排序完全在前端完成，不重新呼叫任何端點。**
+- **重新掃描時排序回到預設**，指示一併消失；「重試回測」成功時同樣以預設排序呈現。舊的排序是對舊清單點的，沿用到新清單上會讓人以為新結果本來就是這個順序。
+- **表頭呈現**：可排序的表頭為手指游標，文字後方顯示提示圖示——未排序時為弱化色「↕」，降冪時為「▼」、升冪時為「▲」，排序中的表頭文字改為主要文字色。色碼見 `## Visual Style`。
 
 #### 一檔多筆的展開列
 
@@ -190,7 +213,7 @@ depends_on: [stock-list]
 - **展開鈕只出現在 ≥ 2 買進日的列上**，只有一筆的列該欄留空——擺一個按下去只會原地展開一列相同內容的按鈕，等於要求使用者逐檔點開才能確認「這檔只有一筆」。
 - **列本體的點擊等同該列的勾選框**（見上方「命中彙總表的列不導向任何頁面」）：點父列本體＝點父列勾選框，點子列本體＝點該子列勾選框。展開鈕是列內的獨立點擊區，只負責展開與收合，不切換勾選。
 - **摺疊與展開都不改變「共 N 檔」**：標題數的是股票檔數，不是筆數。一檔有三筆仍然只算一檔。
-- **排序不受影響**：父列之間仍依該檔最新的一個 `signalDate` 由新到舊、同日依 `stockId` 升冪；子列在父列內部依買進日由新到舊。
+- **展開與摺疊不影響排序**：未點表頭排序時，父列之間依該檔最新的一個 `signalDate` 由新到舊、同日依 `stockId` 升冪，子列在父列內部依買進日由新到舊；依買進價或報酬率排序時，規則見「買進價與報酬率欄排序」。
 
 ##### 父列在摺疊時顯示什麼
 
@@ -207,7 +230,7 @@ depends_on: [stock-list]
 
 **日期逐筆列出、價格卻取合計，是因為日期不能合計。** 兩個買進日沒有「平均買進日」，只挑一個又會讓其他筆的進出場在收合時完全隱形；逐行並排則讓每一行的買進日與賣出日互相對應，收合著就看得出每一筆各持有了多久。價格與報酬率可以成本加權合計，所以取合計。**父列不再顯示「{N} 筆」**——列出了幾行日期就是幾筆。逐筆列出的日期**包含未勾選的筆**（以弱化色呈現），因為它們描述的是「這檔有哪幾次進出場」，與要不要計入總計是兩件事。
 
-**父列的算法必須與標題兩個總計同一套。** 兩者都是成本加權，差別只在涵蓋範圍（一檔 vs 全部）。父列若改用各子筆報酬率的算術平均，同一個畫面上就會有兩套互相矛盾的加權方式，而使用者一定會拿父列去加總驗算標題。
+**父列的算法必須與標題的總計同一套。** 兩者都是成本加權，差別只在涵蓋範圍（一檔 vs 全部）。父列若改用各子筆報酬率的算術平均，同一個畫面上就會有兩套互相矛盾的加權方式，而使用者一定會拿父列去加總驗算標題。
 
 **父列隨子列的勾選即時重算**，不重打端點——所需的 `buyPrice`、`profit`、`lotSize` 都已在回測回應裡。
 
@@ -238,53 +261,127 @@ depends_on: [stock-list]
 
 #### 回測結果的呈現
 
-回測完成後，除了上表右側六欄，**標題右側出現「取消全選」勾選框與兩個標籤**。三者由左至右依序為「取消全選」、總報酬率、總收益。
+回測完成後，除了上表右側六欄，**標題右側出現三個總計標籤**（由左至右為總成本、總報酬率、總收益），**標題列下方那一列的右側出現三個批次勾選框**（見「批次勾選框列」）。往下捲動時三個總計會浮在畫面頂端跟隨（見「總計浮動跟隨」），批次勾選框不浮動。
+
+##### 批次勾選框列
+
+三個勾選框放在標題列**下方那一列**——與「本次採用參數」同一列、**靠右**，由左至右依序為「取消全選」、「取消買進價高於 [金額] 元」、「隱藏資料不齊（無賣出日）」。三者**等高、垂直置中對齊**，彼此間距相同。它們是同一組「決定表上哪些筆計入、哪些筆顯示」的控制項；高低不齊、或與總計擠在標題右側，會讀成幾個互不相關的東西。標題右側因此只留三個總計。
+
+**總成本放在總報酬率前面，是因為總報酬率就是從它算出來的**（`總收益 ÷ 總成本`）。少了總成本，使用者看得到報酬率卻看不到分母——勾掉一檔高價股時報酬率為什麼大幅變動、這份清單全勾到底要壓多少錢，都無從判斷。
 
 ##### 「取消全選」勾選框
 
-總報酬率標籤的左側、同一列上，放一個**標示文字固定為「取消全選」**的勾選框。它是一個字面意義的開關：**打勾代表「目前全部的筆都沒有勾選」**。
+批次勾選框列的第一個，是一個**標示文字固定為「取消全選」**的勾選框。它是一個字面意義的開關：**打勾代表「目前全部的筆都沒有勾選」**。
 
 | 操作 | 結果 |
 |---|---|
-| 勾選「取消全選」 | 表上**每一筆**的勾選框全部取消——單訊號列、每個子列都取消，父列因此呈未勾選 |
-| 取消勾選「取消全選」 | 表上每一筆的勾選框全部勾回，父列因此呈已勾選 |
+| 勾選「取消全選」 | 表上**每一筆**的勾選框全部取消——單訊號列、每個子列都取消，父列因此呈未勾選；**同時把所有被隱藏的筆重新顯示** |
+| 取消勾選「取消全選」 | 表上每一筆的勾選框全部勾回，父列因此呈已勾選；**同時把所有被隱藏的筆重新顯示** |
 
 - **它的勾選狀態是從各筆推導出來的，不是一個獨立記住的旗標**：全部的筆都未勾選時它呈勾選，其餘任何情形（全部勾選、部分勾選）它都呈未勾選。因此使用者逐列手動取消到一筆不剩時，它會自己變成勾選；此時再勾回任何一筆，它就自己變回未勾選。若把它當成獨立旗標，就會出現「取消全選打著勾，表上卻有三筆勾著」這種兩個控制項互相矛盾的畫面。
 - **部分勾選時它呈未勾選，不呈半選**，點下去就是全部取消。它回答的是「是不是全部都取消了」這個是非題，半選在這個問題上沒有意義。
 - **標示文字不隨狀態改變**，恆為「取消全選」。
-- 「全部的筆」包含無法回測的筆與摺疊中的子列：它作用在勾選框上，而不是作用在畫面上看得見的列上。摺疊狀態不影響它的作用範圍，與「摺疊狀態不影響總計」同一條原則。
+- **不論勾選或取消勾選，都會把所有被隱藏的筆重新顯示**，「取消買進價高於 N 元」與「隱藏資料不齊（無賣出日）」兩個框因此都變為未勾選。「取消全選」回答的是「全部」：勾回全部卻還有看不到的列、或取消全部卻留著藏起來的列，都會讓使用者以為自己的操作沒涵蓋那些筆。
+- 「全部的筆」包含無法回測的筆、摺疊中的子列與被隱藏的筆：它作用在勾選框上，而不是作用在畫面上看得見的列上。摺疊狀態不影響它的作用範圍，與「摺疊狀態不影響總計」同一條原則。
 - **與列勾選框同生同滅**：回測完成時與勾選框欄同時出現，回測前、回測中、回測失敗時都不存在，重新掃描時一併移除。回測剛完成時全部的筆預設勾選，所以它此時呈未勾選。
 - 「重試回測」成功時與首次自動回測成功相同：全部的筆預設勾選，它呈未勾選。
-- 切換它完全在前端完成，**不重新呼叫任何端點**，兩個總計與父列合計就地重算。全部取消後兩個總計依既有規則顯示「—」與「未勾選任何標的」（全部標的皆無法回測時則為「沒有可回測的標的」）。
+- 切換它完全在前端完成，**不重新呼叫任何端點**，三個總計與父列合計就地重算。全部取消後三個總計依既有規則顯示「—」與「未勾選任何標的」（全部標的皆無法回測時則為「沒有可回測的標的」）。
 
-兩個總計標籤：
+##### 「取消買進價高於 N 元」勾選框
+
+批次勾選框列的第二個，標示為「取消買進價高於 [金額] 元」，**金額是標示中間的一格數字輸入**，進頁時預設 `500`。**打勾代表「買進價高於這個金額的筆目前已取消勾選並被隱藏」**。
+
+**作用範圍（以下稱「高價組」）**：`buyPrice` **大於**輸入金額的每一**筆**——單筆列與每一個子列各自判斷，包含摺疊中的子列與無法回測（`sellDate` 為 `null`）但 `buyPrice` 有值的筆。`buyPrice` 為 `null` 的筆不屬於高價組。
+
+- **不含等於**：金額 `500` 時，`buyPrice` 恰為 `500.00` 的筆**不**屬於高價組。標示文字因此寫「高於」而不寫「以上」——中文的「以上」通常包含本數，寫成「以上」會讓使用者以為 500 元那筆也會被取消。
+- **逐筆判斷，不看父列均價**：一檔兩筆買進價分別為 480 與 520 時，只有 520 那筆屬於高價組；取消後父列依既有連動規則呈**半選**。父列的成本加權均價只是顯示用的合計，拿它判斷會讓一筆 480 元的部位被一起取消。
+
+| 操作 | 結果 |
+|---|---|
+| 勾選 | 高價組的每一筆**取消勾選並隱藏**；不屬於高價組的筆完全不動 |
+| 取消勾選 | 被它隱藏的筆全部**勾回並重新顯示**；其餘筆完全不動 |
+
+- **它是一個記住的開關，不由各筆的勾選狀態推導**：勾選框既然會把列藏起來，它的狀態就必須回答「那些列現在是不是藏著」。若仍依勾選狀態推導，勾選「取消全選」後它會呈勾選、列卻全都看得到，兩個控制項互相矛盾。因此逐列手動取消高價組、或勾選「取消全選」，都**不會**讓它變成勾選。
+- **勾著期間金額輸入框 disabled**：被藏起來的是勾選那一刻的高價組；勾著時允許改數字，畫面上的金額就會與實際被藏的筆對不起來。要換門檻，先取消勾選（勾回並顯示）、改金額、再勾選。
+- **高價組為空時勾選框 disabled（未勾選）**：沒有任何一筆高於該金額時，這個開關沒有東西可以作用。
+- **金額輸入**：接受 `0` 以上的數字，最多兩位小數（與價格的精度一致）。留空、負數或超過兩位小數時，勾選框 disabled，並在輸入框下方提示「金額需為 0 以上、最多兩位小數」。未勾選時修改金額不切換、也不隱藏任何一筆。
+- **「取消全選」被點時**（不論勾選或取消勾選），被它隱藏的筆全部重新顯示，它變為未勾選；那些筆的勾選狀態依「取消全選」的結果決定，不另外處理。
+- **金額在同一次進頁內保留**：重新掃描不重設金額（它是使用者選的篩選門檻，與掃描條件同性質）；重新整理頁面回到 `500`。
+- **與列勾選框同生同滅**，規則與「取消全選」相同：回測完成時出現且為未勾選，回測前、回測中、回測失敗時不存在，重新掃描時一併移除；「重試回測」成功時與首次回測成功相同。
+- 切換它完全在前端完成，**不重新呼叫任何端點**，三個總計、父列合計與「取消全選」的推導狀態就地重算。
+
+##### 「隱藏資料不齊（無賣出日）」勾選框
+
+批次勾選框列的第三個。**打勾代表「沒有賣出日的筆目前被隱藏」**。
+
+**作用範圍（以下稱「資料不齊組」）**：回測回應中 `sellDate` 為 `null` 的每一**筆**——逐筆判斷，包含子列、摺疊中的子列，以及 `buyPrice` 也為 `null` 的筆。
+
+| 操作 | 結果 |
+|---|---|
+| 勾選 | 資料不齊組的每一筆隱藏 |
+| 取消勾選 | 資料不齊組的每一筆重新顯示 |
+
+- **只隱藏，不改變任何一筆的勾選狀態**：這些筆沒有賣出日，本來就不計入三個總計，取消它們的勾選不會改變任何數字；只做隱藏，使用者取消這個框時看到的勾選狀態就是他自己留下的。
+- **每次回測成功時預設勾選**（含「重試回測」成功）：資料不齊的筆一開始就是藏著的。它們沒有結果可看（例如買進日就是今天），全市場掃描時會把有數字的列擠到下面。
+- **記住的開關**，與價格框同一原則；「取消全選」被點時（不論勾選或取消勾選）它變為未勾選，這些筆重新顯示。
+- **資料不齊組為空時 disabled（未勾選）**。
+- 「另 N 筆尚無可賣出交易日，未計入」照常顯示，N 不因隱藏而改變——隱藏不改變它們未計入的事實。
+- **與列勾選框同生同滅**；重新掃描時移除，下一次回測成功時再以勾選出現。
+- 切換它完全在前端完成，**不重新呼叫任何端點**。
+
+##### 隱藏的列
+
+- 被隱藏的筆**不渲染**在表格中。兩個隱藏框各自隱藏的範圍取**聯集**：一筆同時屬於兩組時，任一框勾著它就隱藏。
+- **一檔多筆時只隱藏那些子列**。展開鈕、父列逐行列出的買進日／賣出日與展開後的子列，一律只計**未隱藏的筆**：未隱藏的相異買進日 ≥ 2 才有展開鈕；只剩 1 筆時該檔以單筆列呈現那一筆；全部子筆都被隱藏時整檔不出現。
+- **父列的連動只作用在未隱藏的筆**：父列勾選框的三態依未隱藏的筆推導，點父列勾選框或父列本體只切換未隱藏的筆。隱藏的筆只受「取消全選」與兩個隱藏框影響——使用者看不到的筆，不該被他對一個看得到的父列所做的點擊改變。父列合計依既有規則計算，數字不因隱藏而改變：價格框隱藏的筆都已取消勾選，資料不齊的筆本來就不可回測。
+- **「共 N 檔」不變**：隱藏不是沒命中。有筆被隱藏時，總計下方另顯示一行「另 K 筆已隱藏」（K 為被隱藏的筆數，兩組取聯集後計數），讓使用者知道表上少了列、以及少了多少。
+- **排序、總計與浮動總計不受隱藏影響**；重新顯示的列出現在目前排序中它應在的位置，不觸發重排。
+- 點列本體只會發生在看得到的列上。
+
+三個總計標籤：
 
 | 標籤 | 算法 | 格式 |
 |---|---|---|
+| 總成本（每筆 1 張） | 已勾選且可回測的各**筆** `buyPrice × lotSize` 總和（含展開後的子筆） | 千分位、不帶小數 |
 | 總報酬率 | `總收益 ÷ 總成本 × 100` | 兩位小數加 `%` |
 | 總收益（每筆 1 張） | 已勾選且可回測的各**筆** `profit` 總和（含展開後的子筆） | 千分位、不帶小數 |
 
-兩個標籤的涵蓋範圍是**已勾選且可回測**的筆——一檔多筆時算的是它展開後的各子筆，不是父列一筆。總成本為那些筆的 `buyPrice × lotSize` 總和（`lotSize` 取自回應，不在前端寫死）。**摺疊狀態不影響總計**：一筆有沒有計入只看它自己的勾選框，與父列當下是展開還是收合無關。
+三個標籤的涵蓋範圍一律是**已勾選且可回測**的筆——一檔多筆時算的是它展開後的各子筆，不是父列一筆。`lotSize` 取自回應，不在前端寫死。**無法回測的筆不計入總成本**，即使它有買進價：它沒有收益可以對應，把它的成本放進分母會讓總報酬率被一筆沒賣出的部位稀釋。**摺疊狀態不影響總計**：一筆有沒有計入只看它自己的勾選框，與父列當下是展開還是收合無關。**排序也不影響總計。**
 
-**全部勾選時，畫面上這兩個數字必須等於回應的 `totalReturnPercent` 與 `totalProfit`，總成本必須等於 `totalCost`。** 前端就地重算是為了讓勾選切換不必重打端點，不是為了自己定義一套算法；全勾的情形是這兩條路徑必須交會的地方，也是唯一能驗出算法走偏的地方。
+**三個標籤必須用同一個涵蓋範圍。** 總成本若改成固定顯示回應的 `totalCost`、不隨勾選變動，使用者勾掉幾檔後拿「總收益 ÷ 總成本」驗算，得到的數字就會和畫面上的總報酬率對不起來。
 
-**漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。兩個總計標籤同此規則。**這指的是畫面上實際呈現的顏色**，不是儲存格上有沒有掛對應的樣式類別——表格儲存格的預設文字色若以更高的權重宣告，會把漲跌色蓋回主要文字色 `#E6EDF5`，類別掛對了畫面照樣是白字。驗收一律以實際渲染出的顏色為準。
+**全部勾選時，畫面上的總成本、總報酬率、總收益必須分別等於回應的 `totalCost`、`totalReturnPercent` 與 `totalProfit`。** 前端就地重算是為了讓勾選切換不必重打端點，不是為了自己定義一套算法；全勾的情形是這兩條路徑必須交會的地方，也是唯一能驗出算法走偏的地方。
 
-**無法回測的標的照常留在表上**，其賣出日／賣出價／報酬率／收益四欄皆顯示弱化色 `#6B7C90` 的「—」（回應中這四個欄位為 `null`，見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）。買進日照常顯示該筆的買進日；買進價在回應的 `buyPrice` 為 `null` 時同樣顯示「—」。**不得把這些列從表格中移除**——它們確實命中了，只是還沒有可賣出的交易日；拿掉它們會讓命中檔數與表格列數對不起來。
+##### 總計浮動跟隨
+
+全市場掃描的命中表常有數百列，使用者往下捲動逐列排除標的時，標題右側的總計早已捲出畫面，看不到自己剛才的勾選造成什麼變化。因此：
+
+- **只有三個總計浮動**：總成本、總報酬率、總收益（標籤與數值）。標題「命中彙總 — 共 N 檔」、三個批次勾選框與「未計入」「已隱藏」說明**不浮動**，照常隨頁面捲走。
+- **何時浮起**：往下捲動到標題列的三個總計離開畫面頂端時，三個總計改為固定在**畫面頂端**，水平位置與結果區面板的右緣對齊。往回捲到原本的三個總計重新進入畫面時，浮動的那一份消失——**同一時間畫面上只看得到一份總計**。
+- **何時結束**：命中表整張捲出畫面頂端之後（已捲過表格最後一列），浮動總計一併消失——畫面上已經沒有它說明的列。
+- **只在回測完成後存在**，與三個總計同生同滅；回測前、回測中、回測失敗時沒有總計，也就沒有浮動。
+- **浮動的數字與原位的數字是同一份**：隨勾選、「取消全選」、「取消買進價高於 N 元」、「隱藏資料不齊（無賣出日）」即時更新，顯示規則（漲跌色、總成本固定主要文字色、無值時的「—」）完全相同。不得另算一份。
+- **浮動總計有自己的底色與邊框**（色碼見 `## Visual Style`），蓋在表格列上方時列的文字不透出來。它不攔截點擊以外的區域：浮動區塊之外的列照常可點。
+- 浮動純屬呈現，**不重新呼叫任何端點**。
+
+**漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。總報酬率與總收益兩個標籤同此規則。**總成本不是漲跌值，不套漲跌色**，恆為主要文字色 `#E6EDF5`——成本永遠是正數，套上紅色會被讀成「賺錢」。**這指的是畫面上實際呈現的顏色**，不是儲存格上有沒有掛對應的樣式類別——表格儲存格的預設文字色若以更高的權重宣告，會把漲跌色蓋回主要文字色 `#E6EDF5`，類別掛對了畫面照樣是白字。驗收一律以實際渲染出的顏色為準。
+
+**無法回測的標的仍屬於命中清單**。顯示時其賣出日／賣出價／報酬率／收益四欄皆為弱化色 `#6B7C90` 的「—」（回應中這四個欄位為 `null`，見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）；買進日照常顯示該筆的買進日，買進價在回應的 `buyPrice` 為 `null` 時同樣顯示「—」。它們**預設由「隱藏資料不齊（無賣出日）」隱藏**，取消勾選該框即出現。**隱藏不等於從結果中移除**：「共 N 檔」照算，並以「另 K 筆已隱藏」說明表上少了多少列——拿掉它們卻不說，會讓命中檔數與表格列數對不起來。
 
 **總計標籤必須說出有幾檔沒算進去，以及為什麼。** 未計入的原因有兩種，兩者的意義不同，必須分開陳述——一個是系統算不出來，一個是使用者自己排除的：
 
 - 有筆無法回測時（回應中 `sellDate` 為 `null`），加一行「另 N 筆尚無可賣出交易日，未計入」。
 - 有筆被取消勾選時，加一行「另 M 筆未勾選，未計入」。
+- 有筆被隱藏時，另加一行「另 K 筆已隱藏」。這一行說的是「表上看不到」，與前兩行說的「不計入」是不同的事，各自計數：一筆可以同時出現在「未勾選」與「已隱藏」兩行。
 
 兩行數的都是**筆**而非檔：一檔三筆中有一筆無法回測時，該行算 1 筆，不是 1 檔——標題的「共 N 檔」與這兩行本來就在數不同的東西，混用會讓兩個數字看起來矛盾。
 - 兩者同時發生時兩行都顯示。都沒有時兩行都不顯示。
 
-兩行皆以次要文字色 `#93A4B8` 呈現，置於兩個標籤下方。少了它們，總報酬率看起來就像是全部命中檔數的成績。
+各行皆以次要文字色 `#93A4B8` 呈現，置於總計標籤下方。少了它們，總報酬率看起來就像是全部命中檔數的成績。
 
 **一筆既無法回測、又被取消勾選時只計入「尚無可賣出交易日」那一行**，不重複計。它本來就不會被計入總計，勾不勾選都一樣。
 
-沒有任何列被計入時，兩個標籤顯示弱化色 `#6B7C90` 的「—」，**不得顯示成 `0%`**——`0%` 的意思是算過剛好打平，與「沒有東西可以算」是兩件事。其下的說明依原因而異：
+沒有任何列被計入時，三個標籤皆顯示弱化色 `#6B7C90` 的「—」，**不得顯示成 `0%` 或 `0`**——`0%` 的意思是算過剛好打平，與「沒有東西可以算」是兩件事。其下的說明依原因而異：
 
 | 情形 | 說明文字 |
 |---|---|
@@ -346,8 +443,8 @@ depends_on: [stock-list]
 | 初次進入（未掃描） | 結果區顯示「選擇策略與區間後開始掃描」，條件區可操作 |
 | 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60% |
 | 有結果、回測中 | 掃描成功、自動回測進行中：合併表格只有代號／名稱與命中策略與訊號日兩欄，**沒有勾選框欄**，也沒有回測六欄；展開鈕照常顯示且可展開，子列此時只顯示該買進日，以及落在這個買進日的策略與各自的訊號日；「開始掃描」右側顯示「回測中…」，「開始掃描」仍可按 |
-| 已回測 | 表格最左的勾選框欄（預設全部勾選）、右側六欄與標題右側兩個標籤同時出現；展開狀態維持使用者當下的收合狀態，不強制展開也不強制收合 |
-| 回測失敗 | 「開始掃描」右側顯示「回測失敗，請稍後再試」與「重試回測」按鈕；表格維持未回測的樣子，不出現勾選框欄、六欄、兩個標籤與「取消全選」 |
+| 已回測 | 表格最左的勾選框欄（預設全部勾選）、右側六欄、標題右側三個總計標籤與標題列下方靠右的三個批次勾選框同時出現（「隱藏資料不齊（無賣出日）」預設勾選，無賣出日的筆一開始即隱藏），往下捲動時三個總計浮在畫面頂端，「買進價」「報酬率」表頭可點選排序，初始為預設排序；展開狀態維持使用者當下的收合狀態，不強制展開也不強制收合 |
+| 回測失敗 | 「開始掃描」右側顯示「回測失敗，請稍後再試」與「重試回測」按鈕；表格維持未回測的樣子，不出現勾選框欄、六欄、三個總計標籤與「取消全選」 |
 | 重試回測中 | 「重試回測」disabled 並顯示「回測中…」，錯誤訊息保留至重試有結果為止；表格內容不變 |
 | 有結果 | 正常表格 |
 | 零命中 | 合併表格處顯示「此區間內沒有命中的股票」，並附一行提示目前的最後同步時間；不送出回測 |
@@ -398,7 +495,7 @@ depends_on: [stock-list]
 ### 數值格式
 
 - 價格兩位小數；百分比兩位小數加 `%`；倍數兩位小數加 `×`。
-- 金額（回測的「收益」與「總收益」）以千分位呈現、不帶小數，負值前置 `-`。
+- 金額（回測的「收益」「總收益」與「總成本」）以千分位呈現、不帶小數，負值前置 `-`。
 - 日期一律 `YYYY-MM-DD`；同步時間 `YYYY-MM-DD HH:mm`。
 - `null` 一律顯示 `—`，不顯示 `0` 或空白。
 
@@ -442,6 +539,13 @@ depends_on: [stock-list]
 | 「回測中…」提示文字 | `#93A4B8` |
 | 總報酬率／總收益標籤文字 | `#93A4B8` |
 | 總報酬率／總收益數值（正／負／零） | `#E04B45` / `#16A75C` / `#93A4B8` |
+| 總成本標籤文字 | `#93A4B8`（與總報酬率／總收益標籤文字同值） |
+| 總成本數值 | `#E6EDF5`（不套漲跌色） |
+| 總成本無值時的「—」 | `#6B7C90`（與總報酬率／總收益的「—」同值） |
+| 可排序表頭文字（未排序／hover） | `#93A4B8` / `#E6EDF5` |
+| 可排序表頭未排序提示圖示「↕」 | `#6B7C90` |
+| 排序中表頭文字 | `#E6EDF5` |
+| 排序中表頭方向圖示「▼」「▲」 | `#3E8FD8` |
 | 「另 N 檔未計入」說明文字 | `#93A4B8` |
 | 回測各欄無值時的「—」 | `#6B7C90` |
 | 命中彙總表勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與策略勾選框同值） |
@@ -450,6 +554,19 @@ depends_on: [stock-list]
 | 「取消全選」勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與命中彙總表勾選框同值） |
 | 「取消全選」勾選框未勾選背景／邊框 | `#0F1620` / `#26333F`（與命中彙總表勾選框同值） |
 | 「取消全選」標示文字 | `#93A4B8`（與總報酬率／總收益標籤文字同值） |
+| 「取消買進價高於 N 元」勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與「取消全選」同值） |
+| 「取消買進價高於 N 元」勾選框未勾選背景／邊框 | `#0F1620` / `#26333F`（與「取消全選」同值） |
+| 「取消買進價高於 N 元」勾選框 disabled 背景／邊框／標示文字 | `#16202C` / `#26333F` / `#4A5866`（與其他 disabled 控制項同值） |
+| 「取消買進價高於 N 元」標示文字 | `#93A4B8`（與「取消全選」標示文字同值） |
+| 金額輸入框背景／文字／邊框／focus 邊框 | `#0F1620` / `#E6EDF5` / `#26333F` / `#3E8FD8`（與其他輸入框同值） |
+| 金額輸入不合法提示文字 | `#F09A94`（與錯誤訊息文字同值） |
+| 浮動總計背景／邊框 | `#16202C` / `#26333F`（與面板同值） |
+| 「隱藏資料不齊（無賣出日）」勾選框已勾選背景／勾記 | `#3E8FD8` / `#FFFFFF`（與「取消全選」同值） |
+| 「隱藏資料不齊（無賣出日）」勾選框未勾選背景／邊框 | `#0F1620` / `#26333F`（與「取消全選」同值） |
+| 「隱藏資料不齊（無賣出日）」勾選框 disabled 背景／邊框／標示文字 | `#16202C` / `#26333F` / `#4A5866`（與其他 disabled 控制項同值） |
+| 「隱藏資料不齊（無賣出日）」標示文字 | `#93A4B8`（與「取消全選」標示文字同值） |
+| 價格框勾著時 disabled 的金額輸入框背景／文字／邊框 | `#16202C` / `#4A5866` / `#26333F`（與 Disabled 參數輸入同值） |
+| 「另 K 筆已隱藏」說明文字 | `#93A4B8`（與「未計入」說明文字同值） |
 | 展開鈕圖示（未展開／已展開） | `#93A4B8` / `#E6EDF5` |
 | 展開鈕 hover 背景 | `#1D2A38` |
 | 展開後子列背景 | `#131C27` |
@@ -532,9 +649,11 @@ depends_on: [stock-list]
 - [x] 後端回 `INVALID_DROP_DAYS`／`INVALID_RISE_DAYS`／`INVALID_DROP_PERCENT`／`INVALID_RISE_PERCENT`／`PARAM_NOT_APPLICABLE` 時，錯誤訊息顯示在回應 `strategy` 指名的那張卡片下方，不是全頁通用錯誤
 
 ### 條件區：股票範圍與區間
-- [ ] 區間預設為「近一個月」快捷鈕的結果：起始週為「今日往前一個日曆月」那一天所在的週、結束週為本週；送出的 `startDate` 為起始週週一、`endDate` 為今日
-- [ ] 三個快捷鈕（近一個月／近三個月／近半年）點擊後，起始週為「今日往前一個／三個／六個日曆月」那一天所在的週，結束週為本週
-- [ ] 起始週晚於結束週時前端擋下，於區間下方提示「起始週不可晚於結束週」，不送出請求
+- [x] 區間預設起始週為上週、結束週為本週：以今日 2026-09-14（週一）驗證起始週顯示「2026 第 37 週（09/07–09/13）」、結束週顯示「2026 第 38 週（09/14–09/20）」，「實際區間 2026-09-07 ~ 2026-09-14」，送出的 `startDate` 為 `2026-09-07`、`endDate` 為 `2026-09-14`
+- [x] 以跨年的今日驗證預設：今日 2027-01-05 時起始週為「2026 第 53 週（12/28–01/03）」、結束週為「2027 第 1 週（01/04–01/10）」，`startDate` 為 `2026-12-28`
+- [x] 進頁時「近一個月」「近三個月」「近半年」三個快捷鈕皆不呈選中；按下任一快捷鈕後該鈕呈選中
+- [x] 三個快捷鈕（近一個月／近三個月／近半年）點擊後，起始週為「今日往前一個／三個／六個日曆月」那一天所在的週，結束週為本週
+- [x] 起始週晚於結束週時前端擋下，於區間下方提示「起始週不可晚於結束週」，不送出請求
 - [x] 股票範圍預設為全市場，此時請求不帶 `stockIds`
 - [x] 切到「指定股票」可搜尋加入股票，已選的以可移除標籤呈現；達 200 檔時輸入框 disabled 並提示
 
@@ -655,7 +774,7 @@ depends_on: [stock-list]
 - [x] 送出的 `items[].signalDate` 為該檔命中的各策略中**最新**的一個，與表格排序所依據的日期一致
 - [x] 標題右側出現「總報酬率」與「總收益（每檔 1 張）」兩個標籤
 - [x] 報酬率、收益與兩個總計標籤的正值為 `#E04B45`、負值為 `#16A75C`、`0` 為 `#93A4B8`
-- [x] 回應中 `sellDate` 為 `null` 的標的**仍留在表上**，其三欄皆顯示 `#6B7C90` 的「—」，未被移出表格
+- [ ] 回應中 `sellDate` 為 `null` 的標的在取消勾選「隱藏資料不齊（無賣出日）」後出現在表上，其賣出日／賣出價／報酬率／收益皆顯示 `#6B7C90` 的「—」
 - [x] 回測完成後表格排序不變，未依報酬率重排
 - [x] 全頁在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致，新增的按鈕、欄位與標籤皆取自 `## Visual Style` 的字面 hex
 
@@ -716,7 +835,7 @@ depends_on: [stock-list]
 - [x] 全部勾選時畫面的總報酬率／總收益仍等於回應的 `totalReturnPercent`／`totalProfit`，總成本等於 `totalCost`
 
 **「取消全選」勾選框**
-- [x] 回測成功後，標題右側由左至右依序為「取消全選」勾選框、總報酬率、總收益；標示文字恆為「取消全選」
+- [ ] 回測成功後，「取消全選」位於標題列下方批次勾選框列的最左；標示文字恆為「取消全選」
 - [x] 回測前、回測中、回測失敗時「取消全選」不存在；按「開始掃描」重新掃描時與勾選框欄一併移除
 - [x] 回測剛完成（全部預設勾選）時「取消全選」呈未勾選
 - [x] 勾選「取消全選」後，每一筆的勾選框（含單訊號列、所有子列、無法回測的筆、摺疊中的子列）全部取消，父列呈未勾選，兩個總計顯示「—」與「未勾選任何標的」
@@ -760,14 +879,83 @@ depends_on: [stock-list]
 - [x] 回測回應依 `(stockId, buyDate)` 對回各列；回應不含 `signalDate` 時畫面照常呈現
 
 **以週選擇區間**
-- [ ] 區間的起、迄兩個輸入皆為週選擇，畫面上沒有任何可以選到單一日期的輸入
-- [ ] 一週為週一至週日，週次依 ISO 8601：以 2027-01-01 所在的週驗證顯示為「2026 第 53 週（12/28–01/03）」
-- [ ] 每個週選擇顯示「{年} 第 {週次} 週（{MM/DD}–{MM/DD}）」，括號內為該週週一與週日
-- [ ] 送出掃描的 `startDate` 為起始週週一、`endDate` 為結束週週日；結束週為本週時 `endDate` 為今日，請求中不出現未來日期
-- [ ] 結束週無法選到本週之後的週
-- [ ] 區間列下方顯示「實際區間 {startDate} ~ {endDate}」，其值與送出的 `startDate`／`endDate` 一致，改週或按快捷鈕後即時更新
-- [ ] 起、迄週恰等於某快捷鈕的結果時該鈕呈選中樣式；手動改週後不再符合即取消選中
-- [ ] 週選擇與「實際區間」提示在瀏覽器中實際渲染的顏色取自 `## Visual Style` 的字面 hex（以 computed style 驗證）
+- [x] 區間的起、迄兩個輸入皆為週選擇，畫面上沒有任何可以選到單一日期的輸入
+- [x] 一週為週一至週日，週次依 ISO 8601：以 2027-01-01 所在的週驗證顯示為「2026 第 53 週（12/28–01/03）」
+- [x] 每個週選擇顯示「{年} 第 {週次} 週（{MM/DD}–{MM/DD}）」，括號內為該週週一與週日
+- [x] 送出掃描的 `startDate` 為起始週週一、`endDate` 為結束週週日；結束週為本週時 `endDate` 為今日，請求中不出現未來日期
+- [x] 結束週無法選到本週之後的週
+- [x] 區間列下方顯示「實際區間 {startDate} ~ {endDate}」，其值與送出的 `startDate`／`endDate` 一致，改週或按快捷鈕後即時更新
+- [x] 起、迄週恰等於某快捷鈕的結果時該鈕呈選中樣式；手動改週後不再符合即取消選中
+- [x] 週選擇與「實際區間」提示在瀏覽器中實際渲染的顏色取自 `## Visual Style` 的字面 hex（以 computed style 驗證）
+
+**買進價／報酬率欄排序**
+- [x] 回測前表格沒有可點選排序的表頭；回測完成後只有「買進價」與「報酬率」兩個表頭可點選排序（手指游標、顯示弱化色「↕」），其他表頭點了不改變排序
+- [x] 回測剛完成、尚未點任何表頭時，表格維持預設排序（最新 `signalDate` 由新到舊、同日 `stockId` 升冪）
+- [x] 連續點「報酬率」表頭：第 1 次依報酬率降冪、第 2 次升冪、第 3 次還原預設排序、第 4 次又是降冪；「買進價」表頭同此循環
+- [x] 依「買進價」排序中點「報酬率」：改為依報酬率降冪，「買進價」表頭的方向圖示消失、回到「↕」；同一時間只有一個表頭顯示「▼」或「▲」
+- [x] 「—」視為最小值：以含一筆無法回測（`returnPercent` 為 `null`）的資料驗證，依報酬率降冪時該列排在最後、升冪時排在最前；買進價為 `null` 的列在買進價排序中同理
+- [x] 值相同（含兩列同為「—」）時依預設排序決定先後：以兩檔報酬率相同、訊號日不同的資料驗證順序為訊號日新者在前
+- [x] 父列以畫面上顯示的合計值排序：以一檔兩子筆、成本加權報酬率與任一子筆報酬率皆不同的資料驗證，父列位置依其顯示的合計值決定
+- [x] 子筆全被取消勾選而顯示「—」的父列，下一次點表頭排序時視為最小值
+- [x] 排序後切換任一列或子列的勾選：父列合計照常重算，但**所有列的位置都不變**；再點一次表頭時，才依當下顯示的值、以循環的下一個狀態重排
+- [x] 展開中的父列，其子列依同一欄、同一方向排序（「—」視為最小值）；還原預設排序時子列回到依買進日由新到舊
+- [x] 父列摺疊時逐行列出的買進日／賣出日，在任何排序下都維持依買進日由新到舊，且第 k 行兩欄仍屬同一筆
+- [x] 點表頭排序不發出任何網路請求（以請求計數斷言），且勾選狀態、展開狀態、「共 N 檔」、三個總計與「未計入」說明皆不改變
+- [x] 排序中按「開始掃描」重新掃描：排序指示消失，下一次回測完成時表格為預設排序；「重試回測」成功時同樣為預設排序
+- [x] 表頭排序圖示在瀏覽器中實際渲染的顏色：「↕」為 `#6B7C90`，「▼」「▲」為 `#3E8FD8`，排序中表頭文字為 `#E6EDF5`（以 computed style 驗證），且在 `prefers-color-scheme: dark` 與 `light` 下完全一致
+
+**總成本**
+- [ ] 回測完成後，標題右側由左至右依序為「總成本（每筆 1 張）」、總報酬率、「總收益（每筆 1 張）」，標題右側不再有任何勾選框
+- [x] 全部勾選時，總成本等於回應的 `totalCost`，以千分位、不帶小數呈現
+- [x] 取消勾選一筆可回測的列後，總成本減少該筆 `buyPrice × lotSize`；勾回後回到原值；切換勾選不發出任何網路請求（以請求計數斷言）
+- [x] 無法回測的筆（`sellDate` 為 `null`）不論勾選與否都不計入總成本，即使其 `buyPrice` 有值
+- [x] 任一勾選狀態下，「總收益 ÷ 總成本 × 100」四捨五入至兩位小數等於畫面上的總報酬率
+- [x] 一檔多筆時總成本計入的是已勾選的各子筆，展開或摺疊時數字完全相同
+- [x] 沒有任何筆計入時（全部取消勾選，或全部皆無法回測），總成本顯示 `#6B7C90` 的「—」，不顯示 `0`
+- [x] 總成本數值在瀏覽器中實際渲染為 `#E6EDF5`、標籤文字為 `#93A4B8`，不因任何值套上漲跌色（以 computed style 驗證），且在 `prefers-color-scheme: dark` 與 `light` 下完全一致
+- [x] 總成本與另兩個總計標籤同生同滅：回測前、回測中、回測失敗時不存在，按「開始掃描」時一併移除
+
+**批次勾選框列**
+- [ ] 回測完成後，「取消全選」「取消買進價高於 [金額] 元」「隱藏資料不齊（無賣出日）」三個勾選框位於標題列下方、與「本次採用參數」同一列並靠右，由左至右依此順序
+- [ ] 三個勾選框等高且垂直置中對齊：以實際渲染位置驗證三個勾選框方塊的高度相同、垂直中心線相同（誤差 ≤ 1px）
+
+**「取消買進價高於 N 元」勾選框**
+- [ ] 金額輸入框進頁預設 `500`；回測完成時此框為未勾選
+- [ ] 勾選後，`buyPrice` 大於金額的每一筆（含單筆列、子列、摺疊中的子列、無法回測但有買進價的筆）取消勾選且不出現在表格中，其餘筆的勾選與顯示完全不變
+- [ ] 取消勾選後，被它隱藏的筆全部勾回並重新顯示，其餘筆的勾選狀態完全不變（先手動取消一筆低價列，再勾選、取消勾選此框，驗證該低價列維持未勾選）
+- [ ] 不含等於：金額 `500` 時 `buyPrice` 恰為 `500.00` 的筆不受影響；逐筆判斷：一檔兩筆買進價 480 與 520、金額 500 時，只有 520 那筆被取消並隱藏；`buyPrice` 為 `null` 的筆不受影響
+- [ ] 此框是記住的開關：勾選「取消全選」後它不會變成勾選；逐列手動取消高價組的每一筆也不會使它變成勾選
+- [ ] 勾著時金額輸入框 disabled；取消勾選後恢復可輸入；未勾選時修改金額不切換、不隱藏任何一筆
+- [ ] 高價組為空時此框 disabled 且未勾選；金額留空、負數或超過兩位小數時此框 disabled，輸入框下方顯示 `#F09A94` 的「金額需為 0 以上、最多兩位小數」
+- [ ] 重新掃描後金額維持使用者輸入的值；此框與「取消全選」同生同滅；切換時三個總計、父列合計與「取消全選」狀態同步重算，且不發出任何網路請求（以請求計數斷言）
+
+**「隱藏資料不齊（無賣出日）」勾選框**
+- [ ] 回測成功（含「重試回測」成功）時此框預設勾選，`sellDate` 為 `null` 的每一筆（含子列、`buyPrice` 為 `null` 的筆）一開始就不出現在表格中
+- [ ] 取消勾選後這些筆重新顯示，再勾選又隱藏；切換前後每一筆的勾選狀態與三個總計完全不變
+- [ ] 「另 N 筆尚無可賣出交易日，未計入」不論此框勾選與否皆照常顯示，N 不變
+- [ ] 沒有任何 `sellDate` 為 `null` 的筆時此框 disabled 且未勾選
+- [ ] 重新掃描時移除，下一次回測成功時再以勾選出現；切換不發出任何網路請求（以請求計數斷言）
+
+**「取消全選」與隱藏的列**
+- [ ] 兩個隱藏框皆勾著時勾選「取消全選」：每一筆取消勾選、所有被隱藏的筆重新顯示，兩個隱藏框皆變為未勾選
+- [ ] 「取消全選」呈勾選時先勾選兩個隱藏框，再取消勾選「取消全選」：每一筆勾回、所有被隱藏的筆重新顯示，兩個隱藏框皆變為未勾選
+
+**隱藏的列**
+- [ ] 一檔三筆中一筆被隱藏：父列仍在，逐行日期與展開後的子列只列出未隱藏的兩筆；一檔兩筆中一筆被隱藏：該檔以單筆列呈現剩下那一筆、沒有展開鈕；全部子筆被隱藏時整檔不出現
+- [ ] 點父列勾選框或父列本體只切換未隱藏的筆，隱藏的筆勾選狀態不變；父列三態依未隱藏的筆推導
+- [ ] 一筆同時屬於高價組與資料不齊組時，任一框勾著即隱藏，兩框皆取消才顯示
+- [ ] 有筆被隱藏時「共 N 檔」不變，總計下方顯示 `#93A4B8` 的「另 K 筆已隱藏」，K 等於被隱藏的筆數（兩組聯集）；沒有隱藏時不顯示這一行
+- [ ] 隱藏或重新顯示不改變排序狀態，重新顯示的列出現在目前排序中它應在的位置
+- [ ] 三個批次勾選框、其標示文字、勾著時 disabled 的金額輸入框與「另 K 筆已隱藏」在瀏覽器中實際渲染的顏色取自 `## Visual Style`（含 disabled 狀態，以 computed style 驗證），且在 `prefers-color-scheme: dark` 與 `light` 下完全一致
+
+**總計浮動跟隨**
+- [x] 回測完成後往下捲動，標題列的三個總計離開畫面頂端時，總成本／總報酬率／總收益固定浮在畫面頂端、與結果區面板右緣對齊；標題、兩個批次勾選框與「未計入」說明不浮動
+- [x] 往回捲到原本的三個總計重新可見時浮動區塊消失；任何捲動位置下畫面上都只看得到一份總計
+- [x] 命中表整張捲出畫面頂端後，浮動總計消失
+- [x] 浮動期間切換任一列勾選、「取消全選」或「取消買進價高於 N 元」，浮動總計的數值即時更新，且與原位總計的值相同
+- [x] 浮動總計的漲跌色、總成本固定 `#E6EDF5`、無值時的 `#6B7C90`「—」與原位規則相同；浮動區塊背景 `#16202C`、邊框 `#26333F`，蓋住的列文字不透出（以 computed style 驗證），`prefers-color-scheme: dark` 與 `light` 下一致
+- [x] 回測前、回測中、回測失敗時捲動不出現浮動總計
+- [x] 捲動不發出任何網路請求
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -1406,3 +1594,239 @@ Scope: exactly the 7 unchecked criteria under 「反彈區塊標題與「不適�
 **Deferred / 未處理**：展開鈕的 `aria-label`（「展開/收合 {stockId} 的**訊號日**明細」）語意上現在更準確的說法應該是「買進日明細」，但維持原文字——這不是任何驗收項要求的文案，且改了會牽動十幾個既有測試對這個確切字串的定位查詢，風險與收益不成比例，留給未來若真的把這段文案納入驗收項時再處理。
 
 **變更檔案**：`develop/frontend/src/api/strategies.ts`、`develop/frontend/src/pages/StrategyTab.tsx`、`develop/frontend/src/__tests__/StrategyTab.test.tsx`。
+
+---
+### Increment 17 — 2026-09-14
+
+**Scope**: the four previously-`- [ ]` groups —「條件區：股票範圍與區間」(3 items)、「以週選擇區間」(8 items)、「買進價與報酬率欄排序」(14 items, NEW), and「總成本」(9 items, NEW). Per the task instructions, items already implemented by a prior commit (19a761d) were verified against the running code rather than re-implemented, and only genuinely missing behavior/tests were added.
+
+**Already implemented before this run (verified, not re-built)**:
+- **條件區：股票範圍與區間**'s 3 items — 近一個月 default range, the three shortcut buttons, and the 起始週晚於結束週 guard — were all fully present in `StrategyTab.tsx` (`quickWeekRange`, `defaultWeekRange`, `applyShortcut`, `dateInvalid`) with existing passing tests (`defaults the date range to...`, `applies each of the three date-range shortcuts...`, `blocks the scan and shows an inline message when 起始週 is after 結束週`). No production code changes were needed for these 3.
+- **以週選擇區間**'s controls (7 of its 8 items) — the week-only selector (`WeekSelector`, no `<input type="week">` anywhere), ISO-8601 week math including the cross-year case (`isoWeekInfo`), the exact `「{年} 第 {週次} 週（{MM/DD}–{MM/DD}）」` label format, `startDate`/`endDate` submission rules, the 結束週-cannot-pass-本週 clamp, the live 「實際區間」hint, and shortcut highlighting/un-highlighting — were all already implemented and covered by existing tests. **Two gaps were found and fixed in this pass** (see below): a genuinely wrong pre-existing test expectation, a missing test for the "結束週 is a past week" `endDate` case, and no computed-style color verification at all for this group.
+
+**Bug found and fixed (pre-existing test, not production code)**: `sends endDate = today (not 結束週的週日)...` (now split into two tests) asserted a default 起始週 of `2026-08-05` when "today" is `2026-09-02`. Hand-verified against the spec's own formula (今日往前一個日曆月 = `2026-08-02`, a Sunday, whose ISO week starts `2026-07-27`) and cross-checked against three other already-passing tests using the same `monthsAgo`/`isoWeekInfo` functions on different dates (the cross-year test, the three-shortcuts test) — all agree the correct value is `2026-07-27`. The component's actual rendered output was `2026-07-27`, i.e. **the code was already correct and only the test's hard-coded expectation was wrong** (likely a hand-calculation error when the test was originally written in commit 19a761d). Fixed the test's expected `實際區間`/`body.startDate` from `2026-08-05` to `2026-07-27`; did not touch `quickWeekRange`/`monthsAgo`/`isoWeekInfo`.
+
+**New production code — 買進價／報酬率欄排序** (`StrategyTab.tsx`):
+- `SortColumn`/`SortDirection`/`SortState` types; `sortKeyValue`/`compareBySortDirection` (「—」represented as `Number.NEGATIVE_INFINITY` so null-vs-null ties and null-vs-value comparisons fall out of one branch-free formula, with a tie always returning `0` so a stable sort falls back to whatever order the input array already had); `rowSortValue` (a single row's or a multi-buy-date parent's *displayed* value — reuses the existing `computeParentAggregate`, never a raw per-child value).
+- Two new pieces of state: `sortState` (current column+direction, `null` = 還原預設排序) and `sortedRowOrder` (a **snapshot** of top-level row order, an array of `stockId`, captured only inside `handleSortClick` at the moment a header is clicked). `displayRows` (a new derived value used in place of `unionRows` for the table body) replays `sortedRowOrder` when set, falling back to `unionRows`'s own default order otherwise. This snapshot-not-live-recompute design is what makes 「排序後切換勾選，列的位置不動」hold: a checkbox toggle changes what `computeParentAggregate` DISPLAYS on next render, but `sortedRowOrder` itself is untouched by anything except the next header click, so rendering always replays the frozen order regardless of how many times checkboxes flip in between.
+- `handleSortClick(column)`: cycles 降冪 → 升冪 → 還原預設排序 → 降冪…; switching to the *other* sortable column always restarts that column's own cycle at 降冪 (compares `sortState?.column !== column` first). On `!nextState` (還原預設排序) it clears both `sortState` and `sortedRowOrder`, so rendering falls back to `unionRows`'s own default order without any special-casing.
+- `renderSortableHeader(column, label)`: the shared markup for both sortable `<th>`s — a `<span class="st-sort-label">` holding *only* the column's bare label text (kept in its own element, separate from the icon span, specifically so `screen.getByText('買進價')` in a pre-existing test keeps matching an exact string rather than a concatenated "買進價↕") and a `<span class="st-sort-icon ...">` holding `↕`/`▼`/`▲`. The `<th>` itself carries `st-sortable` (cursor: pointer) always, plus `st-sort-header-active` (color `#E6EDF5`) only when that column is the active one — the label span has no color of its own and simply inherits whichever color the `<th>` currently has, so one class toggle on the `<th>` recolors both the label and lets the icon carry an unrelated color of its own.
+- Expanded-parent child rows: a new `childOrderGroups` local (sorted by the same column/direction when `sortState` is set, tie broken by `buyDate` desc, otherwise identical to `groups`) feeds `childRows`'s `.map(...)` — deliberately a *separate* variable from `groups`, which the collapsed multi-line 買進日／賣出日 display still reads directly and unconditionally, so that display never reorders under any active sort (「父列摺疊時逐行列出的買進日／賣出日，在任何排序下都維持依買進日由新到舊」).
+- Reset: `runScan` now also calls `setSortState(null)`/`setSortedRowOrder(null)` in the same synchronous block that already clears `backtestResult` etc. the instant 開始掃描 is clicked — before the new scan request is even sent.
+
+**New production code — 總成本** (`StrategyTab.tsx` + `StockListPage.css`): a third `<div className="st-total-item">` inserted between the existing 「取消全選」`<label>` and the 總報酬率 `<div>`, reusing the already-existing `backtestTotals.totalCost` (this value was already being *computed* client-side for the `totalReturnPercent` formula — `computeBacktestTotals` already accumulated it — it just had no UI element reading it before this increment). Value renders as plain `{formatAmount(backtestTotals.totalCost)}` with **no** `signColorClass` call (unlike the two sibling totals) so it always inherits the page's primary text color; the zero-included case renders `<span className="sl-muted">—</span>` instead of `0`. No new color values were introduced — `.st-total-value` already had no `color` of its own (inherits `#E6EDF5`), and `.sl-muted` (`#6B7C90`) and `.st-total-label` (`#93A4B8`) were already defined and reused verbatim.
+
+**New CSS** (`StockListPage.css`): `.st-union-table th.st-sortable` (cursor/user-select), `.st-union-table th.st-sortable:hover` and `.st-union-table th.st-sort-header-active` (both `color: #e6edf5`), `.st-sort-icon`/`.st-sort-icon-idle` (`#6b7c90`)/`.st-sort-icon-active` (`#3e8fd8`) — every hex value copied literally from `## Visual Style`'s newly-added 「可排序表頭」/「總成本」 rows, no theme variable, no `prefers-color-scheme` query anywhere.
+
+**Design decision — why a frozen snapshot instead of a "sort key" that's just re-evaluated every render**: the alternative (store only `sortState`, recompute row order from live `unionRows`+`computeParentAggregate` on every render) is simpler code but directly violates the explicit AC「排序後切換勾選，列的位置不動」— a parent row's displayed aggregate changes the instant a child checkbox flips, so a live recompute would silently re-sort the table out from under a user who is mid-way through unchecking several rows, which the spec calls out by name as the exact failure mode to avoid ("使用者正在逐列排除標的時，列在手下跳走會讓他點錯列"). The snapshot is the smallest mechanism that satisfies both halves of the requirement (re-sort *only* on the next explicit header click) without inventing a second "is this stale" flag — `sortedRowOrder`'s mere presence/absence already doubles as that flag via `sortState`.
+
+**Per-criterion verification**:
+
+*條件區：股票範圍與區間 (3 items, all already implemented)*
+1. 近一個月 default — `defaults the date range to the 近一個月 week range...` (pre-existing, unchanged).
+2. 三個快捷鈕 — `applies each of the three date-range shortcuts to the exact expected ISO weeks` (pre-existing, unchanged).
+3. 起始週晚於結束週 guard — `blocks the scan and shows an inline message when 起始週 is after 結束週` (pre-existing, unchanged).
+
+*以週選擇區間 (8 items)*
+1. 週選擇、無單一日期輸入 — `has no day-level date input anywhere on the page` (pre-existing).
+2. ISO 8601／跨年 — `resolves a cross-year ISO week correctly: 2027-01-01 belongs to 2026 week 53` (pre-existing).
+3. 標籤格式 — asserted throughout via exact-string matches like `2026 第 31 週（07/27–08/02）` (pre-existing, multiple tests).
+4. `startDate`/`endDate` 送出規則 — `sends endDate = today...` (pre-existing, **test expectation fixed this pass**, see bug note above) **plus new**: `sends the end week's own Sunday as endDate when 結束週 is a past week, not 本週` (new — the converse case, previously untested).
+5. 結束週不可選未來 — `cannot step 結束週 past 本週` (pre-existing).
+6. 「實際區間」即時更新 — covered throughout (pre-existing).
+7. 快捷鈕選中／取消選中樣式 — `applies the 近三個月 shortcut, highlights it...` / `un-highlights every shortcut once the weeks are manually stepped away...` (pre-existing).
+8. 顏色 computed style (dark/light) — **new**: `StockListPage.cellColorCascade.test.ts`'s `renders the 週選擇 control, 「實際區間」hint, and 快捷區間鈕 states with their literal Visual Style colors` (Playwright, real Chromium, `describe.each(['dark','light'])`) — verifies `.st-week-select`'s background/text/border (`#0F1620`/`#E6EDF5`/`#26333F`), its `focus-within` border (`#3E8FD8`, via actually focusing a child button), `.st-range-hint` (`#93A4B8`), and both `.st-shortcut`/`.st-shortcut-active` states (`#1B2836`/`#93A4B8` and `#26333F`/`#E6EDF5`). This group had **zero** computed-style verification before this pass — jsdom (used by every other test in `StrategyTab.test.tsx`) does not apply real CSS cascade, so this AC could only be verified via the Playwright suite, matching how earlier increments verified「以 computed style 驗證」ACs elsewhere in this spec.
+
+*買進價與報酬率欄排序 (14 items, all NEW)*
+1. 回測前無排序表頭；回測後僅買進價／報酬率可排序，弱化色「↕」— `has no sortable headers before 回測 completes, and exactly 買進價／報酬率 sortable...` (new; uses a deferred backtest promise to genuinely catch the mid-flight state, the same technique an existing test already used).
+2. 回測剛完成維持預設排序 — `shows the default order (latest signalDate desc, tie stockId asc) immediately after 回測, before any header click` (new).
+3. 降冪→升冪→還原→降冪循環 — `cycles 降冪 → 升冪 → 還原預設排序 → 降冪…` (new; 4 clicks, checks both order and icon each time).
+4. 切換欄位重置為降冪、另一欄圖示消失 — `restarts at 降冪 when switching to the OTHER sortable column...` (new).
+5. 「—」視為最小值（買進價／報酬率皆驗證）— covered inside test 3 (報酬率, via `CCCC`'s null values) and test 4 (買進價, same row).
+6. 值相同依預設排序 — `breaks a tie on the sorted value using the default order (latest signalDate first)` (new, dedicated 2-stock tied-value fixture).
+7. 父列以顯示的合計值排序 — `sorts a multi-buy-date parent row by the value it DISPLAYS (its cost-weighted aggregate)...` (new; fixture deliberately chosen so sorting by the parent's best child's own return would put it in a different, observably-wrong position than sorting by its displayed -9.80% aggregate).
+8. 子筆全取消勾選的父列視為最小值 — `treats a multi-buy-date parent whose children are ALL unchecked (displaying 「—」) as the minimum on the next header click` (new).
+9. 排序後切換勾選不移動列，下次點表頭才重排 — `freezes row order at the moment of the header click...` (new; unchecks one of a parent's two children mid-sort, confirms zero reordering, then confirms the *next* header click does resort using the now-current displayed value).
+10. 展開中子列依同欄同方向排序、還原回買進日新到舊 — `sorts an expanded parent's own child rows by the same column/direction, restoring buyDate-desc order on 還原預設排序` (new).
+11. 父列摺疊時逐行日期恆買進日新到舊 — `keeps a collapsed parent's own buyDate/sellDate lines in buyDate-desc order under any active sort direction` (new).
+12. 排序不打端點、不改其他狀態 — `sorts entirely client-side: zero network requests, and leaves checkbox state, 共 N 檔, totals and 未計入 notes unchanged` (new; request-count assertion plus before/after snapshot equality on checkboxes and totals).
+13. 重新掃描/重試回測後為預設排序 — `resets sort to default (icons back to 「↕」) the instant 開始掃描 re-scans` + `shows default sort order (idle 「↕」 icons) after a failed auto-回測 is retried successfully` (both new; the retry case is a corollary of "no sortable header exists before a successful 回測" rather than needing its own reset code path, and the test's own comment says so).
+14. 表頭圖示 computed style dark/light — **new**: `StockListPage.cellColorCascade.test.ts`'s `colors the sortable headers: idle 「↕」 weak / default label, sorted 「▼」 blue / primary label` (Playwright, `describe.each(['dark','light'])`) — verifies idle icon `#6B7C90`, idle label `#93A4B8` (inherited default), active icon `#3E8FD8`, active label `#E6EDF5`.
+
+*總成本 (9 items, all NEW)*
+1. 標籤順序（取消全選、總成本、總報酬率、總收益）— `places the four totals-row items in order 取消全選, 總成本, 總報酬率, 總收益...` (renamed/extended pre-existing test).
+2. 全部勾選時等於回應 `totalCost` — `with everything checked, the displayed 總成本／總報酬率／總收益 equal the response's totalCost/totalReturnPercent/totalProfit exactly` (renamed/extended pre-existing test; asserts `['4,850,000', '-0.82%', '-40,000']` against `unionBacktestResponse`'s own `totalCost`/`totalProfit`/`totalReturnPercent`).
+3. 取消勾選一筆可回測列後減少 `buyPrice×lotSize`；勾回復原；不打端點 — `unchecking a row updates the totals to exclude it, and rechecking restores the original totals` (extended pre-existing test, now asserts the cost column too) + the pre-existing `toggling a row checkbox issues zero network requests...` test (extended) for the request-count half.
+4. 無法回測的筆（`sellDate` 為 `null`）不論勾選皆不計入，即使 `buyPrice` 有值 — covered by every totals array assertion using `unionBacktestResponse` (2454, `buyPrice: 900`, `sellDate: null`) throughout the extended pre-existing tests — its cost is never in any expected total.
+5. 「總收益 ÷ 總成本 × 100」四捨五入至兩位小數等於畫面上總報酬率 — **new**: `keeps 「總收益 ÷ 總成本 × 100」(rounded to two decimals) equal to the displayed 總報酬率 at any checked state` (verifies the identity both fully-checked and after excluding one row).
+6. 一檔多筆時計入已勾選子筆，展開／摺疊數字相同 — `keeps the two header totals identical whether a multi-signal-date row is expanded or collapsed` (pre-existing test; its array-equality assertion now covers total cost too since it reads all three `.st-total-value`s generically).
+7. 沒有任何筆計入時顯示 `#6B7C90` 的「—」不顯示 `0` — the three `['—','—','—']` assertions (extended pre-existing tests: 沒有可回測的標的／未勾選任何標的／取消全選 全部取消).
+8. computed style（值 `#E6EDF5`、標籤 `#93A4B8`，dark/light 一致，不因值套漲跌色）— **new**: `StockListPage.cellColorCascade.test.ts`'s `renders 總成本 with a fixed primary-text value (never a sign color), a secondary-text label, and a weak-text dash` (Playwright, `describe.each(['dark','light'])`) **plus** the extended jsdom test `colors 報酬率／收益 and the two totals up-red for positive, down-green for negative, neutral for zero`, which now explicitly asserts the total-cost value's `className` contains **neither** `sl-up`, `sl-down`, nor `sl-neutral` even in the all-zero (`returnPercent: 0`) scenario where its two sibling totals *do* get `sl-neutral` — the strongest possible negative-case check that a value being exactly `0` doesn't accidentally trigger a sign class on this one label.
+9. 同生同滅（回測前/中/失敗不存在，開始掃描時一併移除）— **new**: `exists only after a successful 回測, same lifecycle as 取消全選／總報酬率／總收益: absent before/during/on failure, present after a successful retry`.
+
+**Test/build output tails**:
+```
+$ npx vitest run src/__tests__/StrategyTab.test.tsx
+ Test Files  1 passed (1)
+      Tests  180 passed (180)
+
+$ npx vitest run src/__tests__/StockListPage.cellColorCascade.test.ts
+ Test Files  1 passed (1)
+      Tests  34 passed (34)
+
+$ npm test   (vitest run, whole project)
+ Test Files  10 passed (10)
+      Tests  336 passed (336)
+
+$ npm run build   (tsc -b && vite build)
+✓ 47 modules transformed.
+dist/index.html                   0.45 kB │ gzip:  0.29 kB
+dist/assets/index-BdpowpWR.css   29.42 kB │ gzip:  5.08 kB
+dist/assets/index-DWOIKACE.js   322.16 kB │ gzip: 98.61 kB
+✓ built in 125ms
+
+$ npm run lint   (oxlint)
+src/__tests__/StrategyTab.test.tsx:858:7: warning eslint(no-unreachable)  — pre-existing (see Increment 1's Execution Result), unrelated to this pass's shared mock helper
+src/pages/StrategyTab.tsx:827:7: warning react(set-state-in-effect)      — pre-existing (see Increment 1's Execution Result), unrelated line (stock-search-suggestions effect)
+```
+No new lint warnings were introduced; both listed warnings predate this increment.
+
+**code-quality 自我檢查**: absence safety — `rowSortValue`/`compareBySortDirection` use `?? null`/`== null` explicitly everywhere a value may be absent, never a bare chained access; `displayRows`'s `sortedRowOrder.map(...).filter((row): row is UnionRow => row != null)` defensively drops any (should-never-happen, since `sortedRowOrder` is always rebuilt from the current `unionRows` at click time) stale key rather than crashing on `undefined`. error handling — no new `fetch`/promise call sites were added; sorting is 100% synchronous client-side state. resource lifecycle — no new subscriptions, timers, or listeners. atomicity — `setSortState`+`setSortedRowOrder` are two `setState` calls in the same synchronous event handler, which React 19 batches into one render, so there's no user-visible half-updated state between them. performance — `handleSortClick`'s `.sort()` is O(n log n) over the hit list once per click (not per render); the new `childOrderGroups` sort only runs for an *expanded* parent and only re-sorts that one parent's own (typically single-digit) buy-date groups, not the whole table.
+
+**Anything not independently verified, and why**: the dev server/backend at :5173/:8080 mentioned in the task's environment notes were not used for a live click-through — all verification here is via `vitest`(jsdom)+Playwright(real Chromium, headless, for computed-style only), `tsc`, and `vite build`, consistent with how every prior increment in this spec's Execution Result was verified (no increment before this one used a live browser session against the running dev server either). The `POST /api/strategies/backtest`/`POST /api/strategies/scan` endpoints' own contracts were not re-verified against a live backend — this increment is purely a frontend presentation/interaction layer on top of the already-`DONE` backend specs (`specs/backend/strategy-scan.md`, `specs/backend/strategy-backtest.md`), using hand-derived fixtures shaped exactly per those specs' documented response fields (`totalCost`/`lotSize`/per-item `buyPrice`/`profit`/`sellDate`), the same approach every earlier increment of this spec used.
+
+**變更檔案**：
+- `develop/frontend/src/pages/StrategyTab.tsx` — 買進價／報酬率欄排序 state/logic/rendering; 總成本 totals-row item; `runScan`'s reset now also clears sort state.
+- `develop/frontend/src/pages/StockListPage.css` — new `.st-sort-*` rules for the sortable headers; no new rules were needed for 總成本 (fully reuses existing `.st-total-value`/`.st-total-label`/`.sl-muted`).
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx` — new fixtures (`sortableScanResponse`/`sortableBacktestResponse`, `tieScanResponse`/`tieBacktestResponse`, `parentSortScanResponse`/`parentSortBacktestResponse`) and helpers (`topLevelRowStockIds`, `clickSortHeader`, `sortHeaderIcon`); 18 new tests (14 排序 + 1 週選擇區間 + 3 總成本); 1 pre-existing test's wrong hard-coded date fixed; ~10 pre-existing `.st-total-value` array assertions extended from 2 to 3 elements to account for the new 總成本 column; 1 pre-existing header-text assertion updated for the new sort icons.
+- `develop/frontend/src/__tests__/StockListPage.cellColorCascade.test.ts` — new markup fixtures + 3 new `describe.each(['dark','light'])`-parameterized `it()`s covering the sortable-header colors, the 總成本 colors, and the 週選擇／實際區間／快捷鈕 colors — all previously unverified by computed style.
+
+---
+
+### Increment 18 — 2026-09-14
+
+- Status: DONE — all 20 previously-unchecked criteria in this range (「取消買進價高於 N 元」勾選框 × 13, 總計浮動跟隨 × 7) implemented and covered by tests; 362/362 frontend tests pass; `npm run build` clean; lint unchanged (same 2 pre-existing warnings, 0 new).
+
+#### Files changed
+- `develop/frontend/src/pages/StrategyTab.tsx`
+  - New pure helpers: `isPriceThresholdInputInvalid` (0 以上、最多兩位小數 — same round-and-compare shape as `isRisePercentInputInvalid`/`isParamInputInvalid`) and `computeFloatingTotalsVisible(anchorTop, tableEndTop)`, deliberately isolated from DOM measurement so the on/off decision for the floating totals is a plain, unit-testable function (jsdom has no real layout engine backing `getBoundingClientRect`).
+  - New state: `priceThresholdInput` (string, defaults to `'500'`, **never reset by `runScan`** — only the `useState` initializer, which runs once on mount, ever sets it back, matching「金額在同一次進頁內保留…重新整理頁面回到 500」); `totalsAnchorRef`/`tableEndRef`/`unionBlockRef` (refs the scroll effect reads); `floatingTotalsVisible`/`floatingRightOffset`.
+  - New `useEffect` (dep: `hasBacktestTotals`, a derived boolean so the listener isn't torn down/re-attached on every checkbox toggle): registers `scroll`/`resize` listeners only while the three totals exist, measures immediately on registration (so a backtest that completes while the user is already mid-scroll reflects that position right away, not just on the next scroll tick), and tears the listeners down — resetting `floatingTotalsVisible` to `false` — the instant `backtestTotals` goes back to `null` (重新掃描／回測前／回測中／回測失敗). Never issues a network request; pure `getBoundingClientRect()` reads.
+  - New `renderTotalsTriplet(totals: BacktestTotals)` — the 總成本／總報酬率／總收益 JSX, extracted out of the header into one function called from **both** the in-flow position (wrapped in a new `.st-totals-anchor` ref'd div) and the floating copy, so there is exactly one computation and one set of formatting/color rules for both, never a second implementation to drift out of sync.
+  - New 高價組 logic (placed right after the existing 「取消全選」block, reusing its own `allItemKeys`): `priceThresholdInvalid`/`priceThresholdAmount` (parsed from the input string, `null` when invalid); `highPriceGroupKeys` (every `(stockId, buyDate)` key — single rows, every child incl. collapsed ones, and unbacktestable-but-priced rows — whose `backtestItemsByKey.get(key)?.buyPrice` is non-null and strictly greater than the amount); `priceThresholdChecked` (derived: group non-empty AND every key in it unchecked — never independently tracked, never indeterminate); `priceThresholdDisabled` (invalid amount OR empty group); `togglePriceThreshold(turnOn)` (adds/removes exactly `highPriceGroupKeys` from `checkedItemKeys`, never called by the amount `onChange`).
+  - JSX: the new checkbox+amount-input+hint sits between 取消全選 and the totals-anchor (`取消全選, 取消買進價高於 [金額] 元, 總成本, 總報酬率, 總收益`, left to right); amount input is `type="number" min={0} step="0.01"` (matching the existing `.st-rise-input`'s convention rather than a bespoke `type="text"`); a `.st-floating-totals` block (position:fixed, `right` set inline from `floatingRightOffset`) renders only when `floatingTotalsVisible && backtestTotals`, calling `renderTotalsTriplet` with the *same* `backtestTotals` object; a zero-height `.st-table-end-sentinel` sits right after the `</table>`/zero-state block (before `renderScanNotes()`, which is deliberately outside the sentinel's scope since it isn't part of "the hit table").
+- `develop/frontend/src/pages/StockListPage.css` — `.st-totals-anchor` (flex row, preserves the pre-existing 20px gap layout now that the triplet is one level deeper); `.st-price-threshold-item`/`-row`/`-input`(+`:focus`/`::placeholder`)/`-hint` (all literal hexes copied from `## Visual Style`: `#0F1620`/`#E6EDF5`/`#26333F`/`#3E8FD8` for the input, reusing `.st-inline-error`'s `#F09A94` for the hint rather than inventing a second error-text rule); `.st-total-label-disabled` (`#4A5866`); `.st-row-checkbox:disabled` (`#16202C`/`#26333F`, first `:disabled` state this checkbox class has ever needed); `.st-floating-totals` (`#16202C`/`#26333F`, `position: fixed; top: 0; z-index: 20`, opaque background so a row scrolled underneath never shows through); `.st-table-end-sentinel` (`height: 0`). No `prefers-color-scheme` query added anywhere (`grep -rn "prefers-color-scheme" src/pages/StockListPage.css` still returns nothing).
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx` — `priceThresholdScanResponse`/`priceThresholdBacktestResponse` fixtures (5 stocks: 2330 two buy dates 480/520 straddling the 500 threshold so the parent must go 半選 either way; 1101 at exactly 500.00 for the 不含等於 boundary; 3008 at 600 with `sellDate: null` for 無法回測但有買進價; AAAA at 100 as a low-price control; CCCC with `buyPrice: null` for 「buyPrice 為 null 不受此框影響」); `runPriceThresholdScan`/`priceThresholdCheckbox`/`priceThresholdAmountInput`/`waitForFloatingTotals`/`mockFloatingRects` helpers; 13 new tests for 「取消買進價高於 N 元」 (10 plain `it()`s + one `it.each(['', '-1', '1.234'])` contributing 3) and 7 new tests for 總計浮動跟隨 (20 new tests total, covering all 20 unchecked criteria).
+- `develop/frontend/src/__tests__/StockListPage.cellColorCascade.test.ts` — new markup fixtures for the checkbox's checked/unchecked/disabled states, its amount input (incl. focus), its label text (enabled/disabled), its hint, and `.st-floating-totals`'s own background/border/position; 3 new `describe.each(['dark','light'])`-parameterized `it()`s (6 tests, one pair per color scheme); new color constants `INPUT_TEXT`/`ERROR_TEXT`/`PANEL_BG`/`PANEL_BORDER`.
+
+#### Design decisions
+- **Floating is a JS-driven `position: fixed` toggle, not CSS `position: sticky`.** A pure-CSS sticky approach (nesting the triplet as the first child of a wrapper whose bottom coincides with the table's own bottom) would have worked visually and needed zero JavaScript, but it would leave nothing for a jsdom unit test to assert against — there would be no boolean anywhere to drive, only a browser-computed layout fact. The task's own instruction ("verify the visibility logic in unit tests by mocking whatever observer/scroll mechanism you use") reads as expecting exactly this shape: an explicit, mockable decision function (`computeFloatingTotalsVisible`) wired to a scroll/resize listener that measures two refs, with the real pixel-accurate rendering left to Playwright/manual verification. This also makes "only one copy visible at a time" and "disappears once the table has scrolled past" independently assertable in jsdom via mocked rects, rather than only inferable from a real browser.
+- **Two refs, not one IntersectionObserver pair.** `getBoundingClientRect()` on a plain `scroll`/`resize` listener was chosen over `IntersectionObserver` because (a) jsdom has no `IntersectionObserver` at all (would need a polyfill/global stub the rest of the test suite doesn't otherwise need), and (b) the exact sign-based rule (`anchorTop < 0 && tableEndTop >= 0`) is simpler to express and test as a pure function than translating two `IntersectionObserverEntry`s' `isIntersecting`/`boundingClientRect` fields into the same boolean. The trade-off is a `scroll` listener firing on every scroll tick rather than only at threshold crossings — acceptable here since `measure()` only does two `getBoundingClientRect()` reads and two `setState` calls (React bails out re-rendering when the value doesn't change), not a network call or a heavy computation.
+- **The amount input is `type="number"`, not `type="text"`.** Matches the existing `.st-rise-input`/`.st-days-input` convention in this same file rather than introducing a new `inputMode="decimal"` pattern; validation still runs entirely off `e.target.value` as a string either way, so this was a pure consistency fix made during self-review, not a functional change.
+- **`highPriceGroupKeys` reuses `allItemKeys`** (already computed for 「取消全選」) rather than re-deriving the full flatten-over-`unionRows` list a second time — one source for "every 筆 on the table", filtered down for this control's narrower purpose.
+
+#### Per-criterion verification
+**「取消買進價高於 N 元」勾選框 (13 criteria, lines 875–887)**
+1. Order + default `500` — **Satisfied**, tested (`places 取消買進價高於 between 取消全選 and 總成本, defaults the amount to 500, and exists only after a successful 回測`, index-based ordering assertion on `.st-backtest-totals`'s `textContent`) and lifecycle (absent before scan, absent during auto-回測, present after) asserted in the same test.
+2. Checking unchecks exactly the 高價組 (incl. 子列／摺疊中的子列／無法回測但有買進價) — **Satisfied**, tested (`checking it unchecks exactly the 高價組...`, and separately `toggles a collapsed (not-yet-expanded) child position too...` for the specifically-collapsed case).
+3. Unchecking checks the 高價組 back, without touching an already-manually-unchecked row — **Satisfied**, tested (`unchecking it checks the 高價組 back...`).
+4. 不含等於 (`buyPrice` exactly `500.00` not affected) — **Satisfied**, tested (1101 asserted `checked: true` throughout `checking it unchecks exactly the 高價組...`).
+5. 逐筆判斷 (480/520 split, parent 半選) — **Satisfied**, tested (2330 parent `indeterminate: true` assertion in the same test and in the collapsed-toggle test).
+6. `buyPrice: null` unaffected — **Satisfied**, tested (CCCC asserted `checked: true` in `checking it unchecks exactly the 高價組...`).
+7. Derived state (checked when group empty-of-checks incl. after 逐列手動取消 and after 取消全選; unchecked, never indeterminate, on partial) — **Satisfied**, tested (`derives its checked state from the positions rather than remembering its own flag...`).
+8. Empty group → disabled + unchecked — **Satisfied**, tested (`is disabled and unchecked when nothing is above the amount`, and a second scenario with a single-hit list in `has no effect and disabled+unchecked state when the amount is left at its default with nothing above 500`).
+9. Invalid amount (empty/negative/>2 decimals) → disabled + `#F09A94` hint — **Satisfied**, tested (`it.each(['', '-1', '1.234'])`) — colored-text confirmed separately by computed style (see criterion 13 below).
+10. Editing the amount never toggles any 筆, only re-derives — **Satisfied**, tested (`never toggles any position when the amount itself is edited...`, asserts every other checkbox's checked state and the fetch call count are unchanged).
+11. Amount persists across a rescan; lifecycle identical to 取消全選 — **Satisfied**, tested (`keeps the user-entered amount across a re-scan...`: amount survives a failed-then-retried backtest and remains `'750'`; control disappears on 開始掃描/回測失敗, reappears on 重試回測 success).
+12. No network requests; totals/parent/取消全選 recompute — **Satisfied**, tested (`recomputes the three totals, the parent aggregate, and 取消全選 the instant it is toggled — with no network request`: exact totals recomputation `['1,080,000','3.70%','40,000']`, parent `indeterminate: true`, 取消全選 `checked: false`, fetch call count unchanged) plus the fetch-count assertion already inside criterion 10's test for the amount-edit path.
+13. Colors literal hex, dark/light identical — **Satisfied**: `StockListPage.cellColorCascade.test.ts`'s new `renders the 「取消買進價高於 N 元」checkbox's painted colors...` (checked/unchecked/disabled backgrounds+borders, amount input background/text/border/focus-border, all via real computed style in headless Chromium) and `colors the 「取消買進價高於 N 元」label text (enabled/disabled) and its invalid-amount hint` (`#93A4B8`/`#4A5866`/`#F09A94`), both parameterized over `dark`/`light` and passing identically in each.
+
+**總計浮動跟隨 (7 criteria, lines 890–896)**
+1. Shows fixed-at-top, right-aligned to the panel's right edge, once the in-flow totals scroll above the viewport; title/checkboxes/未計入 notes never float — **Satisfied**: visibility logic tested (`shows the floating totals once the in-flow totals scroll above the viewport top, and hides them again once they scroll back into view`, via `mockFloatingRects`+dispatched `scroll` events) and right-alignment tested (`right-aligns the floating totals to the result panel's own right edge`, asserting the inline `right` style equals `window.innerWidth − panelRight`); that only the triplet (not the title/checkboxes/notes) is inside `.st-floating-totals` is structural — `renderTotalsTriplet` is the only thing ever placed inside that `<div>`, confirmed by source read.
+2. Only one copy visible at any scroll position (disappears when the in-flow copy is visible again) — **Satisfied**, tested (second half of the same "shows...hides..." test: re-mocking the anchor back into view and re-dispatching `scroll` removes `.st-floating-totals` from the document entirely — not just hidden via CSS, actually unmounted, so there is structurally never a moment with two `.st-total-value` triplets simultaneously rendered).
+3. Disappears once the whole hit table has scrolled past the top — **Satisfied**, tested (`hides the floating totals once the whole hit table has scrolled past the viewport top, even though the anchor is also above it` — anchor deep above AND table-end sentinel also above ⇒ hidden, proving the second condition is load-bearing and not redundant with the first).
+4. Same numbers, updates immediately on any checkbox/取消全選/取消買進價高於 toggle — **Satisfied**, tested (`mirrors the exact same totals values as the in-flow copy, updating together the instant a checkbox is toggled — never a second computation`: equality asserted both right after becoming visible and again after clicking a row checkbox).
+5. Same color rules (up/down/neutral, fixed `#E6EDF5` total-cost, `#6B7C90` dash), opaque `#16202C`/`#26333F` background/border, dark/light identical — **Satisfied**: `StockListPage.cellColorCascade.test.ts`'s new `renders 浮動總計 with an opaque #16202C background, #26333F border, and the same total-value colors as the in-flow totals` — reuses the exact same `.st-total-value`/sign-class markup already proven correct for the in-flow totals (no second color implementation to separately verify), plus a dedicated background/border/`position: fixed` check.
+6. Absent before/during/after-failed 回測 even if a scroll event fires — **Satisfied**, tested (`never shows the floating totals before 回測, while 回測 is running, or after 回測 fails — even if a scroll event fires`, covering all three states with `mockFloatingRects`+`scroll` dispatched in each).
+7. No network requests from scrolling — **Satisfied**, tested (`never issues a network request when scrolling, even across multiple visibility transitions`: three `mockFloatingRects`+`scroll` transitions plus a `resize`, fetch call count unchanged).
+
+#### Test / build / lint output (verbatim tails)
+```
+$ npx tsc -b
+(no output, exit 0)
+
+$ npx vitest run
+ Test Files  10 passed (10)
+      Tests  362 passed (362)
+
+$ npm run build
+> tsc -b && vite build
+✓ 47 modules transformed.
+dist/index.html                   0.45 kB │ gzip:  0.29 kB
+dist/assets/index-CZXy3WNZ.css   30.32 kB │ gzip:  5.24 kB
+dist/assets/index-DqsuE2D9.js   324.33 kB │ gzip: 99.32 kB
+✓ built in 130ms
+
+$ npm run lint
+src/__tests__/StrategyTab.test.tsx:921:7: warning eslint(no-unreachable) — pre-existing (Increment 1), a `void init` after `return` in the shared `beforeEach` fetchMock, unrelated to and untouched by this increment.
+src/pages/StrategyTab.tsx:871:7: warning react(set-state-in-effect) — pre-existing (Increment 1), the stock-search-suggestions effect (`scope`/`debouncedStockSearch`), unrelated to and untouched by this increment. The new 總計浮動跟隨 effect (`measure()` calling `setFloatingTotalsVisible`/`setFloatingRightOffset` from inside a `useEffect`) triggers the exact same *rule* in principle but was not separately flagged by oxlint — the warning count stayed at 2, confirmed by the tail above.
+```
+Cross-checked per file: `npx vitest run src/__tests__/StrategyTab.test.tsx` alone → `Tests 200 passed (200)` (180 pre-existing + 20 new this increment: 13 「取消買進價高於」 + 7 總計浮動跟隨); `npx vitest run src/__tests__/StockListPage.cellColorCascade.test.ts` alone → `Tests 40 passed (40)` (34 pre-existing + 6 new this increment, 3 `it()`s × 2 color schemes). 200 + 40 = 240; the remaining 122 of the whole-project 362 come from the other 8 test files, unchanged by this increment.
+
+#### code-quality 自我檢查
+Absence safety — `backtestItemsByKey.get(key)?.buyPrice` (optional chaining, never a force-unwrap) everywhere `highPriceGroupKeys` reads a position's price; `totalsAnchorRef.current`/`tableEndRef.current`/`unionBlockRef.current` are all null-checked with an early return inside `measure()` (refs can legitimately be `null` between an unmount and the next render). Error handling — no new `fetch`/promise call sites were added by this increment; the floating-totals effect is pure synchronous DOM measurement, nothing to reject. Resource lifecycle — the new `useEffect` returns a cleanup that removes both the `scroll` and `resize` listeners AND resets `floatingTotalsVisible` to `false`, so a rescan (which nulls `backtestTotals`) can never leave a stale floating panel mounted or a dangling window listener. Atomicity — `togglePriceThreshold`'s add/remove loop runs inside a single functional `setCheckedItemKeys` updater (one state transition, not N), matching the existing `toggleCancelAll`/`toggleParentChecked` shape. Performance — `highPriceGroupKeys`/`allItemKeys` are O(n) over the hit list per render, same order of work `computeBacktestTotals` (already on every render) already does; no request-per-item loop anywhere. One source-review-only finding, not code-changed: `position: fixed` combined with `.st-result-block`'s pre-existing `overflow: hidden` could in principle clip a fixed descendant if any ancestor established a new containing block via `transform`/`filter`/`will-change`/`contain` — confirmed by `grep` that no such property exists anywhere in `.st-union-block`'s ancestor chain (`StockListPage.css`, `App`-level CSS, `KLineChart.css`), so the floating box is not clipped; flagged here rather than silently assumed.
+
+#### Deferred / not independently verified here
+- **Real browser scroll/paint verification of the floating panel's fixed positioning was not performed against a live, running dev server** (the environment notes say the dev server at :5173 is already running as a detached process and must not be restarted, but this agent did not drive it with a real mouse/scroll in a browser this session). What *was* verified in a real headless Chromium (via the existing static-HTML-fixture Playwright technique this spec's `StockListPage.cellColorCascade.test.ts` already establishes) is every computed-style fact the task asked for: the checkbox/input/hint/label colors in all states, and the floating block's own background/border/`position: fixed`, identical under `dark`/`light`. The visibility *logic* (when the floating copy shows/hides, that it mirrors the same values, that it never double-renders) was verified in jsdom by mocking `getBoundingClientRect` and dispatching real `scroll`/`resize` events against the real component tree — exactly the two techniques the task instructions named as sufficient, given jsdom cannot do real layout. The one thing neither of those two techniques can prove — that scrolling an actual, real, laid-out page produces `getBoundingClientRect()` values that cross zero at the moment a human would expect — was not exercised end-to-end in one live session; source review (position:fixed semantics, no clipping ancestor, sentinel placement immediately after `</table>`) is the basis for confidence here instead.
+- The two `getMockImplementation`-based fetch-mock overrides in `never shows the floating totals before 回測, while 回測 is running, or after 回測 fails` restore the base implementation after use (`fetchMock.mockImplementation(baseImpl)`), consistent with how this file's `afterEach` (`vi.restoreAllMocks()`) already tears down mocks between tests — not itself a gap, noted only because it's the one test in this increment with more mock-plumbing than the others.
+
+### Increment 19 — 2026-09-14
+
+**Scope**: the 3 remaining `- [ ]` items under 「條件區：股票範圍與區間」 — the default range changed from the 「近一個月」 shortcut's result to 上週/本週, the cross-year default case, and the "no shortcut highlighted on page load" behavior. Per the task instructions, only these 3 were executed; every other `- [x]` item in this spec (including the 20 checked ones in this same section) was left untouched.
+
+**Files changed**:
+- `develop/frontend/src/pages/StrategyTab.tsx` — `defaultWeekRange()` no longer calls `quickWeekRange(1)`. It now computes `endMonday` = this week's Monday (`isoWeekInfo(today()).monday`) and `startMonday` = 7 days before that (`shiftDays(thisWeekMonday, -7)`), i.e. literally 上週一/本週一 — not "today minus one calendar month". `quickWeekRange`/`monthsAgo`/`isoWeekInfo`/`applyShortcut`/`activeShortcut` are all unchanged; the three shortcut buttons, their computation, and the highlight-derivation logic are exactly as before.
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx` — see "Tests changed" below.
+
+**Design decision**: `defaultWeekRange` was reimplemented as its own direct formula (this-week-Monday and this-week-Monday-minus-7-days) rather than being expressed in terms of `quickWeekRange`, because the two are no longer the same computation — 上週 is exactly 7 calendar days before 本週's Monday, not "the ISO week containing (today minus 1 calendar month)". Reusing `quickWeekRange(1)` here would have been actively wrong (it's the 「近一個月」 shortcut's own formula), not a simplification. The `activeShortcut` highlight derivation needed no change at all: it already compares the live `weekRange` against each shortcut's own `quickWeekRange` result on every render (see its doc comment), so once the default stopped being computed via `quickWeekRange(1)`, "no shortcut highlighted on page load" fell out for free — this is confirmed by the new test rather than assumed, since 上週/本週 could in principle coincide with a shortcut's result for some particular "today" (it never does here, and the code comment in `defaultWeekRange` now says why: 近一個月's start week is ~4 weeks back, never exactly last week).
+
+**Per-criterion verification**:
+1. 區間預設起始週為上週、結束週為本週 (今日 2026-09-14 → 2026 第 37 週(09/07–09/13) / 2026 第 38 週(09/14–09/20) / 實際區間 2026-09-07~2026-09-14 / `startDate=2026-09-07`／`endDate=2026-09-14`) — **Satisfied**, tested (`defaults the date range to 上週/本週 — not any of the three shortcut results, so none is highlighted`, asserts both week labels, the 實際區間 line, and the actual `POST /api/strategies/scan` request body's `startDate`/`endDate`).
+2. 跨年預設 (今日 2027-01-05 → 起始週 2026 第 53 週(12/28–01/03) / 結束週 2027 第 1 週(01/04–01/10) / `startDate=2026-12-28`) — **Satisfied**, tested (`defaults the date range correctly across a year boundary: today 2027-01-05 → 起始週 2026 第 53 週 (12/28–01/03)`, asserts both week labels, 實際區間, and the request body's `startDate`).
+3. 進頁時三個快捷鈕皆不呈選中，按下任一即呈選中 — **Satisfied**. The "none highlighted on load" half is tested in the same test as criterion 1 (asserts all three buttons' `className` excludes `st-shortcut-active` on initial render, at a date that is not itself a shortcut match). The "highlights when clicked" half was already covered before this increment by the pre-existing, untouched `applies the 近三個月 shortcut...` and `applies each of the three date-range shortcuts...` tests (both still pass unchanged) — kept as-is per the "keep coverage of the shortcuts themselves intact" instruction rather than duplicated.
+
+**Pre-existing tests changed, and why** (production code for the shortcuts/week-selector themselves was not touched — every change below is a fixture update to match the new default, not a behavior fix):
+- `defaults the date range to the 近一個月 week range (...)` → renamed and rewritten to `defaults the date range to 上週/本週 — not any of the three shortcut results, so none is highlighted`, now asserting the new 上週/本週 default (per criterion 1 above) instead of the old 近一個月-shortcut-shaped default, plus the no-shortcut-highlighted assertion and a scan-submission check. This is the direct "old 近一個月 default → new contract" update the task called for.
+- `sends endDate = today (not 結束週的週日) when 結束週 is still in progress, and never a future date` (today pinned at 2026-09-02) — its 起始週/實際區間/`startDate` assertions depended on the old default (`2026-07-27`, from 近一個月). Updated to the new default's value for that same pinned date: last week's Monday is `2026-08-24` (this week's Monday `2026-08-31` minus 7 days), so `2026 第 35 週（08/24–08/30）` / `實際區間 2026-08-24 ~ 2026-09-02` / `body.startDate === '2026-08-24'`. The test's actual subject — that `endDate` is today, not the end week's Sunday, when 結束週 is 本週 — is untouched.
+- `sends the end week's own Sunday as endDate when 結束週 is a past week, not 本週` (same pinned today) — previously stepped 結束週 back **twice** (this week → week 34) while relying on the old, far-in-the-past 近一個月 default (`week 31`) to keep 起始週 ≤ 結束週. With the new default (`起始週` = last week = week 35, one week behind 本週's week 36), stepping 結束週 back twice would land it on week 34 — *before* 起始週's week 35 — which the front end's own 起始週不可晚於結束週 guard blocks; two steps back is no longer a valid state to test this behavior from. Changed to step back **once** instead (this week → week 35, which now exactly equals the default 起始週 — still a valid, non-reversed range) and re-derived the expected values from that: 實際區間 `2026-08-24 ~ 2026-08-30`, `body.startDate === '2026-08-24'`, `body.endDate === '2026-08-30'`. The test's actual subject — that `endDate` is the end week's own Sunday, not today, once 結束週 stops being 本週 — is unchanged; only the number of clicks and the resulting week numbers changed. (The `2026 第 34 週` week-label assertion was dropped since the new landing week, 35, is not visually distinguishable via `getByText` from the 起始週 selector showing the identical label — replaced with the still-unique `實際區間` line, which proves the same fact.)
+- No other test in this file asserts a value derived from `defaultWeekRange()`'s formula — confirmed by grepping the file for every `vi.setSystemTime` call and checking each surrounding test's assertions; the remaining ones either apply a shortcut before asserting (unaffected by the default) or assert unrelated behavior (row sorting, floating totals, 取消全選, etc.) that never reads the initial `weekRange`.
+
+**Coverage note**: the shortcut buttons' own computation (`applies the 近三個月 shortcut...`, `applies each of the three date-range shortcuts...`), the cross-year ISO week resolution test independent of the default (`resolves a cross-year ISO week correctly: 2027-01-01 belongs to 2026 week 53...`), the un-highlight-on-manual-step test (`un-highlights every shortcut once the weeks are manually stepped away from all three results`), the 起始週不可晚於結束週 guard test, and the 結束週不可選到本週之後的週 test were all left exactly as they were — none of them reads or depends on `defaultWeekRange()`'s output.
+
+**Test/lint/build output (tails)**:
+```
+$ npm test -- --run
+ RUN  v4.1.11 D:/code/stock/develop/frontend
+
+ Test Files  10 passed (10)
+      Tests  363 passed (363)
+   Start at  23:36:28
+   Duration  35.91s (transform 1.35s, setup 3.04s, import 3.36s, tests 52.62s, environment 12.81s)
+
+$ npm run lint
+src/__tests__/StrategyTab.test.tsx:921:7: warning eslint(no-unreachable) — pre-existing, unrelated to this increment (see Increment 1's Execution Result).
+src/pages/StrategyTab.tsx:878:7: warning react(set-state-in-effect) — pre-existing, unrelated to this increment (stock-search-suggestions effect; line number shifted from 871→878 only because of the intervening Increment 18 code above it, not because this increment touched that line).
+
+$ npm run build
+> tsc -b && vite build
+✓ 47 modules transformed.
+dist/index.html                   0.45 kB │ gzip:  0.29 kB
+dist/assets/index-CZXy3WNZ.css   30.32 kB │ gzip:  5.24 kB
+dist/assets/index-COpapJfa.js   324.39 kB │ gzip: 99.33 kB
+✓ built in 130ms
+```
+Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one new `it()` was added (`defaults the date range correctly across a year boundary: today 2027-01-05 → 起始週 2026 第 53 週 (12/28–01/03)`, covering criterion 2). No test was deleted; the other two touched tests (`defaults the date range to 上週/本週...` and `sends the end week's own Sunday...`) were renamed/edited in place, not added or removed. Lint warning count unchanged at 2; no new warnings introduced.
+
+**code-quality self-check**: the only production-code change is `defaultWeekRange()`, a pure function with no I/O, no absence risk (both inputs are `Date`s constructed internally, never `null`), no error path, and no resource to leak — reviewed against `code-quality`'s checklist and found to raise none of its flags. All other changes are test-fixture edits.
+
+**Anything NOT independently verified, and why**: no live browser/dev-server check was performed, consistent with every prior increment's own verification method for this spec (`vitest`/jsdom, `tsc`, `vite build`, `oxlint` only) — the task's environment notes say the dev server on 5173 and backend on 8080 are already running and must not be restarted or duplicated. The `POST /api/strategies/scan` endpoint's own contract was not re-verified against a live backend; this increment only changes what date range the front end computes and sends, using the same mocked-fetch pattern every earlier increment of this spec already relies on.

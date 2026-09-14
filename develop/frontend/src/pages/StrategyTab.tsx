@@ -33,6 +33,11 @@ type ScanStatus = 'idle' | 'scanning' | 'success' | 'error'
 type SyncStatus = 'idle' | 'running'
 type ShortcutKey = '1m' | '3m' | '6m'
 type BacktestStatus = 'idle' | 'running' | 'success' | 'error'
+/** 買進價／報酬率欄排序 — the only two sortable columns, and the only two directions in
+ * their click cycle (降冪 → 升冪 → 還原預設排序, `null` state meaning the latter). */
+type SortColumn = 'buyPrice' | 'returnPercent'
+type SortDirection = 'desc' | 'asc'
+type SortState = { column: SortColumn; direction: SortDirection }
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -127,8 +132,15 @@ function quickWeekRange(months: number): WeekRange {
   }
 }
 
+/** Default range: start week = LAST week, end week = THIS week — deliberately not the
+ * result of any of the three quick-range shortcuts (「近一個月」's start week is ~4 weeks
+ * back, never exactly last week), so none of the shortcut buttons highlights on page load. */
 function defaultWeekRange(): WeekRange {
-  return quickWeekRange(1)
+  const thisWeekMonday = isoWeekInfo(today()).monday
+  return {
+    startMonday: toIsoDate(shiftDays(thisWeekMonday, -7)),
+    endMonday: toIsoDate(thisWeekMonday),
+  }
 }
 
 /** The 週選擇 control itself — two step buttons around a caption that always reads the
@@ -233,6 +245,32 @@ function isRisePercentInputInvalid(value: string, range: { min: number; max: num
   // "最多一位小數"
   const rounded = Math.round(num * 10) / 10
   return Math.abs(rounded - num) > 1e-9
+}
+
+/** 「取消買進價高於 N 元」的金額輸入 — 0 以上、最多兩位小數，same decimal-place-check shape
+ * as `isRisePercentInputInvalid`/`isParamInputInvalid` above (round to the allowed precision,
+ * compare back to the parsed value). Empty, non-finite, negative, or >2-decimal input is
+ * invalid — only the checkbox goes disabled+unchecked in that case; the amount itself is
+ * never clamped or rewritten out from under the user while they're mid-edit. */
+function isPriceThresholdInputInvalid(value: string): boolean {
+  if (value.trim() === '') return true
+  const num = Number(value)
+  if (!Number.isFinite(num)) return true
+  if (num < 0) return true
+  const rounded = Math.round(num * 100) / 100
+  return Math.abs(rounded - num) > 1e-9
+}
+
+/** 總計浮動跟隨's on/off decision, isolated from DOM measurement so it's a plain,
+ * unit-testable function — jsdom's `getBoundingClientRect` has no real layout engine behind
+ * it, so the wiring around this (a scroll/resize listener reading two refs) can only be
+ * exercised by mocking that measurement, never by asserting real pixel positions.
+ * `anchorTop`: the in-flow 總成本／總報酬率／總收益 triplet's own `getBoundingClientRect().top`
+ * — negative once it has scrolled above the viewport. `tableEndTop`: a sentinel placed
+ * immediately after the hit table's last row — once IT has also scrolled above the viewport
+ * (negative), the whole table is gone and the floating copy has nothing left to describe. */
+function computeFloatingTotalsVisible(anchorTop: number, tableEndTop: number): boolean {
+  return anchorTop < 0 && tableEndTop >= 0
 }
 
 /** Card shape is decided purely by whether `presets` is empty — never by inspecting
@@ -490,6 +528,42 @@ function computeParentAggregate(
   return { checkedChildren, totalChildren: groups.length, includedCount, avgBuyPrice, totalProfit, returnPercent }
 }
 
+/** 「—」視為最小值 — represented as `-Infinity` so both a `null` value and any real number
+ * compare correctly through one branch-free formula, and two `null`s naturally tie
+ * (`compareBySortDirection` then returns `0`, falling back to whatever order the input
+ * array already had — see `handleSortClick`'s stable sort over the default-ordered
+ * `unionRows`). */
+function sortKeyValue(value: number | null): number {
+  return value == null ? Number.NEGATIVE_INFINITY : value
+}
+
+function compareBySortDirection(aValue: number | null, bValue: number | null, direction: SortDirection): number {
+  const a = sortKeyValue(aValue)
+  const b = sortKeyValue(bValue)
+  if (a === b) return 0
+  return direction === 'desc' ? b - a : a - b
+}
+
+/** The value a row currently DISPLAYS for a sortable column — a single-buy-date row's own
+ * backtest item, or a multi-buy-date parent's cost-weighted aggregate (「一檔多筆的父列以它
+ * 畫面上顯示的合計值排序」— never the raw per-child values, which would let the sort order
+ * disagree with the number actually on screen). */
+function rowSortValue(
+  row: UnionRow,
+  column: SortColumn,
+  backtestItemsByKey: Map<string, BacktestResultItem>,
+  checkedItemKeys: Set<string>,
+  lotSize: number,
+): number | null {
+  if (row.buyDateGroups.length >= 2) {
+    const agg = computeParentAggregate(row.stockId, row.buyDateGroups, backtestItemsByKey, checkedItemKeys, lotSize)
+    return column === 'buyPrice' ? agg.avgBuyPrice : agg.returnPercent
+  }
+  const group = row.buyDateGroups[0]
+  const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
+  return column === 'buyPrice' ? (item?.buyPrice ?? null) : (item?.returnPercent ?? null)
+}
+
 /** A checkbox that can additionally render the browser's native indeterminate (半選) glyph
  * — React has no JSX prop for `indeterminate` (it isn't a real DOM attribute), so it has to
  * be poked onto the element imperatively. Used for every merged-table row checkbox (both
@@ -635,11 +709,39 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // the next 開始掃描 click, together with the backtest result itself.
   const [checkedItemKeys, setCheckedItemKeys] = useState<Set<string>>(new Set())
 
+  // ---------- 「取消買進價高於 N 元」勾選框 ----------
+  // The amount is page-level state, deliberately NOT reset by 開始掃描/重新掃描 (「金額在同一
+  // 次進頁內保留…重新整理頁面回到 500」) — only this `useState` initializer, which only runs
+  // once on mount, ever sets it back to '500'. Kept as a string (not a number) so a partial
+  // keystroke like "1." is never silently clobbered, matching `risePercentInputs`'s shape.
+  const [priceThresholdInput, setPriceThresholdInput] = useState('500')
+
+  // ---------- 總計浮動跟隨 ----------
+  // `totalsAnchorRef`/`tableEndRef`/`unionBlockRef` are attached in `renderMergedTable`
+  // below; `floatingTotalsVisible` and `floatingRightOffset` are recomputed by a scroll/
+  // resize listener registered only while `backtestTotals` exists (see the effect further
+  // down), never by a network response.
+  const totalsAnchorRef = useRef<HTMLDivElement | null>(null)
+  const tableEndRef = useRef<HTMLDivElement | null>(null)
+  const unionBlockRef = useRef<HTMLDivElement | null>(null)
+  const [floatingTotalsVisible, setFloatingTotalsVisible] = useState(false)
+  const [floatingRightOffset, setFloatingRightOffset] = useState(0)
+
   // ---------- 展開狀態 (per stock, front-end only, never reset by 回測 — only by 開始掃描
   // implicitly starting a new scanResult) ----------
   // Default collapsed. Only meaningful for a stock with ≥ 2 distinct buy dates; toggling
   // it never re-fetches anything.
   const [expandedStockIds, setExpandedStockIds] = useState<Set<string>>(new Set())
+
+  // ---------- 買進價／報酬率欄排序 (front-end only; only meaningful once backtestResult
+  // exists, reset to default — both `null` — on every 開始掃描) ----------
+  // `sortState` names the current column + direction (`null` = 還原預設排序). `sortedRowOrder`
+  // is a SNAPSHOT of the top-level row order, captured only at the moment a header is
+  // clicked (see `handleSortClick`) — later checkbox toggles recompute what a parent row
+  // DISPLAYS but must never move any row, so rendering always replays this frozen order
+  // instead of re-deriving it from the (possibly since-changed) live aggregates.
+  const [sortState, setSortState] = useState<SortState | null>(null)
+  const [sortedRowOrder, setSortedRowOrder] = useState<string[] | null>(null)
 
   // ---------- 回測 (auto-triggered after a successful scan with ≥1 hit — no button) ----------
   const [backtestStatus, setBacktestStatus] = useState<BacktestStatus>('idle')
@@ -993,6 +1095,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestResult(null)
     setBacktestErrorMessage(null)
     setIsRetryingBacktest(false)
+    // 重新掃描時排序回到預設，指示一併消失 — sorting only ever makes sense against the hit
+    // list it was clicked on; a stale frozen order from the previous list must not survive
+    // into the next one.
+    setSortState(null)
+    setSortedRowOrder(null)
     // 進行中的那次回測隨即作廢 — bump the generation and abort the in-flight request (if
     // any) the instant 開始掃描 is clicked, before the new scan itself even starts, so its
     // eventual response can never land in the new hit list.
@@ -1284,6 +1391,109 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   const backtestTotals = backtestResult ? computeBacktestTotals(backtestResult, checkedItemKeys) : null
 
+  // ---------- 總計浮動跟隨 ----------
+  // A plain scroll/resize listener (not CSS `position: sticky`) so "should the floating
+  // copy be showing right now" is an explicit, unit-testable boolean rather than something
+  // only a real layout engine can prove — see `computeFloatingTotalsVisible` above.
+  // Registered only while the three totals exist (回測完成後) and torn down the instant they
+  // don't (重新掃描／回測前／回測中／回測失敗), per「只在回測完成後存在，與三個總計同生同
+  // 滅」. Never issues a network request — pure DOM measurement, run once immediately on
+  // registration (so a completed backtest reflects the scroll position the user is already
+  // at) and again on every subsequent scroll/resize.
+  const hasBacktestTotals = backtestTotals !== null
+  useEffect(() => {
+    if (!hasBacktestTotals) return
+    const measure = () => {
+      const anchor = totalsAnchorRef.current
+      const tableEnd = tableEndRef.current
+      const panel = unionBlockRef.current
+      if (!anchor || !tableEnd || !panel) return
+      setFloatingTotalsVisible(computeFloatingTotalsVisible(anchor.getBoundingClientRect().top, tableEnd.getBoundingClientRect().top))
+      setFloatingRightOffset(window.innerWidth - panel.getBoundingClientRect().right)
+    }
+    measure()
+    window.addEventListener('scroll', measure, { passive: true })
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure)
+      window.removeEventListener('resize', measure)
+      setFloatingTotalsVisible(false)
+    }
+  }, [hasBacktestTotals])
+
+  /** The three 總成本／總報酬率／總收益 items — shared verbatim between their in-flow
+   * position and the floating copy that appears once they've scrolled out of view, so there
+   * is exactly one computation and one set of formatting/color rules for both
+   * (specs/frontend/strategy.md「總計浮動跟隨」「浮動的數字與原位的數字是同一份…不得另算一
+   * 份」). */
+  const renderTotalsTriplet = (totals: BacktestTotals) => (
+    <>
+      <div className="st-total-item">
+        <span className="st-total-label">總成本（每筆 1 張）</span>
+        <span className="st-total-value">
+          {totals.includedCount === 0 ? <span className="sl-muted">—</span> : formatAmount(totals.totalCost)}
+        </span>
+      </div>
+      <div className="st-total-item">
+        <span className="st-total-label">總報酬率</span>
+        <span className={`st-total-value ${signColorClass(totals.totalReturnPercent)}`}>
+          {formatPercent2(totals.totalReturnPercent)}
+        </span>
+      </div>
+      <div className="st-total-item">
+        <span className="st-total-label">總收益（每筆 1 張）</span>
+        <span className={`st-total-value ${signColorClass(totals.includedCount > 0 ? totals.totalProfit : null)}`}>
+          {totals.includedCount === 0 ? '—' : formatAmount(totals.totalProfit)}
+        </span>
+      </div>
+    </>
+  )
+
+  // ---------- 買進價／報酬率欄排序 ----------
+  // Rows to actually render: `unionRows`'s own default order (最新 signalDate 由新到舊、
+  // 同日 stockId 升冪) whenever no sort is active, or the frozen snapshot from the last
+  // header click otherwise. Looking rows up by stockId rather than storing row objects
+  // directly in `sortedRowOrder` keeps the snapshot itself trivially serializable state
+  // (just stock IDs) while still always rendering the current `unionRows` row data.
+  const displayRows = (() => {
+    if (!sortState || !sortedRowOrder) return unionRows
+    const byStockId = new Map(unionRows.map((row) => [row.stockId, row]))
+    return sortedRowOrder.map((id) => byStockId.get(id)).filter((row): row is UnionRow => row != null)
+  })()
+
+  /** Header click for 買進價／報酬率 — 降冪 → 升冪 → 還原預設排序 循環；switching to the
+   * OTHER sortable column always restarts at 降冪 for that column. The row order is
+   * snapshotted here, from what's on screen at the moment of the click, into
+   * `sortedRowOrder`; nothing else ever mutates that snapshot, so a later checkbox toggle
+   * changes what a parent row DISPLAYS without moving it (specs/frontend/strategy.md「排序
+   * 後切換勾選，列的位置不動…下一次點表頭時，才依當下顯示的值…重排」). */
+  const handleSortClick = (column: SortColumn) => {
+    if (!backtestResult) return
+    const nextState: SortState | null =
+      sortState?.column !== column
+        ? { column, direction: 'desc' }
+        : sortState.direction === 'desc'
+          ? { column, direction: 'asc' }
+          : null
+    if (!nextState) {
+      setSortState(null)
+      setSortedRowOrder(null)
+      return
+    }
+    const lotSize = backtestResult.lotSize
+    const order = [...unionRows]
+      .sort((a, b) =>
+        compareBySortDirection(
+          rowSortValue(a, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
+          rowSortValue(b, nextState.column, backtestItemsByKey, checkedItemKeys, lotSize),
+          nextState.direction,
+        ),
+      )
+      .map((row) => row.stockId)
+    setSortState(nextState)
+    setSortedRowOrder(order)
+  }
+
   // ---------- 「取消全選」勾選框 ----------
   // Every position (筆) across every row — single-buy-date rows, every child of every
   // multi-buy-date stock, including unbacktestable positions and positions currently
@@ -1298,6 +1508,41 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * 呼叫任何端點——`allItemKeys` 已含表上（含摺疊中的子列與無法回測的筆）的每一筆。 */
   const toggleCancelAll = (turnOn: boolean) => {
     setCheckedItemKeys(turnOn ? new Set() : new Set(allItemKeys))
+  }
+
+  // ---------- 「取消買進價高於 N 元」勾選框 ----------
+  const priceThresholdInvalid = isPriceThresholdInputInvalid(priceThresholdInput)
+  const priceThresholdAmount = priceThresholdInvalid ? null : Number(priceThresholdInput)
+  // 高價組：`buyPrice` 嚴格大於金額的每一筆——單筆列與每一個子列各自判斷，包含摺疊中的子列
+  // 與無法回測（`sellDate` 為 null）但 `buyPrice` 有值的筆；`buyPrice` 為 null 的筆一律不
+  // 屬於高價組。逐筆讀 `backtestItemsByKey` 的 `buyPrice`（唯一帶著它的地方是回測回應），
+  // 不看父列的成本加權均價——「逐筆判斷，不看父列均價」。
+  const highPriceGroupKeys =
+    priceThresholdAmount === null
+      ? []
+      : allItemKeys.filter((key) => {
+          const buyPrice = backtestItemsByKey.get(key)?.buyPrice
+          return buyPrice != null && buyPrice > priceThresholdAmount
+        })
+  // 勾選狀態從各筆推導，不是獨立記住的旗標（與「取消全選」同一條原則）：高價組非空且其中
+  // 每一筆都未勾選時呈勾選，其餘情形（含部分取消）呈未勾選、不呈半選。
+  const priceThresholdChecked =
+    backtestResult !== null && highPriceGroupKeys.length > 0 && highPriceGroupKeys.every((key) => !checkedItemKeys.has(key))
+  // 高價組為空、或金額本身不合法時 disabled（未勾選）——沒有東西可以作用，或連範圍都算不出來。
+  const priceThresholdDisabled = backtestResult === null || priceThresholdInvalid || highPriceGroupKeys.length === 0
+
+  /** 勾選「取消買進價高於 N 元」→ 高價組全部取消勾選；取消勾選 → 高價組全部勾回。其餘筆完
+   * 全不動。完全在前端完成，不重新呼叫任何端點；**修改金額本身從不呼叫這個函式**——只有點
+   * 擊勾選框才會，金額變動只改變 `highPriceGroupKeys` 這個推導範圍。 */
+  const togglePriceThreshold = (turnOn: boolean) => {
+    setCheckedItemKeys((keys) => {
+      const next = new Set(keys)
+      for (const key of highPriceGroupKeys) {
+        if (turnOn) next.delete(key)
+        else next.add(key)
+      }
+      return next
+    })
   }
 
   /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
@@ -1353,8 +1598,37 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     </>
   )
 
+  /** One of the two sortable headers (買進價／報酬率) — hand-picked cursor + icon + text
+   * color so the AC's「以 computed style 驗證」can read them straight off the rendered
+   * `<th>`. Only ever called once `backtestResult` exists (the caller gates it), so the
+   * click handler never needs its own null-check beyond `handleSortClick`'s own guard. */
+  const renderSortableHeader = (column: SortColumn, label: string) => {
+    const active = sortState?.column === column
+    const icon = active ? (sortState!.direction === 'desc' ? '▼' : '▲') : '↕'
+    return (
+      <th
+        className={`sl-r st-sortable${active ? ' st-sort-header-active' : ''}`}
+        onClick={() => handleSortClick(column)}
+        aria-sort={active ? (sortState!.direction === 'desc' ? 'descending' : 'ascending') : 'none'}
+      >
+        <span className="st-sort-label">{label}</span>
+        <span className={`st-sort-icon ${active ? 'st-sort-icon-active' : 'st-sort-icon-idle'}`}>{icon}</span>
+      </th>
+    )
+  }
+
   const renderMergedTable = () => (
-    <div className="st-result-block st-union-block">
+    <div className="st-result-block st-union-block" ref={unionBlockRef}>
+      {backtestTotals && floatingTotalsVisible ? (
+        // 總計浮動跟隨 — a separate, position:fixed copy of the SAME `backtestTotals`
+        // object (via the shared `renderTotalsTriplet`, never a second computation),
+        // right-aligned to this panel's own right edge. Only the three totals float —
+        // the title, both batch checkboxes, and the 「未計入」notes never leave their
+        // in-flow position (they simply aren't part of this block).
+        <div className="st-floating-totals" style={{ right: `${floatingRightOffset}px` }}>
+          {renderTotalsTriplet(backtestTotals)}
+        </div>
+      ) : null}
       <div className="st-union-header">
         <h3 className="st-result-title">命中彙總 — 共 {unionRows.length} 檔</h3>
         {backtestTotals ? (
@@ -1369,19 +1643,36 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               />
               <span className="st-total-label">取消全選</span>
             </label>
-            <div className="st-total-item">
-              <span className="st-total-label">總報酬率</span>
-              <span className={`st-total-value ${signColorClass(backtestTotals.totalReturnPercent)}`}>
-                {formatPercent2(backtestTotals.totalReturnPercent)}
-              </span>
+            <div className="st-total-item st-price-threshold-item">
+              <div className="st-price-threshold-row">
+                <input
+                  type="checkbox"
+                  className="st-row-checkbox"
+                  checked={priceThresholdChecked}
+                  disabled={priceThresholdDisabled}
+                  onChange={(e) => togglePriceThreshold(e.target.checked)}
+                  aria-label="取消買進價高於金額元"
+                />
+                <span className={`st-total-label${priceThresholdDisabled ? ' st-total-label-disabled' : ''}`}>
+                  取消買進價高於
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="st-price-threshold-input"
+                  value={priceThresholdInput}
+                  onChange={(e) => setPriceThresholdInput(e.target.value)}
+                  aria-label="取消買進價高於的金額"
+                />
+                <span className={`st-total-label${priceThresholdDisabled ? ' st-total-label-disabled' : ''}`}>元</span>
+              </div>
+              {priceThresholdInvalid ? (
+                <p className="st-inline-error st-price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
+              ) : null}
             </div>
-            <div className="st-total-item">
-              <span className="st-total-label">總收益（每筆 1 張）</span>
-              <span
-                className={`st-total-value ${signColorClass(backtestTotals.includedCount > 0 ? backtestTotals.totalProfit : null)}`}
-              >
-                {backtestTotals.includedCount === 0 ? '—' : formatAmount(backtestTotals.totalProfit)}
-              </span>
+            <div className="st-totals-anchor" ref={totalsAnchorRef}>
+              {renderTotalsTriplet(backtestTotals)}
             </div>
           </div>
         ) : null}
@@ -1422,15 +1713,15 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               <th>代號 / 名稱</th>
               <th>命中策略與訊號日</th>
               {backtestResult ? <th>買進日</th> : null}
-              {backtestResult ? <th className="sl-r">買進價</th> : null}
+              {backtestResult ? renderSortableHeader('buyPrice', '買進價') : null}
               {backtestResult ? <th>賣出日</th> : null}
               {backtestResult ? <th className="sl-r">賣出價</th> : null}
-              {backtestResult ? <th className="sl-r">報酬率</th> : null}
+              {backtestResult ? renderSortableHeader('returnPercent', '報酬率') : null}
               {backtestResult ? <th className="sl-r">收益（每筆 1 張）</th> : null}
             </tr>
           </thead>
           <tbody>
-            {unionRows.flatMap((row) => {
+            {displayRows.flatMap((row) => {
               const groups = row.buyDateGroups
               const hasChildren = groups.length >= 2
               const isExpanded = hasChildren && expandedStockIds.has(row.stockId)
@@ -1573,7 +1864,24 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
               if (!isExpanded) return [parentRow]
 
-              const childRows = groups.map((group) => {
+              // 展開中的子列依同一欄、同一方向排序，「—」同樣視為最小值、值相同依買進日由
+              // 新到舊；還原預設排序（sortState === null）時就是 `groups` 自己已經有的
+              // 由新到舊順序，不必另外排。This is independent of `sortedRowOrder`'s
+              // top-level freeze — a child's own buyPrice/returnPercent never changes with
+              // a checkbox toggle, so re-deriving this order every render can't move a
+              // child row underneath the user either.
+              const childOrderGroups = sortState
+                ? [...groups].sort((a, b) => {
+                    const aItem = backtestItemsByKey.get(itemKey(row.stockId, a.buyDate)) ?? null
+                    const bItem = backtestItemsByKey.get(itemKey(row.stockId, b.buyDate)) ?? null
+                    const aValue = sortState.column === 'buyPrice' ? (aItem?.buyPrice ?? null) : (aItem?.returnPercent ?? null)
+                    const bValue = sortState.column === 'buyPrice' ? (bItem?.buyPrice ?? null) : (bItem?.returnPercent ?? null)
+                    const cmp = compareBySortDirection(aValue, bValue, sortState.direction)
+                    return cmp !== 0 ? cmp : a.buyDate < b.buyDate ? 1 : a.buyDate > b.buyDate ? -1 : 0
+                  })
+                : groups
+
+              const childRows = childOrderGroups.map((group) => {
                 const key = itemKey(row.stockId, group.buyDate)
                 const childChecked = checkedItemKeys.has(key)
                 const item = backtestItemsByKey.get(key) ?? null
@@ -1607,6 +1915,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           </tbody>
         </table>
       )}
+      {/* 總計浮動跟隨's "table scrolled fully past the top" sentinel — a zero-height marker
+          right after the hit table's last row, read only via getBoundingClientRect() in the
+          scroll/resize effect above; never rendered with any visible content of its own. */}
+      <div ref={tableEndRef} className="st-table-end-sentinel" aria-hidden="true" />
       {renderScanNotes()}
     </div>
   )

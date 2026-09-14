@@ -572,6 +572,209 @@ function sameDaySignalBacktestResponse() {
   }
 }
 
+// ---------- 買進價／報酬率欄排序 fixtures ----------
+
+// Three single-buy-date rows with deliberately distinct signalDates so the default order
+// (latest signalDate desc, tie stockId asc) is unambiguous: BBBB (08-25), AAAA (08-20),
+// CCCC (08-15). CCCC is fully unbacktestable — the 「—」-as-minimum case for both sortable
+// columns at once (its buyPrice AND returnPercent are both null).
+function sortableScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 3,
+        items: [
+          { stockId: 'AAAA', stockName: 'A股', signalDate: '2026-08-20', buyDate: '2026-08-20', detail: {} },
+          { stockId: 'BBBB', stockName: 'B股', signalDate: '2026-08-25', buyDate: '2026-08-25', detail: {} },
+          { stockId: 'CCCC', stockName: 'C股', signalDate: '2026-08-15', buyDate: '2026-08-15', detail: {} },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// AAAA: buyPrice 100, return +5%. BBBB: buyPrice 200, return -3%. CCCC: no sellable
+// trading day at all (buyPrice/sellDate/returnPercent all null).
+function sortableBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 300000,
+    totalProfit: -1000,
+    totalReturnPercent: -0.33,
+    backtestedCount: 2,
+    items: [
+      { stockId: 'AAAA', buyDate: '2026-08-20', buyPrice: 100, sellDate: '2026-08-21', sellPrice: 105, returnPercent: 5, profit: 5000 },
+      { stockId: 'BBBB', buyDate: '2026-08-25', buyPrice: 200, sellDate: '2026-08-26', sellPrice: 194, returnPercent: -3, profit: -6000 },
+      { stockId: 'CCCC', buyDate: '2026-08-15', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+    ],
+  }
+}
+
+// Two rows tied on 報酬率 (7%) but with different signalDates — the default-order tiebreak
+// (latest signalDate first) must decide their relative order, both before AND after
+// sorting lands them on an equal value (a stable sort over the already-default-ordered
+// array preserves this without any extra tiebreak code).
+function tieScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 2,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 2,
+        items: [
+          { stockId: 'EEEE', stockName: 'E股', signalDate: '2026-08-18', buyDate: '2026-08-18', detail: {} },
+          { stockId: 'FFFF', stockName: 'F股', signalDate: '2026-08-19', buyDate: '2026-08-19', detail: {} },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+function tieBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 200000,
+    totalProfit: 14000,
+    totalReturnPercent: 7,
+    backtestedCount: 2,
+    items: [
+      { stockId: 'EEEE', buyDate: '2026-08-18', buyPrice: 100, sellDate: '2026-08-19', sellPrice: 107, returnPercent: 7, profit: 7000 },
+      { stockId: 'FFFF', buyDate: '2026-08-19', buyPrice: 100, sellDate: '2026-08-20', sellPrice: 107, returnPercent: 7, profit: 7000 },
+    ],
+  }
+}
+
+// Parent-aggregate sort fixture: 2330 has two buy dates (children +10%/-10%, cost-weighted
+// aggregate -9.80%, same math as `twoDateSingleStockBacktestResponse` above) plus two
+// plain single-date stocks whose returns straddle the AGGREGATE but not either child's own
+// return: 9999 at +20% (above everything) and 8888 at 0% (between the aggregate -9.80% and
+// either child's own +10%/-10%). Sorting 2330 by, say, its best child's own +10% instead of
+// its displayed -9.80% aggregate would put it ABOVE 8888 instead of below — an observable
+// difference in row ORDER, not just a numeric mismatch.
+function parentSortScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 3,
+        items: [
+          { stockId: '2330', stockName: '台積電', signalDate: '2026-08-27', buyDate: '2026-08-27', detail: {} },
+          { stockId: '9999', stockName: '玖玖', signalDate: '2026-08-22', buyDate: '2026-08-22', detail: {} },
+          { stockId: '8888', stockName: '捌捌', signalDate: '2026-08-21', buyDate: '2026-08-21', detail: {} },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+      {
+        strategy: 'HIGHER_LOWS',
+        preset: 'STRICT',
+        matchedCount: 1,
+        items: [{ stockId: '2330', stockName: '台積電', signalDate: '2026-08-20', buyDate: '2026-08-20', detail: { lows: [] } }],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+function parentSortBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 10300000,
+    totalProfit: -970000,
+    totalReturnPercent: -9.42,
+    backtestedCount: 4,
+    items: [
+      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 100, sellDate: '2026-08-28', sellPrice: 110, returnPercent: 10, profit: 10000 },
+      { stockId: '2330', buyDate: '2026-08-20', buyPrice: 10000, sellDate: '2026-08-25', sellPrice: 9000, returnPercent: -10, profit: -1000000 },
+      { stockId: '9999', buyDate: '2026-08-22', buyPrice: 100, sellDate: '2026-08-23', sellPrice: 120, returnPercent: 20, profit: 20000 },
+      { stockId: '8888', buyDate: '2026-08-21', buyPrice: 100, sellDate: '2026-08-22', sellPrice: 100, returnPercent: 0, profit: 0 },
+    ],
+  }
+}
+
+// 「取消買進價高於 N 元」fixtures — five stocks:
+// - 2330: two buy dates, buyPrice 480 (2026-08-27) and 520 (2026-08-20) — straddles the
+//   default 500 threshold so only ONE of its two children is ever in the 高價組 (the parent
+//   must show 半選, never fully checked/unchecked, once that one child is toggled off).
+// - 1101: buyPrice exactly 500.00 — the 不含等於 boundary case, never in the 高價組.
+// - 3008: buyPrice 600, `sellDate: null` — 無法回測但有買進價的筆, still in the 高價組.
+// - AAAA: buyPrice 100 — a plain low-price control row, never touched by any threshold at
+//   or above 100.
+// - CCCC: buyPrice null (and unbacktestable) — 「buyPrice 為 null 的筆不受此框影響」, never
+//   in the 高價組 at any amount.
+function priceThresholdScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 5,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 5,
+        items: [
+          { stockId: '2330', stockName: '台積電', signalDate: '2026-08-27', buyDate: '2026-08-27', detail: {} },
+          { stockId: '1101', stockName: '台泥', signalDate: '2026-08-25', buyDate: '2026-08-25', detail: {} },
+          { stockId: '3008', stockName: '大立光', signalDate: '2026-08-24', buyDate: '2026-08-24', detail: {} },
+          { stockId: 'AAAA', stockName: 'A股', signalDate: '2026-08-23', buyDate: '2026-08-23', detail: {} },
+          { stockId: 'CCCC', stockName: 'C股', signalDate: '2026-08-22', buyDate: '2026-08-22', detail: {} },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+      {
+        strategy: 'HIGHER_LOWS',
+        preset: 'STRICT',
+        matchedCount: 1,
+        items: [{ stockId: '2330', stockName: '台積電', signalDate: '2026-08-20', buyDate: '2026-08-20', detail: { lows: [] } }],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// All checked: cost = 480,000 + 520,000 + 500,000 + 100,000 = 1,600,000 (3008/CCCC excluded,
+// no sellDate); profit = 20,000 + (-20,000) + 10,000 + 10,000 = 20,000; return = 1.25%.
+function priceThresholdBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 1600000,
+    totalProfit: 20000,
+    totalReturnPercent: 1.25,
+    backtestedCount: 4,
+    items: [
+      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 480, sellDate: '2026-08-28', sellPrice: 500, returnPercent: 4.17, profit: 20000 },
+      { stockId: '2330', buyDate: '2026-08-20', buyPrice: 520, sellDate: '2026-08-25', sellPrice: 500, returnPercent: -3.85, profit: -20000 },
+      { stockId: '1101', buyDate: '2026-08-25', buyPrice: 500, sellDate: '2026-08-26', sellPrice: 510, returnPercent: 2, profit: 10000 },
+      { stockId: '3008', buyDate: '2026-08-24', buyPrice: 600, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+      { stockId: 'AAAA', buyDate: '2026-08-23', buyPrice: 100, sellDate: '2026-08-24', sellPrice: 110, returnPercent: 10, profit: 10000 },
+      { stockId: 'CCCC', buyDate: '2026-08-22', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+    ],
+  }
+}
+
 function renderTab(commonStocksOnly = true) {
   return render(
     <MemoryRouter initialEntries={['/stocks?tab=strategy']}>
@@ -598,6 +801,32 @@ function cardFor(name: string): HTMLElement {
 function selectStrategy(name: string): void {
   const head = cardFor(name).querySelector('.st-strategy-card-head') as HTMLElement
   fireEvent.click(within(head).getByRole('checkbox'))
+}
+
+/** Top-level (parent, or single-buy-date) rows only — excludes `.st-child-row`s inside an
+ * expanded parent — read via the 代號 / 名稱 cell (index 2, right after 展開鈕 + 勾選框). Used
+ * throughout 「買進價與報酬率欄排序」 to assert row ORDER without hard-coding how many
+ * columns exist. */
+function topLevelRowStockIds(): string[] {
+  const table = screen.getByRole('table')
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .filter((r) => !r.className.includes('st-child-row'))
+    .map((r) => within(r).getAllByRole('cell')[2].textContent ?? '')
+}
+
+/** Clicks a sortable header by its exact label text (buyPrice → 買進價, returnPercent →
+ * 報酬率) — the label lives in its own `<span class="st-sort-label">`, separate from the
+ * icon, so `getByText` matches it uniquely and the click still bubbles to the `<th>`'s own
+ * handler (no `stopPropagation` on the label span). */
+function clickSortHeader(label: '買進價' | '報酬率'): void {
+  fireEvent.click(screen.getByText(label))
+}
+
+function sortHeaderIcon(label: '買進價' | '報酬率'): string | null {
+  const th = screen.getByText(label).closest('th')!
+  return th.querySelector('.st-sort-icon')?.textContent ?? null
 }
 
 
@@ -735,17 +964,47 @@ describe('StrategyTab', () => {
     expect(document.querySelectorAll('input[type="week"]')).toHaveLength(0)
   })
 
-  it('defaults the date range to the 近一個月 week range (起始週 the week one calendar month back, 結束週 this week)', async () => {
-    // 2026-08-30 is a Sunday, so it's the last day of ISO week 35 (2026-08-24–08-30).
-    // One calendar month back is 2026-07-30 (Thursday), whose ISO week is week 31
-    // (2026-07-27–08-02) — the exact example the spec itself uses.
-    vi.setSystemTime(new Date('2026-08-30T00:00:00'))
+  it('defaults the date range to 上週/本週 — not any of the three shortcut results, so none is highlighted', async () => {
+    // Today 2026-09-14 (Monday) is the exact date the spec itself uses: this week is ISO
+    // week 38 (09/14–09/20); last week is ISO week 37 (09/07–09/13).
+    vi.setSystemTime(new Date('2026-09-14T00:00:00'))
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    expect(screen.getByText('2026 第 31 週（07/27–08/02）')).toBeInTheDocument()
-    expect(screen.getByText('2026 第 35 週（08/24–08/30）')).toBeInTheDocument()
-    expect(screen.getByText('實際區間 2026-07-27 ~ 2026-08-30')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '近一個月' }).className).toContain('st-shortcut-active')
+    expect(screen.getByText('2026 第 37 週（09/07–09/13）')).toBeInTheDocument()
+    expect(screen.getByText('2026 第 38 週（09/14–09/20）')).toBeInTheDocument()
+    expect(screen.getByText('實際區間 2026-09-07 ~ 2026-09-14')).toBeInTheDocument()
+    // Deliberately not any shortcut's result (近一個月's start week is ~4 weeks back, never
+    // exactly last week) — so none of the three buttons is highlighted on page load.
+    expect(screen.getByRole('button', { name: '近一個月' }).className).not.toContain('st-shortcut-active')
+    expect(screen.getByRole('button', { name: '近三個月' }).className).not.toContain('st-shortcut-active')
+    expect(screen.getByRole('button', { name: '近半年' }).className).not.toContain('st-shortcut-active')
+
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
+    const body = JSON.parse((scanCall[1] as RequestInit).body as string)
+    expect(body.startDate).toBe('2026-09-07')
+    expect(body.endDate).toBe('2026-09-14')
+  })
+
+  it('defaults the date range correctly across a year boundary: today 2027-01-05 → 起始週 2026 第 53 週 (12/28–01/03)', async () => {
+    // 2027-01-05 is a Tuesday. This week's Monday is 2027-01-04, whose ISO week is 2027
+    // week 1 (01/04–01/10). Last week's Monday is 2026-12-28, whose ISO week is the prior
+    // year's 2026 week 53 (12/28–01/03) — the cross-year case the spec calls out by name.
+    vi.setSystemTime(new Date('2027-01-05T00:00:00'))
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    expect(screen.getByText('2026 第 53 週（12/28–01/03）')).toBeInTheDocument()
+    expect(screen.getByText('2027 第 1 週（01/04–01/10）')).toBeInTheDocument()
+    expect(screen.getByText('實際區間 2026-12-28 ~ 2027-01-05')).toBeInTheDocument()
+
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
+    const body = JSON.parse((scanCall[1] as RequestInit).body as string)
+    expect(body.startDate).toBe('2026-12-28')
   })
 
   it('applies the 近三個月 shortcut, highlights it, and updates 實際區間', async () => {
@@ -808,15 +1067,41 @@ describe('StrategyTab', () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     expect(screen.getByText('2026 第 36 週（08/31–09/06）')).toBeInTheDocument()
-    expect(screen.getByText('實際區間 2026-08-05 ~ 2026-09-02')).toBeInTheDocument()
+    // 起始週 defaults to 上週：今日（2026-09-02）所在的本週一 is 2026-08-31, so 上週一 is
+    // 2026-08-24 — whose ISO week is 2026 week 35 (08/24–08/30).
+    expect(screen.getByText('2026 第 35 週（08/24–08/30）')).toBeInTheDocument()
+    expect(screen.getByText('實際區間 2026-08-24 ~ 2026-09-02')).toBeInTheDocument()
 
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
-    expect(body.startDate).toBe('2026-08-05')
+    expect(body.startDate).toBe('2026-08-24')
     expect(body.endDate).toBe('2026-09-02')
+  })
+
+  it('sends the end week\'s own Sunday as endDate when 結束週 is a past week, not 本週', async () => {
+    // Today is 2026-09-02 (ISO week 36, 08/31–09/06); the default 起始週 is 上週 (week 35,
+    // 08/24–08/30). Stepping 結束週 back once lands it on week 35 too (equal to 起始週, still
+    // a valid non-reversed range) — no longer 本週, so endDate must be that week's own
+    // Sunday (2026-08-30), never today's date. (Stepping back a second week would push
+    // 結束週 earlier than the default 起始週, which the front end blocks — see the
+    // 起始週不可晚於結束週 guard — so this test only steps back the one week that stays valid.)
+    vi.setSystemTime(new Date('2026-09-02T00:00:00'))
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    const prevEndWeekButton = screen.getByRole('button', { name: '結束週往前一週' })
+    fireEvent.click(prevEndWeekButton)
+    expect(screen.getByText('實際區間 2026-08-24 ~ 2026-08-30')).toBeInTheDocument()
+
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
+    const body = JSON.parse((scanCall[1] as RequestInit).body as string)
+    expect(body.startDate).toBe('2026-08-24')
+    expect(body.endDate).toBe('2026-08-30')
   })
 
   it('cannot step 結束週 past 本週 — the next-week button on the end selector is disabled', async () => {
@@ -2473,16 +2758,19 @@ describe('StrategyTab', () => {
     ;(within(unionTableEl).getAllByRole('checkbox') as HTMLInputElement[]).forEach((cb) => expect(cb.checked).toBe(true))
 
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    // 買進價／報酬率 are the two sortable headers — freshly post-backtest, before any
+    // header click, both show the idle 「↕」 indicator (specs/frontend/strategy.md
+    // 「買進價與報酬率欄排序」表頭呈現).
     expect(headers).toEqual([
       '',
       '',
       '代號 / 名稱',
       '命中策略與訊號日',
       '買進日',
-      '買進價',
+      '買進價↕',
       '賣出日',
       '賣出價',
-      '報酬率',
+      '報酬率↕',
       '收益（每筆 1 張）',
     ])
 
@@ -2783,7 +3071,7 @@ describe('StrategyTab', () => {
     expect(fetchMock.mock.calls.length).toBe(callsBefore)
 
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalValues).toEqual(['-1.05%', '-50,000'])
+    expect(totalValues).toEqual(['4,750,000', '-1.05%', '-50,000'])
     expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(false)
 
     // Unchecking every remaining position (2330's two children, then 2454 — itself
@@ -2792,13 +3080,13 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement)
     fireEvent.click(screen.getByLabelText('納入 2454 計算').closest('tr') as HTMLElement)
     const totalsAfterAllExcluded = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalsAfterAllExcluded).toEqual(['—', '—'])
+    expect(totalsAfterAllExcluded).toEqual(['—', '—', '—'])
     expect(screen.getByText('未勾選任何標的')).toBeInTheDocument()
     expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(true)
     expect(fetchMock.mock.calls.length).toBe(callsBefore)
   })
 
-  it("with everything checked, the displayed 總報酬率／總收益 equal the response's totalReturnPercent/totalProfit exactly", async () => {
+  it("with everything checked, the displayed 總成本／總報酬率／總收益 equal the response's totalCost/totalReturnPercent/totalProfit exactly", async () => {
     scanResponder = () => unionScanResponse()
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
@@ -2810,8 +3098,12 @@ describe('StrategyTab', () => {
 
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
 
+    // unionBacktestResponse's own totalCost/totalProfit/totalReturnPercent are
+    // 4,850,000 / -40,000 / -0.82 — the displayed values must match verbatim
+    // (specs/frontend/strategy.md「全部勾選時…總成本、總報酬率、總收益必須分別等於回應
+    // 的 totalCost、totalReturnPercent 與 totalProfit」).
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalValues).toEqual(['-0.82%', '-40,000'])
+    expect(totalValues).toEqual(['4,850,000', '-0.82%', '-40,000'])
     // 2454 has no sellable day — uncounted for that reason, never "未勾選". Counts 筆
     // (positions), not 檔 — only 1 position (2454's) lacks a sellable day.
     expect(screen.getByText('另 1 筆尚無可賣出交易日，未計入')).toBeInTheDocument()
@@ -2844,7 +3136,9 @@ describe('StrategyTab', () => {
     // (Both the row's own cell and the total label read 1.24% here, hence getAllByText.)
     await waitFor(() => expect(screen.getAllByText('1.24%').length).toBeGreaterThan(0))
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalValues).toEqual(['1.24%', '15,000'])
+    // 總成本 must also come from lotSize=500 (buyPrice 2420 × 500 = 1,210,000), not a
+    // hard-coded 1000 (which would read 2,420,000 instead).
+    expect(totalValues).toEqual(['1,210,000', '1.24%', '15,000'])
   })
 
   it('unchecking a row updates the totals to exclude it, and rechecking restores the original totals', async () => {
@@ -2858,6 +3152,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
     expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+      '4,850,000',
       '-0.82%',
       '-40,000',
     ])
@@ -2870,7 +3165,10 @@ describe('StrategyTab', () => {
 
     fireEvent.click(screen.getByLabelText('納入 2317 計算'))
     await waitFor(() =>
+      // Unchecking 2317 (cost 100,000, backtestable) drops total cost to 4,750,000 too —
+      // 總成本 tracks the exact same 已勾選且可回測 coverage as 總報酬率／總收益.
       expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+        '4,750,000',
         '-1.05%',
         '-50,000',
       ]),
@@ -2882,6 +3180,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByLabelText('納入 2317 計算'))
     await waitFor(() =>
       expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+        '4,850,000',
         '-0.82%',
         '-40,000',
       ]),
@@ -2899,7 +3198,7 @@ describe('StrategyTab', () => {
 
     await waitFor(() => expect(screen.getByText('沒有可回測的標的')).toBeInTheDocument())
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalValues).toEqual(['—', '—'])
+    expect(totalValues).toEqual(['—', '—', '—'])
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
     expect(screen.queryByText('0.00%')).not.toBeInTheDocument()
   })
@@ -2916,7 +3215,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByLabelText('納入 2330 計算'))
     await waitFor(() => expect(screen.getByText('未勾選任何標的')).toBeInTheDocument())
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    expect(totalValues).toEqual(['—', '—'])
+    expect(totalValues).toEqual(['—', '—', '—'])
     expect(screen.queryByText('沒有可回測的標的')).not.toBeInTheDocument()
   })
 
@@ -2964,8 +3263,13 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getAllByText('0.00%').length).toBeGreaterThan(0))
     screen.getAllByText('0.00%').forEach((el) => expect(el.className).toContain('sl-neutral'))
     const totalValues = Array.from(document.querySelectorAll('.st-total-value'))
-    expect(totalValues.map((el) => el.textContent)).toEqual(['0.00%', '0'])
-    totalValues.forEach((el) => expect(el.className).toContain('sl-neutral'))
+    expect(totalValues.map((el) => el.textContent)).toEqual(['2,420,000', '0.00%', '0'])
+    // 總成本（第一個）恆為主要文字色，不套用漲跌色，即使其餘兩個標籤在報酬率／收益為 0
+    // 時套用 sl-neutral — 「總成本不是漲跌值，不套漲跌色」。
+    expect(totalValues[0].className).not.toContain('sl-neutral')
+    expect(totalValues[0].className).not.toContain('sl-up')
+    expect(totalValues[0].className).not.toContain('sl-down')
+    totalValues.slice(1).forEach((el) => expect(el.className).toContain('sl-neutral'))
   })
 
   it('clears any backtest result and returns the table to its un-backtested state the moment 開始掃描 is pressed again', async () => {
@@ -3455,7 +3759,7 @@ describe('StrategyTab', () => {
 
   // ---------------- 「取消全選」勾選框 ----------------
 
-  it('places 「取消全選」immediately left of 總報酬率 (order: 取消全選, 總報酬率, 總收益), existing only after a successful 回測', async () => {
+  it('places the four totals-row items in order 取消全選, 總成本, 總報酬率, 總收益, existing only after a successful 回測', async () => {
     scanResponder = () => boxScanResponse()
     backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
     renderTab()
@@ -3474,8 +3778,8 @@ describe('StrategyTab', () => {
 
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     const container = screen.getByText('總報酬率').closest('.st-backtest-totals') as HTMLElement
-    const labels = within(container).getAllByText(/^取消全選$|^總報酬率$|^總收益（每筆 1 張）$/)
-    expect(labels.map((el) => el.textContent)).toEqual(['取消全選', '總報酬率', '總收益（每筆 1 張）'])
+    const labels = within(container).getAllByText(/^取消全選$|^總成本（每筆 1 張）$|^總報酬率$|^總收益（每筆 1 張）$/)
+    expect(labels.map((el) => el.textContent)).toEqual(['取消全選', '總成本（每筆 1 張）', '總報酬率', '總收益（每筆 1 張）'])
     // 回測剛完成（全部預設勾選）時「取消全選」呈未勾選.
     expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(false)
   })
@@ -3524,10 +3828,10 @@ describe('StrategyTab', () => {
     expect(parentCheckbox.indeterminate).toBe(false)
 
     await waitFor(() => expect(screen.getByText('未勾選任何標的')).toBeInTheDocument())
-    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual(['—', '—'])
+    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual(['—', '—', '—'])
   })
 
-  it('unchecking 「取消全選」checks every position back, restoring the totals to the response\'s own totalReturnPercent/totalProfit', async () => {
+  it('unchecking 「取消全選」checks every position back, restoring the totals to the response\'s own totalCost/totalReturnPercent/totalProfit', async () => {
     scanResponder = () => unionScanResponse()
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
@@ -3545,6 +3849,7 @@ describe('StrategyTab', () => {
     expect(cancelAll.checked).toBe(false)
     await waitFor(() =>
       expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
+        '4,850,000',
         '-0.82%',
         '-40,000',
       ]),
@@ -4098,5 +4403,720 @@ describe('StrategyTab', () => {
     const row = screen.getByText('2454 聯發科').closest('tr') as HTMLElement
     expect(within(row).getByText('1248.00')).toBeInTheDocument()
     expect(within(row).getByText('0.96%')).toBeInTheDocument()
+  })
+
+  // ---------------- 總成本 ----------------
+
+  it('keeps 「總收益 ÷ 總成本 × 100」(rounded to two decimals) equal to the displayed 總報酬率 at any checked state', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+
+    const readTotals = () => {
+      const [cost, returnPct] = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+      return { cost: Number(cost!.replace(/,/g, '')), returnPct: Number(returnPct!.replace('%', '')) }
+    }
+    // All checked: cost 4,850,000, profit -40,000 -> -0.82%.
+    const before = readTotals()
+    expect(before.cost).toBe(4850000)
+    expect(Math.round((-40000 / before.cost) * 100 * 100) / 100).toBe(before.returnPct)
+
+    fireEvent.click(screen.getByLabelText('納入 2317 計算'))
+    // 2317 excluded: cost 4,750,000, profit -50,000 -> -1.05%.
+    await waitFor(() => expect(readTotals().cost).toBe(4750000))
+    const after = readTotals()
+    expect(Math.round((-50000 / after.cost) * 100 * 100) / 100).toBe(after.returnPct)
+  })
+
+  it('exists only after a successful 回測, same lifecycle as 取消全選／總報酬率／總收益: absent before/during/on failure, present after a successful retry', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    expect(screen.queryByText('總成本（每筆 1 張）')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByText('總成本（每筆 1 張）')).not.toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.queryByText('總成本（每筆 1 張）')).not.toBeInTheDocument()
+
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+    await waitFor(() => expect(screen.getByText('總成本（每筆 1 張）')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByText('總成本（每筆 1 張）')).not.toBeInTheDocument()
+  })
+
+  // ---------------- 買進價／報酬率欄排序 ----------------
+
+  it('has no sortable headers before 回測 completes, and exactly 買進價／報酬率 sortable (with the idle 「↕」 icon) once it does', async () => {
+    scanResponder = () => sortableScanResponse()
+    // Deferred (never-yet-resolved) backtest response — same technique the pre-existing
+    // 「shows the merged table with no checkbox column while the auto-triggered 回測 is in
+    // flight」test uses — so the "mid-回測" checkpoint below is genuinely mid-flight rather
+    // than incidentally timed against how fast mocked fetches happen to resolve.
+    let resolveBacktest: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/backtest')) {
+        return new Promise((resolve) => {
+          resolveBacktest = () => resolve(jsonResponse(200, sortableBacktestResponse()))
+        })
+      }
+      if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, sortableScanResponse()))
+      if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+      if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+      return Promise.resolve(jsonResponse(200, {}))
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('AAAA A股')).toBeInTheDocument())
+    // Mid-回測 (checkbox column and the six backtest columns don't exist yet either).
+    expect(document.querySelectorAll('.st-sortable')).toHaveLength(0)
+
+    resolveBacktest(undefined)
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    const sortableHeaders = Array.from(document.querySelectorAll('.st-sortable')).map((el) => el.textContent)
+    expect(sortableHeaders).toEqual(['買進價↕', '報酬率↕'])
+  })
+
+  it('shows the default order (latest signalDate desc, tie stockId asc) immediately after 回測, before any header click', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+  })
+
+  it('cycles 降冪 → 升冪 → 還原預設排序 → 降冪… on repeated clicks of the same header, reordering rows and updating the icon each time, treating 「—」 as the minimum', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    clickSortHeader('報酬率') // 1st: 降冪 — AAAA 5% > BBBB -3% > CCCC 「—」(min)
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+
+    clickSortHeader('報酬率') // 2nd: 升冪 — CCCC 「—」(min) first
+    expect(sortHeaderIcon('報酬率')).toBe('▲')
+    expect(topLevelRowStockIds()).toEqual(['CCCC C股', 'BBBB B股', 'AAAA A股'])
+
+    clickSortHeader('報酬率') // 3rd: 還原預設排序
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+
+    clickSortHeader('報酬率') // 4th: 降冪 again
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+  })
+
+  it('restarts at 降冪 when switching to the OTHER sortable column, clearing the previous column\'s icon (only one column sorted at a time)', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+
+    clickSortHeader('買進價') // switching column -> restarts at 降冪, not continuing 報酬率's cycle
+    expect(sortHeaderIcon('買進價')).toBe('▼')
+    expect(sortHeaderIcon('報酬率')).toBe('↕') // cleared — only one header shows a direction at once
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股']) // 200 > 100 > 「—」
+
+    clickSortHeader('買進價') // 升冪
+    expect(topLevelRowStockIds()).toEqual(['CCCC C股', 'AAAA A股', 'BBBB B股'])
+  })
+
+  it('breaks a tie on the sorted value using the default order (latest signalDate first) — a stable sort over the already-default-ordered rows', async () => {
+    scanResponder = () => tieScanResponse()
+    backtestResponder = () => ({ status: 200, body: tieBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(topLevelRowStockIds()).toEqual(['FFFF F股', 'EEEE E股']) // default: latest signalDate (08-19) first
+
+    clickSortHeader('報酬率') // both tied at 7% -> tie broken by default order, unchanged
+    expect(topLevelRowStockIds()).toEqual(['FFFF F股', 'EEEE E股'])
+  })
+
+  it('sorts a multi-buy-date parent row by the value it DISPLAYS (its cost-weighted aggregate), not by any single child\'s own return', async () => {
+    scanResponder = () => parentSortScanResponse()
+    backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    // Cost-weighted aggregate of children +10%/-10% is -9.80% — neither child's own value.
+    expect(within(row2330).getByText('-9.80%')).toBeInTheDocument()
+
+    clickSortHeader('報酬率') // 降冪 by the DISPLAYED value: 9999 20% > 8888 0% > 2330 -9.80%
+    // If 2330 were sorted by its best child's own +10% instead, it would land ABOVE 8888.
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+  })
+
+  it('treats a multi-buy-date parent whose children are ALL unchecked (displaying 「—」) as the minimum on the next header click', async () => {
+    scanResponder = () => parentSortScanResponse()
+    backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    fireEvent.click(row2330) // fully checked -> click unchecks every child
+    await waitFor(() => expect(within(row2330).getAllByText('—').length).toBeGreaterThan(0))
+
+    clickSortHeader('報酬率') // 降冪: 2330 now displays 「—」, sorts last
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+
+    clickSortHeader('報酬率') // 升冪: 「—」 sorts first
+    expect(topLevelRowStockIds()).toEqual(['2330 台積電', '8888 捌捌', '9999 玖玖'])
+  })
+
+  it('freezes row order at the moment of the header click — toggling a checkbox afterward changes what a parent DISPLAYS but never moves any row until the next header click', async () => {
+    scanResponder = () => parentSortScanResponse()
+    backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+
+    clickSortHeader('報酬率') // 降冪: 9999 20% > 8888 0% > 2330 -9.80%
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+
+    // Uncheck 2330's losing (-10%) child, leaving only its +10% child checked — its
+    // displayed aggregate becomes +10%, now HIGHER than 8888's 0%. The row must not move.
+    fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算'))
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    await waitFor(() => expect(within(row2330).getByText('10.00%')).toBeInTheDocument())
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+
+    // Only the NEXT header click re-sorts, using the now-current displayed values
+    // (9999=20%, 8888=0%, 2330=10%): 升冪 order is 8888, 2330, 9999.
+    clickSortHeader('報酬率')
+    expect(topLevelRowStockIds()).toEqual(['8888 捌捌', '2330 台積電', '9999 玖玖'])
+  })
+
+  it("sorts an expanded parent's own child rows by the same column/direction, restoring buyDate-desc order on 還原預設排序", async () => {
+    scanResponder = () => twoDateSingleStockScanResponse()
+    backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+
+    const table = screen.getByRole('table')
+    const childBuyDates = () =>
+      within(table)
+        .getAllByRole('row')
+        .filter((r) => r.className.includes('st-child-row'))
+        .map((r) => within(r).getAllByRole('cell')[4].textContent)
+
+    expect(childBuyDates()).toEqual(['2026-08-27', '2026-08-20']) // default: buyDate desc
+
+    clickSortHeader('報酬率') // 降冪: +10% (08-27) then -10% (08-20) — matches default here
+    expect(childBuyDates()).toEqual(['2026-08-27', '2026-08-20'])
+
+    clickSortHeader('報酬率') // 升冪: -10% (08-20) first — now DIFFERS from default order
+    expect(childBuyDates()).toEqual(['2026-08-20', '2026-08-27'])
+
+    clickSortHeader('報酬率') // 還原預設排序
+    expect(childBuyDates()).toEqual(['2026-08-27', '2026-08-20'])
+  })
+
+  it("keeps a collapsed parent's own buyDate/sellDate lines in buyDate-desc order under any active sort direction", async () => {
+    scanResponder = () => twoDateSingleStockScanResponse()
+    backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    // Deliberately NOT expanded — this is the collapsed-row listing.
+
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    const buyDateCell = within(row2330).getAllByRole('cell')[4]
+    const dates = () => within(buyDateCell).getAllByText(/^\d{4}-\d{2}-\d{2}$/).map((el) => el.textContent)
+    expect(dates()).toEqual(['2026-08-27', '2026-08-20'])
+
+    clickSortHeader('報酬率') // 降冪
+    expect(dates()).toEqual(['2026-08-27', '2026-08-20'])
+
+    // 升冪 would reverse an expanded parent's OWN child rows (see the previous test) — the
+    // collapsed listing must stay in buyDate-desc order regardless.
+    clickSortHeader('報酬率')
+    expect(dates()).toEqual(['2026-08-27', '2026-08-20'])
+  })
+
+  it('sorts entirely client-side: zero network requests, and leaves checkbox state, 共 N 檔, totals and 未計入 notes unchanged', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const table = screen.getByRole('table')
+    const callsBefore = fetchMock.mock.calls.length
+    const checkedBefore = (within(table).getAllByRole('checkbox') as HTMLInputElement[]).map((cb) => cb.checked)
+    const totalsBefore = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument()
+    expect(screen.getByText('另 1 筆尚無可賣出交易日，未計入')).toBeInTheDocument()
+
+    clickSortHeader('報酬率')
+
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    expect((within(table).getAllByRole('checkbox') as HTMLInputElement[]).map((cb) => cb.checked)).toEqual(checkedBefore)
+    expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual(totalsBefore)
+    expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument()
+    expect(screen.getByText('另 1 筆尚無可賣出交易日，未計入')).toBeInTheDocument()
+  })
+
+  it('resets sort to default (icons back to 「↕」) the instant 開始掃描 re-scans', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    expect(sortHeaderIcon('買進價')).toBe('↕')
+  })
+
+  it('shows default sort order (idle 「↕」 icons) after a failed auto-回測 is retried successfully — no sortable header existed to have been sorted before the retry', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.queryByText('買進價')).not.toBeInTheDocument()
+
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    expect(sortHeaderIcon('買進價')).toBe('↕')
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+  })
+
+  // ---------------- 「取消買進價高於 N 元」勾選框 ----------------
+
+  async function runPriceThresholdScan(): Promise<void> {
+    scanResponder = () => priceThresholdScanResponse()
+    backtestResponder = () => ({ status: 200, body: priceThresholdBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 5 檔')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+  }
+
+  function priceThresholdCheckbox(): HTMLInputElement {
+    return screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement
+  }
+
+  function priceThresholdAmountInput(): HTMLInputElement {
+    return screen.getByLabelText('取消買進價高於的金額') as HTMLInputElement
+  }
+
+  /** `document.querySelector` returns `null` (not a thrown error) when nothing matches yet,
+   * so a bare `waitFor(() => document.querySelector(...))` resolves immediately with `null`
+   * instead of actually waiting — this throws until the element exists, which `waitFor`
+   * does treat as "not ready yet". */
+  async function waitForFloatingTotals(): Promise<HTMLElement> {
+    return waitFor(() => {
+      const el = document.querySelector('.st-floating-totals')
+      if (!el) throw new Error('.st-floating-totals not in the document yet')
+      return el as HTMLElement
+    })
+  }
+
+  it('places 取消買進價高於 between 取消全選 and 總成本, defaults the amount to 500, and exists only after a successful 回測', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+
+    expect(screen.queryByLabelText('取消買進價高於金額元')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByLabelText('取消買進價高於金額元')).not.toBeInTheDocument() // 掃描成功、回測進行中
+
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(priceThresholdAmountInput().value).toBe('500')
+
+    const container = screen.getByText('總報酬率').closest('.st-backtest-totals') as HTMLElement
+    const text = container.textContent ?? ''
+    const idx = {
+      cancelAll: text.indexOf('取消全選'),
+      priceThreshold: text.indexOf('取消買進價高於'),
+      cost: text.indexOf('總成本（每筆 1 張）'),
+      returnPct: text.indexOf('總報酬率'),
+      profit: text.indexOf('總收益（每筆 1 張）'),
+    }
+    expect(idx.cancelAll).toBeLessThan(idx.priceThreshold)
+    expect(idx.priceThreshold).toBeLessThan(idx.cost)
+    expect(idx.cost).toBeLessThan(idx.returnPct)
+    expect(idx.returnPct).toBeLessThan(idx.profit)
+  })
+
+  it('checking it unchecks exactly the 高價組 (buyPrice > 500, including a 子列 and an unbacktestable-but-priced row), leaving every other position untouched — and the straddling parent goes 半選', async () => {
+    await runPriceThresholdScan()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+
+    fireEvent.click(priceThresholdCheckbox())
+
+    expect((screen.getByLabelText('納入 2330 2026-08-20 計算') as HTMLInputElement).checked).toBe(false) // 520 -> 高價組
+    expect((screen.getByLabelText('納入 3008 計算') as HTMLInputElement).checked).toBe(false) // 600, 無法回測但有買進價
+    expect((screen.getByLabelText('納入 2330 2026-08-27 計算') as HTMLInputElement).checked).toBe(true) // 480 -> 不動
+    expect((screen.getByLabelText('納入 1101 計算') as HTMLInputElement).checked).toBe(true) // 恰為 500 -> 不含等於，不動
+    expect((screen.getByLabelText('納入 AAAA 計算') as HTMLInputElement).checked).toBe(true) // 100 -> 不動
+    expect((screen.getByLabelText('納入 CCCC 計算') as HTMLInputElement).checked).toBe(true) // buyPrice null -> 不受影響
+
+    const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
+    expect(parentCheckbox.checked).toBe(false)
+    expect(parentCheckbox.indeterminate).toBe(true) // 一筆在高價組、一筆不在 -> 半選
+  })
+
+  it('unchecking it checks the 高價組 back, without touching a row the user had already unchecked by hand', async () => {
+    await runPriceThresholdScan()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    // 先手動取消一筆低價列（不在高價組）。
+    fireEvent.click(screen.getByLabelText('納入 AAAA 計算'))
+    expect((screen.getByLabelText('納入 AAAA 計算') as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(priceThresholdCheckbox()) // 勾選 -> 高價組全部取消
+    fireEvent.click(priceThresholdCheckbox()) // 再取消勾選 -> 高價組全部勾回
+
+    expect((screen.getByLabelText('納入 2330 2026-08-20 計算') as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText('納入 3008 計算') as HTMLInputElement).checked).toBe(true)
+    // AAAA 從未在高價組內，兩次切換都不曾動它——維持使用者先前手動取消的狀態。
+    expect((screen.getByLabelText('納入 AAAA 計算') as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('is disabled and unchecked when nothing is above the amount', async () => {
+    await runPriceThresholdScan()
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: '10000' } })
+
+    const checkbox = priceThresholdCheckbox()
+    expect(checkbox.disabled).toBe(true)
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it.each(['', '-1', '1.234'])('is disabled and shows the #F09A94 hint for an invalid amount (%s)', async (invalid) => {
+    await runPriceThresholdScan()
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: invalid } })
+
+    expect(priceThresholdCheckbox().disabled).toBe(true)
+    expect(screen.getByText('金額需為 0 以上、最多兩位小數')).toBeInTheDocument()
+  })
+
+  it('derives its checked state from the positions rather than remembering its own flag: checked once the 高價組 is manually emptied by hand, and after 「取消全選」', async () => {
+    await runPriceThresholdScan()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    expect(priceThresholdCheckbox().checked).toBe(false) // 高價組非空但目前都已勾選
+
+    fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算'))
+    fireEvent.click(screen.getByLabelText('納入 3008 計算'))
+    expect(priceThresholdCheckbox().checked).toBe(true) // 高價組全部手動取消 -> 自動呈勾選
+
+    fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算')) // 勾回一筆 -> 部分取消
+    expect(priceThresholdCheckbox().checked).toBe(false)
+
+    fireEvent.click(screen.getByLabelText('取消全選'))
+    expect(priceThresholdCheckbox().checked).toBe(true) // 取消全選後全部未勾選，含高價組
+  })
+
+  it('never toggles any position when the amount itself is edited — only the checkbox derivation changes', async () => {
+    await runPriceThresholdScan()
+    const callsBefore = fetchMock.mock.calls.length
+    const checkedBefore = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+      .filter((cb) => cb !== priceThresholdCheckbox())
+      .map((cb) => cb.checked)
+
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: '450' } })
+
+    const checkedAfter = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+      .filter((cb) => cb !== priceThresholdCheckbox())
+      .map((cb) => cb.checked)
+    expect(checkedAfter).toEqual(checkedBefore)
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    // The checkbox's own derived state does change (450 now covers 480/500/520/600).
+    expect(priceThresholdCheckbox().checked).toBe(false)
+  })
+
+  it('toggles a collapsed (not-yet-expanded) child position too — 2330 shows 半選 the moment it is later expanded', async () => {
+    await runPriceThresholdScan()
+    // 2330 is NOT expanded here — its child rows aren't in the DOM at all yet.
+    expect(screen.queryByLabelText('納入 2330 2026-08-20 計算')).not.toBeInTheDocument()
+
+    fireEvent.click(priceThresholdCheckbox())
+
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    expect((screen.getByLabelText('納入 2330 2026-08-20 計算') as HTMLInputElement).checked).toBe(false) // 520 -> was toggled off while hidden
+    expect((screen.getByLabelText('納入 2330 2026-08-27 計算') as HTMLInputElement).checked).toBe(true) // 480 -> untouched
+    expect((screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement).indeterminate).toBe(true)
+  })
+
+  it('recomputes the three totals, the parent aggregate, and 取消全選 the instant it is toggled — with no network request', async () => {
+    await runPriceThresholdScan()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    const callsBefore = fetchMock.mock.calls.length
+
+    fireEvent.click(priceThresholdCheckbox())
+
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    // Checked+backtestable after the toggle: 2330@0827 (480, profit 20,000), 1101 (500,
+    // profit 10,000), AAAA (100, profit 10,000). Excluded: 2330@0820 (520, now unchecked),
+    // 3008 (600, now unchecked, also unbacktestable anyway), CCCC (buyPrice null, no
+    // sellDate). cost = 1,080,000; profit = 40,000; return = 40,000/1,080,000*100 ≈ 3.70%.
+    expect(Array.from(document.querySelectorAll('.st-totals-anchor .st-total-value')).map((el) => el.textContent)).toEqual([
+      '1,080,000',
+      '3.70%',
+      '40,000',
+    ])
+    const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
+    expect(parentCheckbox.checked).toBe(false)
+    expect(parentCheckbox.indeterminate).toBe(true) // 一筆仍勾選、一筆被取消 -> 半選
+    expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(false) // 還有其餘筆勾選著
+  })
+
+  it('keeps the user-entered amount across a re-scan (only a page reload resets it to 500), and follows the 取消全選 lifecycle (gone on failed 回測, back on 重試回測 success, cleared on 重新掃描)', async () => {
+    await runPriceThresholdScan()
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: '750' } })
+    expect(priceThresholdAmountInput().value).toBe('750')
+
+    scanResponder = () => priceThresholdScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.queryByLabelText('取消買進價高於金額元')).not.toBeInTheDocument()
+
+    backtestResponder = () => ({ status: 200, body: priceThresholdBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+    await waitFor(() => expect(screen.getByLabelText('取消買進價高於金額元')).toBeInTheDocument())
+    // 金額在同一次進頁內保留 — 重試回測不重設它。
+    expect(priceThresholdAmountInput().value).toBe('750')
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByLabelText('取消買進價高於金額元')).not.toBeInTheDocument()
+  })
+
+  it('has no effect and disabled+unchecked state when the amount is left at its default with nothing above 500 (empty 高價組 across the whole hit list)', async () => {
+    scanResponder = () => boxScanResponse() // 2330 only, buyPrice 2420 in singleBacktestResponse — but this test raises the bar instead
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: '5000' } })
+    expect(priceThresholdCheckbox().disabled).toBe(true)
+    expect(priceThresholdCheckbox().checked).toBe(false)
+  })
+
+  // ---------------- 總計浮動跟隨 ----------------
+
+  /** Mocks `getBoundingClientRect` for exactly the three elements the 總計浮動跟隨 scroll
+   * effect reads (`.st-totals-anchor`, `.st-table-end-sentinel`, `.st-union-block`) — jsdom
+   * has no real layout engine, so every other element keeps the harmless all-zero default. */
+  function mockFloatingRects(anchorTop: number, tableEndTop: number, panelRight = 900): void {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const base = { x: 0, y: 0, width: 0, height: 0, left: 0, bottom: 0, right: 0, top: 0, toJSON: () => ({}) }
+      if (this.classList.contains('st-totals-anchor')) return { ...base, top: anchorTop, bottom: anchorTop + 30 } as DOMRect
+      if (this.classList.contains('st-table-end-sentinel')) return { ...base, top: tableEndTop, bottom: tableEndTop } as DOMRect
+      if (this.classList.contains('st-union-block')) return { ...base, right: panelRight, left: panelRight - 700 } as DOMRect
+      return base as DOMRect
+    })
+  }
+
+  it('does not show the floating totals before any scroll (both measurement points still at their jsdom-default zero rect)', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument()
+  })
+
+  it('shows the floating totals once the in-flow totals scroll above the viewport top, and hides them again once they scroll back into view', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    mockFloatingRects(-40, 300)
+    window.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(document.querySelector('.st-floating-totals')).toBeInTheDocument())
+
+    mockFloatingRects(10, 300) // scrolled back — the in-flow totals are visible again
+    window.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument())
+  })
+
+  it('hides the floating totals once the whole hit table has scrolled past the viewport top, even though the anchor is also above it', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    mockFloatingRects(-500, -20) // anchor long gone AND the table's own end has scrolled past
+    window.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument())
+  })
+
+  it('mirrors the exact same totals values as the in-flow copy, updating together the instant a checkbox is toggled — never a second computation', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    mockFloatingRects(-40, 300)
+    window.dispatchEvent(new Event('scroll'))
+    const floating = await waitForFloatingTotals()
+    const inFlowValues = () => Array.from(document.querySelectorAll('.st-totals-anchor .st-total-value')).map((el) => el.textContent)
+    const floatingValues = () => Array.from(floating.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(floatingValues()).toEqual(inFlowValues())
+
+    fireEvent.click(screen.getByLabelText('納入 2317 計算'))
+    expect(floatingValues()).toEqual(inFlowValues())
+  })
+
+  it('right-aligns the floating totals to the result panel\'s own right edge', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    mockFloatingRects(-40, 300, 900)
+    window.dispatchEvent(new Event('scroll'))
+    const floating = await waitForFloatingTotals()
+    // window.innerWidth defaults to 1024 in jsdom; panel right edge mocked at 900.
+    expect(floating.style.right).toBe(`${window.innerWidth - 900}px`)
+  })
+
+  it('never shows the floating totals before 回測, while 回測 is running, or after 回測 fails — even if a scroll event fires', async () => {
+    scanResponder = () => boxScanResponse()
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+
+    mockFloatingRects(-40, 300)
+    window.dispatchEvent(new Event('scroll'))
+    expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument() // 回測前
+
+    const baseImpl = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>
+    let resolveBacktest: (v: unknown) => void = () => {}
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.startsWith('/api/strategies/backtest')) {
+        return new Promise((resolve) => {
+          resolveBacktest = () => resolve(jsonResponse(200, singleBacktestResponse()))
+        })
+      }
+      return baseImpl(url, init)
+    })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('回測中…')).toBeInTheDocument())
+    window.dispatchEvent(new Event('scroll'))
+    expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument() // 回測中
+
+    resolveBacktest(undefined)
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    fetchMock.mockImplementation(baseImpl) // restore normal routing (honors backtestResponder again)
+
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    window.dispatchEvent(new Event('scroll'))
+    expect(document.querySelector('.st-floating-totals')).not.toBeInTheDocument() // 回測失敗
+  })
+
+  it('never issues a network request when scrolling, even across multiple visibility transitions', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const callsBefore = fetchMock.mock.calls.length
+    mockFloatingRects(-40, 300)
+    window.dispatchEvent(new Event('scroll'))
+    mockFloatingRects(10, 300)
+    window.dispatchEvent(new Event('scroll'))
+    mockFloatingRects(-500, -20)
+    window.dispatchEvent(new Event('scroll'))
+    window.dispatchEvent(new Event('resize'))
+    expect(fetchMock.mock.calls.length).toBe(callsBefore)
   })
 })

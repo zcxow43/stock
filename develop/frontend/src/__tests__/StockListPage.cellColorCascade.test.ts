@@ -57,6 +57,13 @@ const SECONDARY_BTN_BG = 'rgb(27, 40, 54)' // #1B2836
 const SECONDARY_BTN_BORDER = 'rgb(38, 51, 63)' // #26333F
 const DISABLED_BTN_BG = 'rgb(22, 32, 44)' // #16202C
 const DISABLED_BTN_TEXT = 'rgb(74, 88, 102)' // #4A5866
+// specs/frontend/strategy.md「取消買進價高於 N 元」勾選框 — the amount input's own literal
+// colors (「輸入框」row's values, not new ones) and its invalid-input hint text.
+const INPUT_TEXT = 'rgb(230, 237, 245)' // #E6EDF5
+const ERROR_TEXT = 'rgb(240, 154, 148)' // #F09A94
+// specs/frontend/strategy.md「總計浮動跟隨」— the floating block's own background/border.
+const PANEL_BG = 'rgb(22, 32, 44)' // #16202C
+const PANEL_BORDER = 'rgb(38, 51, 63)' // #26333F
 
 function pageHtml(): string {
   return `<!doctype html>
@@ -192,6 +199,84 @@ function pageHtml(): string {
           </tr>
         </tbody>
       </table>
+      <!-- specs/frontend/strategy.md「買進價與報酬率欄排序」— the two sortable headers'
+           idle (「↕」, #6B7C90 icon / #93A4B8 inherited label) and active-sorted (「▼」/「▲」,
+           #3E8FD8 icon / #E6EDF5 inherited label) states. Markup lifted verbatim from
+           StrategyTab.tsx's renderSortableHeader. -->
+      <table class="sl-table st-result-table st-union-table st-union-table-backtested">
+        <thead>
+          <tr>
+            <th class="sl-r st-sortable" id="sort-header-idle">
+              <span class="st-sort-label" id="sort-label-idle">買進價</span><span class="st-sort-icon st-sort-icon-idle" id="sort-icon-idle">↕</span>
+            </th>
+            <th class="sl-r st-sortable st-sort-header-active" id="sort-header-active">
+              <span class="st-sort-label" id="sort-label-active">報酬率</span><span class="st-sort-icon st-sort-icon-active" id="sort-icon-active">▼</span>
+            </th>
+          </tr>
+        </thead>
+      </table>
+      <!-- specs/frontend/strategy.md「總成本」— the third totals label, between 取消全選
+           and 總報酬率. Value never carries a sign color (always inherits the primary text
+           color); the no-value dash reuses .sl-muted verbatim like the other two totals. -->
+      <div class="st-total-item">
+        <span class="st-total-label" id="total-cost-label">總成本（每筆 1 張）</span>
+        <span class="st-total-value" id="total-cost-value">4,850,000</span>
+      </div>
+      <div class="st-total-item">
+        <span class="st-total-label">總成本（每筆 1 張）</span>
+        <span class="st-total-value"><span class="sl-muted" id="total-cost-dash">—</span></span>
+      </div>
+      <!-- specs/frontend/strategy.md「取消買進價高於 N 元」勾選框 — checked/unchecked reuse
+           .st-row-checkbox verbatim (same literal colors already pinned down above for
+           取消全選), plus this control's own disabled state (checkbox + label text) and the
+           amount input's own background/text/border/focus-border, and its own #F09A94
+           validation hint. Markup lifted verbatim from StrategyTab.tsx's renderMergedTable. -->
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="price-threshold-checked" checked />
+          <span class="st-total-label" id="price-threshold-label">取消買進價高於</span>
+          <input type="number" min="0" step="0.01" class="st-price-threshold-input" id="price-threshold-input" value="500" />
+          <span class="st-total-label">元</span>
+        </div>
+      </div>
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="price-threshold-unchecked" />
+        </div>
+      </div>
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="price-threshold-disabled" disabled />
+          <span class="st-total-label st-total-label-disabled" id="price-threshold-label-disabled">取消買進價高於</span>
+        </div>
+        <p class="st-inline-error st-price-threshold-hint" id="price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
+      </div>
+      <!-- specs/frontend/strategy.md「總計浮動跟隨」— the fixed-position floating copy of
+           the totals triplet; reuses .st-total-item/.st-total-value verbatim (same
+           computation, same color rules, per spec), this block only adds its own
+           background/border. -->
+      <div class="st-floating-totals" id="floating-totals">
+        <div class="st-total-item">
+          <span class="st-total-label">總成本（每筆 1 張）</span>
+          <span class="st-total-value" id="floating-total-cost">4,850,000</span>
+        </div>
+        <div class="st-total-item">
+          <span class="st-total-label">總報酬率</span>
+          <span class="st-total-value sl-up" id="floating-total-return">2.48%</span>
+        </div>
+      </div>
+      <!-- specs/frontend/strategy.md「以週選擇區間」— the 週選擇 control (background/text/
+           border, and its focus-within border) and the「實際區間」hint text, plus the two
+           快捷區間鈕 states. Markup lifted verbatim from StrategyTab.tsx's WeekSelector +
+           shortcut buttons. -->
+      <div class="st-week-select" id="week-select">
+        <button type="button" class="st-week-step" id="week-step-prev">‹</button>
+        <span class="st-week-caption">2026 第 31 週（07/27–08/02）</span>
+        <button type="button" class="st-week-step">›</button>
+      </div>
+      <div class="st-range-hint" id="range-hint">實際區間 2026-07-27 ~ 2026-08-30</div>
+      <button type="button" class="st-shortcut" id="shortcut-inactive">近三個月</button>
+      <button type="button" class="st-shortcut st-shortcut-active" id="shortcut-active">近一個月</button>
     </div>
     <!-- specs/frontend/momentum.md「漲幅欄漲跌色實際生效」— markup lifted from
          MomentumTab.tsx's renderIndustryBlock: the 產業別區塊標題 avgGain span (not a
@@ -315,6 +400,24 @@ describe.each(['dark', 'light'] as const)(
           'parent-buydate-unchecked',
           'parent-selldate-checked',
           'parent-selldate-unchecked',
+          // specs/frontend/strategy.md「買進價與報酬率欄排序」
+          'sort-label-idle',
+          'sort-icon-idle',
+          'sort-label-active',
+          'sort-icon-active',
+          // specs/frontend/strategy.md「總成本」
+          'total-cost-label',
+          'total-cost-value',
+          'total-cost-dash',
+          // specs/frontend/strategy.md「取消買進價高於 N 元」勾選框
+          'price-threshold-label',
+          'price-threshold-label-disabled',
+          'price-threshold-hint',
+          // specs/frontend/strategy.md「總計浮動跟隨」
+          'floating-total-cost',
+          'floating-total-return',
+          // specs/frontend/strategy.md「以週選擇區間」
+          'range-hint',
         ] as const
         return await page.evaluate((cellIds) => {
           const out: Record<string, string> = {}
@@ -535,6 +638,151 @@ describe.each(['dark', 'light'] as const)(
         expect(result.uncheckedBorder).toBe(UNCHECKED_BORDER)
         expect(result.labelCheckedColor).toBe(LABEL_TEXT)
         expect(result.labelUncheckedColor).toBe(LABEL_TEXT)
+      } finally {
+        await context.close()
+      }
+    })
+
+    // specs/frontend/strategy.md「買進價與報酬率欄排序」表頭呈現 — idle 「↕」 is weak text
+    // (#6B7C90) with the label at the header's own default color (#93A4B8, inherited, no
+    // class of its own); the actively-sorted header's direction icon is #3E8FD8 and its
+    // label switches to the primary text color (#E6EDF5) via `.st-sort-header-active` on
+    // the `<th>` itself — verified by actual computed color, not by which class either
+    // element carries.
+    it('colors the sortable headers: idle 「↕」 weak / default label, sorted 「▼」 blue / primary label', async () => {
+      const colors = await computedColors()
+      expect(colors['sort-icon-idle']).toBe(WEAK_TEXT)
+      expect(colors['sort-label-idle']).toBe(FLAT)
+      expect(colors['sort-icon-active']).toBe(CHECKED_BG)
+      expect(colors['sort-label-active']).toBe(PRIMARY_TEXT)
+    })
+
+    // specs/frontend/strategy.md「總成本」— the value is always the primary text color
+    // (never a sign color, even though it sits beside 總報酬率／總收益 which do get one),
+    // the label matches the other two totals' label color, and the no-value dash reuses
+    // the shared weak-text `.sl-muted` class.
+    it('renders 總成本 with a fixed primary-text value (never a sign color), a secondary-text label, and a weak-text dash', async () => {
+      const colors = await computedColors()
+      expect(colors['total-cost-label']).toBe(FLAT)
+      expect(colors['total-cost-value']).toBe(PRIMARY_TEXT)
+      expect(colors['total-cost-dash']).toBe(WEAK_TEXT)
+    })
+
+    // specs/frontend/strategy.md「取消買進價高於 N 元」勾選框 — checked/unchecked reuse
+    // .st-row-checkbox's already-pinned-down colors (same values as 取消全選), plus this
+    // control's own disabled state (checkbox background/border + label text) and the
+    // amount input's own background/text/border/focus-border.
+    it("renders the 「取消買進價高於 N 元」checkbox's painted colors: checked/unchecked (shared with 取消全選), disabled (checkbox + label), and its amount input", async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const checked = document.getElementById('price-threshold-checked') as HTMLInputElement
+          const unchecked = document.getElementById('price-threshold-unchecked') as HTMLInputElement
+          const disabled = document.getElementById('price-threshold-disabled') as HTMLInputElement
+          const input = document.getElementById('price-threshold-input') as HTMLInputElement
+          const before = {
+            checkedBg: getComputedStyle(checked).backgroundColor,
+            checkedMark: getComputedStyle(checked, '::after').borderRightColor,
+            uncheckedBg: getComputedStyle(unchecked).backgroundColor,
+            uncheckedBorder: getComputedStyle(unchecked).borderTopColor,
+            disabledBg: getComputedStyle(disabled).backgroundColor,
+            disabledBorder: getComputedStyle(disabled).borderTopColor,
+            inputBg: getComputedStyle(input).backgroundColor,
+            inputText: getComputedStyle(input).color,
+            inputBorder: getComputedStyle(input).borderTopColor,
+          }
+          input.focus()
+          return { ...before, inputFocusedBorder: getComputedStyle(input).borderTopColor }
+        })
+        expect(result.checkedBg).toBe(CHECKED_BG)
+        expect(result.checkedMark).toBe(CHECK_MARK_WHITE)
+        expect(result.uncheckedBg).toBe(UNCHECKED_BG)
+        expect(result.uncheckedBorder).toBe(UNCHECKED_BORDER)
+        expect(result.disabledBg).toBe(DISABLED_BTN_BG) // #16202C
+        expect(result.disabledBorder).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.inputBg).toBe(UNCHECKED_BG) // #0F1620
+        expect(result.inputText).toBe(INPUT_TEXT) // #E6EDF5
+        expect(result.inputBorder).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.inputFocusedBorder).toBe(CHECKED_BG) // #3E8FD8
+      } finally {
+        await context.close()
+      }
+    })
+
+    it('colors the 「取消買進價高於 N 元」label text (enabled/disabled) and its invalid-amount hint', async () => {
+      const colors = await computedColors()
+      expect(colors['price-threshold-label']).toBe(LABEL_TEXT) // #93A4B8
+      expect(colors['price-threshold-label-disabled']).toBe(DISABLED_BTN_TEXT) // #4A5866
+      expect(colors['price-threshold-hint']).toBe(ERROR_TEXT) // #F09A94
+    })
+
+    // specs/frontend/strategy.md「總計浮動跟隨」— the floating copy's own background/border
+    // (opaque, so a row scrolled underneath never shows through) and that it reuses the
+    // exact same 總成本／總報酬率／總收益 rendering (`.st-total-value`) the in-flow totals
+    // already use, not a second, differently-colored implementation.
+    it('renders 浮動總計 with an opaque #16202C background, #26333F border, and the same total-value colors as the in-flow totals', async () => {
+      const colors = await computedColors()
+      expect(colors['floating-total-cost']).toBe(PRIMARY_TEXT)
+      expect(colors['floating-total-return']).toBe(RED_UP)
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const el = document.getElementById('floating-totals')!
+          const style = getComputedStyle(el)
+          return { bg: style.backgroundColor, border: style.borderTopColor, position: style.position }
+        })
+        expect(result.bg).toBe(PANEL_BG)
+        expect(result.border).toBe(PANEL_BORDER)
+        expect(result.position).toBe('fixed')
+      } finally {
+        await context.close()
+      }
+    })
+
+    // specs/frontend/strategy.md「以週選擇區間」— the 週選擇 control's own background/text/
+    // border colors, its focus-within border, the「實際區間」hint text, and the two 快捷
+    // 區間鈕 states (unselected／selected).
+    it('renders the 週選擇 control, 「實際區間」hint, and 快捷區間鈕 states with their literal Visual Style colors', async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const weekSelect = document.getElementById('week-select')!
+          const prevBtn = document.getElementById('week-step-prev') as HTMLButtonElement
+          const before = {
+            bg: getComputedStyle(weekSelect).backgroundColor,
+            text: getComputedStyle(weekSelect).color,
+            border: getComputedStyle(weekSelect).borderTopColor,
+          }
+          prevBtn.focus()
+          const focusedBorder = getComputedStyle(weekSelect).borderTopColor
+          const rangeHint = getComputedStyle(document.getElementById('range-hint')!).color
+          const shortcutInactive = document.getElementById('shortcut-inactive')!
+          const shortcutActive = document.getElementById('shortcut-active')!
+          return {
+            ...before,
+            focusedBorder,
+            rangeHint,
+            shortcutInactiveBg: getComputedStyle(shortcutInactive).backgroundColor,
+            shortcutInactiveText: getComputedStyle(shortcutInactive).color,
+            shortcutActiveBg: getComputedStyle(shortcutActive).backgroundColor,
+            shortcutActiveText: getComputedStyle(shortcutActive).color,
+          }
+        })
+        expect(result.bg).toBe(UNCHECKED_BG) // #0F1620
+        expect(result.text).toBe(PRIMARY_TEXT) // #E6EDF5
+        expect(result.border).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.focusedBorder).toBe(CHECKED_BG) // #3E8FD8 (focus-within)
+        expect(result.rangeHint).toBe(FLAT) // #93A4B8
+        expect(result.shortcutInactiveBg).toBe(SECONDARY_BTN_BG) // #1B2836
+        expect(result.shortcutInactiveText).toBe(FLAT) // #93A4B8
+        expect(result.shortcutActiveBg).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.shortcutActiveText).toBe(PRIMARY_TEXT) // #E6EDF5
       } finally {
         await context.close()
       }

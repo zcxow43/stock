@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="../_scripts/shell.css">
 <link rel="stylesheet" href="screen.css">
 </head>
-<body class="page-strategy">
+<body class="page-strategy nodesc">
   <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
   <div class="wrap">
     <div class="head">
@@ -23,7 +23,7 @@
       <div class="meta">
         <span class="cnt">股票清單：共 <b>1,032</b> 檔</span>
         <span class="sep">|</span>
-        <div class="last" data-target>最後同步：<b>2026-08-30 09:14</b>　<span style="color:#6B7C90">完成 1,032 檔上市普通股 ・ 失敗 0 ・ 略過 0</span></div>
+        <div class="last">最後同步：<b>2026-08-30 09:14</b>　<span style="color:#6B7C90">完成 1,032 檔上市普通股 ・ 失敗 0 ・ 略過 0</span></div>
       </div>
       <div class="btns">
         <button class="btn">更新股票清單</button>
@@ -34,16 +34,13 @@
       <h2>掃描條件</h2>
       <div class="cards">
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
-          <select><option>嚴格</option></select>
-          <div class="desc">以 5 日均線為基準，左右各 5 根，需 3 段遞增，每段高過 2%</div><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div>
+          <select><option>嚴格</option></select><div class="desc" style="display:none">以 5 日均線為基準，左右各 3 根，需 2 段遞增，每段高過 1%</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.0"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">箱型突破</span></div>
           <select><option>標準</option></select>
-          <div class="desc">回看 20 根，箱高 &lt; 8%，突破 1.5% 且量增 1.5 倍</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.5"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">上漲支撐</span></div>
           <select><option>標準</option></select>
-          <div class="desc">收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="3.0"><span class="pct">%</span></div></div>
         <div class="card on"><div class="top"><span class="box"></span><span class="nm">反彈</span></div>
           <div class="desc">先在回看窗口內自最高收盤跌幅達門檻築出谷底，其後指定天數內自谷底反彈幅度達門檻</div>
@@ -65,10 +62,37 @@
         <span class="week">2026 第 34 週（08/17–08/23）</span> <span>~</span> <span class="week">2026 第 35 週（08/24–08/30）</span>
         <div class="seg"><button>近一個月</button><button>近三個月</button><button>近半年</button></div></div>
       <div class="rangehint">實際區間 2026-08-17 ~ 2026-08-30</div>
-      <div class="actions"><button class="btn primary" data-trigger>開始掃描</button>
-        <span class="hint">已勾選 5 個策略</span></div>
+      <div class="actions"><button class="btn primary">開始掃描</button>
+        <span class="hint">回測完成 ・ 以 2026-08-30 收盤為基準</span></div>
     </div>
-    <div class="empty">選擇策略與區間後開始掃描<div class="sub">尚未執行任何掃描</div></div>
+    <div class="res union">
+      <div class="reshead">
+        <h3>命中彙總<span> — 共 5 檔</span></h3>
+        <div class="totals">
+          <div class="tot3" data-trigger><div class="tot"><span class="tl">總成本（每筆 1 張）</span><b class="cost">470,000</b></div><div class="tot"><span class="tl">總報酬率</span><b class="down">-0.04%</b></div><div class="tot"><span class="tl">總收益（每筆 1 張）</span><b class="down">-200</b></div></div>
+        </div>
+      </div>
+      <div class="totnote">另 1 筆尚無可賣出交易日，未計入</div>
+      <div class="totnote">另 3 筆未勾選，未計入</div>
+      <div class="totnote">另 3 筆已隱藏</div>
+      <div class="subrow"><div class="params">底底高（嚴格）・箱型突破（標準）・上漲支撐（標準）・反彈（3 日跌 10% → 1 日反彈 5%）・累積上漲（30 日）</div>
+        <div class="batchrow"><label class="allclear"><span class="acb"></span>取消全選</label>
+          <label class="pxclear" data-target><span class="acb on"></span>取消買進價高於<input class="pxamt dis" disabled value="500">元</label>
+          <label class="hideinc"><span class="acb"></span>隱藏資料不齊（無賣出日）</label></div></div>
+      <table>
+        <thead><tr><th class="exp"></th><th class="ck"></th><th>代號</th><th>名稱</th><th>命中策略與訊號日</th><th>買進日</th><th class="r sortable">買進價<span class="si">↕</span></th><th>賣出日</th><th class="r">賣出價</th><th class="r sortable sorted">報酬率<span class="si">▼</span></th><th class="r">收益（每筆 1 張）</th></tr></thead>
+        <tbody>
+          <tr class="hover"><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2317</td><td>鴻海</td>
+            <td class="hits"><span class="stag">底底高</span><span class="sdate">2026-08-25</span></td><td>2026-08-25</td><td class="r">264.50</td><td>2026-08-29</td><td class="r">270.80</td><td class="r up">+2.38%</td><td class="r up">+6,300</td></tr>
+          <tr><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2603</td><td>長榮</td>
+            <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-26</span></td><td>2026-08-26</td><td class="r">205.50</td><td>2026-08-27</td><td class="r">199.00</td><td class="r down">-3.16%</td><td class="r down">-6,500</td></tr>
+          <tr><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">3231</td><td>緯創</td>
+            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-30</span></td><td>2026-08-30</td><td class="r">118.50</td><td class="dash">—</td><td class="r dash">—</td><td class="r dash">—</td><td class="r dash">—</td></tr>
+        </tbody>
+      </table>
+      <div class="note">底底高：另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>
+      <div class="note">箱型突破：另有 1 檔已突破，但確認日尚未到 ▸</div>
+    </div>
   </div>
 </body>
 </html>

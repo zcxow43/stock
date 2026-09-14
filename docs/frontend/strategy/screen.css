@@ -173,3 +173,37 @@
 .page-strategy .week { display:inline-block; background:#0F1620; color:#E6EDF5; border:1px solid #26333F;
   border-radius:4px; padding:5px 10px; font-size:13px; }
 .page-strategy .rangehint { color:#93A4B8; font-size:12px; margin:2px 0 6px; }
+
+/* 可排序表頭（買進價、報酬率）與總成本 */
+.page-strategy thead th.sortable { cursor:pointer; }
+.page-strategy thead th.sortable .si { margin-left:4px; font-size:11px; color:#6B7C90; }
+.page-strategy thead th.sortable.sorted { color:#E6EDF5; }
+.page-strategy thead th.sortable.sorted .si { color:#3E8FD8; }
+.page-strategy .tot b.cost { color:#E6EDF5; }
+
+/* 「取消買進價高於 N 元」勾選框、總計浮動跟隨 */
+.page-strategy .pxclear { display:inline-flex; align-items:center; gap:5px; color:#93A4B8; font-size:12px; align-self:center; }
+.page-strategy .pxclear .acb { position:relative; width:14px; height:14px; border-radius:3px; background:#0F1620; border:1px solid #26333F; box-sizing:border-box; }
+.page-strategy .pxclear .acb.on { background:#3E8FD8; border-color:#3E8FD8; }
+.page-strategy .pxclear .acb.on::after { content:""; position:absolute; left:4px; top:1px; width:3px; height:7px; border:solid #FFFFFF; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.page-strategy .pxclear input.pxamt { width:52px; height:20px; font-size:12px; font-family:inherit; text-align:right; background:#0F1620; color:#E6EDF5; border:1px solid #26333F; border-radius:3px; padding:0 4px; box-sizing:border-box; }
+.page-strategy .tot3 { display:flex; align-items:baseline; gap:18px; }
+.page-strategy.scrolled .topbar, .page-strategy.scrolled .head, .page-strategy.scrolled .pageopt,
+.page-strategy.scrolled .tabs, .page-strategy.scrolled .syncbar, .page-strategy.scrolled .cond,
+.page-strategy.scrolled .reshead, .page-strategy.scrolled .totnote, .page-strategy.scrolled .params,
+.page-strategy.scrolled thead { display:none; }
+.page-strategy.scrolled .res { position:relative; padding-top:56px; }
+.page-strategy .floattot { position:absolute; top:0; right:0; display:flex; align-items:baseline; gap:18px;
+  background:#16202C; border:1px solid #26333F; border-top:0; border-radius:0 0 8px 8px; padding:10px 16px; z-index:5; }
+
+/* 批次勾選框列（標題列下方靠右，三個等高）、「隱藏資料不齊」、已隱藏說明 */
+.page-strategy .subrow { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:2px 0 6px; }
+.page-strategy .subrow .params { margin:0; }
+.page-strategy .batchrow { display:flex; align-items:center; gap:18px; }
+.page-strategy .batchrow > label { height:22px; align-self:center; }
+.page-strategy .hideinc { display:inline-flex; align-items:center; gap:5px; color:#93A4B8; font-size:12px; }
+.page-strategy .hideinc .acb { position:relative; width:14px; height:14px; border-radius:3px; background:#0F1620; border:1px solid #26333F; box-sizing:border-box; }
+.page-strategy .hideinc .acb.on { background:#3E8FD8; border-color:#3E8FD8; }
+.page-strategy .hideinc .acb.on::after { content:""; position:absolute; left:4px; top:1px; width:3px; height:7px; border:solid #FFFFFF; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.page-strategy .pxclear input.pxamt.dis { background:#16202C; color:#4A5866; border-color:#26333F; }
+.page-strategy.scrolled .subrow { display:none; }

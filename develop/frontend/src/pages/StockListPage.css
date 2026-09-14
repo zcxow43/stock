@@ -1181,6 +1181,113 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Wraps just the 總成本／總報酬率／總收益 triplet (not the two batch checkboxes) so its own
+   `getBoundingClientRect()` — read by the 總計浮動跟隨 scroll effect — measures exactly the
+   three items the spec says float, and nothing else. Keeps the same row layout the three
+   items had as direct `.st-backtest-totals` children before this wrapper existed. */
+.st-totals-anchor {
+  display: flex;
+  gap: 20px;
+}
+
+/* 「取消買進價高於 N 元」勾選框 — the checkbox+label+amount-input row, with its own
+   validation hint stacked below (rather than beside) it, unlike the value-only totals. */
+.st-price-threshold-item {
+  align-items: flex-start;
+}
+
+.st-price-threshold-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.st-price-threshold-input {
+  width: 56px;
+  background: #0f1620;
+  color: #e6edf5;
+  border: 1px solid #26333f;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-price-threshold-input:focus {
+  outline: none;
+  border-color: #3e8fd8;
+}
+
+.st-price-threshold-input::placeholder {
+  color: #6b7c90;
+}
+
+.st-price-threshold-hint {
+  margin: 4px 0 0;
+  white-space: normal;
+}
+
+.st-total-label-disabled {
+  color: #4a5866;
+}
+
+/* 浮動總計 — position:fixed copy of the same 總成本／總報酬率／總收益 triplet, shown only
+   while `floatingTotalsVisible` (see the scroll effect in StrategyTab.tsx) is true. Opaque
+   background so a table row scrolled underneath it never shows through; right-aligned to
+   the result panel's own right edge via the inline `right` style the component computes. */
+.st-floating-totals {
+  position: fixed;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 0 0 8px 8px;
+  padding: 10px 18px;
+  white-space: nowrap;
+}
+
+/* 總計浮動跟隨's "table scrolled fully past the top" measurement point — zero-height,
+   invisible, never part of the visible layout. */
+.st-table-end-sentinel {
+  height: 0;
+}
+
+/* 買進價／報酬率欄排序 — the header itself keeps the shared `.sl-table thead th` colors
+   (#93a4b8 idle, this rule only adds the pointer cursor + hover), the label span inherits
+   whatever color the `<th>` currently has (so `.st-sort-header-active` below only needs to
+   set color once, on the `<th>`, not separately on the label), and the icon carries its
+   own idle/active color regardless of the label's. */
+.st-union-table th.st-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.st-union-table th.st-sortable:hover {
+  color: #e6edf5;
+}
+
+.st-union-table th.st-sort-header-active {
+  color: #e6edf5;
+}
+
+.st-sort-icon {
+  margin-left: 4px;
+  font-size: 11px;
+}
+
+.st-sort-icon-idle {
+  color: #6b7c90;
+}
+
+.st-sort-icon-active {
+  color: #3e8fd8;
+}
+
 .st-uncounted-notes {
   padding: 6px 18px 0;
 }
@@ -1243,6 +1350,14 @@
   width: 8px;
   height: 2px;
   background: #3e8fd8;
+}
+
+/* Disabled — currently only 「取消買進價高於 N 元」（空高價組或金額不合法時）. Deliberately
+   the same literal colors as the other disabled controls on this page, not a bespoke look. */
+.st-row-checkbox:disabled {
+  background: #16202c;
+  border-color: #26333f;
+  cursor: default;
 }
 
 /* Unchecked row — whole row (including its own up/down-colored 報酬率／收益) turns weak
