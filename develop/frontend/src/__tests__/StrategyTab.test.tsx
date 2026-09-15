@@ -3078,6 +3078,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    revealIncompletePositions()
 
     const callsBefore = fetchMock.mock.calls.length
     // 2317 alone: cost 100*1000=100,000, profit 10,000 -> excluding it from the combined
@@ -3899,6 +3900,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    revealIncompletePositions()
 
     fireEvent.click(screen.getByLabelText('納入 2317 計算'))
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
@@ -3921,6 +3923,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    revealIncompletePositions()
 
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
     expect(cancelAll.checked).toBe(false)
@@ -4958,6 +4961,26 @@ describe('StrategyTab', () => {
     expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked()
   })
 
+  it('drops a multi-buy-date stock from the table entirely once every one of its positions is hidden, while 共 N 檔 and 另 K 筆已隱藏 both still count it', async () => {
+    await runPriceThresholdScan()
+    // 400 puts BOTH of 2330's buy dates (480, 520) in the 高價組, along with 1101 (500) and
+    // 3008 (600) — AAAA (100) and CCCC (null) stay untouched. 4 positions hidden total.
+    fireEvent.change(priceThresholdAmountInput(), { target: { value: '400' } })
+    fireEvent.click(priceThresholdCheckbox())
+    expect(screen.queryByText('2330 台積電')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展開 2330 的訊號日明細' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('納入 1101 計算')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('納入 3008 計算')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('納入 AAAA 計算')).toBeInTheDocument()
+    // 標題「共 N 檔」不變——即使 2330 整檔（兩筆）都被隱藏。
+    expect(screen.getByText('命中彙總 — 共 5 檔')).toBeInTheDocument()
+    expect(screen.getByText('另 4 筆已隱藏')).toBeInTheDocument()
+    // 取消勾選後 2330 整檔（含兩個買進日）重新出現。
+    fireEvent.click(priceThresholdCheckbox())
+    expect(screen.getByText('2330 台積電')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '展開 2330 的訊號日明細' })).toBeInTheDocument()
+  })
+
   it('recomputes the three totals, the parent aggregate, and 取消全選 the instant it is toggled — with no network request', async () => {
     await runPriceThresholdScan()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
@@ -5099,7 +5122,19 @@ describe('StrategyTab', () => {
 
   it('keeps a three-position parent with only two visible dates, and parent clicks leave its hidden incomplete child checked', async () => {
     const scan = priceThresholdScanResponse()
-    scan.results[0].items.push({ stockId: '2330', stockName: '台積電', signalDate: '2026-08-29', buyDate: '2026-08-29', detail: {} })
+    // `results[0]`'s and `results[1]`'s `items` arrays carry differently-shaped `detail`
+    // literals (`{}` vs `{ lows: [] }`), so TS widens `results` itself to a union-element
+    // array — indexing narrows `.items` to a union of the two array types, whose combined
+    // `push` signature then demands a `detail` satisfying BOTH shapes at once. This fixture
+    // never reads `detail`'s contents, so a targeted widen-then-cast here is the correct
+    // fix, not a strict-typing workaround for a real bug.
+    ;(scan.results[0].items as { stockId: string; stockName: string; signalDate: string; buyDate: string; detail: Record<string, unknown> }[]).push({
+      stockId: '2330',
+      stockName: '台積電',
+      signalDate: '2026-08-29',
+      buyDate: '2026-08-29',
+      detail: {},
+    })
     const backtest = priceThresholdBacktestResponse()
     backtest.items.push({ stockId: '2330', buyDate: '2026-08-29', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null })
     scanResponder = () => scan

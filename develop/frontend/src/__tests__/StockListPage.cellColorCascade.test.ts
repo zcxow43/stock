@@ -251,6 +251,40 @@ function pageHtml(): string {
         </div>
         <p class="st-inline-error st-price-threshold-hint" id="price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
       </div>
+      <!-- specs/frontend/strategy.md「批次勾選框列」/「隱藏資料不齊（無賣出日）」勾選框 —
+           the real three-item .st-batch-controls row (取消全選／取消買進價高於／隱藏資料
+           不齊), markup lifted verbatim from StrategyTab.tsx's renderMergedTable, used both
+           for this row's own equal-height/vertical-center layout check and (separately
+           below) 隱藏資料不齊's own checked/unchecked/disabled painted colors. -->
+      <div class="st-batch-controls" id="batch-controls-row">
+        <label class="st-total-item st-selectall-item" id="batch-cancel-all-item">
+          <input type="checkbox" class="st-row-checkbox" id="batch-cancel-all-checkbox" checked />
+          <span class="st-total-label">取消全選</span>
+        </label>
+        <div class="st-total-item st-price-threshold-item" id="batch-price-threshold-item">
+          <div class="st-price-threshold-row">
+            <input type="checkbox" class="st-row-checkbox" id="batch-price-threshold-checkbox" />
+            <span class="st-total-label">取消買進價高於</span>
+            <input type="number" min="0" step="0.01" class="st-price-threshold-input" value="500" />
+            <span class="st-total-label">元</span>
+          </div>
+        </div>
+        <label class="st-selectall-item st-incomplete-item" id="batch-incomplete-item">
+          <input type="checkbox" class="st-row-checkbox" id="batch-incomplete-checkbox" checked />
+          <span class="st-total-label">隱藏資料不齊（無賣出日）</span>
+        </label>
+      </div>
+      <label class="st-selectall-item st-incomplete-item">
+        <input type="checkbox" class="st-row-checkbox" id="incomplete-unchecked" />
+        <span class="st-total-label" id="incomplete-label-unchecked">隱藏資料不齊（無賣出日）</span>
+      </label>
+      <label class="st-selectall-item st-incomplete-item">
+        <input type="checkbox" class="st-row-checkbox" id="incomplete-disabled" disabled />
+        <span class="st-total-label st-total-label-disabled" id="incomplete-label-disabled">隱藏資料不齊（無賣出日）</span>
+      </label>
+      <!-- specs/frontend/strategy.md「隱藏的列」— 「另 K 筆已隱藏」, same .st-uncounted-note
+           class as the other 未計入 notes. -->
+      <p class="st-uncounted-note" id="hidden-count-note">另 3 筆已隱藏</p>
       <!-- specs/frontend/strategy.md「總計浮動跟隨」— the fixed-position floating copy of
            the totals triplet; reuses .st-total-item/.st-total-value verbatim (same
            computation, same color rules, per spec), this block only adds its own
@@ -418,6 +452,10 @@ describe.each(['dark', 'light'] as const)(
           'floating-total-return',
           // specs/frontend/strategy.md「以週選擇區間」
           'range-hint',
+          // specs/frontend/strategy.md「隱藏資料不齊（無賣出日）」勾選框 / 「另 K 筆已隱藏」
+          'incomplete-label-unchecked',
+          'incomplete-label-disabled',
+          'hidden-count-note',
         ] as const
         return await page.evaluate((cellIds) => {
           const out: Record<string, string> = {}
@@ -738,6 +776,71 @@ describe.each(['dark', 'light'] as const)(
         expect(result.bg).toBe(PANEL_BG)
         expect(result.border).toBe(PANEL_BORDER)
         expect(result.position).toBe('fixed')
+      } finally {
+        await context.close()
+      }
+    })
+
+    // specs/frontend/strategy.md「隱藏資料不齊（無賣出日）」勾選框 — checked/unchecked reuse
+    // .st-row-checkbox's already-pinned-down colors (same values as 取消全選／取消買進價高於),
+    // plus this control's own disabled state (checkbox background/border + label text) and
+    // its plain (enabled) label text color.
+    it("renders the 「隱藏資料不齊（無賣出日）」checkbox's painted colors: checked/unchecked (shared with the other two batch checkboxes), disabled state, and its label text", async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const checked = document.getElementById('batch-incomplete-checkbox') as HTMLInputElement
+          const unchecked = document.getElementById('incomplete-unchecked') as HTMLInputElement
+          const disabled = document.getElementById('incomplete-disabled') as HTMLInputElement
+          return {
+            checkedBg: getComputedStyle(checked).backgroundColor,
+            checkedMark: getComputedStyle(checked, '::after').borderRightColor,
+            uncheckedBg: getComputedStyle(unchecked).backgroundColor,
+            uncheckedBorder: getComputedStyle(unchecked).borderTopColor,
+            disabledBg: getComputedStyle(disabled).backgroundColor,
+            disabledBorder: getComputedStyle(disabled).borderTopColor,
+          }
+        })
+        expect(result.checkedBg).toBe(CHECKED_BG)
+        expect(result.checkedMark).toBe(CHECK_MARK_WHITE)
+        expect(result.uncheckedBg).toBe(UNCHECKED_BG)
+        expect(result.uncheckedBorder).toBe(UNCHECKED_BORDER)
+        expect(result.disabledBg).toBe(DISABLED_BTN_BG) // #16202C
+        expect(result.disabledBorder).toBe(UNCHECKED_BORDER) // #26333F
+      } finally {
+        await context.close()
+      }
+    })
+
+    it('colors the 「隱藏資料不齊（無賣出日）」label text (enabled/disabled) and the 「另 K 筆已隱藏」note', async () => {
+      const colors = await computedColors()
+      expect(colors['incomplete-label-unchecked']).toBe(LABEL_TEXT) // #93A4B8
+      expect(colors['incomplete-label-disabled']).toBe(DISABLED_BTN_TEXT) // #4A5866
+      expect(colors['hidden-count-note']).toBe(FLAT) // #93A4B8
+    })
+
+    // specs/frontend/strategy.md「批次勾選框列」— the three batch checkboxes (取消全選／取消
+    // 買進價高於／隱藏資料不齊) must render at equal box height and share the same vertical
+    // center line (≤ 1px), which only an actual layout engine can prove — jsdom has none.
+    it('renders the three batch checkboxes at equal height with the same vertical center (≤ 1px)', async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const [cancelAll, priceThreshold, incomplete] = await Promise.all([
+          page.locator('#batch-cancel-all-checkbox').boundingBox(),
+          page.locator('#batch-price-threshold-checkbox').boundingBox(),
+          page.locator('#batch-incomplete-checkbox').boundingBox(),
+        ])
+        expect(cancelAll).not.toBeNull()
+        expect(priceThreshold).not.toBeNull()
+        expect(incomplete).not.toBeNull()
+        const heights = [cancelAll!.height, priceThreshold!.height, incomplete!.height]
+        const centers = [cancelAll!, priceThreshold!, incomplete!].map((box) => box.y + box.height / 2)
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
+        expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1)
       } finally {
         await context.close()
       }
