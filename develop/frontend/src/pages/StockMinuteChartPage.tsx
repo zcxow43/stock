@@ -93,10 +93,19 @@ interface AdjacentDaysState {
   nextDate: string | null
 }
 
-const DATA_STATUS_MESSAGE: Record<string, string> = {
-  OUT_OF_WINDOW: '資料來源僅提供最近 30 天的分鐘資料，此交易日已超出可取得範圍。',
-  NO_DATA: '此交易日沒有分鐘成交資料。',
-  NOT_A_TRADING_DAY: '此日期非該股票的交易日。',
+// OUT_OF_WINDOW has no static copy: the earliest available date comes from the API response's
+// `availableFrom` (never a hardcoded date — see specs/frontend/stock-minute-chart.md).
+function dataStatusMessage(data: MinuteBarResponse): string {
+  switch (data.dataStatus) {
+    case 'OUT_OF_WINDOW':
+      return `分鐘資料最早只提供到 ${data.availableFrom ?? '—'}，此交易日早於可取得範圍。`
+    case 'NO_DATA':
+      return '此交易日沒有分鐘成交資料。'
+    case 'NOT_A_TRADING_DAY':
+      return '此日期非該股票的交易日。'
+    default:
+      return ''
+  }
 }
 
 export default function StockMinuteChartPage() {
@@ -403,7 +412,7 @@ export default function StockMinuteChartPage() {
             data!.dataStatus !== 'AVAILABLE' && (
               <div className="mc-unavailable">
                 <div className="mc-unavailable-icon">—</div>
-                <p>{DATA_STATUS_MESSAGE[data!.dataStatus]}</p>
+                <p>{dataStatusMessage(data!)}</p>
                 <Link to={`/stocks/${stockId}/daily`} className="mc-btn">
                   返回日 K
                 </Link>

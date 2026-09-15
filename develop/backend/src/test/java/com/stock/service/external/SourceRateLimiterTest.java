@@ -122,4 +122,39 @@ class SourceRateLimiterTest {
         properties.getRateLimit().setIntervalMs(intervalMs);
         return new SourceRateLimiter(properties);
     }
+
+    // ---------- acquire(sourceCode, explicitIntervalMs) overload (spec: 富果相鄰兩次請求的間隔不小於 1 秒，
+    // 數值取自設定；與 Yahoo 各自計算間隔) -- used by the minute-bar Fugle path with its own configured
+    // interval, independent of app.backfill.rate-limit.interval-ms.
+
+    @Test
+    void explicitInterval_secondCallToSameSource_waitsAtLeastThatInterval_ignoringDefaultConfig() {
+        // Default (BackfillProperties) interval is deliberately huge -- if the explicit overload
+        // fell back to it instead of honoring its own argument, this would time out/fail loudly.
+        SourceRateLimiter limiter = newLimiter(5_000);
+        long explicitIntervalMs = 100;
+
+        limiter.acquire("FUGLE", explicitIntervalMs);
+        long start = System.nanoTime();
+        limiter.acquire("FUGLE", explicitIntervalMs);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertTrue(elapsedMs >= explicitIntervalMs - 20 && elapsedMs < 1_000,
+                "must wait ~" + explicitIntervalMs + "ms (its own configured interval), not the default's 5000ms; "
+                        + "waited " + elapsedMs + "ms");
+    }
+
+    @Test
+    void explicitIntervalSource_andDefaultIntervalSource_neverBlockEachOther() {
+        SourceRateLimiter limiter = newLimiter(500);
+        limiter.acquire(SOURCE_A); // default-interval source (e.g. YAHOO), starts its cooldown
+
+        long start = System.nanoTime();
+        limiter.acquire("FUGLE", 100); // distinct source code, own explicit interval
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertTrue(elapsedMs < 60,
+                "a different source's explicit-interval acquire() must not wait on SOURCE_A's interval; took "
+                        + elapsedMs + "ms");
+    }
 }

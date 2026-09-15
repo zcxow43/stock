@@ -23,6 +23,7 @@ app:
     finmind-base-url: https://api.finmindtrade.com/api/v4/data
     finmind-token: ""
     yahoo-finance-base-url: https://query1.finance.yahoo.com/v8/finance/chart
+    fugle-base-url: https://api.fugle.tw/marketdata/v1.0/stock/historical/candles
     connect-timeout-ms: 10000
     read-timeout-ms: 15000
   backfill:
@@ -52,3 +53,9 @@ app:
       enabled: false
   minute-price:
     max-attempt-count: 3
+    available-from: "2023-05-23"
+    fugle:
+      # Fake key, never the real one -- tests mock the HTTP layer and never call the real Fugle API.
+      api-key: "test-fugle-key-DO-NOT-USE"
+      # Small on purpose so the rate-limiting test doesn't need to sleep a full second per call.
+      interval-ms: 100

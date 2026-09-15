@@ -1,7 +1,7 @@
 ---
 status: done
 title: "個股分 K 線圖頁"
-requirement: "前端 K 線瀏覽 — 在日 K 圖上連點兩下某一天後，以現價流線圖展示該交易日的分 K 走勢"
+requirement: "前端 K 線瀏覽 — 在日 K 圖上連點兩下某一天後，以現價流線圖展示該交易日的分 K 走勢；超出範圍的說明改依回應的最早可取得日顯示，不再寫死「僅提供最近 30 天」"
 depends_on: [stock-daily-chart]
 ---
 
@@ -15,7 +15,7 @@ depends_on: [stock-daily-chart]
 
 路由：`/stocks/{stockId}/minute/{tradeDate}`，`tradeDate` 格式 `YYYY-MM-DD`。
 
-本頁的關鍵設計課題不是繪圖，而是**誠實呈現「這天的分 K 拿不到」**：資料來源只提供最近 30 天的分鐘資料（見 `specs/backend/stock-minute-price.md`），使用者在日 K 上點一個三個月前的 K 棒是完全正常的操作，該情境必須有明確的說明，而不是轉圈或空圖。
+本頁的關鍵設計課題不是繪圖，而是**誠實呈現「這天的分 K 拿不到」**：分鐘資料最早只能取得到某個日期（目前為 2023-05-23，實際日期以回應的 `availableFrom` 為準，見 `specs/backend/stock-minute-price.md`），使用者在日 K 上點一個好幾年前的 K 棒是完全正常的操作，該情境必須有明確的說明，而不是轉圈或空圖。
 
 ## Requirements
 
@@ -59,7 +59,7 @@ depends_on: [stock-daily-chart]
 | `dataStatus` | 圖表區呈現 |
 |---|---|
 | `AVAILABLE` | 正常繪製分 K 圖與成交量副圖 |
-| `OUT_OF_WINDOW` | 訊息：「資料來源僅提供最近 30 天的分鐘資料，此交易日已超出可取得範圍。」附「返回日 K」按鈕。**不提供重試按鈕**——重試永遠不會成功 |
+| `OUT_OF_WINDOW` | 訊息：「分鐘資料最早只提供到 {availableFrom}，此交易日早於可取得範圍。」`{availableFrom}` 取自回應，格式 `YYYY-MM-DD`，**前端不寫死任何日期**。附「返回日 K」按鈕。**不提供重試按鈕**——重試永遠不會成功 |
 | `NO_DATA` | 訊息：「此交易日沒有分鐘成交資料。」附「返回日 K」按鈕 |
 | `NOT_A_TRADING_DAY` | 訊息：「此日期非該股票的交易日。」附「返回日 K」按鈕 |
 | `FETCH_FAILED` | 訊息：「取得分鐘資料失敗」，下方以小字顯示回應的 `message`，附「重試」按鈕（以 `refresh=true` 重新請求） |
@@ -93,7 +93,7 @@ depends_on: [stock-daily-chart]
 | 進頁、切換週期、重新整理 | `GET /api/stocks/{stockId}/minute-bars?tradeDate={日期}&interval={週期}&refresh={true 僅於重新整理}` |
 | 進頁 | `GET /api/stocks/statistics?stockIds={stockId}&includeSeries=true&startDate={tradeDate 往前 14 天}&endDate={tradeDate 往後 14 天}` — 僅為取得相鄰交易日清單 |
 
-分 K 回應使用的欄位：`stockId`、`stockName`、`tradeDate`、`interval`、`dataStatus`、`source`、`fetchedAt`、`barCount`、`dailySummary{open,high,low,close,volume}`、`bars[]{barTime,open,high,low,close,volume}`、以及 `FETCH_FAILED` 時的 `message`。
+分 K 回應使用的欄位：`stockId`、`stockName`、`tradeDate`、`interval`、`dataStatus`、`source`、`fetchedAt`、`barCount`、`dailySummary{open,high,low,close,volume}`、`bars[]{barTime,open,high,low,close,volume}`、`availableFrom`、以及 `FETCH_FAILED` 時的 `message`。
 
 相鄰交易日取自統計回應的 `items[0].series[].tradeDate`：排序後找出目前 `tradeDate` 的前一個與後一個。此請求失敗或回傳空序列時，前後切換按鈕一律 disabled，**不影響分 K 圖本身的顯示**。
 
@@ -157,7 +157,7 @@ depends_on: [stock-daily-chart]
 - [x] Tooltip 顯示時間、開高低收、相對當日開盤的漲跌幅、成交量
 - [x] 週期切換為 `5 分` 後重新請求並重繪，資料點數量約為 1 分的五分之一
 - [x] 當日概況條顯示 `dailySummary` 的開高低收與成交量
-- [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「資料來源僅提供最近 30 天的分鐘資料…」，**不出現重試按鈕**，且當日概況條仍顯示
+- [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「資料來源僅提供最近 30 天的分鐘資料…」，**不出現重試按鈕**，且當日概況條仍顯示（此為**當時的文案**；已於下方增量改為依回應的 `availableFrom` 顯示）
 - [x] `dataStatus` 為 `NO_DATA` / `NOT_A_TRADING_DAY` / `FETCH_FAILED` 時各顯示不同文案，四種狀態的訊息互不相同
 - [x] `dataStatus` 為 `FETCH_FAILED` 時顯示回應的 `message` 與「重試」按鈕，點擊後以 `refresh=true` 重新請求
 - [x] 載入中顯示「正在取得當日分鐘資料…」說明文字，而非僅一個轉圈圖示
@@ -178,6 +178,18 @@ depends_on: [stock-daily-chart]
 - [x] Tooltip 仍顯示該點的時間、開、高、低、收、相對當日開盤的漲跌幅與成交量，逐分鐘的開高低收未因主圖改為折線而遺失
 - [x] 十字準星移動時，折線上對應的資料點以 `#E6EDF5` 圓點標示
 - [x] 日 K 頁（`/stocks/{stockId}/daily`）的主圖仍為蠟燭圖，未受本次變更影響
+
+
+### 超出範圍的說明改依最早可取得日顯示（本次新增）
+
+- [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「分鐘資料最早只提供到 {availableFrom}，此交易日早於可取得範圍。」，其中日期取自回應的 `availableFrom`，格式 `YYYY-MM-DD`
+- [x] 日期不寫死：將回應的 `availableFrom` 改為另一個日期，畫面上的訊息隨之改變；前端程式中不存在 `2023-05-23` 字面值
+- [x] 畫面上任何地方都不再出現「僅提供最近 30 天」的文案
+- [x] `OUT_OF_WINDOW` 時仍**不出現重試按鈕**，附「返回日 K」按鈕，且當日概況條仍顯示
+- [x] 30 天以前、但不早於 `availableFrom` 的交易日回 `dataStatus: AVAILABLE`（`source: FUGLE`）時，正常繪製分 K 圖與成交量副圖，呈現方式與 `source: YAHOO` 完全相同
+- [x] `dataStatus` 為 `FETCH_FAILED` 且 `message` 為「未設定富果 API Key，無法取得 30 天以前的分 K」時，照常顯示該 `message` 與「重試」按鈕
+- [x] 四種非 `AVAILABLE` 狀態的訊息仍互不相同
+- [x] 新文案的顏色取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下完全一致
 
 ## Execution Result
 - Status: DONE
@@ -212,3 +224,17 @@ Implemented the 8 previously-unchecked Acceptance Criteria: switched the main pa
   - Verified via direct SVG inspection (not just visual screenshot) in the same session: `svg path[stroke="#3E8FD8"]` count 1 with `fill="none"`; zero `rect[fill="#E04B45"|"#16A75C"]` (no candle bodies) and zero `line[stroke="#E04B45"|"#16A75C"]` (no wicks) anywhere on the minute page; zero `rect[fill="#9A3B37"|"#12784A"]` (no colored volume bars) and 262/265 `rect[fill="#3A4757"]` (all volume bars neutral, one per bar); zero `<linearGradient>`/`<radialGradient>` in the SVG (no area fill under the line); the open-price label text (`2395.00`) present among the SVG `<text>` nodes; clicking the chart produced exactly one `circle[fill="#E6EDF5"]` at the crosshair's active point, with the tooltip showing full `開/高/低/收/對開盤/成交量` for that minute.
   - Loaded `/stocks/2330/daily` in the same session and confirmed by direct SVG inspection that it still renders 127 candle rects (`fill="#E04B45"`/`"#16A75C"`) and zero `path[stroke="#3E8FD8"]` — the daily page's main chart is unaffected by this increment, as required by the last AC.
   - Backend and frontend dev processes were both stopped at the end of this session (`pkill` on `spring-boot:run` and `vite --port 5199`; confirmed with `ps aux`/`lsof` showing neither process nor either port listening). No fixture data was inserted or needed cleanup — all verification reused real data already present in the database.
+
+### Increment 3 — 2026-09-15
+
+本次執行「超出範圍的說明改依最早可取得日顯示」增量，8 項全數完成。
+
+**文案**：`OUT_OF_WINDOW` 的訊息改為依回應組出「分鐘資料最早只提供到 {availableFrom}，此交易日早於可取得範圍。」，日期取自回應的 `availableFrom`。前端原始碼中不存在 `2023-05-23` 字面值，另以「改變模擬回應的 `availableFrom`，訊息隨之改變」的測試證明未寫死。舊文案「僅提供最近 30 天」已移除，並以測試斷言畫面上不再出現。回應型別新增 `availableFrom`。
+
+**行為不變的部分（以測試確認）**：`OUT_OF_WINDOW` 仍無「重試」按鈕、保留「返回日 K」、當日概況條照常顯示；`source: FUGLE` 的 `AVAILABLE` 日期與 `YAHOO` 呈現完全相同，繪製路徑不依來源分支（`source` 只用於頁尾文字）；`FETCH_FAILED` 搭配「未設定富果 API Key，無法取得 30 天以前的分 K」時照常顯示該訊息與「重試」按鈕；四種非 `AVAILABLE` 狀態的訊息互不相同。
+
+**顏色**：新文案沿用既有的訊息元素樣式（字面 hex `#93A4B8`，無主題變數、無 `prefers-color-scheme` 規則），本次**未修改任何 CSS**，因此沿用先前已在真實瀏覽器驗證過的結果，未另做計算後樣式驗證。
+
+**驗證**：`npm test` 由 377 項增為 380 項，全數通過；`npm run build` 無錯誤。
+
+**變更檔案**：`src/api/minuteBars.ts`、`src/pages/StockMinuteChartPage.tsx`、`src/__tests__/StockMinuteChartPage.test.tsx`。

@@ -44,6 +44,7 @@ function makeMinuteResponse(overrides: Partial<MinuteBarResponse> = {}): MinuteB
     barCount: bars.length,
     dailySummary: { open: 2355, high: 2380, low: 2350, close: 2375, volume: 18234000 },
     bars,
+    availableFrom: '2024-01-02',
     message: null,
     ...overrides,
   }
@@ -279,19 +280,79 @@ describe('StockMinuteChartPage', () => {
     })
   })
 
-  it('OUT_OF_WINDOW: shows the 30-day window message, no retry button, and the daily summary strip still shows', async () => {
+  it('OUT_OF_WINDOW: shows the availableFrom-derived message, no retry button, and the daily summary strip still shows', async () => {
     vi.stubGlobal(
       'fetch',
-      mockFetchRouter({ minute: makeMinuteResponse({ dataStatus: 'OUT_OF_WINDOW', bars: [], barCount: 0 }) }),
+      mockFetchRouter({
+        minute: makeMinuteResponse({ dataStatus: 'OUT_OF_WINDOW', bars: [], barCount: 0, availableFrom: '2024-01-02' }),
+      }),
     )
     renderPage()
-    expect(await screen.findByText(/資料來源僅提供最近 30 天的分鐘資料/)).toBeInTheDocument()
+    expect(
+      await screen.findByText('分鐘資料最早只提供到 2024-01-02，此交易日早於可取得範圍。'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/僅提供最近 30 天/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重試' })).not.toBeInTheDocument()
     expect(screen.getByText('開盤').parentElement).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '返回日 K' })).toBeInTheDocument()
   })
 
-  it('NO_DATA, NOT_A_TRADING_DAY, and FETCH_FAILED each show distinct messages', async () => {
+  it('OUT_OF_WINDOW: message changes when availableFrom changes, proving the date is not hardcoded', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        minute: makeMinuteResponse({ dataStatus: 'OUT_OF_WINDOW', bars: [], barCount: 0, availableFrom: '2025-09-30' }),
+      }),
+    )
+    renderPage()
+    expect(
+      await screen.findByText('分鐘資料最早只提供到 2025-09-30，此交易日早於可取得範圍。'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/2024-01-02/)).not.toBeInTheDocument()
+  })
+
+  it('AVAILABLE with source FUGLE (day older than 30 days) renders the chart and volume subplot exactly like YAHOO', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({ minute: makeMinuteResponse({ source: 'FUGLE' }) }),
+    )
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    expect(container.querySelector('path[stroke="#3E8FD8"]')).toBeTruthy()
+    expect(container.querySelectorAll('rect[fill="#3A4757"]').length).toBeGreaterThan(0)
+    expect(await screen.findByText(/資料來源 FUGLE/)).toBeInTheDocument()
+  })
+
+  it('FETCH_FAILED with the 富果 API Key message shows that message and the 重試 button', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        minute: makeMinuteResponse({
+          dataStatus: 'FETCH_FAILED',
+          bars: [],
+          barCount: 0,
+          message: '未設定富果 API Key，無法取得 30 天以前的分 K',
+        }),
+      }),
+    )
+    renderPage()
+    expect(await screen.findByText('取得分鐘資料失敗')).toBeInTheDocument()
+    expect(screen.getByText('未設定富果 API Key，無法取得 30 天以前的分 K')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument()
+  })
+
+  it('OUT_OF_WINDOW, NO_DATA, NOT_A_TRADING_DAY, and FETCH_FAILED each show mutually distinct messages', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        minute: makeMinuteResponse({ dataStatus: 'OUT_OF_WINDOW', bars: [], barCount: 0, availableFrom: '2024-01-02' }),
+      }),
+    )
+    const { unmount: u0 } = renderPage()
+    const outOfWindowMsg = '分鐘資料最早只提供到 2024-01-02，此交易日早於可取得範圍。'
+    expect(await screen.findByText(outOfWindowMsg)).toBeInTheDocument()
+    u0()
+
     vi.stubGlobal('fetch', mockFetchRouter({ minute: makeMinuteResponse({ dataStatus: 'NO_DATA', bars: [], barCount: 0 }) }))
     const { unmount: u1 } = renderPage()
     expect(await screen.findByText('此交易日沒有分鐘成交資料。')).toBeInTheDocument()
@@ -315,6 +376,9 @@ describe('StockMinuteChartPage', () => {
     expect(await screen.findByText('取得分鐘資料失敗')).toBeInTheDocument()
     expect(screen.getByText('連線逾時')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument()
+
+    const distinctMessages = new Set([outOfWindowMsg, '此交易日沒有分鐘成交資料。', '此日期非該股票的交易日。', '取得分鐘資料失敗'])
+    expect(distinctMessages.size).toBe(4)
   })
 
   it('FETCH_FAILED retry button re-requests with refresh=true', async () => {

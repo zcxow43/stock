@@ -16,6 +16,8 @@ public class MinuteBarResponse {
     private int interval;
     private String dataStatus;
     private String source;
+    /** Configured earliest date minute bars exist for, from either source; present on every response. */
+    private LocalDate availableFrom;
     private LocalDateTime fetchedAt;
     private int barCount;
     private DailySummaryDto dailySummary;
@@ -69,6 +71,14 @@ public class MinuteBarResponse {
 
     public void setSource(String source) {
         this.source = source;
+    }
+
+    public LocalDate getAvailableFrom() {
+        return availableFrom;
+    }
+
+    public void setAvailableFrom(LocalDate availableFrom) {
+        this.availableFrom = availableFrom;
     }
 
     public LocalDateTime getFetchedAt() {

@@ -160,10 +160,13 @@ class StockMinutePriceIntegrationTest {
 
     // ---------- 3. Out of window: no request, repeated calls stay at zero ----------
 
+    // Since the 30 天以前的分 K 改由富果補抓 increment, OUT_OF_WINDOW's boundary is availableFrom
+    // (2023-05-23), not "30 days ago" -- a date merely more than 30 days ago now routes to Fugle
+    // instead (see StockMinutePriceFugleIntegrationTest for that path).
     @Test
     void outOfWindowDate_returnsOutOfWindow_withoutAnyExternalRequest_repeatedly() {
         String stockId = "ZM03";
-        LocalDate tradeDate = weekdayAtLeast(35);
+        LocalDate tradeDate = beforeAvailableFromWeekday();
         seedStock(stockId, "測試分K三");
         seedDailyPrice(stockId, tradeDate, "10.00", "10.50", "9.80", "10.20", 5000);
 
@@ -487,9 +490,18 @@ class StockMinutePriceIntegrationTest {
         return d;
     }
 
-    /** A weekday strictly more than 30 days before today (guaranteed out-of-window). */
+    /** A weekday strictly more than 30 days before today (guaranteed inside the Fugle window). */
     private LocalDate weekdayAtLeast(int minDaysAgo) {
         return recentWeekday(Math.max(minDaysAgo, 31));
+    }
+
+    /** A weekday strictly before availableFrom (2023-05-23) -- guaranteed OUT_OF_WINDOW either source. */
+    private LocalDate beforeAvailableFromWeekday() {
+        LocalDate d = LocalDate.of(2023, 1, 16); // a Monday
+        while (d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            d = d.minusDays(1);
+        }
+        return d;
     }
 
     private LocalDate mostRecentSaturday() {

@@ -35,6 +35,9 @@ export interface MinuteBarResponse {
   barCount: number
   dailySummary: DailySummary | null
   bars: MinuteBar[]
+  /** Earliest trade date minute data is available for, `YYYY-MM-DD`. Used to render the
+   * OUT_OF_WINDOW message — never hardcode this date on the frontend. */
+  availableFrom: string | null
   /** Only present when dataStatus = FETCH_FAILED. */
   message: string | null
 }

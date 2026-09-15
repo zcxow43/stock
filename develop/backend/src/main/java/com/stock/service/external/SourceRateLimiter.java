@@ -44,8 +44,18 @@ public class SourceRateLimiter {
      * rate the source sees.
      */
     public void acquire(String sourceCode) {
+        acquire(sourceCode, properties.getRateLimit().getIntervalMs());
+    }
+
+    /**
+     * Same as {@link #acquire(String)}, but with an explicit minimum interval instead of {@link
+     * BackfillProperties}'s shared one — used by sources that need their own configured spacing
+     * (spec: 富果相鄰兩次請求的間隔不小於 1 秒，數值取自設定；與 Yahoo 各自計算間隔). The lock/last-call-time map is
+     * still keyed by {@code sourceCode} alone, so this and {@link #acquire(String)} on the SAME
+     * source code still serialize against each other.
+     */
+    public void acquire(String sourceCode, long intervalMs) {
         Object lock = locks.computeIfAbsent(sourceCode, code -> new Object());
-        long intervalMs = properties.getRateLimit().getIntervalMs();
         synchronized (lock) {
             Long last = lastRequestAtMillis.get(sourceCode);
             if (last != null) {

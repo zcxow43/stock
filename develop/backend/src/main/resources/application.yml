@@ -23,6 +23,7 @@ app:
     finmind-base-url: https://api.finmindtrade.com/api/v4/data
     finmind-token: ""
     yahoo-finance-base-url: https://query1.finance.yahoo.com/v8/finance/chart
+    fugle-base-url: https://api.fugle.tw/marketdata/v1.0/stock/historical/candles
     connect-timeout-ms: 10000
     read-timeout-ms: 15000
   backfill:
@@ -55,3 +56,11 @@ app:
     warmup-trading-days: 250
   minute-price:
     max-attempt-count: 3
+    # Quoted for the same reason as startup-catch-up.start-date above (YAML timestamp parsing).
+    available-from: "2023-05-23"
+    fugle:
+      # Local dev: /start injects FUGLE_API_KEY from the env file one directory above the project
+      # root (never committed). Blank default here is intentional -- see FugleClient.warnIfApiKeyMissing.
+      api-key: ${FUGLE_API_KEY:}
+      # Fugle free-tier historical-candle quota is 60 req/min => must stay >= 1000ms.
+      interval-ms: 1000

@@ -18,6 +18,8 @@ import com.stock.mapper.StockDailyPriceMapper;
 import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockMinuteFetchStatusMapper;
 import com.stock.mapper.StockMinutePriceMapper;
+import com.stock.service.external.FugleClient;
+import com.stock.service.external.SourceRateLimiter;
 import com.stock.service.external.YahooFinanceClient;
 import com.stock.service.external.dto.NormalizedMinuteBar;
 import com.stock.service.external.RateLimitedException;
@@ -39,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
 /**
  * GET /api/stocks/{stockId}/minute-bars — on-demand fetch-and-cache of one stock's 1-minute bars
@@ -55,7 +58,9 @@ public class MinuteBarQueryService {
     private static final LocalTime INTRADAY_CUTOFF = LocalTime.of(14, 0);
     private static final int WINDOW_DAYS = 30;
     private static final String SOURCE_YAHOO = "YAHOO";
+    private static final String SOURCE_FUGLE = "FUGLE";
     private static final String API_STATUS_FETCH_FAILED = "FETCH_FAILED";
+    private static final String FUGLE_KEY_MISSING_MESSAGE = "未設定富果 API Key，無法取得 30 天以前的分 K";
     private static final int PRICE_SCALE = 2;
     private static final int MAX_ERROR_LENGTH = 500;
     private static final DateTimeFormatter BAR_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
@@ -66,6 +71,8 @@ public class MinuteBarQueryService {
     private final StockMinuteFetchStatusMapper fetchStatusMapper;
     private final MinutePriceIngestionService ingestionService;
     private final YahooFinanceClient yahooFinanceClient;
+    private final FugleClient fugleClient;
+    private final SourceRateLimiter sourceRateLimiter;
     private final BackfillProperties backfillProperties;
     private final MinutePriceProperties minutePriceProperties;
 
@@ -74,6 +81,8 @@ public class MinuteBarQueryService {
                                   StockMinuteFetchStatusMapper fetchStatusMapper,
                                   MinutePriceIngestionService ingestionService,
                                   YahooFinanceClient yahooFinanceClient,
+                                  FugleClient fugleClient,
+                                  SourceRateLimiter sourceRateLimiter,
                                   BackfillProperties backfillProperties,
                                   MinutePriceProperties minutePriceProperties) {
         this.stockMapper = stockMapper;
@@ -82,6 +91,8 @@ public class MinuteBarQueryService {
         this.fetchStatusMapper = fetchStatusMapper;
         this.ingestionService = ingestionService;
         this.yahooFinanceClient = yahooFinanceClient;
+        this.fugleClient = fugleClient;
+        this.sourceRateLimiter = sourceRateLimiter;
         this.backfillProperties = backfillProperties;
         this.minutePriceProperties = minutePriceProperties;
     }
@@ -123,27 +134,43 @@ public class MinuteBarQueryService {
         // The 抓取決策 table alone decides whether we would fetch at all; a date that's already
         // AVAILABLE/NO_DATA/OUT_OF_WINDOW never reaches this branch when refresh=false (see
         // shouldFetch below), so an already-fetched date remains readable forever even once its
-        // trade date ages past the source's rolling window (spec: 已標記 AVAILABLE 的過往日期...
-        // 仍可正常讀取，資料已永久落地) — the window check below only ever applies to a *new*
-        // fetch attempt, never retroactively downgrades a resolved outcome.
+        // trade date ages past either source's rolling window (spec: 已標記 AVAILABLE 的過往日期...
+        // 仍可正常讀取，資料已永久落地) — the window checks below only ever apply to a *new* fetch
+        // attempt, never retroactively downgrade a resolved outcome.
         if (shouldFetch(current, tradeDate, today, refresh)) {
+            LocalDate availableFrom = minutePriceProperties.getAvailableFrom();
             LocalDate windowFloor = today.minusDays(WINDOW_DAYS);
             boolean alreadyResolved = current != null && (
                     StockMinuteFetchStatus.STATUS_AVAILABLE.equals(current.getStatus())
                             || StockMinuteFetchStatus.STATUS_NO_DATA.equals(current.getStatus())
                             || StockMinuteFetchStatus.STATUS_OUT_OF_WINDOW.equals(current.getStatus()));
-            if (tradeDate.isBefore(windowFloor)) {
-                // Out-of-window is a purely local, permanent determination: it can only ever get
-                // more out-of-window as time passes, so no request is ever worth making for it,
-                // refresh=true included (spec: 超窗判斷在本地完成，不發請求). If we already have a
-                // resolved outcome for this date (typically refresh=true on old AVAILABLE data),
-                // leave it untouched instead of clobbering good data with OUT_OF_WINDOW.
+            if (tradeDate.isBefore(availableFrom)) {
+                // Out-of-window is a purely local, permanent determination driven by the
+                // availableFrom setting: it can only ever get more out-of-window as time passes, so
+                // no request is EVER worth making for it, to EITHER source, refresh=true included
+                // (spec: 早於 availableFrom 的交易日回 OUT_OF_WINDOW，且未對 Yahoo 與富果發出任何請求). If we
+                // already have a resolved outcome for this date, leave it untouched instead of
+                // clobbering good data with OUT_OF_WINDOW.
                 if (!alreadyResolved) {
                     fetchStatusMapper.upsertOutOfWindow(stockId, tradeDate);
                     current = freshStatus(stockId, tradeDate, StockMinuteFetchStatus.STATUS_OUT_OF_WINDOW);
                 }
+            } else if (tradeDate.isBefore(windowFloor)) {
+                // 30 天以前、不早於 availableFrom -> Fugle only, never Yahoo (兩個來源互不備援).
+                if (!fugleClient.isApiKeyConfigured()) {
+                    // Config problem, not a source failure: no request, no status-table write, so a
+                    // later successful fetch (once the key is set) is never blocked by a stale
+                    // attempt_count (spec: 不寫入狀態表是刻意的...若照常累加 attempt_count，設定好金鑰之後
+                    // 這些日期仍會被重試上限擋住).
+                    current = fugleKeyMissingStatus(stockId, tradeDate);
+                } else {
+                    current = doFetch(stock, tradeDate, current, SOURCE_FUGLE,
+                            () -> fetchFugleWithRetry(stockId, tradeDate));
+                }
             } else {
-                current = doFetch(stock, tradeDate, current);
+                // Within the last 30 days -> Yahoo only, never Fugle.
+                current = doFetch(stock, tradeDate, current, SOURCE_YAHOO,
+                        () -> fetchYahooWithRetry(stockId, stock.getMarket(), tradeDate));
             }
         }
 
@@ -182,24 +209,30 @@ public class MinuteBarQueryService {
         }
     }
 
-    private StockMinuteFetchStatus doFetch(Stock stock, LocalDate tradeDate, StockMinuteFetchStatus previous) {
+    /**
+     * Runs one fetch attempt against whichever source the caller already picked for this date
+     * (spec: 兩個來源互不備援 — this never falls back from one source to the other; the caller decides
+     * the source purely from the date, before this is invoked).
+     */
+    private StockMinuteFetchStatus doFetch(Stock stock, LocalDate tradeDate, StockMinuteFetchStatus previous,
+                                            String source, Supplier<List<NormalizedMinuteBar>> fetcher) {
         String stockId = stock.getStockId();
         try {
-            List<NormalizedMinuteBar> bars = fetchWithRetry(stockId, stock.getMarket(), tradeDate);
+            List<NormalizedMinuteBar> bars = fetcher.get();
             LocalDateTime fetchedAt = LocalDateTime.now(TAIPEI);
-            ingestionService.applyFetchResult(stockId, tradeDate, bars, SOURCE_YAHOO, fetchedAt);
+            ingestionService.applyFetchResult(stockId, tradeDate, bars, source, fetchedAt);
 
             StockMinuteFetchStatus result = new StockMinuteFetchStatus();
             result.setStockId(stockId);
             result.setTradeDate(tradeDate);
             result.setStatus(bars.isEmpty() ? StockMinuteFetchStatus.STATUS_NO_DATA : StockMinuteFetchStatus.STATUS_AVAILABLE);
             result.setBarCount(bars.size());
-            result.setSource(SOURCE_YAHOO);
+            result.setSource(source);
             result.setAttemptCount(0);
             result.setFetchedAt(fetchedAt);
             return result;
         } catch (Exception e) {
-            log.warn("Minute bar fetch failed for stock {} on {}", stockId, tradeDate, e);
+            log.warn("Minute bar fetch failed for stock {} on {} via {}", stockId, tradeDate, source, e);
             String message = truncate(e.getMessage());
             fetchStatusMapper.markFailed(stockId, tradeDate, message);
 
@@ -217,7 +250,7 @@ public class MinuteBarQueryService {
     }
 
     /** Same request-pacing/backoff as stock-price-ingestion's backfill path (spec: 速率控制沿用既有機制). */
-    private List<NormalizedMinuteBar> fetchWithRetry(String stockId, String market, LocalDate tradeDate) {
+    private List<NormalizedMinuteBar> fetchYahooWithRetry(String stockId, String market, LocalDate tradeDate) {
         BackfillProperties.RateLimit rateLimit = backfillProperties.getRateLimit();
         long backoffMs = rateLimit.getInitialBackoffMs();
         int attempt = 0;
@@ -233,6 +266,44 @@ public class MinuteBarQueryService {
                 backoffMs *= rateLimit.getBackoffMultiplier();
             }
         }
+    }
+
+    /**
+     * Same backoff mechanism as {@link #fetchYahooWithRetry}, but paced by Fugle's own configured
+     * interval via {@link SourceRateLimiter} (spec: 富果相鄰兩次請求的間隔不小於 1 秒，數值取自設定；富果與
+     * Yahoo 各自計算請求間隔). {@code SourceRateLimiter#acquire} is called before every real attempt,
+     * including retries, exactly like {@code PriceHistoryFetcher}'s equivalent loop.
+     */
+    private List<NormalizedMinuteBar> fetchFugleWithRetry(String stockId, LocalDate tradeDate) {
+        BackfillProperties.RateLimit rateLimit = backfillProperties.getRateLimit();
+        long backoffMs = rateLimit.getInitialBackoffMs();
+        int attempt = 0;
+        while (true) {
+            try {
+                sourceRateLimiter.acquire(SOURCE_FUGLE, minutePriceProperties.getFugle().getIntervalMs());
+                return fugleClient.fetchMinuteBars(stockId, tradeDate);
+            } catch (RateLimitedException e) {
+                attempt++;
+                if (attempt > rateLimit.getMaxRetries()) {
+                    throw e;
+                }
+                sleep(backoffMs);
+                backoffMs *= rateLimit.getBackoffMultiplier();
+            }
+        }
+    }
+
+    /**
+     * Transient (never persisted) FAILED status for the "no Fugle key configured" case (spec:
+     * 未設定 API Key 時...不發出請求、不寫入狀態表，直接回 dataStatus: FETCH_FAILED).
+     */
+    private StockMinuteFetchStatus fugleKeyMissingStatus(String stockId, LocalDate tradeDate) {
+        StockMinuteFetchStatus result = new StockMinuteFetchStatus();
+        result.setStockId(stockId);
+        result.setTradeDate(tradeDate);
+        result.setStatus(StockMinuteFetchStatus.STATUS_FAILED);
+        result.setLastError(FUGLE_KEY_MISSING_MESSAGE);
+        return result;
     }
 
     private void sleep(long millis) {
@@ -323,6 +394,10 @@ public class MinuteBarQueryService {
         response.setInterval(interval);
         response.setDataStatus(dataStatus);
         response.setSource(source);
+        // Every response carries this, regardless of dataStatus (spec: availableFrom 每個回應都有，
+        // 與該次查詢的日期與狀態無關) -- set here once rather than at each call site so no path can
+        // forget it.
+        response.setAvailableFrom(minutePriceProperties.getAvailableFrom());
         response.setFetchedAt(fetchedAt);
         response.setBarCount(bars.size());
         response.setDailySummary(dailySummary);
