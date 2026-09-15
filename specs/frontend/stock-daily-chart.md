@@ -43,6 +43,7 @@ depends_on: [stock-list]
 - **紅漲綠跌（台股慣例）**：`close >= open` 為紅色實心 K 棒，`close < open` 為綠色實心 K 棒。上下影線與 K 棒同色。
 - Y 軸為價格，範圍依區間內的最高與最低價自動決定並各留 5% 邊距；刻度標籤 2 位小數。
 - 滑鼠移動時顯示十字準星，X／Y 軸端點顯示對應的日期與價格標籤。
+- **十字準星必須對齊滑鼠正下方的那一根 K 棒**，在任何視窗寬度下皆然。圖表在寬螢幕上不會撐滿容器——以固定比例繪製並在容器內置中，兩側留白（實測 1650px 視窗：容器寬 1561px，圖表實際繪製寬 1200px，左側留白約 180px）。滑鼠對應到哪一根 K 棒，必須依**圖表實際繪製的位置與縮放**計算，不可假設圖表撐滿容器；否則越靠近左右兩端偏移越大，使用者指著某一天，十字準星、資訊列與點擊釘選卻落在相鄰的另一天。
 
 ### 副圖
 
@@ -160,6 +161,8 @@ K 棒的逐日數值顯示在**圖表面板頂端的一條固定資訊列**，�
 
 主圖與副圖以一個可重複使用的圖表元件實作，對外參數至少包含：資料陣列、X 軸標籤陣列、**主圖型態（蠟燭／折線）**、副圖設定（線／柱、資料、顏色）、水平參考線設定、單擊回呼與雙擊回呼（兩者分開，不可合併為單一回呼）、**滑鼠所在 K 棒改變時的回呼**（離開圖表時回傳「無」），以及**選用的**浮動 tooltip 內容。本頁不傳浮動 tooltip，改以前述回呼搭配釘選狀態自行在圖表上方繪製資訊列；分 K 頁傳入浮動 tooltip。
 
+滑鼠位置 → K 棒索引的換算（滑鼠移動、單擊、雙擊三者共用同一個換算）屬於共用元件，依「主圖：蠟燭圖」中「十字準星必須對齊滑鼠正下方的那一根 K 棒」的要求，以圖表實際繪製的位置與縮放為準。分 K 頁使用同一個元件，因此同樣適用。
+
 **主圖型態必須是元件的參數，不能寫死成蠟燭。** 本頁傳入蠟燭；分 K 頁（`specs/frontend/stock-minute-chart.md`）傳入折線，並額外傳入一條開盤價水平參考線、X 軸標籤由日期改為時間、副圖只有成交量、不傳雙擊回呼。折線型態下元件只讀每筆資料的 `close`，以單一線色繪製，不套用蠟燭的紅漲綠跌配色。
 
 繪圖方式（自繪或引入圖表函式庫）由 dev agent 依 `env.md` 的前端技術棧決定；本 spec 只約束外觀與互動行為。
@@ -238,6 +241,10 @@ K 棒的逐日數值顯示在**圖表面板頂端的一條固定資訊列**，�
 - [x] 共用圖表元件的主圖型態為對外參數，可傳入蠟燭或折線；折線型態下只讀 `close`、以單一線色繪製，不套用紅漲綠跌
 - [x] 共用圖表元件可接受水平參考線設定，並將其值納入 Y 軸範圍計算
 - [x] 本頁（日 K）主圖仍為蠟燭圖，紅漲綠跌與既有行為完全不變
+- [x] 圖表容器比圖表實際繪製寬度更寬（寬螢幕上圖表置中、兩側留白）時，日 K 頁滑鼠停在任一根 K 棒正上方，十字準星、X 軸日期標籤與資訊列皆為該根的日期，而非相鄰日期；以區間最左、正中、最右三根於實際瀏覽器（視窗寬 1650px 以上）驗證
+- [x] 同上情境下，單擊釘選的日期與雙擊進入分 K 的 `tradeDate`，皆為滑鼠所在那一根 K 棒的日期
+- [x] 分 K 頁（共用同一元件）在同樣寬度下，滑鼠停在首根、正中、末根資料點正上方時，十字準星與 tooltip 的時間皆為該資料點的時間
+- [x] 圖表實際繪製寬度等於容器寬度（窄視窗）時，對齊行為維持正確，既有點擊／雙擊／釘選測試照常通過
 
 ## Execution Result
 - Status: DONE
@@ -278,3 +285,27 @@ Implemented the 3 previously-unchecked Acceptance Criteria (共用圖表元件�
   - `npm run build` (`tsc -b && vite build`) and `npx vitest run` (89/89 passing — 83 pre-existing + 6 new) both green; `npx oxlint .` shows only two pre-existing, unrelated warnings in `StrategyTab.tsx`/`StrategyTab.test.tsx` (not touched by this increment).
   - End-to-end verified against the real backend and real MySQL data already present in the database (no fixture insert/cleanup needed this run): started the backend (`mvn -f develop/backend/pom.xml spring-boot:run`, port 8080) and the frontend dev server (`npm run dev`, port 5173), then loaded `/stocks/2330/daily` in a headless Chromium (Playwright, installed with `npm install --no-save` so `package.json`/`package-lock.json` show no diff — verified via `git diff --stat`) against the real 2330 data (159 daily price rows, 158 indicator rows) already in the database. Screenshot confirms the page renders identically to its pre-refactor appearance: red-up/green-down candles, warmup banner, summary strip, volume/MACD/KD subplots, all colors matching. Both dev processes were stopped afterward (confirmed via `curl` timing out on both ports); no test data was inserted or needed cleanup since real data was reused as-is.
   - Line-mode and reference-line correctness (the part not exercisable through the daily-K page, since it never passes those props) was verified via the new unit tests calling `KLineChart` directly with `mainType="line"` and `priceReferenceLines` — this was the "temporary harness" called for by the task; no scaffolding beyond the (kept) unit test file was needed, so nothing further required removal.
+
+### Increment 3 — 2026-09-16
+
+Implemented the 4 previously-unchecked Acceptance Criteria: mouse -> bar-index alignment on wide screens where the chart's actual drawn area is narrower than (and centered within) its container, for both the daily-K page and the minute-K page, which share `KLineChart.tsx`.
+
+- Root cause: the `<svg>` is `viewBox="0 0 1200 <totalHeight>"` with `width="100%"` and the default `preserveAspectRatio` (`xMidYMid meet`). On a wide viewport the box's aspect ratio is wider than `1200:totalHeight`, so the browser scales the drawing to fit the box's *height* and letterboxes it horizontally — centered, with blank margins on both sides (measured on a real 1650px-wide viewport: box 1576px wide starting at `x=37`, drawing only 1200px wide starting at `x≈225`/`≈235` depending on the panel's total height). The previous conversion (`clientX * (VIEW_WIDTH / rect.width)`) assumed the drawing fills the box, so it silently drifted toward the box's edges the further the pointer sat from center — exactly the bug this increment fixes.
+- Files changed:
+  - `develop/frontend/src/components/KLineChart.tsx` — replaced the box-width-only `clientX -> viewBox-X` conversion inside `indexFromClientX` with a new `resolveViewX(svg, clientX, totalHeight)` helper, used by `handleMouseMove`, `handleClick`, and `handleDoubleClick` alike (all three still share the single conversion, per this spec's "共用 K 線圖元件" requirement). `resolveViewX`:
+    1. Prefers the real browser's `svg.getScreenCTM()` (inverted, via `createSVGPoint().matrixTransform`) — this already accounts for `preserveAspectRatio` scaling/centering (and anything else: page zoom, CSS `transform` ancestors) exactly, without hand-replicating the algorithm.
+    2. Falls back — for jsdom in unit tests, which implements neither `getScreenCTM` nor `createSVGPoint` (confirmed empirically: calling `getScreenCTM` on a real jsdom-created `<svg>` throws `TypeError: svg.getScreenCTM is not a function`, so `svg.getScreenCTM?.()` short-circuits to `undefined` with no throw) — to replicating the default `xMidYMid meet` scale/centering computation from `getBoundingClientRect()` alone: `scale = min(rect.width / VIEW_WIDTH, rect.height / totalHeight)`, then centers the drawn width within the box.
+    - `indexFromClientX` now threads `totalHeight` through (previously computed but unused by this function) since the fallback path needs it to replicate the `meet` scale calculation.
+  - `develop/frontend/src/__tests__/KLineChart.test.tsx` — added a new `describe` block ("mouse-to-bar alignment when the box is wider than the drawing (letterboxed)") with 10 new tests: `it.each` over leftmost/middle/rightmost bar index for hover (`onHoverIndexChange`), click-pin (`onBarClick`), and double-click (`onBarDoubleClick`), each mocking `SVGElement.prototype.getBoundingClientRect` to a box wider than the 1200-wide drawing (one fixture uses a round `scale=1` letterboxed box at 1600px wide/200px each-side margin, the other uses the spec's real measured numbers — 1561px box, 37px left offset — at a fractional `scale=0.9`), and computing the expected `clientX` for each bar independently from the same `xMidYMid meet` formula. A closing regression test explicitly re-derives what the pre-fix naive `VIEW_WIDTH / rect.width` scaling would have picked for one of these fixtures and asserts it disagrees with the correct bar — documenting that the fixtures are genuinely letterboxed, not accidentally equivalent to the old code path. Confirmed these 4 new `it.each` cases fail against the pre-fix code (verified by temporarily stashing the `KLineChart.tsx` change and re-running: 4/16 failed with the wrong neighboring bar index, e.g. expected `0` got `1`) before restoring the fix.
+- Notes:
+  - `npx vitest run`: **391/391 passing** (10 test files; 381 pre-existing + 10 new in `KLineChart.test.tsx`). `npm run build` (`tsc -b && vite build`): green, no new warnings.
+  - Real-browser verification, per this increment's instructions, against the frontend dev server already running on `http://localhost:5173` (left running throughout, not restarted) proxied to the already-running backend on `:8080`, using real data already in the database (no fixtures inserted or removed). Used Playwright — already present as a leftover devDependency from Increment 1/2 (`git diff --stat package.json package-lock.json` shows no diff, confirming nothing new was added or needed removing this time either) — driven from a throwaway Node script in the session scratchpad (not committed to the repo).
+    - Methodology: for each page, captured the real network response the page itself fetched (the daily statistics series / the minute bars array) via Playwright response interception, so "the leftmost/middle/rightmost bar's true date-or-time" is ground truth from the live data, not assumed. Independently computed (in the verification script, not by calling into the app's code) the expected real screen pixel for each bar index using the actually-measured `getBoundingClientRect()`/`viewBox` of the live `<svg>` and the same `xMidYMid meet` formula, then moved the mouse to that exact pixel and read back what the app displayed.
+    - **Daily `/stocks/2338/daily`** at 1650px viewport width: measured box 1576px wide at `left=37`, drawn 1200px (scale 1) — matches the drawn-narrower-than-container letterboxing this increment fixes. 64 daily bars in range (`2026-06-15` .. `2026-09-14`).
+      - Hover: leftmost (index 0, clientX≈241.8) → infobar date `2026-06-15` (expected `2026-06-15`) ✓; middle (index 32, clientX≈803.8) → `2026-07-31` (expected `2026-07-31`) ✓; rightmost (index 63, clientX≈1348.2) → `2026-09-14` (expected `2026-09-14`) ✓.
+      - Click-pin: same three positions → pinned infobar dates `2026-06-15` / `2026-07-31` / `2026-09-14`, all matching the hovered bar exactly (re-clicking each unpinned it before the next case) ✓.
+      - Double-click: same three positions navigated to `/stocks/2338/minute/2026-06-15`, `/stocks/2338/minute/2026-07-31`, `/stocks/2338/minute/2026-09-14` respectively — all matching the hovered bar's `tradeDate` exactly (verified `page.goBack()` between cases to return to the daily page) ✓.
+    - **Minute `/stocks/2408/minute/2026-07-30`** at the same 1650px viewport width: measured box 1576px wide at `left=37`, drawn 1200px (scale 1) — same letterboxing shape. 265 minute bars for the day (`09:00` .. `13:30`, 1-minute interval).
+      - Hover: first (index 0, clientX≈235.1) → tooltip `2026-07-30 09:00` (expected `2026-07-30 09:00`) ✓; middle (index 132, clientX≈795.0) → `2026-07-30 11:13` (expected `2026-07-30 11:13`) ✓; last (index 264, clientX≈1354.9) → `2026-07-30 13:30` (expected `2026-07-30 13:30`) ✓.
+    - **Narrow-viewport regression check** (900px viewport, `/stocks/2338/daily`): measured box only 826px wide — narrower than the 1200-wide drawing's natural width, so the drawing itself shrinks to fill the box exactly (`drawn width == container width`, the case this increment must not regress). Hover at leftmost/middle/rightmost of the same 64-bar range again matched exactly (`2026-06-15` / `2026-07-31` / `2026-09-14`) — confirms the `getScreenCTM`-based real-browser path (and the fallback formula it mirrors) both degenerate correctly to the old, already-correct behavior when there is no letterboxing to correct for.
+  - All temporary verification scripts and their copies inside `develop/frontend/` were deleted after use (`git status --short` shows only the two intended source files modified: `src/components/KLineChart.tsx` and `src/__tests__/KLineChart.test.tsx`); nothing under `develop/frontend/` other than those two was left changed by this increment. Both dev servers (`:5173` frontend, `:8080` backend) were left running exactly as found, per the task's explicit instruction not to stop or restart either.

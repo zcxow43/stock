@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import KLineChart, { type CandleBar, type SubplotSpec } from '../components/KLineChart'
 
 const COLORS = {
@@ -150,5 +150,141 @@ describe('KLineChart — daily-K page behavior is unchanged (regression)', () =>
     expect(container.querySelectorAll(`rect[fill="${COLORS.up}"]`).length).toBe(1)
     expect(container.querySelectorAll(`rect[fill="${COLORS.down}"]`).length).toBe(1)
     expect(container.querySelectorAll('line[stroke-dasharray="4 4"]').length).toBe(0) // no price reference lines
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// Mouse -> bar-index alignment on wide screens where the box is wider than the drawing itself.
+//
+// The `<svg>` is `viewBox="0 0 1200 <totalHeight>"` with `width="100%"` and the default
+// `preserveAspectRatio` ("xMidYMid meet"), so on a box whose aspect ratio is wider than
+// 1200:totalHeight the drawing is scaled to the box's *height* and letterboxed — centered with
+// blank space on both sides (exactly the real 1650px-viewport measurements from the spec: box
+// 1561px wide, drawing only 1200px wide starting at x=218). jsdom has no `getScreenCTM`, so
+// these tests exercise the fallback that replicates that scaling from `getBoundingClientRect()`
+// alone — mirroring how the real browser's `getScreenCTM()` would resolve it.
+// ---------------------------------------------------------------------------------------------
+describe('KLineChart — mouse-to-bar alignment when the box is wider than the drawing (letterboxed)', () => {
+  // Mirrors KLineChart's private layout constants — not exported, so replicated here to compute
+  // expected clientX values without reaching into the component's internals.
+  const VIEW_WIDTH = 1200
+  const LEFT_MARGIN = 8
+  const RIGHT_MARGIN = 68
+  const PRICE_HEIGHT = 260 // component default when `priceHeight` prop is omitted
+  const BOTTOM_AXIS_HEIGHT = 26
+  const PANEL_GAP = 4
+  // With `subplots: []` (this suite's fixture), totalHeight collapses to just the price panel
+  // plus the bottom axis strip.
+  const TOTAL_HEIGHT = PRICE_HEIGHT + PANEL_GAP - PANEL_GAP + BOTTOM_AXIS_HEIGHT // = 286
+
+  function viewXForBar(n: number, index: number): number {
+    const chartWidth = VIEW_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
+    const cw = chartWidth / n
+    return LEFT_MARGIN + cw * index + cw / 2
+  }
+
+  /** Mocks a letterboxed box: `scale` < the box's own width/VIEW_WIDTH ratio, so the drawing is
+   * narrower than the box and centered within it (blank space on both sides). */
+  function mockLetterboxedRect(boxLeft: number, boxWidth: number, scale: number): void {
+    const drawnWidth = VIEW_WIDTH * scale
+    const boxHeight = TOTAL_HEIGHT * scale
+    vi.spyOn(SVGElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: boxLeft,
+      top: 0,
+      width: boxWidth,
+      height: boxHeight,
+      right: boxLeft + boxWidth,
+      bottom: boxHeight,
+      x: boxLeft,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+    // sanity guard for the test fixture itself: the box must actually be wider than the drawing
+    if (boxWidth <= drawnWidth) throw new Error('test fixture is not letterboxed')
+  }
+
+  function clientXFromViewX(boxLeft: number, boxWidth: number, scale: number, viewX: number): number {
+    const drawnWidth = VIEW_WIDTH * scale
+    const offsetX = boxLeft + (boxWidth - drawnWidth) / 2
+    return offsetX + viewX * scale
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const n = 5
+  const bars = makeBars([10, 11, 9, 12, 8])
+
+  it.each([
+    ['leftmost', 0],
+    ['middle', 2],
+    ['rightmost', 4],
+  ])('hover: pointer over the %s bar reports that bar index, not a neighbor (scale 1, offset 200px each side)', (_name, index) => {
+    const boxLeft = 200
+    const boxWidth = 1600 // scale constrained by height -> drawn width 1200, centered with 200px margins
+    const scale = 1
+    mockLetterboxedRect(boxLeft, boxWidth, scale)
+    const onHoverIndexChange = vi.fn()
+    const { container } = render(
+      <KLineChart {...baseProps()} bars={bars} onHoverIndexChange={onHoverIndexChange} />,
+    )
+    const svg = container.querySelector('svg')!
+    const clientX = clientXFromViewX(boxLeft, boxWidth, scale, viewXForBar(n, index as number))
+    fireEvent.mouseMove(svg, { clientX, clientY: 100 })
+    expect(onHoverIndexChange).toHaveBeenLastCalledWith(index)
+  })
+
+  it.each([
+    ['leftmost', 0],
+    ['middle', 2],
+    ['rightmost', 4],
+  ])('click-pin: clicking the %s bar pins that bar index, not a neighbor (fractional scale, asymmetric offset)', (_name, index) => {
+    const boxLeft = 37
+    const boxWidth = 1561 // the spec's real measured 1650px-viewport numbers
+    const scale = 0.9 // drawing narrower than 1200 -> still letterboxed
+    mockLetterboxedRect(boxLeft, boxWidth, scale)
+    const onBarClick = vi.fn()
+    const { container } = render(<KLineChart {...baseProps()} bars={bars} onBarClick={onBarClick} />)
+    const svg = container.querySelector('svg')!
+    const clientX = clientXFromViewX(boxLeft, boxWidth, scale, viewXForBar(n, index as number))
+    fireEvent.click(svg, { clientX, clientY: 100 })
+    expect(onBarClick).toHaveBeenCalledWith(index)
+  })
+
+  it.each([
+    ['leftmost', 0],
+    ['middle', 2],
+    ['rightmost', 4],
+  ])('double-click: dbl-clicking the %s bar reports that bar index, not a neighbor', (_name, index) => {
+    const boxLeft = 200
+    const boxWidth = 1600
+    const scale = 1
+    mockLetterboxedRect(boxLeft, boxWidth, scale)
+    const onBarDoubleClick = vi.fn()
+    const { container } = render(
+      <KLineChart {...baseProps()} bars={bars} onBarDoubleClick={onBarDoubleClick} />,
+    )
+    const svg = container.querySelector('svg')!
+    const clientX = clientXFromViewX(boxLeft, boxWidth, scale, viewXForBar(n, index as number))
+    fireEvent.doubleClick(svg, { clientX, clientY: 100 })
+    expect(onBarDoubleClick).toHaveBeenCalledWith(index)
+  })
+
+  it('without the fix, the naive box-width-only scaling would have picked a different (wrong) bar for these fixtures', () => {
+    // Documents *why* this suite exists: prove the letterboxed fixtures above are not
+    // accidentally scale=1-offset=0 in disguise — the naive `VIEW_WIDTH / rect.width` scaling
+    // this fix replaced really does disagree with the correct answer here.
+    const boxLeft = 37
+    const boxWidth = 1561
+    const scale = 0.9
+    const index = 4 // rightmost
+    const clientX = clientXFromViewX(boxLeft, boxWidth, scale, viewXForBar(n, index))
+    const naiveScaleX = VIEW_WIDTH / boxWidth
+    const naiveViewX = (clientX - boxLeft) * naiveScaleX
+    const chartWidth = VIEW_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
+    const cw = chartWidth / n
+    const naiveIndex = Math.min(n - 1, Math.max(0, Math.floor((naiveViewX - LEFT_MARGIN) / cw)))
+    expect(naiveIndex).not.toBe(index)
   })
 })

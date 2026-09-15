@@ -60,6 +60,23 @@
           <div class="rise"><span class="rl">天數</span><input value="30" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">漲幅門檻</span><input value="15.0"><span class="pct">%</span></div>
           <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人買賣超佔比</span></div>
+          <div class="desc">外資（不含外資自營商）或投信近指定天數買賣超合計取絕對值 ÷ 成交股數合計，達門檻即命中，淨買超與淨賣超皆計</div>
+          <div class="rise"><span class="rl">法人</span><span class="grp on"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
+          <div class="rise"><span class="rl">天數</span><input value="5" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">佔比門檻</span><input value="10.0"><span class="pct">%</span></div>
+          <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人連續買超</span></div>
+          <div class="desc">外資（不含外資自營商）或投信連續指定天數每日買超</div>
+          <div class="rise"><span class="rl">法人</span><span class="grp on"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
+          <div class="rise"><span class="rl">連續買超天數</span><input value="5" style="width:44px"><span class="pct">日</span></div>
+          <div class="desc">連續買超天數為回看的交易日數，不含週末與休市日</div></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人買超強度排名</span></div>
+          <div class="desc">外資（不含外資自營商）或投信近指定天數買超合計 ÷ 成交股數合計為強度，只有淨買超者參與，每個交易日外資與投信各取強度前幾名</div>
+          <div class="rise"><span class="rl">法人</span><span class="grp on"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
+          <div class="rise"><span class="rl">天數</span><input value="5" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">取前幾名</span><input value="10" style="width:44px"><span class="pct">名</span></div>
+          <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>

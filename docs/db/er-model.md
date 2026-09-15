@@ -1,6 +1,6 @@
-# Stock 資料庫 ER 模型全覽
+# 股票資料庫 ER 模型總覽
 
-本資料庫支撐一套股票行情與技術指標系統，涵蓋「股票與產業別基本資料」「日線行情與指標運算」「分鐘 K 線與抓取狀態」「批次同步進度」「migration 執行紀錄」五大功能區塊。這些區塊之間多數不是靠傳統外鍵串接，而是靠共用的 `stock_id`（或 `stock_id + trade_date`）鍵值鬆散關聯——這是刻意的設計取捨，詳見各群組說明與最末的資料表總覽。
+本資料庫涵蓋台股全市場股票的主檔字典、日線與分鐘級行情、技術指標、三大法人買賣超、批次作業進度，以及 migration 執行紀錄，是股票統計、K 線瀏覽與選股策略功能共用的資料基礎。整個 schema 依業務性質切分為六個叢集：主檔管理（股票／產業別字典）、日線行情與指標、三大法人買賣超、分鐘 K 線、批次同步進度、Migration 執行紀錄；除「主檔管理」內部的 `stock_industry` 關聯表外，各叢集的事實表與主檔管理之間刻意**不建外鍵**，一律以共用的 `stock_id` 鍵對應，理由是行情類資料的寫入健壯性優先於參照完整性。
 
 ## 全景
 
@@ -8,44 +8,52 @@
 
 ## master — 主檔管理
 
-儲存全市場股票的代號、名稱、市場別，以及股票與產業別的多對多歸屬，是全系統代號、名稱與產業分類的權威來源。
+此叢集是全系統的股票與產業別字典，其他叢集的事實表都以 `stock_id` 這把共用鍵指向本叢集，但刻意不建外鍵以避免新股寫入失敗。
 
 ![master](er-model/master.png)
 
-- **stock** — 全市場股票主檔（universe），一列代表一檔股票，`stock_id` 為主鍵。與 `stock_daily_price`、`stock_minute_price`、`stock_sync_progress` **皆刻意不建外鍵**：新上市股票可能在主檔同步之前就已出現在行情快照或分 K 資料中，外鍵會讓那筆資料寫入失敗而永久遺失；行情抓取的健壯性優先於參照完整性。
-- **industry** — 產業別字典表，代理主鍵 + `industry_name` 唯一鍵。不建立任何對外的外鍵（它是被參照的一方）。表本身**不做刪除**，避免主鍵在下次匯入時被重新配發而讓既有關聯失效。
-- **stock_industry** — `stock` 與 `industry` 的多對多關聯表，複合主鍵 `(stock_id, industry_id)`。**這是本資料庫唯一真正建立外鍵的關聯**：`fk_si_stock`、`fk_si_industry` 皆為 `ON UPDATE CASCADE ON DELETE CASCADE`。可以安全建外鍵是因為寫入方（產業別匯入）在同一交易邊界內保證兩端先存在；`ON DELETE CASCADE` 目前不會被觸發，因為下市走 `is_active=0` 標記，`stock` 的列從不真的被刪除。
+- **stock**：全市場股票主檔，記錄代號、名稱、市場別與是否仍在交易，作為回補排程 universe 與統計結果名稱來源；與 `stock_daily_price` 等行情事實表之間刻意不建外鍵，理由是新上市股票可能先出現在行情快照才補進主檔，外鍵會讓行情寫入失敗而遺失無法重取的資料。
+- **industry**：產業別字典表，由產業別匯入以名稱 UPSERT 補齊、不預先種入資料，且本表不做刪除以保持代理主鍵穩定，避免既有 `stock_industry` 關聯指向錯誤產業。
+- **stock_industry**：`stock` 與 `industry` 的多對多關聯表，是本 schema 唯一宣告外鍵的表（`fk_si_stock`、`fk_si_industry`，皆 `ON UPDATE/DELETE CASCADE`）；`ON DELETE CASCADE` 在現行系統不會被觸發，因為下市一律走 `is_active = 0`、`stock` 列從不刪除，外鍵存在只是為未來真的發生刪除時不留下孤兒列的保險。
 
 ## daily-price — 日線行情與指標
 
-儲存個股每日收盤後的 OHLC 原始行情，以及由該行情推導出的 MACD／KD 技術指標與其遞迴中間狀態。
+此叢集儲存日線 OHLC 原始行情與由其推導的 MACD／KD 指標，是統計與策略功能的核心事實資料。
 
 ![daily-price](er-model/daily-price.png)
 
-- **stock_daily_price** — 日線 OHLC 原始成交價（未除權息還原），複合主鍵 `(stock_id, trade_date)`，是所有技術指標的唯一原始資料來源。與 `stock` 之間**無外鍵**（理由同上）。
-- **stock_daily_indicator** — 由 `stock_daily_price` 的 OHLC 推導出的 MACD／KD 指標值與遞迴中間狀態，複合主鍵 `(stock_id, trade_date, param_key)`，支援同一天並存多組參數。與 `stock_daily_price` 之間**未宣告外鍵**，兩表僅以共用鍵值（`stock_id`、`trade_date`）鬆散對應，由寫入流程自行保證來源行情已存在。
+- **stock_daily_price**：個股每交易日的 OHLC、成交量與成交金額，原始成交價（未除權息還原），是所有技術指標的唯一資料來源，其成交量也是法人籌碼型態佔比與強度的分母；與 `stock` 之間不建外鍵（理由同主檔管理叢集）。
+- **stock_daily_indicator**：由 `stock_daily_price` 的 OHLC 推導的 MACD（`dif`/`dea`/`osc`）與 KD（`k_value`/`d_value`/`j_value`）指標，連同遞迴中間狀態（`ema_fast`/`ema_slow`）一併落地以支援逐日增量推進；主鍵含 `param_key` 以支援多組參數並存，與 `stock_daily_price` 之間未宣告外鍵，僅以 `(stock_id, trade_date)` 共用鍵對應。
 
-## minute-price — 分鐘 K 線與抓取狀態
+## institutional-trade — 三大法人買賣超
 
-儲存個股單一交易日內的每分鐘 OHLCV，以及逐日抓取結果的狀態記錄，避免對查無資料的日期反覆重打外部來源。
+此叢集儲存三大法人逐日買賣超日報，與日線行情的成交量合併計算法人買賣超佔比與強度。
+
+![institutional-trade](er-model/institutional-trade.png)
+
+- **stock_institutional_trade**：三大法人（外資不含外資自營商、外資自營商、投信、自營商合計／自行買賣／避險）逐日買進／賣出／買賣超股數，共十七個數值欄位依資料源原樣保存、不做任何加總或合併，單位為股；不建任何外鍵——與 `stock` 僅共用 `stock_id` 鍵，與 `stock_daily_price` 則是策略掃描依 `(stock_id, trade_date)` 把買賣超股數與成交量合併相除計算佔比與強度時的邏輯關聯，非資料庫層級約束。資料源只列出有法人交易的證券，因此不寫補零列。
+
+## minute-price — 分鐘 K 線
+
+此叢集儲存個股單日分鐘級 K 線與其逐日抓取狀態，供前端點選日 K 後展示當日分 K，並避免對無資料日期重複外部請求。
 
 ![minute-price](er-model/minute-price.png)
 
-- **stock_minute_price** — 個股單一交易日內的每分鐘 OHLCV（僅 09:00–13:30），複合主鍵 `(stock_id, trade_date, bar_time)`，以年度 `RANGE` 分區支援整段丟棄舊資料。**無外鍵**：一方面理由與 `stock` 相同，另一方面 MySQL 分區表本身也不支援外鍵。
-- **stock_minute_fetch_status** — 記錄每個「股票 × 交易日」的分 K 抓取結果（`AVAILABLE`／`NO_DATA`／`OUT_OF_WINDOW`／`FAILED`／`NOT_A_TRADING_DAY`），複合主鍵 `(stock_id, trade_date)`。與 `stock_minute_price` 需在同一交易邊界內一致寫入，但**未宣告外鍵**；`NOT_A_TRADING_DAY` 的判定依據是 `stock_daily_price` 是否存在對應日線，這也只是查詢時的邏輯關聯，不是外鍵約束。
+- **stock_minute_price**：個股單一交易日 09:00–13:30 的每分鐘 OHLCV，僅存 1 分鐘 K 棒（5/15/30/60 分由查詢時聚合，不落地），以年度 `RANGE` 分區支援整段捨棄；分區表不支援外鍵，且沿用主檔管理叢集「不對行情表建外鍵」的決定。
+- **stock_minute_fetch_status**：記錄每個「股票 × 交易日」分 K 的抓取結果（`AVAILABLE`／`NO_DATA`／`OUT_OF_WINDOW`／`FAILED`／`NOT_A_TRADING_DAY`），避免對永遠取不到資料的日期重複打外部 API；與 `stock_minute_price` 須在同一交易邊界內寫入以維持一致，但兩表間同樣未宣告外鍵，僅以 `(stock_id, trade_date)` 共用鍵對應。
 
 ## sync-progress — 批次同步進度
 
-記錄全市場逐檔批次作業（行情回補、指標重算）目前處理到哪一檔、哪個日期，支援長時間作業的斷點續傳與失敗重試。
+此叢集記錄長時間批次回補與指標重算作業逐檔進度，支援斷點續傳與失敗重試。
 
 ![sync-progress](er-model/sync-progress.png)
 
-- **stock_sync_progress** — 記錄每檔股票在批次作業（`PRICE_BACKFILL`／`INDICATOR_REBUILD`）中的進度，複合主鍵 `(stock_id, job_type)`，支援斷點續傳與失敗重試上限。與 `stock` 之間**無外鍵**，僅共用 `stock_id`。
+- **stock_sync_progress**：記錄「一檔股票 × 一種批次作業（`PRICE_BACKFILL`／`INDICATOR_REBUILD`）」的當前進度與 `last_synced_date`（區間迄日，非最後交易日），支援斷點續傳與 `attempt_count` 重試上限；沒有外鍵，`stock_id` 僅為與 `stock` 共用的邏輯鍵。三大法人買賣超的補齊不使用本表。
 
 ## schema-migration — Migration 執行紀錄
 
-記錄哪些「資料位移類」migration 已經套用過，作為這類非冪等 DML 語句重跑時的守門依據。
+此叢集只有一張守門表，記錄哪些「資料位移類」migration 已經執行過，讓相對位移的 SQL 可以安全重跑而不重複套用。
 
 ![schema-migration](er-model/schema-migration.png)
 
-- **schema_migration** — 記錄哪些「相對位移類」migration（如 `UPDATE ... + INTERVAL 8 HOUR`）已經套用過，`version` 為主鍵。**這張表刻意不與任何業務資料表建立外鍵或共用鍵值關聯**——它不描述業務資料，只是執行位移類 DML 時的冪等性守門機制；哪些表的哪些欄位曾被位移過，是寫在各自 spec 的 `Migration SQL` 段落裡，而不是靠資料庫層級的關聯表達。
+- **schema_migration**：以版本號（`V0xx`）為主鍵，記錄哪些相對位移類 migration（`stock` 的 V011、`stock_daily_price` 的 V012、`stock_sync_progress` 的 V010，皆為 UTC→Asia/Taipei 的時間戳 +8 小時修正）已經套用過，是這類 SQL 唯一可靠的重跑守門依據；本身不對任何表建外鍵，僅以版本號字串與各 migration 內嵌的子查詢邏輯對應。

@@ -143,6 +143,41 @@ function computeDomain(
   return [min - pad, max + pad]
 }
 
+/**
+ * Maps a `clientX` (mouse event coordinate, CSS pixels) to an X coordinate in the SVG's own
+ * viewBox space (`0..VIEW_WIDTH`).
+ *
+ * The `<svg>` is drawn with `viewBox="0 0 VIEW_WIDTH totalHeight"`, `width="100%"` and the
+ * default `preserveAspectRatio` (`xMidYMid meet`). On a wide viewport the box is often wider
+ * than `VIEW_WIDTH / totalHeight`'s aspect ratio, so the drawing is scaled to fit the box's
+ * height instead of its width and is then letterboxed — centered with blank space on both
+ * sides. `clientX * (VIEW_WIDTH / rect.width)` (the box's full width) ignores that letterboxing
+ * and drifts further off the true bar the further the pointer sits from center.
+ *
+ * Real browsers expose the exact CSS-pixel -> viewBox transform via `getScreenCTM()`, which
+ * already accounts for `preserveAspectRatio` scaling/centering (and anything else — page
+ * zoom, `transform` ancestors) without needing to replicate that algorithm by hand.
+ */
+function resolveViewX(svg: SVGSVGElement, clientX: number, totalHeight: number): number {
+  const ctm = svg.getScreenCTM?.()
+  if (ctm) {
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = 0
+    return pt.matrixTransform(ctm.inverse()).x
+  }
+  // Fallback for environments without `getScreenCTM` (jsdom in unit tests): replicate the
+  // default `xMidYMid meet` scaling/centering from the bounding box alone. `min(...)` picks
+  // whichever axis constrains the scale; the other axis ends up letterboxed and centered.
+  const rect = svg.getBoundingClientRect()
+  if (rect.width <= 0) return 0
+  const scale =
+    rect.height > 0 ? Math.min(rect.width / VIEW_WIDTH, rect.height / totalHeight) : rect.width / VIEW_WIDTH
+  const drawnWidth = VIEW_WIDTH * scale
+  const offsetX = rect.left + (rect.width - drawnWidth) / 2
+  return (clientX - offsetX) / scale
+}
+
 function buildLinePath(
   values: Array<number | null>,
   xFor: (i: number) => number,
@@ -235,13 +270,11 @@ export default function KLineChart({
     (clientX: number): number => {
       const svg = svgRef.current
       if (!svg || n === 0) return 0
-      const rect = svg.getBoundingClientRect()
-      const scaleX = VIEW_WIDTH / rect.width
-      const vx = (clientX - rect.left) * scaleX
+      const vx = resolveViewX(svg, clientX, totalHeight)
       const idx = Math.floor((vx - LEFT_MARGIN) / cw)
       return Math.min(n - 1, Math.max(0, idx))
     },
-    [cw, n],
+    [cw, n, totalHeight],
   )
 
   const updateHover = (index: number | null) => {

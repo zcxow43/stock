@@ -1,6 +1,6 @@
 # 策略型態掃描與回測
 
-從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 勾選五個策略掃描並自動回測 → 點「報酬率」表頭排序 → 展開一檔的多個訊號日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 勾選「取消買進價高於 500 元」 → 往下捲動、三個總計浮動跟隨」的完整流程。
+從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 勾選八個策略（含三個法人籌碼型態）掃描並自動回測 → 點「報酬率」表頭排序 → 展開一檔的多個訊號日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 勾選「取消買進價高於 500 元」 → 往下捲動、三個總計浮動跟隨」的完整流程。
 
 ![storyboard](strategy/storyboard.png)
 
@@ -12,7 +12,7 @@
 
 | 步驟 | 觸發 | 後端 API | 用途 | 契約 |
 |---|---|---|---|---|
-| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲的參數定義 | [strategy-scan](../backend/strategy-scan.md) |
+| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲／三個法人籌碼型態的參數定義（含外資／投信複選） | [strategy-scan](../backend/strategy-scan.md) |
 | 1 | 進頁載入 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt` 顯示最後同步時間 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 1 | 進頁載入 | `GET /api/stocks?page=1&size=1` | 只取 `total` 顯示常駐的「共 N 檔」 | [stock-catalog](../backend/stock-catalog.md) |
 | 2 | 按「更新股票清單」 | `POST /api/stocks/universe/import` | **此端點即是向交易所抓取上市股票清單的起點**，同時匯入官方產業別 | [stock-universe-import](../backend/stock-universe-import.md) |
@@ -20,8 +20,8 @@
 | 3 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | **此端點即是抓取歷史日 K 的起點**；全市場模式逐交易日各向交易所取一次當日全市場快照 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 3 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 輪詢進度，更新已完成檔數 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 4 | 同步完成 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 重取 `lastSyncedAt` | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 5 | 按「開始掃描」 | `POST /api/strategies/scan` | 一次送入五個策略，回應組成單一命中彙總表與標題下的採用參數那一行 | [strategy-scan](../backend/strategy-scan.md) |
-| 5 | 掃描成功且命中 ≥ 1 檔時**自動送出**（無按鈕） | `POST /api/strategies/backtest` | 對命中清單**逐買進日**算買賣結果（一檔有幾個相異買進日就送幾筆；上漲支撐的買進日為確認完成日 D+2）；失敗時「重試回測」以同一份內容重送 | [strategy-backtest](../backend/strategy-backtest.md) |
+| 5 | 按「開始掃描」 | `POST /api/strategies/scan` | 一次送入八個策略（法人籌碼型態各帶 `investors` 與自己的參數），回應組成單一命中彙總表與標題下的採用參數那一行；法人籌碼型態另帶 `dataThroughDate` 與達標方。本端點只讀已入庫的法人資料，**不會**向交易所抓取——法人資料由第 3 步的日線回補結束後在背景補齊 | [strategy-scan](../backend/strategy-scan.md) |
+| 5 | 掃描成功且命中 ≥ 1 檔時**自動送出**（無按鈕） | `POST /api/strategies/backtest` | 對命中清單**逐買進日**算買賣結果（一檔有幾個相異買進日就送幾筆；上漲支撐的買進日為確認完成日 D+2，法人籌碼型態為訊號日的次一交易日）；失敗時「重試回測」以同一份內容重送 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 6 | 自動回測完成 | —（不發請求） | 第 5 步的回測回應抵達，填入表格右側六欄與標題右側總成本、總報酬率、總收益三個標籤（全勾時總成本即回應的 `totalCost`） | [strategy-backtest](../backend/strategy-backtest.md) |
 | 7 | 點「報酬率」表頭 | —（不發請求） | 排序純前端，依畫面上顯示的報酬率降冪重排，「—」視為最小值排最後 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 8 | 點展開鈕 | —（不發請求） | 展開狀態純前端；該檔各買進日的數字在第 6 步的回應裡已經全部拿到了，子列依同一欄同方向排序 | [strategy-backtest](../backend/strategy-backtest.md) |

@@ -207,3 +207,25 @@
 .page-strategy .hideinc .acb.on::after { content:""; position:absolute; left:4px; top:1px; width:3px; height:7px; border:solid #FFFFFF; border-width:0 2px 2px 0; transform:rotate(45deg); }
 .page-strategy .pxclear input.pxamt.dis { background:#16202C; color:#4A5866; border-color:#26333F; }
 .page-strategy.scrolled .subrow { display:none; }
+
+/* eight strategy cards: wrap to a second row, size each card by its inputs (not its description), never wrap an input row */
+.page-strategy .cards { flex-wrap:wrap; row-gap:5px; }
+.page-strategy .cards .card { flex:1 1 auto; padding-left:10px; padding-right:10px; }
+.page-strategy .cards .card .rise { flex-wrap:nowrap; white-space:nowrap; }
+.page-strategy .cards .card .desc { width:0; min-width:100%; }
+
+/* all screens: take back the few pixels the second card row costs */
+.page-strategy .cards { row-gap:2px; }
+.page-strategy .cond h2 { margin:0 0 2px; }
+.page-strategy .condrow { margin-bottom:1px; }
+/* result screens: lay the wide second-row cards out on one line, and tighten the chrome above the conditions */
+.page-strategy.nodesc .cards .card:nth-child(n+7) { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; }
+.page-strategy.nodesc .cards .card:nth-child(n+7) > * { margin:0; }
+.page-strategy.nodesc .head { margin-bottom:4px; }
+.page-strategy.nodesc .tabs { margin-bottom:4px; }
+.page-strategy.nodesc .syncbar { padding-top:5px; padding-bottom:5px; margin-bottom:4px; }
+.page-strategy.nodesc .note { line-height:15px; }
+
+/* the params line can now be longer than its row: let it wrap, never squeeze the batch checkboxes beside it */
+.page-strategy .subrow .params { flex:1 1 0; min-width:0; }
+.page-strategy .subrow > :not(.params) { flex:none; }
