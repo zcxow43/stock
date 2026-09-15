@@ -120,7 +120,7 @@ class FugleClientTest {
     }
 
     @Test
-    void volume_writtenDirectly_asPerBarValue_notCumulative() {
+    void volume_convertedFromLotsToShares_asPerBarValue_notCumulative() {
         FugleClient client = new FugleClient(restTemplate, BASE_URL, "key");
         LocalDate tradeDate = LocalDate.of(2026, 8, 5);
         List<Bar> raw = List.of(
@@ -131,8 +131,8 @@ class FugleClientTest {
                 .andRespond(withSuccess(fixture(tradeDate, raw), MediaType.APPLICATION_JSON));
 
         List<NormalizedMinuteBar> bars = client.fetchMinuteBars("2330", tradeDate);
-        assertEquals(140L, bars.get(0).getVolume());
-        assertEquals(78L, bars.get(1).getVolume(), "must be this bar's own volume, never summed/cumulative");
+        assertEquals(140_000L, bars.get(0).getVolume(), "Fugle volume is 張; stored volume is 股 (x1000)");
+        assertEquals(78_000L, bars.get(1).getVolume(), "must be this bar's own volume, never summed/cumulative");
     }
 
     @Test

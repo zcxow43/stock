@@ -94,7 +94,7 @@ DELETE FROM stock_minute_fetch_status
 
 - **只刪 `OUT_OF_WINDOW` 列。** 這類列從未寫入 K 棒（`bar_count` 為 0），刪除不會在 `stock_minute_price` 留下孤兒資料；`AVAILABLE`、`NO_DATA`、`FAILED`、`NOT_A_TRADING_DAY` 一律不動。
 - **可安全重跑。** 刪除後符合條件的列為 0；新版後端只會對早於 2023-05-23 的日期寫入 `OUT_OF_WINDOW`，不會再產生符合條件的列，因此 `Applied-when` 會持續為真，重跑刪除 0 列。
-- 日後若最早可取得日往前推（例如來源開放更早的分 K），早於 2023-05-23 的 `OUT_OF_WINDOW` 列會再次過時，屆時需以新的日期另立一次同樣的清理，本 migration 不涵蓋。
+- 日後若最早可取得日往前推（例如來源開放更早的分 K），早於 2023-05-23 的 `OUT_OF_WINDOW` 列會再次過時。**不需再另立清理**：後端的抓取決策會以現行 `availableFrom` 重新檢驗每一筆 `OUT_OF_WINDOW` 列，不早於分界者視為過時並重新抓取（見 `specs/backend/stock-minute-price.md` 的「抓取決策」）。本 migration 仍保留，只是讓舊列提前消失，正確性不再依賴它是否執行過。
 
 ## Acceptance Criteria
 - [x] `stock_minute_fetch_status` 表建立成功，欄位、型別、註解與上述 DDL 一致

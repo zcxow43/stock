@@ -132,8 +132,8 @@ public class MinuteBarQueryService {
         StockMinuteFetchStatus current = fetchStatusMapper.findOne(stockId, tradeDate);
 
         // The 抓取決策 table alone decides whether we would fetch at all; a date that's already
-        // AVAILABLE/NO_DATA/OUT_OF_WINDOW never reaches this branch when refresh=false (see
-        // shouldFetch below), so an already-fetched date remains readable forever even once its
+        // AVAILABLE/NO_DATA (or OUT_OF_WINDOW still before availableFrom) never reaches this branch
+        // when refresh=false (see shouldFetch below), so an already-fetched date remains readable forever even once its
         // trade date ages past either source's rolling window (spec: 已標記 AVAILABLE 的過往日期...
         // 仍可正常讀取，資料已永久落地) — the window checks below only ever apply to a *new* fetch
         // attempt, never retroactively downgrade a resolved outcome.
@@ -201,8 +201,13 @@ public class MinuteBarQueryService {
                 return current.getFetchedAt() == null || current.getFetchedAt().isBefore(cutoff);
             case StockMinuteFetchStatus.STATUS_FAILED:
                 return current.getAttemptCount() < minutePriceProperties.getMaxAttemptCount();
-            case StockMinuteFetchStatus.STATUS_NO_DATA:
             case StockMinuteFetchStatus.STATUS_OUT_OF_WINDOW:
+                // Derived locally from availableFrom, not reported by a source, so a row written
+                // under an older boundary (e.g. the Yahoo-only "30 days" era) is stale once the date
+                // is no longer before the current availableFrom (spec: 抓取決策, OUT_OF_WINDOW 不早於
+                // availableFrom 視為過時).
+                return !tradeDate.isBefore(minutePriceProperties.getAvailableFrom());
+            case StockMinuteFetchStatus.STATUS_NO_DATA:
             case StockMinuteFetchStatus.STATUS_NOT_A_TRADING_DAY:
             default:
                 return false;

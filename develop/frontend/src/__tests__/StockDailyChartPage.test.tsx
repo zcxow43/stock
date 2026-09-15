@@ -265,17 +265,17 @@ describe('StockDailyChartPage', () => {
     expect(container.querySelectorAll('svg rect[fill="#E04B45"], svg rect[fill="#16A75C"]').length).toBeGreaterThan(0)
   })
 
-  it('single click pins the crosshair/tooltip without navigating; clicking the same bar again unpins', async () => {
+  it('single click pins the crosshair/info bar without navigating; clicking the same bar again unpins', async () => {
     vi.stubGlobal('fetch', mockFetchRouter({}))
     const { container } = renderPage()
     await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
     const svg = container.querySelector('svg')!
     fireEvent.click(svg, { clientX: clientXForBar(5, 1), clientY: 100 })
-    await waitFor(() => expect(container.querySelector('.dc-tooltip-date')?.textContent).toBe('2026-08-21'))
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-21'))
     expect(screen.queryByText('minute page')).not.toBeInTheDocument()
-    // second click on the same bar unpins (tooltip disappears)
+    // second click on the same bar unpins: the info bar falls back to the latest bar
     fireEvent.click(svg, { clientX: clientXForBar(5, 1), clientY: 100 })
-    await waitFor(() => expect(container.querySelector('.dc-tooltip-date')).not.toBeInTheDocument())
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-26'))
   })
 
   it('Esc unpins a pinned bar', async () => {
@@ -284,9 +284,30 @@ describe('StockDailyChartPage', () => {
     await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
     const svg = container.querySelector('svg')!
     fireEvent.click(svg, { clientX: clientXForBar(5, 2), clientY: 100 })
-    await waitFor(() => expect(container.querySelector('.dc-tooltip-date')?.textContent).toBe('2026-08-24'))
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-24'))
     fireEvent.keyDown(window, { key: 'Escape' })
-    await waitFor(() => expect(container.querySelector('.dc-tooltip-date')).not.toBeInTheDocument())
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-26'))
+  })
+
+  it('info bar sits above the chart, shows the latest bar by default, follows hover in place, and no floating box appears', async () => {
+    vi.stubGlobal('fetch', mockFetchRouter({}))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
+    const infobar = container.querySelector('.dc-infobar')!
+    expect(infobar).toBeInTheDocument()
+    // rendered before the chart, not inside it
+    expect(infobar.compareDocumentPosition(container.querySelector('.kc-root')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-26')
+
+    const svg = container.querySelector('svg')!
+    fireEvent.mouseMove(svg, { clientX: clientXForBar(5, 0), clientY: 100 })
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-20'))
+    expect(infobar.textContent).toContain('2380.00')
+    expect(infobar.textContent).toContain('8.6000 / 5.5000')
+    expect(container.querySelector('.kc-tooltip')).not.toBeInTheDocument()
+
+    fireEvent.mouseLeave(svg)
+    await waitFor(() => expect(container.querySelector('.dc-infobar-date')?.textContent).toBe('2026-08-26'))
   })
 
   it('double-clicking a candle navigates to /stocks/{id}/minute/{tradeDate}', async () => {

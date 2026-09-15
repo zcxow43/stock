@@ -72,7 +72,11 @@ export interface KLineChartProps {
   onBarClick: (index: number) => void
   /** Fired on native browser dblclick — never hand-rolled from two click events (see spec). */
   onBarDoubleClick: (index: number) => void
-  renderTooltip: (index: number) => ReactNode
+  /** Floating box that follows the crosshair (the minute-K page). Omit it to show no floating box —
+   * the daily-K page draws its own fixed info bar above the chart from `onHoverIndexChange`. */
+  renderTooltip?: (index: number) => ReactNode
+  /** Fired when the bar under the mouse changes; `null` when the mouse leaves the chart. */
+  onHoverIndexChange?: (index: number | null) => void
   /**
    * Main panel drawing style: `'candle'` (default) draws OHLC candlesticks with red-up/green-down
    * coloring (the daily-K page). `'line'` draws a single-color line through each bar's `close`
@@ -165,6 +169,7 @@ export default function KLineChart({
   onBarClick,
   onBarDoubleClick,
   renderTooltip,
+  onHoverIndexChange,
   mainType = 'candle',
   lineColor,
   priceReferenceLines,
@@ -239,12 +244,17 @@ export default function KLineChart({
     [cw, n],
   )
 
+  const updateHover = (index: number | null) => {
+    if (index === hoverIndex) return
+    setHoverIndex(index)
+    onHoverIndexChange?.(index)
+  }
   const handleMouseMove = (e: MouseEvent) => {
     if (pinnedIndex != null || n === 0) return
-    setHoverIndex(indexFromClientX(e.clientX))
+    updateHover(indexFromClientX(e.clientX))
   }
   const handleMouseLeave = () => {
-    if (pinnedIndex == null) setHoverIndex(null)
+    if (pinnedIndex == null) updateHover(null)
   }
   const handleClick = (e: MouseEvent) => {
     if (n === 0) return
@@ -561,7 +571,7 @@ export default function KLineChart({
         )}
       </svg>
 
-      {activeIndex != null && (
+      {activeIndex != null && renderTooltip && (
         <div
           className={`kc-tooltip${tooltipOnLeftSide ? ' kc-tooltip-left' : ''}`}
           style={{ left: `${activeXRatio * 100}%`, top: `${(priceTop / totalHeight) * 100}%` }}

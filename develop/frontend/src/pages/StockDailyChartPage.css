@@ -342,29 +342,43 @@
   font-size: 14px;
 }
 
-.dc-tooltip-body {
+/* Fixed info bar above the chart (spec: 資訊列) — stays put while only its numbers follow the crosshair. */
+.dc-infobar {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.dc-tooltip-date {
-  font-weight: 600;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+  min-height: 22px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #1b2836;
+  border-bottom: 1px solid #26333f;
+  border-radius: 5px;
+  font-size: 12px;
   color: #e6edf5;
-  margin-bottom: 4px;
-}
-
-.dc-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  color: #93a4b8;
-}
-
-.dc-tooltip-row > span:last-child {
   font-variant-numeric: tabular-nums;
 }
 
-.dc-tooltip-value {
+.dc-infobar-date {
+  font-weight: 600;
+  color: #e6edf5;
+}
+
+.dc-infobar-item {
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.dc-infobar-k {
+  color: #93a4b8;
+}
+
+/* inline-block so each value's reserved min-width (set inline, in ch) actually applies */
+.dc-infobar-item > span:last-child {
+  display: inline-block;
+}
+
+.dc-infobar-v {
   color: #e6edf5;
 }

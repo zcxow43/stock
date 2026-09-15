@@ -107,6 +107,7 @@ export default function StockDailyChartPage() {
   const [customEnd, setCustomEnd] = useState('')
 
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   // Reset stock-scoped UI state whenever the stock changes.
@@ -271,57 +272,43 @@ export default function StockDailyChartPage() {
     if (row) navigate(`/stocks/${stockId}/minute/${row.tradeDate}`)
   }
 
-  function renderTooltip(index: number) {
+  // Fixed info bar above the chart (spec: 資訊列): shows the crosshair's bar — pinned, else hovered,
+  // else the latest bar — so it never appears/disappears or follows the mouse.
+  function renderInfoBar() {
+    const candidate = pinnedIndex ?? hoverIndex
+    const index = candidate != null && series[candidate] ? candidate : series.length - 1
     const row = series[index]
     if (!row) return null
     const prevClose = index > 0 ? series[index - 1].close : null
     const changeAmount = prevClose != null ? row.close - prevClose : null
     const changePercent = prevClose != null && prevClose !== 0 ? (changeAmount! / prevClose) * 100 : null
+    // Each value reserves its widest plausible width (in ch), so where the bar wraps never depends on
+    // the numbers — otherwise a day with "—" indicators is one line shorter and the chart jumps.
+    const item = (label: string, value: string, minCh: number, valueClass = 'dc-infobar-v') => (
+      <span className="dc-infobar-item">
+        <span className="dc-infobar-k">{label}</span>
+        <span className={valueClass} style={{ minWidth: `${minCh}ch` }}>
+          {value}
+        </span>
+      </span>
+    )
     return (
-      <div className="dc-tooltip-body">
-        <div className="dc-tooltip-date">{row.tradeDate}</div>
-        <div className="dc-tooltip-row">
-          <span>開</span>
-          <span className="dc-tooltip-value">{fmt2(row.open)}</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>高</span>
-          <span className="dc-tooltip-value">{fmt2(row.high)}</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>低</span>
-          <span className="dc-tooltip-value">{fmt2(row.low)}</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>收</span>
-          <span className="dc-tooltip-value">{fmt2(row.close)}</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>漲跌</span>
-          <span className={changeClass(changeAmount)}>
-            {changeAmount == null ? '—' : `${fmtSigned2(changeAmount)}（${fmtSigned2(changePercent, '%')}）`}
-          </span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>成交量</span>
-          <span className="dc-tooltip-value">{fmtLots(row.volume)} 張</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>DIF / DEA</span>
-          <span className="dc-tooltip-value">
-            {fmt4(row.dif)} / {fmt4(row.dea)}
-          </span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>OSC</span>
-          <span className="dc-tooltip-value">{fmt4(row.osc)}</span>
-        </div>
-        <div className="dc-tooltip-row">
-          <span>K / D / J</span>
-          <span className="dc-tooltip-value">
-            {fmt4(row.k)} / {fmt4(row.d)} / {fmt4(row.j)}
-          </span>
-        </div>
+      <div className="dc-infobar">
+        <span className="dc-infobar-date">{row.tradeDate}</span>
+        {item('開', fmt2(row.open), 8)}
+        {item('高', fmt2(row.high), 8)}
+        {item('低', fmt2(row.low), 8)}
+        {item('收', fmt2(row.close), 8)}
+        {item(
+          '漲跌',
+          changeAmount == null ? '—' : `${fmtSigned2(changeAmount)}（${fmtSigned2(changePercent, '%')}）`,
+          18,
+          changeClass(changeAmount),
+        )}
+        {item('成交量', `${fmtLots(row.volume)} 張`, 12)}
+        {item('DIF / DEA', `${fmt4(row.dif)} / ${fmt4(row.dea)}`, 21)}
+        {item('OSC', fmt4(row.osc), 9)}
+        {item('K / D / J', `${fmt4(row.k)} / ${fmt4(row.d)} / ${fmt4(row.j)}`, 31)}
       </div>
     )
   }
@@ -471,6 +458,7 @@ export default function StockDailyChartPage() {
             </div>
           )}
 
+          {stats.status === 'success' && !hasNoData && renderInfoBar()}
           {stats.status === 'success' && !hasNoData && (
             <KLineChart
               bars={bars}
@@ -478,7 +466,7 @@ export default function StockDailyChartPage() {
               pinnedIndex={pinnedIndex}
               onBarClick={handleBarClick}
               onBarDoubleClick={handleBarDoubleClick}
-              renderTooltip={renderTooltip}
+              onHoverIndexChange={setHoverIndex}
               upColor={COLOR.up}
               downColor={COLOR.down}
               gridColor={COLOR.grid}

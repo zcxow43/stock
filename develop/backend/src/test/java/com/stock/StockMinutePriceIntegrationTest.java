@@ -186,6 +186,34 @@ class StockMinutePriceIntegrationTest {
         assertEquals("OUT_OF_WINDOW", dbStatus);
     }
 
+    // A row left as OUT_OF_WINDOW by an older boundary (the Yahoo-only "30 days" era) must not stick
+    // once the date is no longer before availableFrom: it is re-fetched from the date's source.
+    @Test
+    void staleOutOfWindowRow_notBeforeAvailableFrom_isRefetched_andBecomesAvailable() {
+        String stockId = "ZMOW";
+        LocalDate tradeDate = recentWeekday(5);
+        seedStock(stockId, "測試分K舊超窗");
+        seedDailyPrice(stockId, tradeDate, "50.00", "52.00", "49.50", "51.00", 100000);
+        jdbc.update("INSERT INTO stock_minute_fetch_status (stock_id, trade_date, status) VALUES (?, ?, 'OUT_OF_WINDOW')",
+                stockId, java.sql.Date.valueOf(tradeDate));
+
+        List<Bar> bars = List.of(
+                new Bar(9, 0, 50.0, 50.5, 49.8, 50.2, 100L),
+                new Bar(9, 1, 50.2, 50.6, 50.0, 50.4, 120L));
+        mockServer.expect(requestTo(yahooUrl(stockId, tradeDate)))
+                .andRespond(withSuccess(buildYahooFixture(tradeDate, bars), MediaType.APPLICATION_JSON));
+
+        ResponseEntity<MinuteBarResponse> response = getMinuteBars(stockId, tradeDate, null, null);
+
+        assertEquals("AVAILABLE", response.getBody().getDataStatus());
+        assertEquals(2, response.getBody().getBars().size());
+        mockServer.verify();
+        String dbStatus = jdbc.queryForObject(
+                "SELECT status FROM stock_minute_fetch_status WHERE stock_id = ? AND trade_date = ?",
+                String.class, stockId, java.sql.Date.valueOf(tradeDate));
+        assertEquals("AVAILABLE", dbStatus);
+    }
+
     // ---------- 4. NO_DATA: source has no minute data for a trading day, repeated calls stay at zero ----------
 
     @Test

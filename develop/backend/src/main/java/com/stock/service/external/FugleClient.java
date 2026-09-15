@@ -54,6 +54,7 @@ public class FugleClient {
     private static final LocalTime SESSION_OPEN = LocalTime.of(9, 0);
     private static final LocalTime SESSION_CLOSE = LocalTime.of(13, 30);
     private static final int PRICE_SCALE = 2;
+    private static final long SHARES_PER_LOT = 1000L;
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
@@ -159,7 +160,9 @@ public class FugleClient {
                 continue;
             }
 
-            long volume = candle.getVolume() == null ? 0L : candle.getVolume();
+            // Fugle reports 張 (lots); stock_minute_price.volume is 股 like Yahoo and the daily table
+            // (spec: 富果 volume 單位是「張」，寫入前必須 × 1000).
+            long volume = candle.getVolume() == null ? 0L : candle.getVolume() * SHARES_PER_LOT;
             bars.add(new NormalizedMinuteBar(stockId, tradeDate, barTime,
                     money(candle.getOpen()), money(candle.getHigh()), money(candle.getLow()),
                     money(candle.getClose()), volume));

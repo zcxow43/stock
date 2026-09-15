@@ -43,7 +43,7 @@ depends_on: [stock-price-ingestion, stock-catalog]
 - **富果 Fugle（30 天以前）**：`GET https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/<代號>?from=<tradeDate>&to=<tradeDate>&timeframe=1&fields=open,high,low,close,volume&sort=asc`，以 `X-API-KEY` header 帶入 API Key。下列各點中，速率限額與單次區間上限取自官方文件，其餘皆已於 2026-09-15 以真實請求確認（上市 2330、上櫃 6488；日期 2026-08-05、2026-09-10、2023-05-22 與週六 2026-08-08）：
   - 代號為**純代號**，上市、上櫃皆不加 `.TW`／`.TWO` 後綴；回應以 `exchange` 標示 `TWSE` 或 `TPEx`。
   - 回應 `data[]` 每筆的 `date` 為含時區的 ISO 8601（例 `2026-08-05T09:00:00.000+08:00`），**標示該分鐘的起始時間**，首根為 `09:00`，與 Yahoo 同一條時間格線。
-  - `volume` 為**單根成交量，不是當日累計**，直接寫入，不做增量轉換。
+  - `volume` 為**單根成交量，不是當日累計**，不做增量轉換；但**單位是「張」（1 張 = 1000 股）**，與 Yahoo 及 `stock_minute_price.volume`、`stock_daily_price.volume` 的「股」不同，寫入前必須 **× 1000** 換算為股。以 2408 南亞科 2026-07-30 實測：富果各分鐘 `volume` 加總為 118,196，同日日線成交量為 120,154,208 股，比值約 1000；Yahoo 來源的日期同一比值約 1.1。未換算時分 K 副圖的每根量會比實際小 1000 倍，前端再以「股 ÷ 1000」顯示成張，畫面上只剩個位數。
   - 查詢區間內查無資料時回 **HTTP 404（Resource Not Found），不是空陣列**；早於 2023-05-23 的日期與非交易日皆如此。
   - 分 K 歷史資料自 2023-05-23 起；單次查詢區間須小於 1 年（本功能一次只查一天，不受影響）。
   - 超過速率限額時回 HTTP 429。
@@ -67,7 +67,11 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `AVAILABLE`，且目標日**非今日** | 直接讀資料庫，零外部請求 |
 | `AVAILABLE`，目標日**為今日**且 `fetched_at` 早於當日 14:00 | 重新請求（盤中資料會持續增長） |
 | `AVAILABLE`，目標日為今日且 `fetched_at` 在當日 14:00 之後 | 直接讀資料庫（該日已收盤定案） |
-| `NO_DATA` / `OUT_OF_WINDOW` / `NOT_A_TRADING_DAY` | 直接回覆該狀態，零外部請求 |
+| `NO_DATA` / `NOT_A_TRADING_DAY` | 直接回覆該狀態，零外部請求 |
+| `OUT_OF_WINDOW`，且目標日**早於** `availableFrom` | 直接回覆該狀態，零外部請求 |
+| `OUT_OF_WINDOW`，但目標日**不早於** `availableFrom` | 視為過時，等同「無對應列」重新判斷來源並請求 |
+
+`OUT_OF_WINDOW` 不是來源回報的結果，而是以 `availableFrom` 在本地推算的結論；`availableFrom` 一改（或早期只有 Yahoo 時以「30 天」寫入的列），舊列就可能與現行分界矛盾。每次查詢都以現行 `availableFrom` 重新檢驗，這類列會在下一次被點開時自行修正，不依賴一次性的資料清理——曾有使用者點開 2026-07-30 時，因富果上線前留下的舊列而仍看到「最早只提供到 2023-05-23」。
 | `FAILED` 且 `attempt_count` 未達上限（預設 3） | 請求外部來源 |
 | `FAILED` 且已達上限 | 直接回覆失敗，零外部請求；僅 `refresh=true` 可強制重試 |
 
@@ -215,6 +219,7 @@ Response `200`：
 - [x] 早於今日減 30 天、且不早於 `availableFrom` 的交易日由富果抓取：回 `dataStatus: AVAILABLE`、`source: FUGLE`，且未對 Yahoo 發出任何請求
 - [x] 富果請求為 `GET .../historical/candles/<代號>?from=<tradeDate>&to=<tradeDate>&timeframe=1&fields=open,high,low,close,volume&sort=asc`，並帶 `X-API-KEY` header（以請求記錄驗證完整路徑、參數與 header）
 - [x] 早於 `availableFrom` 的交易日回 `dataStatus: OUT_OF_WINDOW`，且未對 Yahoo 與富果發出任何請求
+- [x] 狀態表中已存在 `OUT_OF_WINDOW` 列、但日期不早於 `availableFrom` 的交易日：查詢時不回 `OUT_OF_WINDOW`，而是依日期向對應來源（30 天內 Yahoo）請求，回 `AVAILABLE` 並將該列更新為 `AVAILABLE`
 - [x] 30 天內的日期 Yahoo 請求失敗時記為 `FAILED`，**未改向富果請求**；30 天以前的日期富果失敗時，**未改向 Yahoo 請求**
 - [x] Yahoo 已抓取為 `AVAILABLE` 的日期超過 30 天後，仍直接讀資料庫，未對任何來源重新請求
 
@@ -226,7 +231,8 @@ Response `200`：
 - [x] 以富果的真實回應確認：一個正常交易日的 1 分 K 首根 `barTime` 為 `09:00`、末根為 `13:30`，13:25–13:29 沒有 K 棒，共 266 根
 - [x] 同一交易日分別以 Yahoo 與富果正規化後，兩者的 `bar_time` 集合完全相同（驗證兩個來源落在同一條時間格線，而非相差一分鐘）；Yahoo 在 13:25–13:29 回傳的空值 K 棒被丟棄，因此兩者皆為 266 根
 - [x] 富果 `date` 以其 `+08:00` 時區換算：首根為 `09:00`，而非 `01:00` 或 `17:00`
-- [x] 富果 `volume` 以單根量直接寫入：逐根比對，寫入的成交量等於來源該根的 `volume`，未做累計轉增量
+- [x] 富果 `volume` 以單根量寫入：逐根比對，寫入的成交量等於來源該根的 `volume` × 1000（張換算為股），未做累計轉增量
+- [x] 同一交易日的 1 分 K 成交量加總與 `stock_daily_price.volume` 同一數量級（以真實富果資料驗證比值落在 1 附近，而非約 1000）；兩個來源寫入後單位一致，皆為股
 - [x] 上櫃股票以純代號查詢富果（不加 `.TWO`）可取得資料，以一檔實際上櫃股票驗證
 - [x] 富果結果中 OHLC 任一為 `null` 的分鐘不產生 K 棒，`stock_minute_price` 中不存在價格為 0 的列
 - [x] 富果的 K 棒寫入與 `stock_minute_fetch_status` 更新（`source` 為 `FUGLE`）在同一交易內完成
