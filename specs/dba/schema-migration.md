@@ -75,3 +75,10 @@ V009 建表完成，`version` 為主鍵、`applied_at` 預設 `CURRENT_TIMESTAMP
 | V010 | 2026-08-31 11:30:44 |
 | V011 | 2026-08-31 11:31:00 |
 | V012 | 2026-08-31 11:31:10 |
+
+### Increment 2 — 2026-09-16（/sync-env）
+
+`/sync-env` 比對 live 資料庫（`127.0.0.1:3306/stock`，本機 `MySQL80` 服務，`@@hostname` = `DESKTOP-SVDB6J3`，8.0.27）時，`schema_migration` 不存在——上方 2026-08-31 的建表紀錄寫入的是另一台同樣占用 3306 的 MySQL（推測為 `docker/docker-compose.yml` 的 `stock-mysql` 容器），不是目前後端連線的這一台。
+
+- 依 spec 原文套用 V009（`CREATE TABLE IF NOT EXISTS`），`SHOW CREATE TABLE` 與註解 `HEX()` 皆與 spec 一致。
+- **表保持空白，未登錄任何版本。** 這台資料庫無法證明 V010／V011／V012 的時間位移是否曾經套用（三支皆無 `Applied-when` 探針，`/sync-env` 判為無法判定而略過）。在釐清之前，不得對這台資料庫執行那三支 migration：`schema_migration` 為空時守門條件 `g.c = 0` 成立，會再位移 8 小時。

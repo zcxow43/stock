@@ -131,3 +131,10 @@ CREATE TABLE stock_institutional_trade (
 - `EXPLAIN` 證明索引生效：指定多檔加日期區間的查詢走 `PRIMARY` 的 range scan；`DISTINCT trade_date` 的區間查詢走 `idx_trade_date` 且為 covering index（`Using where; Using index`）。
 
 **資料狀態**：驗證用的測試列（`9999`、`6666`）已刪除，表回到原本的空狀態（前後列數皆為 0）。
+
+### Increment 2 — 2026-09-16（/sync-env）
+
+策略掃描勾選法人籌碼型態時回 500（`Table 'stock.stock_institutional_trade' doesn't exist`）。`/sync-env` 比對 live 資料庫（`127.0.0.1:3306/stock`，本機 `MySQL80` 服務，`@@hostname` = `DESKTOP-SVDB6J3`，8.0.27）確認本表不存在——Increment 1 的建表寫入的是另一台同樣占用 3306 的 MySQL（推測為 Docker 的 `stock-mysql` 容器），不是後端實際連線的這一台。
+
+- 依 spec 原文重新套用 V016，7 項驗收於這台資料庫逐項重驗皆符合（22 欄、`PRIMARY`＋`idx_trade_date`、有號／無號、無預設值、無外鍵、UPSERT 冪等、`EXPLAIN` 走 `PRIMARY` range 與 `idx_trade_date`）；測試列 `9999`、`6666` 已刪除，表為 0 列。
+- 表建立後為空，法人資料依 `specs/backend/institutional-trade-ingestion.md` 於下一次日線回補結束（策略分頁「同步日 K 至今日」）或每日增量成功後於背景補齊。
