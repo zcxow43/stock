@@ -75,9 +75,11 @@ class StockSyncServiceCommonStocksOnlyTest {
 
         JobRunningRegistry jobRunningRegistry = new JobRunningRegistry();
         BackfillProperties properties = new BackfillProperties();
+        InstitutionalTradeCatchUpRunner institutionalTradeCatchUpRunner = mock(InstitutionalTradeCatchUpRunner.class);
 
         service = new StockSyncService(twseClient, stockMapper, progressMapper, priceIngestionService,
-                backfillRunner, snapshotBackfillRunner, jobRunningRegistry, properties);
+                backfillRunner, snapshotBackfillRunner, jobRunningRegistry, properties,
+                institutionalTradeCatchUpRunner);
     }
 
     @Test

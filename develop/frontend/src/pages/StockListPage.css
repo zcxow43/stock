@@ -712,6 +712,37 @@
   color: #d9a441;
 }
 
+/* 複選參數（type: "multiSelect"）— currently the three institutional cards' own 「法人」
+   row (☑ 外資 ☑ 投信). Reuses the exact same checkbox accent/label colors as every other
+   checkbox on this page (`## Visual Style`「勾選框已勾選背景／勾記」/「參數輸入標籤與單位
+   文字」) — no new colors introduced. */
+.st-multiselect-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.st-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #93a4b8;
+  cursor: pointer;
+}
+
+.st-multiselect-option input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3e8fd8;
+  cursor: pointer;
+}
+
+.st-multiselect-option input[type='checkbox']:disabled {
+  cursor: default;
+}
+
 /* 反彈's optional 「另外要求反彈漲幅」 group toggle — same checkbox styling as a
    strategy card's own checkbox (`## Visual Style`「選用參數群組勾選框已勾選背景／勾記」
    uses the same value as「策略勾選框」). */

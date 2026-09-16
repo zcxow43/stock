@@ -2,6 +2,7 @@ package com.stock.service;
 
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
+import com.stock.domain.StockInstitutionalTrade;
 import com.stock.dto.ScanRequestDto;
 import com.stock.dto.ScanResponseDto;
 import com.stock.dto.StrategyHitDto;
@@ -9,12 +10,17 @@ import com.stock.dto.StrategyResultDto;
 import com.stock.dto.StrategySelectionDto;
 import com.stock.exception.DaysNotApplicableException;
 import com.stock.exception.DuplicateStrategyException;
+import com.stock.exception.InvalidBuyDaysException;
 import com.stock.exception.InvalidDateRangeException;
 import com.stock.exception.InvalidDropDaysException;
 import com.stock.exception.InvalidDropPercentException;
+import com.stock.exception.InvalidInvestorsException;
+import com.stock.exception.InvalidRatioPercentException;
 import com.stock.exception.InvalidRiseDaysException;
 import com.stock.exception.InvalidRisePercentException;
 import com.stock.exception.InvalidStrategyDaysException;
+import com.stock.exception.InvalidTopNException;
+import com.stock.exception.InvalidWindowDaysException;
 import com.stock.exception.NoStrategySelectedException;
 import com.stock.exception.ParamNotApplicableException;
 import com.stock.exception.PresetNotApplicableException;
@@ -22,7 +28,9 @@ import com.stock.exception.TooManyStocksException;
 import com.stock.exception.UnknownStockIdException;
 import com.stock.exception.UnknownStrategyException;
 import com.stock.mapper.StockDailyPriceMapper;
+import com.stock.mapper.StockInstitutionalTradeMapper;
 import com.stock.mapper.StockMapper;
+import com.stock.service.pattern.InstitutionalPatternDetector;
 import com.stock.service.pattern.PatternDetectionOutcome;
 import com.stock.service.pattern.PatternDetector;
 import com.stock.util.CommonStockCodeUtil;
@@ -34,10 +42,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -54,15 +64,26 @@ public class StrategyScanService {
     // (specs/backend/strategy-scan.md, "反彈的 dropPercent 維持 0~50 不變").
     private static final BigDecimal DROP_PERCENT_MAX = new BigDecimal("50");
     private static final int RISE_PERCENT_MAX_SCALE = 1;
+    // Shared, fixed upper bounds for the three institutional params that are not per-detector (see
+    // specs/backend/strategy-scan.md, "法人籌碼型態" parameter tables) — windowDays/buyDays share one
+    // bound across the detectors that accept them, so a single constant each is enough.
+    private static final int WINDOW_OR_BUY_DAYS_MIN = 1;
+    private static final int WINDOW_OR_BUY_DAYS_MAX = 20;
+    private static final BigDecimal RATIO_PERCENT_MAX = new BigDecimal("100");
+    private static final int TOP_N_MIN = 1;
+    private static final int TOP_N_MAX = 50;
 
     private final StockMapper stockMapper;
     private final StockDailyPriceMapper priceMapper;
+    private final StockInstitutionalTradeMapper institutionalTradeMapper;
     private final Map<String, PatternDetector> detectorsByCode;
 
     public StrategyScanService(StockMapper stockMapper, StockDailyPriceMapper priceMapper,
+                                StockInstitutionalTradeMapper institutionalTradeMapper,
                                 List<PatternDetector> detectors) {
         this.stockMapper = stockMapper;
         this.priceMapper = priceMapper;
+        this.institutionalTradeMapper = institutionalTradeMapper;
         Map<String, PatternDetector> byCode = new LinkedHashMap<>();
         for (PatternDetector detector : detectors) {
             byCode.put(detector.getCode(), detector);
@@ -92,10 +113,13 @@ public class StrategyScanService {
         }
 
         Map<String, List<StockDailyPrice>> seriesByStock = loadSeries(selections, targetIds, startDate, endDate);
+        InstitutionalData institutionalData =
+                loadInstitutionalData(selections, targetIds, seriesByStock, startDate, endDate);
 
         List<StrategyResultDto> results = new ArrayList<>(selections.size());
         for (StrategySelectionDto selection : selections) {
-            results.add(runStrategy(selection, targetIds, stockNames, seriesByStock, startDate, endDate));
+            results.add(runStrategy(selection, targetIds, stockNames, seriesByStock, institutionalData, startDate,
+                    endDate));
         }
 
         ScanResponseDto response = new ScanResponseDto();
@@ -166,9 +190,86 @@ public class StrategyScanService {
                     rejectReboundOnlyParams(selection);
                 }
             }
+            validateInstitutionalParams(selection, detector);
+            if (selection.getRisePercent() != null && !detector.acceptsRisePercent()) {
+                // The three institutional patterns judge shares/volume, never a price rise — a
+                // risePercent sent to them must be rejected, not silently ignored (specs/backend/
+                // strategy-scan.md, "對三個法人籌碼型態帶了 risePercent").
+                throw new ParamNotApplicableException(selection.getCode(), "risePercent");
+            }
             validateRisePercent(selection, detector);
         }
         return selections;
+    }
+
+    /**
+     * Validates the five institutional-only fields (`investors`/`windowDays`/`ratioPercent`/
+     * `buyDays`/`topN`) uniformly for every strategy: rejects any of them sent to a detector that
+     * does not declare {@code acceptsXxx()} for that field (PARAM_NOT_APPLICABLE, naming the field),
+     * then range/shape-validates the ones the detector does accept — see specs/backend/
+     * strategy-scan.md, "法人籌碼型態" 共通規則 and 驗證與用語.
+     */
+    private void validateInstitutionalParams(StrategySelectionDto selection, PatternDetector detector) {
+        String code = selection.getCode();
+        if (selection.getInvestors() != null && !detector.acceptsInvestors()) {
+            throw new ParamNotApplicableException(code, "investors");
+        }
+        if (selection.getWindowDays() != null && !detector.acceptsWindowDays()) {
+            throw new ParamNotApplicableException(code, "windowDays");
+        }
+        if (selection.getRatioPercent() != null && !detector.acceptsRatioPercent()) {
+            throw new ParamNotApplicableException(code, "ratioPercent");
+        }
+        if (selection.getBuyDays() != null && !detector.acceptsBuyDays()) {
+            throw new ParamNotApplicableException(code, "buyDays");
+        }
+        if (selection.getTopN() != null && !detector.acceptsTopN()) {
+            throw new ParamNotApplicableException(code, "topN");
+        }
+
+        if (detector.acceptsInvestors()) {
+            validateInvestors(selection);
+        }
+        if (detector.acceptsWindowDays()) {
+            validateIntInRange(selection.getWindowDays(), WINDOW_OR_BUY_DAYS_MIN, WINDOW_OR_BUY_DAYS_MAX,
+                    () -> new InvalidWindowDaysException(code));
+        }
+        if (detector.acceptsRatioPercent()) {
+            validatePercentInRange(selection.getRatioPercent(), RATIO_PERCENT_MAX,
+                    () -> new InvalidRatioPercentException(code));
+        }
+        if (detector.acceptsBuyDays()) {
+            validateIntInRange(selection.getBuyDays(), WINDOW_OR_BUY_DAYS_MIN, WINDOW_OR_BUY_DAYS_MAX,
+                    () -> new InvalidBuyDaysException(code));
+        }
+        if (detector.acceptsTopN()) {
+            validateIntInRange(selection.getTopN(), TOP_N_MIN, TOP_N_MAX, () -> new InvalidTopNException(code));
+        }
+    }
+
+    /**
+     * `investors` may be omitted (null, meaning "both" — resolved at detection time); when present
+     * it must be non-empty, contain only FOREIGN/TRUST, and have no duplicate — see
+     * specs/backend/strategy-scan.md, "investors 為空陣列、含 FOREIGN／TRUST 以外的值、或有重複".
+     */
+    private void validateInvestors(StrategySelectionDto selection) {
+        List<String> investors = selection.getInvestors();
+        if (investors == null) {
+            return;
+        }
+        if (investors.isEmpty()) {
+            throw new InvalidInvestorsException(selection.getCode());
+        }
+        Set<String> seen = new HashSet<>();
+        for (String investor : investors) {
+            if (!InstitutionalPatternDetector.FOREIGN.equals(investor)
+                    && !InstitutionalPatternDetector.TRUST.equals(investor)) {
+                throw new InvalidInvestorsException(selection.getCode());
+            }
+            if (!seen.add(investor)) {
+                throw new InvalidInvestorsException(selection.getCode());
+            }
+        }
     }
 
     /**
@@ -380,18 +481,99 @@ public class StrategyScanService {
         return seriesByStock;
     }
 
+    /** Holder for the one shared institutional-trade read used by all selected institutional
+     *  strategies within a single scan — see specs/backend/strategy-scan.md, "同一次掃描中三個型態共用同一份
+     *  讀取結果". */
+    private static final class InstitutionalData {
+        final Map<String, List<StockInstitutionalTrade>> seriesByStock;
+        final Set<LocalDate> fetchedDates;
+        final LocalDate dataThroughDate;
+
+        InstitutionalData(Map<String, List<StockInstitutionalTrade>> seriesByStock, Set<LocalDate> fetchedDates,
+                           LocalDate dataThroughDate) {
+            this.seriesByStock = seriesByStock;
+            this.fetchedDates = fetchedDates;
+            this.dataThroughDate = dataThroughDate;
+        }
+    }
+
+    /**
+     * Batched institutional-trade read, performed once per scan regardless of how many of the three
+     * institutional strategies are selected together (specs/backend/strategy-scan.md, "同一次掃描中三個
+     * 型態共用同一份讀取結果"): one range query for the rows themselves, one distinct-dates query for the
+     * "已抓取" signal (scoped to ALL securities, not just the target population — spec: "該日法人資料已抓取
+     * （stock_institutional_trade 在該日有任何一列）"). The read's lower bound is the earliest trade_date
+     * already present in {@code seriesByStock} — the same batched price lookback already reaches back
+     * far enough to cover every institutional strategy's own `windowDays`/`buyDays` lookback need,
+     * since {@link #loadSeries} takes the max lookback across ALL selected strategies including
+     * these. Institutional data is read only through endDate ("法人資料本身只讀到 endDate 為止") — never the
+     * confirm-after price row fetched for `buyDate`.
+     */
+    private InstitutionalData loadInstitutionalData(List<StrategySelectionDto> selections, List<String> targetIds,
+                                                      Map<String, List<StockDailyPrice>> seriesByStock,
+                                                      LocalDate startDate, LocalDate endDate) {
+        boolean needsInstitutionalData = false;
+        for (StrategySelectionDto selection : selections) {
+            if (detectorsByCode.get(selection.getCode()) instanceof InstitutionalPatternDetector) {
+                needsInstitutionalData = true;
+                break;
+            }
+        }
+        if (!needsInstitutionalData || targetIds.isEmpty()) {
+            return new InstitutionalData(Collections.emptyMap(), Collections.emptySet(), null);
+        }
+
+        LocalDate fetchStart = startDate;
+        for (List<StockDailyPrice> bars : seriesByStock.values()) {
+            for (StockDailyPrice bar : bars) {
+                if (bar.getTradeDate().isBefore(fetchStart)) {
+                    fetchStart = bar.getTradeDate();
+                }
+            }
+        }
+
+        Map<String, List<StockInstitutionalTrade>> seriesByStockId = new LinkedHashMap<>();
+        for (String id : targetIds) {
+            seriesByStockId.put(id, new ArrayList<>());
+        }
+        List<StockInstitutionalTrade> rows =
+                institutionalTradeMapper.findByStockIdsAndDateRange(targetIds, fetchStart, endDate);
+        for (StockInstitutionalTrade row : rows) {
+            seriesByStockId.computeIfAbsent(row.getStockId(), k -> new ArrayList<>()).add(row);
+        }
+
+        List<LocalDate> fetchedDatesList = institutionalTradeMapper.findFetchedTradeDates(fetchStart, endDate);
+        Set<LocalDate> fetchedDates = new HashSet<>(fetchedDatesList);
+        LocalDate dataThroughDate = fetchedDates.stream().max(LocalDate::compareTo).orElse(null);
+
+        return new InstitutionalData(seriesByStockId, fetchedDates, dataThroughDate);
+    }
+
     private StrategyResultDto runStrategy(StrategySelectionDto selection, List<String> targetIds,
                                            Map<String, String> stockNames,
                                            Map<String, List<StockDailyPrice>> seriesByStock,
+                                           InstitutionalData institutionalData,
                                            LocalDate startDate, LocalDate endDate) {
         PatternDetector detector = detectorsByCode.get(selection.getCode());
         List<StrategyHitDto> items = new ArrayList<>();
         List<String> insufficientData = new ArrayList<>();
         List<String> pendingConfirm = new ArrayList<>();
 
+        Map<String, PatternDetectionOutcome> outcomesByStock;
+        if (detector instanceof InstitutionalPatternDetector) {
+            InstitutionalPatternDetector institutionalDetector = (InstitutionalPatternDetector) detector;
+            outcomesByStock = institutionalDetector.detectAll(targetIds, seriesByStock,
+                    institutionalData.seriesByStock, institutionalData.fetchedDates, startDate, endDate, selection);
+        } else {
+            outcomesByStock = new LinkedHashMap<>();
+            for (String stockId : targetIds) {
+                List<StockDailyPrice> bars = seriesByStock.getOrDefault(stockId, Collections.emptyList());
+                outcomesByStock.put(stockId, detector.detect(bars, startDate, endDate, selection));
+            }
+        }
+
         for (String stockId : targetIds) {
-            List<StockDailyPrice> bars = seriesByStock.getOrDefault(stockId, Collections.emptyList());
-            PatternDetectionOutcome outcome = detector.detect(bars, startDate, endDate, selection);
+            PatternDetectionOutcome outcome = outcomesByStock.get(stockId);
             if (outcome.isInsufficientData()) {
                 insufficientData.add(stockId);
             } else if (outcome.isHit()) {
@@ -409,8 +591,14 @@ public class StrategyScanService {
         result.setStrategy(selection.getCode());
         // Mutually exclusive on the wire (specs/backend/strategy-scan.md, "掃描回應中 CUMULATIVE_RISE
         // 那一筆回 days ... 其餘四筆回 preset"): each detector knows its own header shape (preset,
-        // days, or REBOUND's requireRise/dropDays/dropPercent/riseDays/risePercent).
+        // days, REBOUND's requireRise/dropDays/dropPercent/riseDays/risePercent, or an institutional
+        // detector's investors/windowDays/ratioPercent/buyDays/topN).
         detector.populateResultParams(selection, result);
+        if (detector instanceof InstitutionalPatternDetector) {
+            // Shared across all institutional strategies in this scan (see loadInstitutionalData) —
+            // not selection-derived, so it is not part of populateResultParams's contract.
+            result.setDataThroughDate(institutionalData.dataThroughDate);
+        }
         result.setMatchedCount(items.size());
         result.setItems(items);
         result.setInsufficientData(insufficientData);

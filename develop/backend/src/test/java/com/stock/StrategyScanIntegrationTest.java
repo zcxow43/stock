@@ -63,6 +63,7 @@ class StrategyScanIntegrationTest {
     }
 
     private void cleanupTestData() {
+        jdbc.update("DELETE FROM stock_institutional_trade WHERE stock_id LIKE 'SS%'");
         jdbc.update("DELETE FROM stock_daily_price WHERE stock_id LIKE 'SS%'");
         jdbc.update("DELETE FROM stock WHERE stock_id LIKE 'SS%'");
     }
@@ -76,10 +77,12 @@ class StrategyScanIntegrationTest {
 
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        // 5 total since increment 2 added RISING_SUPPORT and increment 3 added REBOUND/CUMULATIVE_RISE
-        // — see catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording and
-        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording below.
-        assertEquals(5, strategies.size());
+        // 8 total: increment 2 added RISING_SUPPORT, increment 3 added REBOUND/CUMULATIVE_RISE, and
+        // this increment added the three institutional-trade patterns — see
+        // catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording,
+        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording, and
+        // catalog_returnsEightStrategiesIncludingInstitutionalPatternsMatchingSpecWording below.
+        assertEquals(8, strategies.size());
 
         JsonNode box = findByCode(strategies, "BOX_BREAKOUT");
         assertEquals("箱型突破", box.get("name").asText());
@@ -631,9 +634,11 @@ class StrategyScanIntegrationTest {
 
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        // 5 total since increment 3 added REBOUND/CUMULATIVE_RISE — see
-        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording below.
-        assertEquals(5, strategies.size());
+        // 8 total: increment 3 added REBOUND/CUMULATIVE_RISE and this increment added the three
+        // institutional-trade patterns — see
+        // catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording and
+        // catalog_returnsEightStrategiesIncludingInstitutionalPatternsMatchingSpecWording below.
+        assertEquals(8, strategies.size());
 
         JsonNode risingSupport = findByCode(strategies, "RISING_SUPPORT");
         assertEquals("上漲支撐", risingSupport.get("name").asText());
@@ -1720,7 +1725,9 @@ class StrategyScanIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        assertEquals(5, strategies.size());
+        // 8 total since this increment added the three institutional-trade patterns — see
+        // catalog_returnsEightStrategiesIncludingInstitutionalPatternsMatchingSpecWording below.
+        assertEquals(8, strategies.size());
 
         // REBOUND's catalogue shape (empty presets + description + paramGroups + params) moved to
         // catalog_rebound_hasEmptyPresetsPlusDescriptionParamGroupsAndParams below (REBOUND dropped
@@ -1816,7 +1823,8 @@ class StrategyScanIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
-        assertEquals(5, strategies.size());
+        // 8 total since this increment added the three institutional-trade patterns.
+        assertEquals(8, strategies.size());
 
         JsonNode cumulativeRise = findByCode(strategies, "CUMULATIVE_RISE");
         assertEquals("累積上漲", cumulativeRise.get("name").asText());
@@ -2729,6 +2737,1049 @@ class StrategyScanIntegrationTest {
         assertEquals("CUMULATIVE_RISE", tooHighResponse.getBody().getStrategy());
     }
 
+    // ==================== Institutional patterns: catalogue (AC 型態目錄) ====================
+
+    @Test
+    void catalog_returnsEightStrategiesIncludingInstitutionalPatternsMatchingSpecWording() throws Exception {
+        JsonNode root = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody());
+        JsonNode strategies = root.get("strategies");
+        assertEquals(8, strategies.size());
+
+        JsonNode netRatio = findByCode(strategies, "INSTITUTIONAL_NET_RATIO");
+        assertEquals("法人買賣超佔比", netRatio.get("name").asText());
+        assertEquals("外資（不含外資自營商）或投信近指定天數買賣超合計取絕對值 ÷ 成交股數合計，達門檻即命中，淨買超與淨賣超皆計",
+                netRatio.get("description").asText());
+        assertEquals(0, netRatio.get("presets").size());
+        JsonNode netRatioParams = netRatio.get("params");
+        assertEquals(3, netRatioParams.size());
+        JsonNode netRatioWindowDays = findByCode(netRatioParams, "windowDays");
+        assertEquals(5, netRatioWindowDays.get("default").asInt());
+        assertEquals(1, netRatioWindowDays.get("min").asInt());
+        assertEquals(20, netRatioWindowDays.get("max").asInt());
+        JsonNode ratioPercentParam = findByCode(netRatioParams, "ratioPercent");
+        assertBigDecimalEquals("10", ratioPercentParam.get("default"));
+        assertBigDecimalEquals("0", ratioPercentParam.get("min"));
+        assertBigDecimalEquals("100", ratioPercentParam.get("max"));
+
+        JsonNode consecutiveBuy = findByCode(strategies, "INSTITUTIONAL_CONSECUTIVE_BUY");
+        assertEquals("法人連續買超", consecutiveBuy.get("name").asText());
+        assertEquals("外資（不含外資自營商）或投信連續指定天數每日買超", consecutiveBuy.get("description").asText());
+        assertEquals(0, consecutiveBuy.get("presets").size());
+        JsonNode buyDaysParam = findByCode(consecutiveBuy.get("params"), "buyDays");
+        assertEquals(5, buyDaysParam.get("default").asInt());
+        assertEquals(1, buyDaysParam.get("min").asInt());
+        assertEquals(20, buyDaysParam.get("max").asInt());
+
+        JsonNode strengthRank = findByCode(strategies, "INSTITUTIONAL_STRENGTH_RANK");
+        assertEquals("法人買超強度排名", strengthRank.get("name").asText());
+        assertEquals("外資（不含外資自營商）或投信近指定天數買超合計 ÷ 成交股數合計為強度，只有淨買超者參與，每個交易日外資與投信各取強度前幾名",
+                strengthRank.get("description").asText());
+        assertEquals(0, strengthRank.get("presets").size());
+        JsonNode topNParam = findByCode(strengthRank.get("params"), "topN");
+        assertEquals(10, topNParam.get("default").asInt());
+        assertEquals(1, topNParam.get("min").asInt());
+        assertEquals(50, topNParam.get("max").asInt());
+    }
+
+    @Test
+    void institutionalStrategies_investorsParamIsMultiSelect_othersAreNotTyped() throws Exception {
+        JsonNode root = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody());
+        JsonNode strategies = root.get("strategies");
+        for (String code : new String[] {"INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY",
+                "INSTITUTIONAL_STRENGTH_RANK"}) {
+            JsonNode params = findByCode(strategies, code).get("params");
+            JsonNode investors = findByCode(params, "investors");
+            assertEquals("multiSelect", investors.get("type").asText());
+            JsonNode options = investors.get("options");
+            assertEquals(2, options.size());
+            assertEquals("FOREIGN", options.get(0).get("code").asText());
+            assertEquals("外資", options.get(0).get("name").asText());
+            assertEquals("TRUST", options.get(1).get("code").asText());
+            assertEquals("投信", options.get(1).get("name").asText());
+            assertEquals(Arrays.asList("FOREIGN", "TRUST"), toStringList(investors.get("default")));
+            assertEquals(1, investors.get("minSelected").asInt());
+
+            for (JsonNode param : params) {
+                if (!"investors".equals(param.get("code").asText())) {
+                    assertFalse(param.has("type"), code + "'s " + param.get("code").asText() + " must not carry type");
+                }
+            }
+        }
+    }
+
+    @Test
+    void catalog_otherFiveStrategiesUnchangedByInstitutionalPatterns() throws Exception {
+        JsonNode root = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody());
+        JsonNode strategies = root.get("strategies");
+        assertEquals(3, findByCode(strategies, "BOX_BREAKOUT").get("presets").size());
+        assertEquals(3, findByCode(strategies, "HIGHER_LOWS").get("presets").size());
+        assertEquals(3, findByCode(strategies, "RISING_SUPPORT").get("presets").size());
+        JsonNode rebound = findByCode(strategies, "REBOUND");
+        assertEquals(0, rebound.get("presets").size());
+        assertEquals(4, rebound.get("params").size());
+        JsonNode cumulativeRise = findByCode(strategies, "CUMULATIVE_RISE");
+        assertEquals(0, cumulativeRise.get("presets").size());
+        assertEquals(2, cumulativeRise.get("params").size());
+    }
+
+    // ==================== Institutional patterns: 共通規則 ====================
+
+    @Test
+    void institutional_foreignExcludesForeignDealer_dealerOnlyDoesNotMatchAnyOfTheThree() throws Exception {
+        String stockId = "SS7010";
+        seedStock(stockId, "外資排除自營商測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 4; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 1_000_000);
+            insertInstitutionalRow(stockId, d, 0, 5_000_000, 0); // foreignNet=0, dealerNet huge, trustNet=0
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", 1_000_000);
+        insertInstitutionalRow(stockId, d0, 0, 5_000_000, 0);
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 1_000_000);
+
+        List<StrategySelectionDto> selections = Arrays.asList(
+                netRatioSelection(Collections.singletonList("FOREIGN"), null, null),
+                consecutiveBuySelection(Collections.singletonList("FOREIGN"), null),
+                strengthRankSelection(Collections.singletonList("FOREIGN"), null, null));
+        ScanRequestDto request = scanRequestFromSelections(selections, Collections.singletonList(stockId), d0, d0);
+        for (JsonNode result : postScan(request).get("results")) {
+            assertEquals(0, result.get("matchedCount").asInt(),
+                    result.get("strategy").asText() + " must not match on foreign-dealer-only activity");
+        }
+    }
+
+    @Test
+    void institutional_fetchedDayWithoutRowForStock_treatedAsZero() throws Exception {
+        String stockId = "SS7020";
+        String marker = "SS7020M";
+        seedStock(stockId, "已抓取無此檔列測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 4; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 2_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", 10_000_000);
+        // no institutional row for stockId itself on d0, but the date is still "已抓取" globally:
+        insertInstitutionalRow(marker, d0, 1, 0);
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode detail = result.get("items").get(0).get("detail");
+        assertEquals(8_000_000L, detail.get("foreign").get("netShares").asLong());
+    }
+
+    @Test
+    void institutional_unfetchedDate_stockNotJudgedForThatDay() throws Exception {
+        String stockId = "SS7030";
+        seedStock(stockId, "未抓取日期跳過測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d1 = d0.plusDays(1);
+        LocalDate leadStart = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            LocalDate d = leadStart.plusDays(i);
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+        }
+        // d1 has a price row but NO institutional row anywhere -> its window must not be judged.
+        insertCloseOnlyRow(stockId, d1, "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d1);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        JsonNode item = result.get("items").get(0);
+        assertEquals(d0.toString(), item.get("signalDate").asText());
+        assertEquals(d1.toString(), item.get("buyDate").asText());
+    }
+
+    @Test
+    void institutional_investorsTrustOnly_foreignIgnored() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        String stockIdA = "SS7040A";
+        seedStock(stockIdA, "只判定投信-不命中", true);
+        seedInstitutionalWindow(stockIdA, d0, 4, 5_000_000, 200_000, 10_000_000);
+        ScanRequestDto requestA = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("TRUST"), null, null)),
+                Collections.singletonList(stockIdA), d0, d0);
+        assertEquals(0, postScan(requestA).get("results").get(0).get("matchedCount").asInt(),
+                "foreign alone clearing the threshold must not count when only TRUST is selected");
+
+        String stockIdB = "SS7040B";
+        seedStock(stockIdB, "只判定投信-命中", true);
+        seedInstitutionalWindow(stockIdB, d0, 4, 5_000_000, 3_000_000, 10_000_000);
+        ScanRequestDto requestB = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("TRUST"), null, null)),
+                Collections.singletonList(stockIdB), d0, d0);
+        JsonNode resultB = postScan(requestB).get("results").get(0);
+        assertEquals(1, resultB.get("matchedCount").asInt());
+        JsonNode detailB = resultB.get("items").get(0).get("detail");
+        assertTrue(detailB.get("foreign").isNull(), "foreign must be explicit null when investors=[TRUST]");
+        assertEquals(Collections.singletonList("TRUST"), toStringList(detailB.get("matchedInvestors")));
+    }
+
+    @Test
+    void institutional_bothInvestorsSelected_eachJudgedIndependently() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        String stockIdA = "SS7050A";
+        seedStock(stockIdA, "雙方各自判定-僅投信達標", true);
+        seedInstitutionalWindow(stockIdA, d0, 4, 200_000, 3_000_000, 10_000_000);
+        ScanRequestDto requestA = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Arrays.asList("FOREIGN", "TRUST"), null, null)),
+                Collections.singletonList(stockIdA), d0, d0);
+        JsonNode resultA = postScan(requestA).get("results").get(0);
+        assertEquals(1, resultA.get("matchedCount").asInt());
+        assertEquals(Collections.singletonList("TRUST"),
+                toStringList(resultA.get("items").get(0).get("detail").get("matchedInvestors")));
+
+        String stockIdB = "SS7050B";
+        seedStock(stockIdB, "雙方各自判定-皆達標", true);
+        seedInstitutionalWindow(stockIdB, d0, 4, 3_000_000, 3_000_000, 10_000_000);
+        ScanRequestDto requestB = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Arrays.asList("FOREIGN", "TRUST"), null, null)),
+                Collections.singletonList(stockIdB), d0, d0);
+        JsonNode resultB = postScan(requestB).get("results").get(0);
+        assertEquals(1, resultB.get("matchedCount").asInt(), "still exactly one item even though both cleared");
+        assertEquals(Arrays.asList("FOREIGN", "TRUST"),
+                toStringList(resultB.get("items").get(0).get("detail").get("matchedInvestors")));
+    }
+
+    @Test
+    void institutional_investorsOmitted_defaultsToBoth() throws Exception {
+        String stockId = "SS7060";
+        seedStock(stockId, "省略investors預設兩者", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        seedInstitutionalWindow(stockId, d0, 4, 200_000, 3_000_000, 10_000_000); // only trust clears
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(Arrays.asList("FOREIGN", "TRUST"), toStringList(result.get("investors")));
+        assertEquals(1, result.get("matchedCount").asInt(), "omitted investors must judge both");
+    }
+
+    @Test
+    void institutional_buyDateSkipsSuspensionGap_canFallAfterEndDate() throws Exception {
+        String stockId = "SS7070";
+        seedStock(stockId, "停牌缺列進場日測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 4; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", 10_000_000);
+        insertInstitutionalRow(stockId, d0, 3_000_000, 0);
+        LocalDate resumed = d0.plusDays(3); // 2 calendar days suspended (d0+1, d0+2 missing)
+        insertCloseOnlyRow(stockId, resumed, "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode item = postScan(request).get("results").get(0).get("items").get(0);
+        assertEquals(resumed.toString(), item.get("buyDate").asText());
+        assertNotEquals(d0.plusDays(1).toString(), item.get("buyDate").asText());
+    }
+
+    @Test
+    void institutional_onlyHitAtLatestBar_pendingConfirm() throws Exception {
+        String stockId = "SS7080";
+        seedStock(stockId, "命中在最新一筆-待確認", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 4; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", 10_000_000);
+        insertInstitutionalRow(stockId, d0, 3_000_000, 0);
+        // deliberately no price row after d0 -> no buyDate available
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt());
+        assertTrue(result.get("items").isEmpty());
+        assertTrue(toStringList(result.get("pendingConfirm")).contains(stockId));
+    }
+
+    @Test
+    void institutional_earlierHitWithBuyDateWins_overLaterHitWithoutOne() throws Exception {
+        String stockId = "SS7090";
+        seedStock(stockId, "較早命中優先-不列待確認", true);
+        LocalDate dEarly = LocalDate.of(2026, 3, 10);
+        LocalDate dLate = dEarly.plusDays(1);
+        LocalDate d = dEarly.minusDays(4);
+        for (int i = 0; i < 5; i++) { // covers dEarly's whole window
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, dLate, "100.00", 10_000_000);
+        insertInstitutionalRow(stockId, dLate, 3_000_000, 0);
+        // no price row after dLate -> dLate's own hit has no buyDate
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), dEarly, dLate);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        assertEquals(dEarly.toString(), result.get("items").get(0).get("signalDate").asText());
+        assertEquals(dLate.toString(), result.get("items").get(0).get("buyDate").asText());
+        assertFalse(toStringList(result.get("pendingConfirm")).contains(stockId),
+                "an earlier resolvable hit must suppress pendingConfirm even though the latest D also matched");
+    }
+
+    @Test
+    void institutional_noDataAtAllInPeriod_dataThroughDateNull_allInsufficientData() throws Exception {
+        String stockId = "SS7100";
+        seedStock(stockId, "完全無法人資料測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertFalse(result.has("dataThroughDate"), "dataThroughDate must be omitted (NON_NULL) when null");
+        assertTrue(toStringList(result.get("insufficientData")).contains(stockId));
+        assertEquals(0, result.get("matchedCount").asInt());
+    }
+
+    @Test
+    void institutional_insufficientPriceLookback_insufficientDataRegardlessOfInstitutionalPresence() throws Exception {
+        String stockId = "SS7110";
+        seedStock(stockId, "行情前置不足測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(2); // only 2 lead-in bars; windowDays=5 needs 4
+        for (int i = 0; i < 2; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", 10_000_000);
+        insertInstitutionalRow(stockId, d0, 3_000_000, 0);
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertTrue(toStringList(result.get("insufficientData")).contains(stockId));
+        assertEquals(0, result.get("matchedCount").asInt());
+    }
+
+    @Test
+    void institutional_ratioIsSumOverSum_notAverageOfDailyRatios() throws Exception {
+        String stockId = "SS7120";
+        seedStock(stockId, "合計相除非平均測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        long[] nets = {1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000};
+        long[] volumes = {10_000_000, 10_000_000, 10_000_000, 10_000_000, 60_000_000};
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", volumes[i]);
+            insertInstitutionalRow(stockId, d, nets[i], 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto netRatioReq = scanRequestFromSelections(
+                Collections.singletonList(
+                        netRatioSelection(Collections.singletonList("FOREIGN"), null, new BigDecimal("1"))),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode netRatioResult = postScan(netRatioReq).get("results").get(0);
+        assertBigDecimalEquals("15.00", netRatioResult.get("items").get(0).get("detail").get("foreign")
+                .get("ratioPercent"));
+
+        ScanRequestDto strengthReq = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), null, 1)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode strengthResult = postScan(strengthReq).get("results").get(0);
+        assertBigDecimalEquals("15.00", strengthResult.get("items").get(0).get("detail").get("foreign")
+                .get("strengthPercent"));
+    }
+
+    @Test
+    void institutional_batchedQueries_fixedCountRegardlessOfStockCountAndStrategyCount() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        List<String> stockIds = new ArrayList<>();
+        for (int n = 1; n <= 6; n++) {
+            String stockId = "SS713" + n;
+            stockIds.add(stockId);
+            seedStock(stockId, "批次查詢測試" + n, true);
+            LocalDate d = d0.minusDays(4);
+            for (int i = 0; i < 5; i++) {
+                insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+                insertInstitutionalRow(stockId, d, 3_000_000, 1_000_000);
+                d = d.plusDays(1);
+            }
+            insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        }
+
+        ScanRequestDto smallRequest = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)), stockIds.subList(0, 2), d0, d0);
+        queryCountInterceptor.reset("com.stock.mapper.StockInstitutionalTradeMapper.");
+        postScan(smallRequest);
+        int smallCount = queryCountInterceptor.getCount();
+
+        ScanRequestDto largeRequest = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)), stockIds, d0, d0);
+        queryCountInterceptor.reset("com.stock.mapper.StockInstitutionalTradeMapper.");
+        postScan(largeRequest);
+        int largeCount = queryCountInterceptor.getCount();
+
+        assertEquals(smallCount, largeCount, "institutional query count must not grow with stock count");
+        assertTrue(largeCount > 0);
+
+        ScanRequestDto threeStrategiesRequest = scanRequestFromSelections(
+                Arrays.asList(netRatioSelection(null, null, null), consecutiveBuySelection(null, null),
+                        strengthRankSelection(null, null, null)),
+                stockIds, d0, d0);
+        queryCountInterceptor.reset("com.stock.mapper.StockInstitutionalTradeMapper.");
+        postScan(threeStrategiesRequest);
+        int threeStrategyCount = queryCountInterceptor.getCount();
+        assertEquals(largeCount, threeStrategyCount,
+                "three institutional strategies in one scan must share the same single institutional read");
+    }
+
+    @Test
+    void institutional_eightStrategiesTogether_resultsInOrder_pricePatternsUnaffected() throws Exception {
+        String stockId = "SS7140";
+        seedStock(stockId, "八策略同時送出測試", true);
+        LocalDate start = LocalDate.of(2026, 3, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.06", 1800);
+        LocalDate d = breakoutDate.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertInstitutionalRow(stockId, d, 100, 100);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, breakoutDate.plusDays(1), "105.06", 1800);
+
+        List<StrategySelectionDto> selections = Arrays.asList(
+                selection("BOX_BREAKOUT", "STANDARD"),
+                selection("HIGHER_LOWS", "LOOSE"),
+                selection("RISING_SUPPORT", "LOOSE"),
+                reboundSelection(null, null, null, null, null),
+                selectionDays("CUMULATIVE_RISE", null, null),
+                netRatioSelection(null, null, null),
+                consecutiveBuySelection(null, null),
+                strengthRankSelection(null, null, null));
+        ScanRequestDto request =
+                scanRequestFromSelections(selections, Collections.singletonList(stockId), breakoutDate, breakoutDate);
+        JsonNode results = postScan(request).get("results");
+        assertEquals(8, results.size());
+        String[] expectedOrder = {"BOX_BREAKOUT", "HIGHER_LOWS", "RISING_SUPPORT", "REBOUND", "CUMULATIVE_RISE",
+                "INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY", "INSTITUTIONAL_STRENGTH_RANK"};
+        for (int i = 0; i < expectedOrder.length; i++) {
+            assertEquals(expectedOrder[i], results.get(i).get("strategy").asText());
+        }
+        JsonNode boxResult = results.get(0);
+        assertEquals(1, boxResult.get("matchedCount").asInt(),
+                "BOX_BREAKOUT's hit must be unaffected by the institutional strategies riding along");
+        assertEquals(stockId, boxResult.get("items").get(0).get("stockId").asText());
+    }
+
+    // ==================== Institutional patterns: 法人買賣超佔比 ====================
+
+    @Test
+    void netRatio_sumsBeforeAbsoluteValue_notAverageOfDailyAbsoluteRatios() throws Exception {
+        String stockId = "SS7400";
+        seedStock(stockId, "先加總再取絕對值測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        long[] foreignNets = {8_000_000, -8_000_000, 8_000_000, -8_000_000, 1_000_000}; // sum = +1,000,000
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, foreignNets[i], 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(0, result.get("matchedCount").asInt(),
+                "sum-first ratio is 1,000,000/50,000,000=2%, not the ~66% a daily-absolute average would give");
+    }
+
+    @Test
+    void netRatio_netSellDirection_ratioAndNetSharesMatchHandCalculation() throws Exception {
+        String stockId = "SS7410";
+        seedStock(stockId, "淨賣超命中測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 13_500_000);
+            insertInstitutionalRow(stockId, d, -2_500_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode foreign = postScan(request).get("results").get(0).get("items").get(0).get("detail").get("foreign");
+        assertEquals(-12_500_000L, foreign.get("netShares").asLong());
+        assertBigDecimalEquals("18.52", foreign.get("ratioPercent"));
+        assertEquals("SELL", foreign.get("direction").asText());
+    }
+
+    @Test
+    void netRatio_ratioExactlyAtThreshold_hits_zeroSumNeverHitsEvenWithZeroThreshold() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        String stockIdA = "SS7420A";
+        seedStock(stockIdA, "剛好等於門檻命中測試", true);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockIdA, d, "100.00", 10_000_000); // volume sum = 50,000,000
+            insertInstitutionalRow(stockIdA, d, 1_000_000, 0); // net sum = 5,000,000 -> ratio exactly 10%
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockIdA, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestA = scanRequestFromSelections(
+                Collections.singletonList(
+                        netRatioSelection(Collections.singletonList("FOREIGN"), null, new BigDecimal("10"))),
+                Collections.singletonList(stockIdA), d0, d0);
+        assertEquals(1, postScan(requestA).get("results").get(0).get("matchedCount").asInt(),
+                "ratio exactly equal to ratioPercent must hit (>=)");
+
+        String stockIdB = "SS7420B";
+        seedStock(stockIdB, "淨額為零永不命中測試", true);
+        long[] netsZero = {2_000_000, -2_000_000, 1_000_000, -1_000_000, 0}; // sum = 0
+        d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockIdB, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockIdB, d, netsZero[i], 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockIdB, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestB = scanRequestFromSelections(
+                Collections.singletonList(
+                        netRatioSelection(Collections.singletonList("FOREIGN"), null, BigDecimal.ZERO)),
+                Collections.singletonList(stockIdB), d0, d0);
+        assertEquals(0, postScan(requestB).get("results").get(0).get("matchedCount").asInt(),
+                "a zero window net sum must never hit even when ratioPercent is 0");
+    }
+
+    @Test
+    void netRatio_responseEchoesResolvedParams_noPreset_defaultsWindowDays5RatioPercent10() throws Exception {
+        String stockId = "SS7430";
+        seedStock(stockId, "回應欄位測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 1, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(null, null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertFalse(result.has("preset"));
+        assertEquals(Arrays.asList("FOREIGN", "TRUST"), toStringList(result.get("investors")));
+        assertEquals(5, result.get("windowDays").asInt());
+        assertBigDecimalEquals("10", result.get("ratioPercent"));
+        assertTrue(result.has("dataThroughDate"));
+    }
+
+    // ==================== Institutional patterns: 法人連續買超 ====================
+
+    @Test
+    void consecutiveBuy_everyDayPositiveHits_anyNonPositiveDayFails() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        String stockIdA = "SS7500A";
+        seedStock(stockIdA, "連續買超命中測試", true);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockIdA, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockIdA, d, 0, 100_000);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockIdA, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestA = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), null)),
+                Collections.singletonList(stockIdA), d0, d0);
+        assertEquals(1, postScan(requestA).get("results").get(0).get("matchedCount").asInt());
+
+        String stockIdB = "SS7500B";
+        seedStock(stockIdB, "其中一日為零不命中測試", true);
+        long[] trustNetsZero = {100_000, 100_000, 0, 100_000, 100_000};
+        d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockIdB, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockIdB, d, 0, trustNetsZero[i]);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockIdB, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestB = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), null)),
+                Collections.singletonList(stockIdB), d0, d0);
+        assertEquals(0, postScan(requestB).get("results").get(0).get("matchedCount").asInt());
+
+        String stockIdC = "SS7500C";
+        seedStock(stockIdC, "其中一日為負不命中測試", true);
+        long[] trustNetsNeg = {100_000, 100_000, -50_000, 100_000, 100_000};
+        d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockIdC, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockIdC, d, 0, trustNetsNeg[i]);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockIdC, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestC = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), null)),
+                Collections.singletonList(stockIdC), d0, d0);
+        assertEquals(0, postScan(requestC).get("results").get(0).get("matchedCount").asInt());
+    }
+
+    @Test
+    void consecutiveBuy_buyDaysOne_windowIsJustSignalDay() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        String stockIdA = "SS7510A";
+        seedStock(stockIdA, "buyDays1命中測試", true);
+        insertCloseOnlyRow(stockIdA, d0, "100.00", 10_000_000);
+        insertInstitutionalRow(stockIdA, d0, 0, 500_000);
+        insertCloseOnlyRow(stockIdA, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestA = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), 1)),
+                Collections.singletonList(stockIdA), d0, d0);
+        assertEquals(1, postScan(requestA).get("results").get(0).get("matchedCount").asInt());
+
+        String stockIdB = "SS7510B";
+        seedStock(stockIdB, "buyDays1不命中測試", true);
+        insertCloseOnlyRow(stockIdB, d0, "100.00", 10_000_000);
+        insertInstitutionalRow(stockIdB, d0, 0, 0);
+        insertCloseOnlyRow(stockIdB, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto requestB = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), 1)),
+                Collections.singletonList(stockIdB), d0, d0);
+        assertEquals(0, postScan(requestB).get("results").get(0).get("matchedCount").asInt());
+    }
+
+    @Test
+    void consecutiveBuy_netBuySharesEqualsWindowSum() throws Exception {
+        String stockId = "SS7520";
+        seedStock(stockId, "買超股數合計測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        long[] trustNets = {100_000, 200_000, 300_000, 400_000, 500_000}; // sum = 1,500,000
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 0, trustNets[i]);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(Collections.singletonList("TRUST"), null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode detail = postScan(request).get("results").get(0).get("items").get(0).get("detail");
+        assertEquals(1_500_000L, detail.get("trust").get("netBuyShares").asLong());
+    }
+
+    @Test
+    void consecutiveBuy_responseEchoesInvestorsAndBuyDays_noPreset_defaultsToFive() throws Exception {
+        String stockId = "SS7530";
+        seedStock(stockId, "回應欄位測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 0, 1);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(consecutiveBuySelection(null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertFalse(result.has("preset"));
+        assertEquals(Arrays.asList("FOREIGN", "TRUST"), toStringList(result.get("investors")));
+        assertEquals(5, result.get("buyDays").asInt());
+        assertTrue(result.has("dataThroughDate"));
+    }
+
+    // ==================== Institutional patterns: 法人買超強度排名 ====================
+
+    @Test
+    void strengthRank_top10Of12DistinctStrengths_only10Hit() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        List<String> stockIds = new ArrayList<>();
+        for (int n = 1; n <= 12; n++) {
+            String stockId = "SS76" + String.format("%02d", n);
+            stockIds.add(stockId);
+            seedStock(stockId, "strengthRank" + n, true);
+            long net = 12_000_000L - (n * 100_000L); // strictly decreasing, all positive
+            LocalDate d = d0.minusDays(4);
+            for (int i = 0; i < 5; i++) {
+                insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+                insertInstitutionalRow(stockId, d, net, 0);
+                d = d.plusDays(1);
+            }
+            insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        }
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), null, 10)),
+                stockIds, d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(10, result.get("matchedCount").asInt());
+        List<String> hitIds = new ArrayList<>();
+        for (JsonNode item : result.get("items")) {
+            hitIds.add(item.get("stockId").asText());
+        }
+        assertTrue(hitIds.contains("SS7601") && hitIds.contains("SS7610"));
+        assertFalse(hitIds.contains("SS7611"));
+        assertFalse(hitIds.contains("SS7612"));
+    }
+
+    @Test
+    void strengthRank_onlyPositiveNetParticipates_zeroOrNegativeExcluded() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        String[] ids = {"SS7701", "SS7702", "SS7703", "SS7704", "SS7705"};
+        long[] nets = {1_000_000, 2_000_000, 0, -1_000_000, 3_000_000}; // 3 positive: idx 0,1,4
+        for (int n = 0; n < ids.length; n++) {
+            seedStock(ids[n], "onlyPositive" + n, true);
+            LocalDate d = d0.minusDays(4);
+            for (int i = 0; i < 5; i++) {
+                insertCloseOnlyRow(ids[n], d, "100.00", 10_000_000);
+                insertInstitutionalRow(ids[n], d, nets[n], 0);
+                d = d.plusDays(1);
+            }
+            insertCloseOnlyRow(ids[n], d0.plusDays(1), "100.00", 10_000_000);
+        }
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), null, 10)),
+                Arrays.asList(ids), d0, d0);
+        assertEquals(3, postScan(request).get("results").get(0).get("matchedCount").asInt());
+    }
+
+    @Test
+    void strengthRank_tieBreakByRawValueThenStockId() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+
+        // Rounded percentages collide (both "10.00") but raw values differ -> ranked by raw.
+        String stockHigherRaw = "SS7801";
+        String stockLowerRaw = "SS7802";
+        seedStock(stockHigherRaw, "raw較高", true);
+        seedStock(stockLowerRaw, "raw較低", true);
+        seedStrengthWindow(stockHigherRaw, d0, 10_004_000, 100_000_000); // 10.004% -> rounds to 10.00
+        seedStrengthWindow(stockLowerRaw, d0, 10_001_000, 100_000_000); // 10.001% -> rounds to 10.00
+
+        ScanRequestDto request1 = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), null, 1)),
+                Arrays.asList(stockHigherRaw, stockLowerRaw), d0, d0);
+        JsonNode result1 = postScan(request1).get("results").get(0);
+        assertEquals(1, result1.get("matchedCount").asInt());
+        assertEquals(stockHigherRaw, result1.get("items").get(0).get("stockId").asText(),
+                "higher raw strength must rank first even though both round to the same displayed percentage");
+
+        // Identical raw values -> ascending stockId wins, regardless of request order.
+        String stockA = "SS7810";
+        String stockB = "SS7811";
+        seedStock(stockA, "同強度A", true);
+        seedStock(stockB, "同強度B", true);
+        seedStrengthWindow(stockA, d0, 5_000_000, 100_000_000);
+        seedStrengthWindow(stockB, d0, 5_000_000, 100_000_000);
+
+        ScanRequestDto request2 = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), null, 1)),
+                Arrays.asList(stockB, stockA), d0, d0);
+        JsonNode result2 = postScan(request2).get("results").get(0);
+        assertEquals(1, result2.get("matchedCount").asInt());
+        assertEquals(stockA, result2.get("items").get(0).get("stockId").asText(),
+                "identical raw strength must be broken by ascending stockId");
+    }
+
+    @Test
+    void strengthRank_perDayIndependentRanking_signalDateIsLatestQualifyingDay() throws Exception {
+        LocalDate d1 = LocalDate.of(2026, 3, 10);
+        LocalDate d2 = d1.plusDays(1);
+        String target = "SS7830T";
+        seedStock(target, "逐日排名目標股", true);
+        insertCloseOnlyRow(target, d1, "100.00", 10_000_000);
+        insertInstitutionalRow(target, d1, 1_000_000, 0); // weak on D1
+        insertCloseOnlyRow(target, d2, "100.00", 10_000_000);
+        insertInstitutionalRow(target, d2, 9_000_000, 0); // strong on D2
+        insertCloseOnlyRow(target, d2.plusDays(1), "100.00", 10_000_000);
+
+        List<String> stockIds = new ArrayList<>();
+        stockIds.add(target);
+        for (int n = 1; n <= 10; n++) {
+            String competitor = "SS7830C" + n;
+            stockIds.add(competitor);
+            seedStock(competitor, "competitor" + n, true);
+            insertCloseOnlyRow(competitor, d1, "100.00", 10_000_000);
+            insertInstitutionalRow(competitor, d1, 5_000_000, 0); // stronger than target on D1
+            insertCloseOnlyRow(competitor, d2, "100.00", 10_000_000);
+            insertInstitutionalRow(competitor, d2, 100_000, 0); // weaker than target on D2
+            insertCloseOnlyRow(competitor, d2.plusDays(1), "100.00", 10_000_000);
+        }
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Collections.singletonList("FOREIGN"), 1, 10)),
+                stockIds, d1, d2);
+        JsonNode result = postScan(request).get("results").get(0);
+        JsonNode targetHit = null;
+        for (JsonNode item : result.get("items")) {
+            if (target.equals(item.get("stockId").asText())) {
+                targetHit = item;
+            }
+        }
+        assertTrue(targetHit != null, "target must hit thanks to D2's ranking");
+        assertEquals(d2.toString(), targetHit.get("signalDate").asText());
+    }
+
+    @Test
+    void strengthRank_foreignMissesTopN_trustMakesIt_detailForeignNull() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        String target = "SS7840T";
+        seedStock(target, "外資未進投信進測試", true);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(target, d, "100.00", 10_000_000);
+            insertInstitutionalRow(target, d, 100_000, 5_000_000); // weak foreign, strong trust
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(target, d0.plusDays(1), "100.00", 10_000_000);
+
+        List<String> stockIds = new ArrayList<>();
+        stockIds.add(target);
+        for (int n = 1; n <= 10; n++) {
+            String competitor = "SS7840C" + n;
+            stockIds.add(competitor);
+            seedStock(competitor, "competitor" + n, true);
+            d = d0.minusDays(4);
+            for (int i = 0; i < 5; i++) {
+                insertCloseOnlyRow(competitor, d, "100.00", 10_000_000);
+                insertInstitutionalRow(competitor, d, 1_000_000, 0); // strong foreign, no trust
+                d = d.plusDays(1);
+            }
+            insertCloseOnlyRow(competitor, d0.plusDays(1), "100.00", 10_000_000);
+        }
+
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Arrays.asList("FOREIGN", "TRUST"), null, 10)),
+                stockIds, d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        JsonNode targetItem = null;
+        for (JsonNode item : result.get("items")) {
+            if (target.equals(item.get("stockId").asText())) {
+                targetItem = item;
+            }
+        }
+        assertTrue(targetItem != null, "target must hit via TRUST even though FOREIGN misses topN");
+        JsonNode detail = targetItem.get("detail");
+        assertTrue(detail.get("foreign").isNull());
+        assertTrue(detail.get("trust").get("rank").asInt() >= 1);
+        assertEquals(Collections.singletonList("TRUST"), toStringList(detail.get("matchedInvestors")));
+    }
+
+    @Test
+    void strengthRank_populationScopedToStockIds_topNWithinThatSet() throws Exception {
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        String[] ids = {"SS7850A", "SS7850B", "SS7850C"};
+        long[] nets = {3_000_000, 2_000_000, 1_000_000};
+        for (int n = 0; n < ids.length; n++) {
+            seedStock(ids[n], "population" + n, true);
+            LocalDate d = d0.minusDays(4);
+            for (int i = 0; i < 5; i++) {
+                insertCloseOnlyRow(ids[n], d, "100.00", 10_000_000);
+                insertInstitutionalRow(ids[n], d, nets[n], nets[n]);
+                d = d.plusDays(1);
+            }
+            insertCloseOnlyRow(ids[n], d0.plusDays(1), "100.00", 10_000_000);
+        }
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(Arrays.asList("FOREIGN", "TRUST"), null, 1)),
+                Arrays.asList(ids), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        assertEquals("SS7850A", result.get("items").get(0).get("stockId").asText());
+    }
+
+    @Test
+    void strengthRank_responseEchoesInvestorsWindowDaysTopN_noPreset_defaults5And10() throws Exception {
+        String stockId = "SS7860";
+        seedStock(stockId, "回應欄位測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 1, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(strengthRankSelection(null, null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        JsonNode result = postScan(request).get("results").get(0);
+        assertFalse(result.has("preset"));
+        assertEquals(Arrays.asList("FOREIGN", "TRUST"), toStringList(result.get("investors")));
+        assertEquals(5, result.get("windowDays").asInt());
+        assertEquals(10, result.get("topN").asInt());
+    }
+
+    // ==================== Institutional patterns: 驗證與用語 ====================
+
+    @Test
+    void institutional_presetRisePercentDaysAllRejected() {
+        for (String code : new String[] {"INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY",
+                "INSTITUTIONAL_STRENGTH_RANK"}) {
+            StrategySelectionDto withPreset = new StrategySelectionDto();
+            withPreset.setCode(code);
+            withPreset.setPreset("STANDARD");
+            ErrorResponse err1 = postScanExpectingError(withPreset);
+            assertEquals("PRESET_NOT_APPLICABLE", err1.getCode());
+            assertEquals(code, err1.getStrategy());
+
+            StrategySelectionDto withRisePercent = new StrategySelectionDto();
+            withRisePercent.setCode(code);
+            withRisePercent.setRisePercent(new BigDecimal("5"));
+            ErrorResponse err2 = postScanExpectingError(withRisePercent);
+            assertEquals("PARAM_NOT_APPLICABLE", err2.getCode());
+            assertEquals(code, err2.getStrategy());
+            assertEquals("risePercent", err2.getParam());
+
+            StrategySelectionDto withDays = new StrategySelectionDto();
+            withDays.setCode(code);
+            withDays.setDays(BigDecimal.valueOf(10));
+            ErrorResponse err3 = postScanExpectingError(withDays);
+            assertEquals("DAYS_NOT_APPLICABLE", err3.getCode());
+            assertEquals(code, err3.getStrategy());
+        }
+    }
+
+    @Test
+    void otherStrategies_institutionalOnlyParamsRejected() {
+        StrategySelectionDto boxWithInvestors = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithInvestors.setInvestors(Collections.singletonList("FOREIGN"));
+        ErrorResponse err1 = postScanExpectingError(boxWithInvestors);
+        assertEquals("PARAM_NOT_APPLICABLE", err1.getCode());
+        assertEquals("BOX_BREAKOUT", err1.getStrategy());
+        assertEquals("investors", err1.getParam());
+
+        StrategySelectionDto boxWithWindowDays = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithWindowDays.setWindowDays(BigDecimal.valueOf(5));
+        assertEquals("windowDays", postScanExpectingError(boxWithWindowDays).getParam());
+
+        StrategySelectionDto boxWithRatioPercent = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithRatioPercent.setRatioPercent(BigDecimal.TEN);
+        assertEquals("ratioPercent", postScanExpectingError(boxWithRatioPercent).getParam());
+
+        StrategySelectionDto boxWithBuyDays = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithBuyDays.setBuyDays(BigDecimal.valueOf(5));
+        assertEquals("buyDays", postScanExpectingError(boxWithBuyDays).getParam());
+
+        StrategySelectionDto boxWithTopN = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithTopN.setTopN(BigDecimal.TEN);
+        assertEquals("topN", postScanExpectingError(boxWithTopN).getParam());
+
+        StrategySelectionDto consecutiveBuyWithWindowDays = consecutiveBuySelection(null, null);
+        consecutiveBuyWithWindowDays.setWindowDays(BigDecimal.valueOf(5));
+        ErrorResponse err2 = postScanExpectingError(consecutiveBuyWithWindowDays);
+        assertEquals("PARAM_NOT_APPLICABLE", err2.getCode());
+        assertEquals("INSTITUTIONAL_CONSECUTIVE_BUY", err2.getStrategy());
+        assertEquals("windowDays", err2.getParam());
+
+        StrategySelectionDto netRatioWithTopN = netRatioSelection(null, null, null);
+        netRatioWithTopN.setTopN(BigDecimal.TEN);
+        ErrorResponse err3 = postScanExpectingError(netRatioWithTopN);
+        assertEquals("PARAM_NOT_APPLICABLE", err3.getCode());
+        assertEquals("INSTITUTIONAL_NET_RATIO", err3.getStrategy());
+        assertEquals("topN", err3.getParam());
+    }
+
+    @Test
+    void institutional_invalidInvestorsVariants() {
+        for (List<String> invalid : Arrays.asList(Collections.<String>emptyList(),
+                Collections.singletonList("DEALER"), Arrays.asList("FOREIGN", "FOREIGN"))) {
+            ErrorResponse err = postScanExpectingError(netRatioSelection(invalid, null, null));
+            assertEquals("INVALID_INVESTORS", err.getCode());
+            assertEquals("INSTITUTIONAL_NET_RATIO", err.getStrategy());
+        }
+    }
+
+    @Test
+    void institutional_invalidRangeFieldsRejected() {
+        for (BigDecimal v : Arrays.asList(BigDecimal.ZERO, new BigDecimal("21"), new BigDecimal("5.5"))) {
+            StrategySelectionDto sel = netRatioSelection(null, null, null);
+            sel.setWindowDays(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_WINDOW_DAYS", err.getCode());
+            assertEquals("INSTITUTIONAL_NET_RATIO", err.getStrategy());
+        }
+        for (BigDecimal v : Arrays.asList(new BigDecimal("-1"), new BigDecimal("100.1"), new BigDecimal("10.55"))) {
+            ErrorResponse err = postScanExpectingError(netRatioSelection(null, null, v));
+            assertEquals("INVALID_RATIO_PERCENT", err.getCode());
+            assertEquals("INSTITUTIONAL_NET_RATIO", err.getStrategy());
+        }
+        for (BigDecimal v : Arrays.asList(BigDecimal.ZERO, new BigDecimal("21"), new BigDecimal("5.5"))) {
+            StrategySelectionDto sel = consecutiveBuySelection(null, null);
+            sel.setBuyDays(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_BUY_DAYS", err.getCode());
+            assertEquals("INSTITUTIONAL_CONSECUTIVE_BUY", err.getStrategy());
+        }
+        for (BigDecimal v : Arrays.asList(BigDecimal.ZERO, new BigDecimal("51"), new BigDecimal("10.5"))) {
+            StrategySelectionDto sel = strengthRankSelection(null, null, null);
+            sel.setTopN(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_TOP_N", err.getCode());
+            assertEquals("INSTITUTIONAL_STRENGTH_RANK", err.getStrategy());
+        }
+    }
+
+    @Test
+    void institutionalStrategies_noAdviceOrEntryExitWording() throws Exception {
+        ResponseEntity<String> catalogResponse = rest.getForEntity("/api/strategies", String.class);
+        assertNoAdviceWording(catalogResponse.getBody());
+        assertFalse(catalogResponse.getBody().contains("進場"));
+
+        String stockId = "SS7900";
+        seedStock(stockId, "用語測試", true);
+        LocalDate d0 = LocalDate.of(2026, 3, 10);
+        LocalDate d = d0.minusDays(4);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 10_000_000);
+            insertInstitutionalRow(stockId, d, 3_000_000, 0);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", 10_000_000);
+        ScanRequestDto request = scanRequestFromSelections(
+                Collections.singletonList(netRatioSelection(Collections.singletonList("FOREIGN"), null, null)),
+                Collections.singletonList(stockId), d0, d0);
+        ResponseEntity<String> scanResponse = rest.postForEntity("/api/strategies/scan", request, String.class);
+        assertNoAdviceWording(scanResponse.getBody());
+        assertFalse(scanResponse.getBody().contains("進場"));
+    }
+
     // ==================== helpers ====================
 
     private JsonNode findByCode(JsonNode array, String code) {
@@ -2811,6 +3862,40 @@ class StrategyScanIntegrationTest {
         return dto;
     }
 
+    /** Builds an institutional-pattern-shaped selection — no `preset`/`risePercent`/`days`; each of
+     *  `investors`/`windowDays`/`ratioPercent`/`buyDays`/`topN` is set only when non-null (null means
+     *  "omitted", i.e. use that field's own default). */
+    private StrategySelectionDto institutionalSelection(String code, List<String> investors, Integer windowDays,
+                                                          BigDecimal ratioPercent, Integer buyDays, Integer topN) {
+        StrategySelectionDto dto = new StrategySelectionDto();
+        dto.setCode(code);
+        dto.setInvestors(investors);
+        if (windowDays != null) {
+            dto.setWindowDays(BigDecimal.valueOf(windowDays));
+        }
+        dto.setRatioPercent(ratioPercent);
+        if (buyDays != null) {
+            dto.setBuyDays(BigDecimal.valueOf(buyDays));
+        }
+        if (topN != null) {
+            dto.setTopN(BigDecimal.valueOf(topN));
+        }
+        return dto;
+    }
+
+    private StrategySelectionDto netRatioSelection(List<String> investors, Integer windowDays,
+                                                    BigDecimal ratioPercent) {
+        return institutionalSelection("INSTITUTIONAL_NET_RATIO", investors, windowDays, ratioPercent, null, null);
+    }
+
+    private StrategySelectionDto consecutiveBuySelection(List<String> investors, Integer buyDays) {
+        return institutionalSelection("INSTITUTIONAL_CONSECUTIVE_BUY", investors, null, null, buyDays, null);
+    }
+
+    private StrategySelectionDto strengthRankSelection(List<String> investors, Integer windowDays, Integer topN) {
+        return institutionalSelection("INSTITUTIONAL_STRENGTH_RANK", investors, windowDays, null, null, topN);
+    }
+
     private ScanRequestDto scanRequest(List<String[]> strategies, List<String> stockIds,
                                         LocalDate startDate, LocalDate endDate) {
         ScanRequestDto request = new ScanRequestDto();
@@ -2862,6 +3947,16 @@ class StrategyScanIntegrationTest {
         return objectMapper.readTree(response.getBody());
     }
 
+    /** Posts a single-selection scan request expecting a 400, and returns the parsed error body. */
+    private ErrorResponse postScanExpectingError(StrategySelectionDto selection) {
+        ScanRequestDto request = new ScanRequestDto();
+        request.setStrategies(Collections.singletonList(selection));
+        ResponseEntity<ErrorResponse> response =
+                rest.postForEntity("/api/strategies/scan", request, ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        return response.getBody();
+    }
+
     private void seedStock(String stockId, String name, boolean active) {
         jdbc.update("INSERT INTO stock (stock_id, stock_name, market, is_active) VALUES (?, ?, 'TSE', ?)",
                 stockId, name, active);
@@ -2880,6 +3975,76 @@ class StrategyScanIntegrationTest {
      *  which only look at close prices. */
     private void insertCloseOnlyRow(String stockId, LocalDate date, String close, long volume) {
         insertPriceRow(stockId, date, close, close, close, close, volume);
+    }
+
+    /** One {@code stock_institutional_trade} row: foreign (ex-dealer) and trust net shares only —
+     *  every other numeric column is 0/derived, which is all the three institutional patterns ever
+     *  read (specs/backend/strategy-scan.md, "共通規則" 口徑 table). Also marks `date` as "已抓取" for
+     *  every stock, since the fetched-dates signal is table-wide, not stock-scoped. */
+    private void insertInstitutionalRow(String stockId, LocalDate date, long foreignNet, long trustNet) {
+        insertInstitutionalRow(stockId, date, foreignNet, 0, trustNet);
+    }
+
+    /** As {@link #insertInstitutionalRow(String, LocalDate, long, long)} but also sets
+     *  `foreign_dealer_net_shares` — used to prove 外資自營商 never participates in the foreign judgment. */
+    private void insertInstitutionalRow(String stockId, LocalDate date, long foreignNet, long foreignDealerNet,
+                                         long trustNet) {
+        long foreignBuy = Math.max(foreignNet, 0);
+        long foreignSell = Math.max(-foreignNet, 0);
+        long foreignDealerBuy = Math.max(foreignDealerNet, 0);
+        long foreignDealerSell = Math.max(-foreignDealerNet, 0);
+        long trustBuy = Math.max(trustNet, 0);
+        long trustSell = Math.max(-trustNet, 0);
+        jdbc.update("INSERT INTO stock_institutional_trade "
+                        + "(stock_id, trade_date, "
+                        + "foreign_buy_shares, foreign_sell_shares, foreign_net_shares, "
+                        + "foreign_dealer_buy_shares, foreign_dealer_sell_shares, foreign_dealer_net_shares, "
+                        + "trust_buy_shares, trust_sell_shares, trust_net_shares, "
+                        + "dealer_net_shares, dealer_self_buy_shares, dealer_self_sell_shares, dealer_self_net_shares, "
+                        + "dealer_hedge_buy_shares, dealer_hedge_sell_shares, dealer_hedge_net_shares, "
+                        + "total_net_shares, source) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, ?, 'TEST')",
+                stockId, date, foreignBuy, foreignSell, foreignNet, foreignDealerBuy, foreignDealerSell,
+                foreignDealerNet, trustBuy, trustSell, trustNet, foreignNet + trustNet);
+    }
+
+    /** `count` consecutive-calendar-day institutional rows with a fixed net for both investors. */
+    private List<LocalDate> seedInstitutionalSeries(String stockId, LocalDate start, int count, long foreignNet,
+                                                      long trustNet) {
+        List<LocalDate> dates = new ArrayList<>(count);
+        LocalDate d = start;
+        for (int i = 0; i < count; i++) {
+            insertInstitutionalRow(stockId, d, foreignNet, trustNet);
+            dates.add(d);
+            d = d.plusDays(1);
+        }
+        return dates;
+    }
+
+    /**
+     * The common institutional-pattern fixture shape: 4 lead-in days plus `d0` itself (5 trading
+     * days total — exactly `windowDays`/`buyDays`'s default window), each with the given constant
+     * daily foreign/trust net and volume, plus one price-only row the day after `d0` so `buyDate`
+     * resolves. Used by every default-`windowDays`/`buyDays` fixture that does not need day-by-day
+     * variation.
+     */
+    private void seedInstitutionalWindow(String stockId, LocalDate d0, int leadInDays, long dailyForeignNet,
+                                          long dailyTrustNet, long dailyVolume) {
+        LocalDate d = d0.minusDays(leadInDays);
+        for (int i = 0; i < leadInDays; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", dailyVolume);
+            insertInstitutionalRow(stockId, d, dailyForeignNet, dailyTrustNet);
+            d = d.plusDays(1);
+        }
+        insertCloseOnlyRow(stockId, d0, "100.00", dailyVolume);
+        insertInstitutionalRow(stockId, d0, dailyForeignNet, dailyTrustNet);
+        insertCloseOnlyRow(stockId, d0.plusDays(1), "100.00", dailyVolume);
+    }
+
+    /** INSTITUTIONAL_STRENGTH_RANK fixture helper: spreads a total foreign net/volume evenly across
+     *  the default 5-day window ending at `d0` (both totals must be exactly divisible by 5). */
+    private void seedStrengthWindow(String stockId, LocalDate d0, long totalForeignNet, long totalVolume) {
+        seedInstitutionalWindow(stockId, d0, 4, totalForeignNet / 5, 0, totalVolume / 5);
     }
 
     /** One close-only bar per element of `closes`, consecutive calendar days ascending from start. */

@@ -3,6 +3,7 @@ package com.stock.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -12,6 +13,11 @@ import java.util.List;
  * specs/backend/strategy-scan.md, "results 依 strategies 送入的順序回傳". REBOUND echoes none of
  * `preset`/`days` but instead `requireRise`/`dropDays`/`dropPercent` (and, when `requireRise` is
  * true, `riseDays`/`risePercent`) — see "反彈改為跌段＋選用漲段的雙段參數、移除靈敏度".
+ *
+ * <p>The three institutional-trade patterns echo `investors` plus their own subset of
+ * `windowDays`/`ratioPercent`/`buyDays`/`topN`, and additionally `dataThroughDate` — the latest
+ * trading day `stock_institutional_trade` actually covers within the pre-loaded period, or
+ * {@code null} when it covers none at all — see specs/backend/strategy-scan.md, "法人籌碼型態".
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StrategyResultDto {
@@ -24,6 +30,12 @@ public class StrategyResultDto {
     private BigDecimal dropPercent;
     private Integer riseDays;
     private BigDecimal risePercent;
+    private List<String> investors;
+    private Integer windowDays;
+    private BigDecimal ratioPercent;
+    private Integer buyDays;
+    private Integer topN;
+    private LocalDate dataThroughDate;
     private int matchedCount;
     private List<StrategyHitDto> items;
     private List<String> insufficientData;
@@ -94,6 +106,54 @@ public class StrategyResultDto {
 
     public void setRisePercent(BigDecimal risePercent) {
         this.risePercent = risePercent;
+    }
+
+    public List<String> getInvestors() {
+        return investors;
+    }
+
+    public void setInvestors(List<String> investors) {
+        this.investors = investors;
+    }
+
+    public Integer getWindowDays() {
+        return windowDays;
+    }
+
+    public void setWindowDays(Integer windowDays) {
+        this.windowDays = windowDays;
+    }
+
+    public BigDecimal getRatioPercent() {
+        return ratioPercent;
+    }
+
+    public void setRatioPercent(BigDecimal ratioPercent) {
+        this.ratioPercent = ratioPercent;
+    }
+
+    public Integer getBuyDays() {
+        return buyDays;
+    }
+
+    public void setBuyDays(Integer buyDays) {
+        this.buyDays = buyDays;
+    }
+
+    public Integer getTopN() {
+        return topN;
+    }
+
+    public void setTopN(Integer topN) {
+        this.topN = topN;
+    }
+
+    public LocalDate getDataThroughDate() {
+        return dataThroughDate;
+    }
+
+    public void setDataThroughDate(LocalDate dataThroughDate) {
+        this.dataThroughDate = dataThroughDate;
     }
 
     public int getMatchedCount() {

@@ -19,6 +19,7 @@ app:
   external:
     twse-daily-all-url: https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL
     twse-mi-index-url: https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX
+    twse-t86-url: https://www.twse.com.tw/rwd/zh/fund/T86
     twse-industry-url: https://openapi.twse.com.tw/v1/opendata/t187ap03_L
     finmind-base-url: https://api.finmindtrade.com/api/v4/data
     finmind-token: ""
@@ -50,6 +51,11 @@ app:
     # otherwise fire a real request against the live TWSE snapshot endpoint on every
     # test-suite boot.
     startup:
+      enabled: false
+  institutional-trade:
+    # Must stay disabled in tests: this fires on every syncDaily()/backfill call in the test
+    # suite, and would otherwise issue real requests against the live TWSE T86 endpoint.
+    catch-up:
       enabled: false
   minute-price:
     max-attempt-count: 3

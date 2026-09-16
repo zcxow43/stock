@@ -1,6 +1,7 @@
 package com.stock.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * One entry of the POST /api/strategies/scan request's `strategies` array. `risePercent` is an
@@ -16,6 +17,13 @@ import java.math.BigDecimal;
  * `requireRise`/`dropDays`/`dropPercent`/`riseDays` are accepted only by REBOUND — see
  * specs/backend/strategy-scan.md, "反彈改為跌段＋選用漲段的雙段參數、移除靈敏度". `risePercent` doubles as REBOUND's
  * rebound-threshold field (only when `requireRise` is not `false`).
+ *
+ * <p>`investors`/`windowDays`/`ratioPercent`/`buyDays`/`topN` are accepted only by the three
+ * institutional-trade patterns (INSTITUTIONAL_NET_RATIO/INSTITUTIONAL_CONSECUTIVE_BUY/
+ * INSTITUTIONAL_STRENGTH_RANK) — see specs/backend/strategy-scan.md, "法人籌碼型態". `windowDays`/
+ * `ratioPercent`/`buyDays`/`topN` are declared as BigDecimal for the same reason `days` is: a
+ * non-integer/out-of-scale value deserializes successfully so it can be rejected by this field's
+ * own dedicated error code instead of a generic JSON-parsing 400.
  */
 public class StrategySelectionDto {
 
@@ -27,6 +35,11 @@ public class StrategySelectionDto {
     private BigDecimal dropDays;
     private BigDecimal dropPercent;
     private BigDecimal riseDays;
+    private List<String> investors;
+    private BigDecimal windowDays;
+    private BigDecimal ratioPercent;
+    private BigDecimal buyDays;
+    private BigDecimal topN;
 
     public StrategySelectionDto() {
     }
@@ -93,5 +106,45 @@ public class StrategySelectionDto {
 
     public void setRiseDays(BigDecimal riseDays) {
         this.riseDays = riseDays;
+    }
+
+    public List<String> getInvestors() {
+        return investors;
+    }
+
+    public void setInvestors(List<String> investors) {
+        this.investors = investors;
+    }
+
+    public BigDecimal getWindowDays() {
+        return windowDays;
+    }
+
+    public void setWindowDays(BigDecimal windowDays) {
+        this.windowDays = windowDays;
+    }
+
+    public BigDecimal getRatioPercent() {
+        return ratioPercent;
+    }
+
+    public void setRatioPercent(BigDecimal ratioPercent) {
+        this.ratioPercent = ratioPercent;
+    }
+
+    public BigDecimal getBuyDays() {
+        return buyDays;
+    }
+
+    public void setBuyDays(BigDecimal buyDays) {
+        this.buyDays = buyDays;
+    }
+
+    public BigDecimal getTopN() {
+        return topN;
+    }
+
+    public void setTopN(BigDecimal topN) {
+        this.topN = topN;
     }
 }

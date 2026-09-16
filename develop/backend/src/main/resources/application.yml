@@ -19,6 +19,7 @@ app:
   external:
     twse-daily-all-url: https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL
     twse-mi-index-url: https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX
+    twse-t86-url: https://www.twse.com.tw/rwd/zh/fund/T86
     twse-industry-url: https://openapi.twse.com.tw/v1/opendata/t187ap03_L
     finmind-base-url: https://api.finmindtrade.com/api/v4/data
     finmind-token: ""
@@ -49,6 +50,12 @@ app:
   master-sync:
     # Runs before startup-catch-up (see StartupCatchUpRunner), independent switch.
     startup:
+      enabled: true
+  institutional-trade:
+    # Background-only catch-up for stock_institutional_trade, triggered after every
+    # PRICE_BACKFILL batch finishes and after every successful daily increment (spec:
+    # institutional-trade-ingestion.md, 觸發時機). No HTTP endpoint, no progress table.
+    catch-up:
       enabled: true
   indicator:
     executor-pool-size: 4

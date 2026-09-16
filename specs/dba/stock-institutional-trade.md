@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "三大法人買賣超日表 stock_institutional_trade"
 requirement: "法人籌碼策略 — 儲存交易所三大法人買賣超日報（T86）逐檔逐日的買進／賣出／買賣超股數，作為外資（不含外資自營商）與投信的買賣超佔比、連續買超、買超強度排名三個型態的資料來源"
 ---
@@ -105,10 +105,29 @@ CREATE TABLE stock_institutional_trade (
 
 ## Acceptance Criteria
 
-- [ ] `stock_institutional_trade` 建立成功，欄位、型別、`NOT NULL`、註解與上述 DDL 完全一致
-- [ ] 主鍵為 `(stock_id, trade_date)` 複合鍵，表中不存在 `AUTO_INCREMENT` 欄位
-- [ ] 七個 `*_net_shares` 欄位為有號 `BIGINT`，可寫入負值（如 `-69992000`）；十個 `*_buy_shares`／`*_sell_shares` 欄位為 `BIGINT UNSIGNED`
-- [ ] 十七個數值欄位皆無預設值：省略任一數值欄位的 `INSERT` 在 strict mode 下失敗
-- [ ] 表上不存在任何外鍵約束
-- [ ] 對同一 `(stock_id, trade_date)` 連續 UPSERT 兩次，表中僅一列，且第二次的值覆蓋第一次
-- [ ] `EXPLAIN` 驗證「多檔股票 + 日期區間」的讀取走主鍵範圍掃描（`key=PRIMARY`），`SELECT DISTINCT trade_date ... WHERE trade_date BETWEEN ...` 走 `idx_trade_date`
+- [x] `stock_institutional_trade` 建立成功，欄位、型別、`NOT NULL`、註解與上述 DDL 完全一致
+- [x] 主鍵為 `(stock_id, trade_date)` 複合鍵，表中不存在 `AUTO_INCREMENT` 欄位
+- [x] 七個 `*_net_shares` 欄位為有號 `BIGINT`，可寫入負值（如 `-69992000`）；十個 `*_buy_shares`／`*_sell_shares` 欄位為 `BIGINT UNSIGNED`
+- [x] 十七個數值欄位皆無預設值：省略任一數值欄位的 `INSERT` 在 strict mode 下失敗
+- [x] 表上不存在任何外鍵約束
+- [x] 對同一 `(stock_id, trade_date)` 連續 UPSERT 兩次，表中僅一列，且第二次的值覆蓋第一次
+- [x] `EXPLAIN` 驗證「多檔股票 + 日期區間」的讀取走主鍵範圍掃描（`key=PRIMARY`），`SELECT DISTINCT trade_date ... WHERE trade_date BETWEEN ...` 走 `idx_trade_date`
+
+## Execution Result
+
+### Increment 1 — 2026-09-16
+
+建立 `stock_institutional_trade` 表（`V016`），7 項驗收全數符合。
+
+**套用**：以 `mysql` CLI 直接對 live 資料庫執行 spec 內嵌的 `CREATE TABLE`，未產生任何獨立的 `.sql` 檔。本次為純 DDL，依 `specs/dba/schema-migration.md` 的規定（只有相對位移類的 migration 需要那道守門）不需寫入 `schema_migration`；該表仍維持最高 `V014`，與 `V015` 的處理一致。
+
+**驗證（皆以 live 資料庫的實際輸出為憑）**：
+- `SHOW CREATE TABLE` 的 22 個欄位名稱、型別、`NOT NULL`、註解、`PRIMARY KEY (stock_id, trade_date)`、`KEY idx_trade_date`、引擎與字元集皆與 spec 的 DDL 相同；另以 `HEX()` 比對確認中文註解沒有編碼損壞。
+- 複合主鍵成立，且除 `created_at`／`updated_at` 的 `DEFAULT_GENERATED` 外沒有任何 `auto_increment`。
+- 有號的 `*_net_shares` 可存負值（實測存入 `-69,992,000`）；無號的 `*_buy/sell_shares` 拒絕負值（`ERROR 1264 Out of range value`）。
+- 17 個數值欄位皆無預設值：strict mode 下省略 `total_net_shares` 的 INSERT 被拒（`ERROR 1364`）。
+- 無任何外鍵約束（`TABLE_CONSTRAINTS` 只有 `PRIMARY`）。
+- 同一 `(stock_id, trade_date)` 連續 UPSERT 兩次後仍只有一列，且值為第二次的內容。
+- `EXPLAIN` 證明索引生效：指定多檔加日期區間的查詢走 `PRIMARY` 的 range scan；`DISTINCT trade_date` 的區間查詢走 `idx_trade_date` 且為 covering index（`Using where; Using index`）。
+
+**資料狀態**：驗證用的測試列（`9999`、`6666`）已刪除，表回到原本的空狀態（前後列數皆為 0）。

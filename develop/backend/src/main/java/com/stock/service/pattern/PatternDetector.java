@@ -137,6 +137,48 @@ public interface PatternDetector {
     }
 
     /**
+     * Whether this detector accepts the request's `risePercent` override — true for every price
+     * pattern (BOX_BREAKOUT/HIGHER_LOWS/RISING_SUPPORT/REBOUND/CUMULATIVE_RISE). The three
+     * institutional patterns (see {@link InstitutionalPatternDetector}) override this to {@code
+     * false}: they judge buy/sell shares and volume, never a price rise, so a `risePercent` sent to
+     * them is rejected with PARAM_NOT_APPLICABLE rather than silently ignored — see
+     * specs/backend/strategy-scan.md, "對三個法人籌碼型態帶了 risePercent".
+     */
+    default boolean acceptsRisePercent() {
+        return true;
+    }
+
+    /** Whether this detector accepts the request's `investors` field — true only for the three
+     *  institutional patterns. */
+    default boolean acceptsInvestors() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `windowDays` field — true only for
+     *  INSTITUTIONAL_NET_RATIO and INSTITUTIONAL_STRENGTH_RANK. */
+    default boolean acceptsWindowDays() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `ratioPercent` field — true only for
+     *  INSTITUTIONAL_NET_RATIO. */
+    default boolean acceptsRatioPercent() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `buyDays` field — true only for
+     *  INSTITUTIONAL_CONSECUTIVE_BUY. */
+    default boolean acceptsBuyDays() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `topN` field — true only for
+     *  INSTITUTIONAL_STRENGTH_RANK. */
+    default boolean acceptsTopN() {
+        return false;
+    }
+
+    /**
      * Trading days of history required strictly before the scan's startDate for this selection —
      * drives how far back the batched lookback pre-fetch must reach (specs/backend/strategy-scan.md,
      * "區間與資料前置需求"). REBOUND/CUMULATIVE_RISE return lookback − 1, since their own window

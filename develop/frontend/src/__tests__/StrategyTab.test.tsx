@@ -64,6 +64,68 @@ const CATALOG = {
         { code: 'risePercent', name: '漲幅門檻', unit: '%', default: 15, min: 0, max: 50, step: 0.1 },
       ],
     },
+    {
+      code: 'INSTITUTIONAL_NET_RATIO',
+      name: '法人買賣超佔比',
+      description: '外資（不含外資自營商）或投信近指定天數買賣超合計取絕對值 ÷ 成交股數合計，達門檻即命中，淨買超與淨賣超皆計',
+      presets: [],
+      params: [
+        {
+          code: 'investors',
+          name: '法人',
+          type: 'multiSelect',
+          options: [
+            { code: 'FOREIGN', name: '外資' },
+            { code: 'TRUST', name: '投信' },
+          ],
+          default: ['FOREIGN', 'TRUST'],
+          minSelected: 1,
+        },
+        { code: 'windowDays', name: '天數', unit: '日', default: 5, min: 1, max: 20, step: 1 },
+        { code: 'ratioPercent', name: '佔比門檻', unit: '%', default: 10, min: 0, max: 100, step: 0.1 },
+      ],
+    },
+    {
+      code: 'INSTITUTIONAL_CONSECUTIVE_BUY',
+      name: '法人連續買超',
+      description: '外資（不含外資自營商）或投信連續指定天數每日買超',
+      presets: [],
+      params: [
+        {
+          code: 'investors',
+          name: '法人',
+          type: 'multiSelect',
+          options: [
+            { code: 'FOREIGN', name: '外資' },
+            { code: 'TRUST', name: '投信' },
+          ],
+          default: ['FOREIGN', 'TRUST'],
+          minSelected: 1,
+        },
+        { code: 'buyDays', name: '連續買超天數', unit: '日', default: 5, min: 1, max: 20, step: 1 },
+      ],
+    },
+    {
+      code: 'INSTITUTIONAL_STRENGTH_RANK',
+      name: '法人買超強度排名',
+      description: '外資（不含外資自營商）或投信近指定天數買超合計 ÷ 成交股數合計為強度，只有淨買超者參與，每個交易日外資與投信各取強度前幾名',
+      presets: [],
+      params: [
+        {
+          code: 'investors',
+          name: '法人',
+          type: 'multiSelect',
+          options: [
+            { code: 'FOREIGN', name: '外資' },
+            { code: 'TRUST', name: '投信' },
+          ],
+          default: ['FOREIGN', 'TRUST'],
+          minSelected: 1,
+        },
+        { code: 'windowDays', name: '天數', unit: '日', default: 5, min: 1, max: 20, step: 1 },
+        { code: 'topN', name: '取前幾名', unit: '名', default: 10, min: 1, max: 50, step: 1 },
+      ],
+    },
   ],
 }
 
@@ -238,6 +300,189 @@ function cumulativeRiseScanResponse() {
           },
         ],
         insufficientData: ['6669'],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// 法人買賣超佔比 — one hit, 外資賣超 only (matchedInvestors: ['FOREIGN'], direction: SELL),
+// dataThroughDate present. signalDate/buyDate deliberately different (訊號日的下一個交易日)
+// so「命中策略與訊號日」／「買進日」欄可以各自驗證。
+function netRatioScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'INSTITUTIONAL_NET_RATIO',
+        investors: ['FOREIGN', 'TRUST'],
+        windowDays: 5,
+        ratioPercent: 10,
+        dataThroughDate: '2026-08-28',
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '2609',
+            stockName: '陽明',
+            signalDate: '2026-08-27',
+            buyDate: '2026-08-28',
+            detail: {
+              windowStartDate: '2026-08-21',
+              volumeShares: 67500000,
+              matchedInvestors: ['FOREIGN'],
+              foreign: { netShares: -12500000, ratioPercent: 18.52, direction: 'SELL' },
+              trust: null,
+            },
+          },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// 法人連續買超 — one hit (投信 only), one pendingConfirm entry.
+function consecutiveBuyScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'INSTITUTIONAL_CONSECUTIVE_BUY',
+        investors: ['TRUST'],
+        buyDays: 5,
+        dataThroughDate: '2026-08-28',
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '2317',
+            stockName: '鴻海',
+            signalDate: '2026-08-26',
+            buyDate: '2026-08-27',
+            detail: {
+              windowStartDate: '2026-08-20',
+              matchedInvestors: ['TRUST'],
+              foreign: null,
+              trust: { netBuyShares: 3150000 },
+            },
+          },
+        ],
+        insufficientData: [],
+        pendingConfirm: ['2330'],
+      },
+    ],
+  }
+}
+
+// 法人買超強度排名 — one hit, both sides matched. dataThroughDate null (尚無法人資料 case).
+function strengthRankScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'INSTITUTIONAL_STRENGTH_RANK',
+        investors: ['FOREIGN', 'TRUST'],
+        windowDays: 5,
+        topN: 10,
+        dataThroughDate: null,
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '3231',
+            stockName: '緯創',
+            signalDate: '2026-08-27',
+            buyDate: '2026-08-28',
+            detail: {
+              windowStartDate: '2026-08-21',
+              volumeShares: 67500000,
+              matchedInvestors: ['FOREIGN', 'TRUST'],
+              foreign: { rank: 2, strengthPercent: 18.52, netBuyShares: 12500000 },
+              trust: { rank: 7, strengthPercent: 3.1, netBuyShares: 2092500 },
+            },
+          },
+        ],
+        insufficientData: ['1234'],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+function netRatioBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 20000,
+    totalProfit: 500,
+    totalReturnPercent: 2.5,
+    backtestedCount: 1,
+    items: [
+      { stockId: '2609', buyDate: '2026-08-28', buyPrice: 20, sellDate: '2026-09-01', sellPrice: 20.5, returnPercent: 2.5, profit: 500 },
+    ],
+  }
+}
+
+// One stock (9999) hit by two institutional strategies on two DIFFERENT buyDates — exercises
+// the expand/collapse path with institutional hit-tag formatting on both the collapsed row
+// and each expanded child row.
+function institutionalExpansionScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'INSTITUTIONAL_NET_RATIO',
+        investors: ['FOREIGN', 'TRUST'],
+        windowDays: 5,
+        ratioPercent: 10,
+        dataThroughDate: '2026-08-28',
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '9999',
+            stockName: '測試股',
+            signalDate: '2026-08-27',
+            buyDate: '2026-08-28',
+            detail: {
+              windowStartDate: '2026-08-21',
+              volumeShares: 1000000,
+              matchedInvestors: ['FOREIGN', 'TRUST'],
+              foreign: { netShares: 100000, ratioPercent: 12, direction: 'BUY' },
+              trust: { netShares: -50000, ratioPercent: 11, direction: 'SELL' },
+            },
+          },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+      {
+        strategy: 'INSTITUTIONAL_CONSECUTIVE_BUY',
+        investors: ['TRUST'],
+        buyDays: 5,
+        dataThroughDate: '2026-08-28',
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '9999',
+            stockName: '測試股',
+            signalDate: '2026-08-19',
+            buyDate: '2026-08-20',
+            detail: {
+              windowStartDate: '2026-08-13',
+              matchedInvestors: ['TRUST'],
+              foreign: null,
+              trust: { netBuyShares: 500000 },
+            },
+          },
+        ],
+        insufficientData: [],
         pendingConfirm: [],
       },
     ],
@@ -5344,5 +5589,346 @@ describe('StrategyTab', () => {
     window.dispatchEvent(new Event('scroll'))
     window.dispatchEvent(new Event('resize'))
     expect(fetchMock.mock.calls.length).toBe(callsBefore)
+  })
+
+  describe('法人籌碼卡片', () => {
+    it('renders three institutional cards with names/params/description from GET /api/strategies, and no sensitivity dropdown', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      expect(screen.getByText('法人連續買超')).toBeInTheDocument()
+      expect(screen.getByText('法人買超強度排名')).toBeInTheDocument()
+
+      const netRatioCard = cardFor('法人買賣超佔比')
+      expect(
+        within(netRatioCard).getByText(
+          '外資（不含外資自營商）或投信近指定天數買賣超合計取絕對值 ÷ 成交股數合計，達門檻即命中，淨買超與淨賣超皆計',
+        ),
+      ).toBeInTheDocument()
+      expect(within(netRatioCard).queryByRole('combobox')).not.toBeInTheDocument()
+      const consecutiveCard = cardFor('法人連續買超')
+      expect(within(consecutiveCard).queryByRole('combobox')).not.toBeInTheDocument()
+      const rankCard = cardFor('法人買超強度排名')
+      expect(within(rankCard).queryByRole('combobox')).not.toBeInTheDocument()
+
+      // Values/ranges are only populated once a card is selected (matches every other
+      // params-driven card's own behavior) — select each and check its inputs picked up the
+      // catalogue's own default/min/max, never a front-end-hard-coded number.
+      selectStrategy('法人買賣超佔比')
+      expect((within(netRatioCard).getByLabelText('天數') as HTMLInputElement).value).toBe('5')
+      expect((within(netRatioCard).getByLabelText('佔比門檻') as HTMLInputElement).value).toBe('10')
+      selectStrategy('法人連續買超')
+      expect((within(consecutiveCard).getByLabelText('連續買超天數') as HTMLInputElement).value).toBe('5')
+      selectStrategy('法人買超強度排名')
+      expect((within(rankCard).getByLabelText('天數') as HTMLInputElement).value).toBe('5')
+      expect((within(rankCard).getByLabelText('取前幾名') as HTMLInputElement).value).toBe('10')
+    })
+
+    it('renders all eight cards in the shared responsive grid, with every institutional param rendered as its own real input (none dropped to fit)', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買超強度排名')).toBeInTheDocument())
+      // .st-strategy-cards is an unmodified `grid-template-columns: repeat(auto-fill,
+      // minmax(260px, 1fr))` container (see StockListPage.css) that already reflows at any
+      // width without a fixed column count — adding three more cards exercises the same,
+      // already-correct wrapping mechanism, not new layout code.
+      const cards = document.querySelectorAll('.st-strategy-cards > .st-strategy-card')
+      expect(cards.length).toBe(8)
+      expect(within(cardFor('法人買賣超佔比')).getByLabelText('天數')).toBeInTheDocument()
+      expect(within(cardFor('法人買賣超佔比')).getByLabelText('佔比門檻')).toBeInTheDocument()
+      expect(within(cardFor('法人連續買超')).getByLabelText('連續買超天數')).toBeInTheDocument()
+      expect(within(cardFor('法人買超強度排名')).getByLabelText('天數')).toBeInTheDocument()
+      expect(within(cardFor('法人買超強度排名')).getByLabelText('取前幾名')).toBeInTheDocument()
+    })
+
+    it('renders a checkbox row (法人：外資／投信, both checked by default) for a multiSelect param, and reshaping any numeric param to type: "multiSelect" in the catalogue makes IT render checkboxes too — no branch keyed on investors or a strategy code', async () => {
+      // Reshape 累積上漲's plain numeric `days` param into a multiSelect — the renderer must
+      // key off `type`, not off a hard-coded `investors` name or `CUMULATIVE_RISE` code.
+      const reshapedCatalog = {
+        strategies: CATALOG.strategies.map((s) =>
+          s.code === 'CUMULATIVE_RISE'
+            ? {
+                ...s,
+                params: (s.params as unknown[]).map((p) =>
+                  (p as { code: string }).code === 'days'
+                    ? {
+                        code: 'days',
+                        name: '天數',
+                        type: 'multiSelect',
+                        options: [
+                          { code: 'A', name: '選項甲' },
+                          { code: 'B', name: '選項乙' },
+                        ],
+                        default: ['A'],
+                        minSelected: 1,
+                      }
+                    : p,
+                ),
+              }
+            : s,
+        ),
+      }
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, scanResponder()))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, reshapedCatalog))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      const netRatioCard = cardFor('法人買賣超佔比')
+      expect((within(netRatioCard).getByLabelText('外資') as HTMLInputElement).checked).toBe(true)
+      expect((within(netRatioCard).getByLabelText('投信') as HTMLInputElement).checked).toBe(true)
+
+      const card = cardFor('累積上漲')
+      expect(within(card).getByLabelText('選項甲')).toHaveAttribute('type', 'checkbox')
+      expect(within(card).getByLabelText('選項乙')).toHaveAttribute('type', 'checkbox')
+      expect(within(card).queryByLabelText('天數')).not.toBeInTheDocument() // no longer a number input
+      expect((within(card).getByLabelText('漲幅門檻') as HTMLInputElement).type).toBe('number') // untouched param
+    })
+
+    it('shows 請至少勾選一個法人 and blocks the scan once both 法人 checkboxes are unchecked; re-checking either makes it disappear', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      selectStrategy('法人買賣超佔比')
+      const card = cardFor('法人買賣超佔比')
+      fireEvent.click(within(card).getByLabelText('外資'))
+      fireEvent.click(within(card).getByLabelText('投信'))
+
+      expect(within(card).getByText('請至少勾選一個法人')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+      const scanCalls = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).length
+      expect(scanCalls).toBe(0)
+
+      fireEvent.click(within(card).getByLabelText('外資'))
+      expect(within(card).queryByText('請至少勾選一個法人')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+    })
+
+    it('sends only investors/windowDays/ratioPercent for 法人買賣超佔比 — never preset/risePercent/days — investors ordered FOREIGN before TRUST', async () => {
+      scanResponder = () => netRatioScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      selectStrategy('法人買賣超佔比')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'INSTITUTIONAL_NET_RATIO', investors: ['FOREIGN', 'TRUST'], windowDays: 5, ratioPercent: 10 }])
+    })
+
+    it('sends only investors/buyDays for 法人連續買超 — never preset/risePercent/days — and investors is ["TRUST"] when only 投信 stays checked', async () => {
+      scanResponder = () => consecutiveBuyScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人連續買超')).toBeInTheDocument())
+      selectStrategy('法人連續買超')
+      const card = cardFor('法人連續買超')
+      fireEvent.click(within(card).getByLabelText('外資')) // uncheck 外資, leaving only 投信
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'INSTITUTIONAL_CONSECUTIVE_BUY', investors: ['TRUST'], buyDays: 5 }])
+    })
+
+    it('sends only investors/windowDays/topN for 法人買超強度排名 — never preset/risePercent/days', async () => {
+      scanResponder = () => strengthRankScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買超強度排名')).toBeInTheDocument())
+      selectStrategy('法人買超強度排名')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'INSTITUTIONAL_STRENGTH_RANK', investors: ['FOREIGN', 'TRUST'], windowDays: 5, topN: 10 }])
+    })
+
+    it.each([
+      ['法人買賣超佔比', '天數', '0', '天數需介於 1 ~ 20 的整數'],
+      ['法人買賣超佔比', '天數', '21', '天數需介於 1 ~ 20 的整數'],
+      ['法人買賣超佔比', '天數', '5.5', '天數需介於 1 ~ 20 的整數'],
+      ['法人買賣超佔比', '佔比門檻', '-1', '佔比門檻需介於 0 ~ 100'],
+      ['法人買賣超佔比', '佔比門檻', '100.1', '佔比門檻需介於 0 ~ 100'],
+      ['法人買賣超佔比', '佔比門檻', '10.55', '佔比門檻需介於 0 ~ 100'],
+      ['法人連續買超', '連續買超天數', '0', '連續買超天數需介於 1 ~ 20 的整數'],
+      ['法人連續買超', '連續買超天數', '21', '連續買超天數需介於 1 ~ 20 的整數'],
+      ['法人買超強度排名', '取前幾名', '0', '取前幾名需介於 1 ~ 50 的整數'],
+      ['法人買超強度排名', '取前幾名', '51', '取前幾名需介於 1 ~ 50 的整數'],
+    ])(
+      'blocks the scan and shows the range error for %s＝%s with value %s (message: %s)',
+      async (cardName, label, bad, expected) => {
+        renderTab()
+        await waitFor(() => expect(screen.getByText(cardName)).toBeInTheDocument())
+        selectStrategy(cardName)
+        const card = cardFor(cardName)
+        const input = within(card).getByLabelText(label) as HTMLInputElement
+        fireEvent.change(input, { target: { value: bad } })
+
+        expect(within(card).getByText(expected)).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+        const scanCalls = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).length
+        expect(scanCalls).toBe(0)
+      },
+    )
+
+    it.each([
+      ['INVALID_WINDOW_DAYS', 'INSTITUTIONAL_NET_RATIO', '法人買賣超佔比'],
+      ['INVALID_RATIO_PERCENT', 'INSTITUTIONAL_NET_RATIO', '法人買賣超佔比'],
+      ['INVALID_BUY_DAYS', 'INSTITUTIONAL_CONSECUTIVE_BUY', '法人連續買超'],
+      ['INVALID_WINDOW_DAYS', 'INSTITUTIONAL_STRENGTH_RANK', '法人買超強度排名'],
+      ['INVALID_TOP_N', 'INSTITUTIONAL_STRENGTH_RANK', '法人買超強度排名'],
+    ])('shows the backend %s error under the %s card (%s), not as a page-wide error', async (code, strategyCode, cardName) => {
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(400, { code, strategy: strategyCode }))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText(cardName)).toBeInTheDocument())
+      selectStrategy(cardName)
+      const card = cardFor(cardName)
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(card.querySelectorAll('.st-inline-error').length).toBeGreaterThan(0))
+      expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+    })
+
+    it('shows 請至少勾選一個法人 under the named card for the backend INVALID_INVESTORS fallback', async () => {
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) {
+          return Promise.resolve(jsonResponse(400, { code: 'INVALID_INVESTORS', strategy: 'INSTITUTIONAL_STRENGTH_RANK' }))
+        }
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買超強度排名')).toBeInTheDocument())
+      selectStrategy('法人買超強度排名')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const card = cardFor('法人買超強度排名')
+      await waitFor(() => expect(within(card).getByText('請至少勾選一個法人')).toBeInTheDocument())
+      expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+    })
+
+    it('formats 命中策略與訊號日 for institutional hits — matched investors (and direction for 法人買賣超佔比) — the same format in the collapsed row and in every expanded child row', async () => {
+      scanResponder = () => institutionalExpansionScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      selectStrategy('法人買賣超佔比')
+      selectStrategy('法人連續買超')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('9999 測試股')).toBeInTheDocument())
+
+      // 「命中策略與訊號日」renders the strategy name and the「（達標方）」segment as two
+      // separate text nodes inside the same `.st-union-tag-name` span, so a plain
+      // `getByText(...)` (which does not match across sibling text nodes) can't be used
+      // here — read the whole tag's own textContent instead.
+      const tagTexts = () => Array.from(document.querySelectorAll('.st-union-tag')).map((el) => el.textContent)
+
+      // Collapsed row: both hits listed, each in its own institutional format.
+      expect(tagTexts()).toContain('法人買賣超佔比（外資買超／投信賣超） 2026-08-27')
+      expect(tagTexts()).toContain('法人連續買超（投信） 2026-08-19')
+
+      // Expand — each child row (one distinct buyDate each) keeps the exact same format.
+      fireEvent.click(screen.getByRole('button', { name: '展開 9999 的訊號日明細' }))
+      const childRows = screen.getAllByRole('row').filter((r) => r.className.includes('st-child-row'))
+      expect(childRows).toHaveLength(2)
+      const childTagTexts = childRows.flatMap((r) => Array.from(r.querySelectorAll('.st-union-tag')).map((el) => el.textContent))
+      expect(childTagTexts).toContain('法人買賣超佔比（外資買超／投信賣超） 2026-08-27')
+      expect(childTagTexts).toContain('法人連續買超（投信） 2026-08-19')
+    })
+
+    it("shows 買進日 from the response's buyDate (different from 訊號日) and sends that buyDate — never signalDate+1 — to 回測", async () => {
+      scanResponder = () => netRatioScanResponse()
+      backtestResponder = () => ({ status: 200, body: netRatioBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      selectStrategy('法人買賣超佔比')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      const row = screen.getByLabelText('納入 2609 計算').closest('tr') as HTMLElement
+      const cells = within(row).getAllByRole('cell')
+      expect(cells[3].textContent).toContain('2026-08-27') // 命中策略與訊號日：signalDate
+      expect(cells[4].textContent).toBe('2026-08-28') // 買進日：buyDate ≠ signalDate
+
+      const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))
+      const body = JSON.parse((backtestCall![1] as RequestInit).body as string)
+      expect(body.items).toEqual([{ stockId: '2609', buyDate: '2026-08-28' }])
+    })
+
+    it.each([
+      [() => netRatioScanResponse(), '法人買賣超佔比', '法人買賣超佔比（外資／投信・5 日合計 ≥ 10%・法人資料至 2026-08-28）'],
+      [() => consecutiveBuyScanResponse(), '法人連續買超', '法人連續買超（投信・連 5 日・法人資料至 2026-08-28）'],
+      [() => strengthRankScanResponse(), '法人買超強度排名', '法人買超強度排名（外資／投信・5 日強度・各前 10 名・尚無法人資料）'],
+    ])('shows 本次採用參數 for %s sourced from the scan response — including 法人資料至/尚無法人資料 — not the current inputs', async (responder, cardName, expected) => {
+      scanResponder = responder
+      renderTab()
+      await waitFor(() => expect(screen.getByText(cardName)).toBeInTheDocument())
+      selectStrategy(cardName)
+      // Edit the input after selecting but before scanning — the params line must still
+      // reflect what the RESPONSE says was actually used, never this unsaved edit.
+      const card = cardFor(cardName)
+      const dayLikeInput = within(card).queryByLabelText('天數') ?? within(card).queryByLabelText('連續買超天數')
+      if (dayLikeInput) fireEvent.change(dayLikeInput, { target: { value: '9' } })
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(screen.getByText(expected)).toBeInTheDocument())
+    })
+
+    it('shows 「{策略名稱}：另有 N 檔已達標，但次一交易日尚未到」for institutional pendingConfirm, excluded from the merged table and from 回測', async () => {
+      scanResponder = () => consecutiveBuyScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人連續買超')).toBeInTheDocument())
+      selectStrategy('法人連續買超')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(screen.getByText('法人連續買超：另有 1 檔已達標，但次一交易日尚未到')).toBeInTheDocument())
+      expect(topLevelRowStockIds()).toEqual(['2317 鴻海'])
+      const backtestCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest')),
+      )
+      const body = JSON.parse((backtestCall![1] as RequestInit).body as string)
+      expect(body.items.some((i: { stockId: string }) => i.stockId === '2330')).toBe(false)
+    })
+
+    it('shows 「{策略名稱}：另有 N 檔因行情或法人資料不足而未納入判定」for institutional insufficientData; the five price patterns keep their existing wording', async () => {
+      scanResponder = () => strengthRankScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買超強度排名')).toBeInTheDocument())
+      selectStrategy('法人買超強度排名')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() =>
+        expect(screen.getByText('法人買超強度排名：另有 1 檔因行情或法人資料不足而未納入判定')).toBeInTheDocument(),
+      )
+      // Never the price-pattern wording for an institutional strategy's own note.
+      expect(screen.queryByText('法人買超強度排名：另有 1 檔因區間前的歷史資料不足而未納入判定')).not.toBeInTheDocument()
+    })
+
+    it('never uses 建議／推薦／可進場 wording anywhere in the three institutional cards or their scan-result text', async () => {
+      scanResponder = () => netRatioScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('法人買賣超佔比')).toBeInTheDocument())
+      selectStrategy('法人買賣超佔比')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      const text = document.body.textContent ?? ''
+      expect(text).not.toContain('建議')
+      expect(text).not.toContain('推薦')
+      expect(text).not.toContain('可進場')
+    })
   })
 })

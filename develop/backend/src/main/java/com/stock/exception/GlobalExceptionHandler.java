@@ -161,6 +161,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidDropPercent(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidInvestorsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidInvestors(InvalidInvestorsException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidInvestors(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidWindowDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidWindowDays(InvalidWindowDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidWindowDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidRatioPercentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRatioPercent(InvalidRatioPercentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRatioPercent(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidBuyDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBuyDays(InvalidBuyDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidTopNException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTopN(InvalidTopNException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidTopN(e.getStrategy()));
+    }
+
     @ExceptionHandler(NoBacktestItemsException.class)
     public ResponseEntity<ErrorResponse> handleNoBacktestItems(NoBacktestItemsException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("NO_BACKTEST_ITEMS"));

@@ -41,11 +41,13 @@ public class StockSyncService {
     private final SnapshotBackfillRunner snapshotBackfillRunner;
     private final JobRunningRegistry jobRunningRegistry;
     private final BackfillProperties backfillProperties;
+    private final InstitutionalTradeCatchUpRunner institutionalTradeCatchUpRunner;
 
     public StockSyncService(TwseClient twseClient, StockMapper stockMapper, StockSyncProgressMapper progressMapper,
                              PriceIngestionService priceIngestionService, BackfillRunner backfillRunner,
                              SnapshotBackfillRunner snapshotBackfillRunner, JobRunningRegistry jobRunningRegistry,
-                             BackfillProperties backfillProperties) {
+                             BackfillProperties backfillProperties,
+                             InstitutionalTradeCatchUpRunner institutionalTradeCatchUpRunner) {
         this.twseClient = twseClient;
         this.stockMapper = stockMapper;
         this.progressMapper = progressMapper;
@@ -54,12 +56,20 @@ public class StockSyncService {
         this.snapshotBackfillRunner = snapshotBackfillRunner;
         this.jobRunningRegistry = jobRunningRegistry;
         this.backfillProperties = backfillProperties;
+        this.institutionalTradeCatchUpRunner = institutionalTradeCatchUpRunner;
     }
 
-    /** Single-request whole-market daily snapshot ingestion; synchronous, no progress tracking needed. */
+    /**
+     * Single-request whole-market daily snapshot ingestion; synchronous, no progress tracking
+     * needed. Triggers the institutional-trade background catch-up after a successful write (spec:
+     * institutional-trade-ingestion.md, 觸發時機 — 每日增量成功寫入之後) — {@code triggerAsync} is itself
+     * {@code @Async} and returns immediately, so this method's response time is unchanged.
+     */
     public DailySyncResponse syncDaily() {
         TwseSnapshotResult snapshot = twseClient.fetchDailyAll();
-        return priceIngestionService.applyDailySnapshot(snapshot);
+        DailySyncResponse response = priceIngestionService.applyDailySnapshot(snapshot);
+        institutionalTradeCatchUpRunner.triggerAsync();
+        return response;
     }
 
     public BackfillResponse startBackfill(BackfillRequest request) {
@@ -204,6 +214,14 @@ public class StockSyncService {
         CompletableFuture<Void> completion = "ALL".equals(prepared.mode)
                 ? snapshotBackfillRunner.run(jobType, processableIds, request.getEndDate())
                 : backfillRunner.run(jobType, processableIds, request.isResume());
+
+        // Every PRICE_BACKFILL batch triggers the institutional-trade background catch-up once it
+        // actually finishes (spec: institutional-trade-ingestion.md, 觸發時機) -- regardless of which
+        // of the three entry points started it (manual endpoint, the strategy tab's "同步日 K 至今日",
+        // or startup catch-up), since all three converge here. Covers the "caughtUpCount ==
+        // targetCount, zero external requests" case too: the completion future still completes
+        // (immediately) even when processableIds was empty.
+        completion.whenComplete((ignoredResult, ignoredEx) -> institutionalTradeCatchUpRunner.triggerAsync());
 
         BackfillResponse response = new BackfillResponse(jobType, targetIds.size(), caughtUpCount,
                 prepared.commonStocksOnly, request.getStartDate(), request.getEndDate(), prepared.mode);

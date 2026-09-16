@@ -7,6 +7,10 @@ import {
   type BacktestRequestItem,
   type BacktestResponse,
   type BacktestResultItem,
+  type InstitutionalConsecutiveBuyDetail,
+  type InstitutionalNetRatioDetail,
+  type InstitutionalStrengthRankDetail,
+  type InvestorCode,
   type ParamGroup,
   type PresetCode,
   type ScanRequest,
@@ -14,6 +18,8 @@ import {
   type ScanStrategySelection,
   type StrategyCatalogItem,
   type StrategyCode,
+  type StrategyDetail,
+  type StrategyNumberParam,
   type StrategyParam,
   type StrategyResult,
 } from '../api/strategies'
@@ -302,11 +308,13 @@ function isGroupOn(
   return stored ?? group?.default ?? true
 }
 
-/** A params-driven input's validity, entirely from its own `params` entry — `step === 1`
- * means "整數" (day-count params); any other step (currently always `0.1`) means "at most
- * that many decimal places" (percent/amount params). Nothing here is keyed by `code` or
- * `unit`; it all comes from the numbers the API already sent. */
-function isParamInputInvalid(value: string, param: StrategyParam): boolean {
+/** A params-driven numeric input's validity, entirely from its own `params` entry —
+ * `step === 1` means "整數" (day-count params); any other step (currently always `0.1`)
+ * means "at most that many decimal places" (percent/amount params). Nothing here is keyed
+ * by `code` or `unit`; it all comes from the numbers the API already sent. Only meaningful
+ * for the numeric variant — every call site narrows to it first (either via an early
+ * `type === 'multiSelect'` return, or by filtering the array it came from). */
+function isParamInputInvalid(value: string, param: StrategyNumberParam): boolean {
   if (value.trim() === '') return true
   const num = Number(value)
   if (!Number.isFinite(num)) return true
@@ -318,7 +326,11 @@ function isParamInputInvalid(value: string, param: StrategyParam): boolean {
   return Math.abs(rounded - num) > 1e-9
 }
 
+/** Accepts either variant so a caller that only knows "this is *some* `params` entry" (e.g.
+ * a backend validation-error fallback naming a param by code) doesn't have to narrow first —
+ * the `multiSelect` branch mirrors「複選參數」's own 「請至少勾選一個<參數名>」 wording. */
 function paramErrorMessage(param: StrategyParam): string {
+  if (param.type === 'multiSelect') return `請至少勾選一個${param.name}`
   return param.step === 1
     ? `${param.name}需介於 ${param.min} ~ ${param.max} 的整數`
     : `${param.name}需介於 ${param.min} ~ ${param.max}`
@@ -340,9 +352,60 @@ const ONE_DAY_WINDOW_HINT: Record<string, string> = {
   dropDays: '下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中',
 }
 
+/** The three 法人籌碼 strategy codes — the only place besides `formatStrategyParams`/
+ * `renderScanNotes` that names them individually, both for copy that genuinely differs per
+ * strategy (「資料不足」／「待確認」wording) and never for deciding what a *card* looks like
+ * (that stays purely `type`/`presets`-driven, see `isParamsDriven`/`renderParamRow`). */
+const INSTITUTIONAL_STRATEGY_CODES: StrategyCode[] = [
+  'INSTITUTIONAL_NET_RATIO',
+  'INSTITUTIONAL_CONSECUTIVE_BUY',
+  'INSTITUTIONAL_STRENGTH_RANK',
+]
+
+/** Union of the three institutional detail shapes — everything downstream that only cares
+ * about「哪一方達標」(never the per-strategy numeric judgement fields) works against this
+ * narrower type instead of the full five-price-pattern-plus-three `StrategyDetail` union. */
+type InstitutionalDetail = InstitutionalNetRatioDetail | InstitutionalConsecutiveBuyDetail | InstitutionalStrengthRankDetail
+
+function investorLabel(code: string): string {
+  return code === 'FOREIGN' ? '外資' : code === 'TRUST' ? '投信' : code
+}
+
+/** A hit's `detail` shape decides whether it's an institutional one — every institutional
+ * detail (and only those) carries a `matchedInvestors` array (specs/backend/strategy-scan.md
+ * 「三者共有…matchedInvestors」). This is a value-shape check, not a code/param-name branch. */
+function hasMatchedInvestors(detail: StrategyDetail): detail is InstitutionalDetail {
+  return 'matchedInvestors' in detail
+}
+
+/** Only `INSTITUTIONAL_NET_RATIO`'s `foreign`/`trust` carry a `direction` — the other two
+ * institutional detail shapes don't have the field at all. Detected structurally via `in`
+ * (again, off the response shape, not off a strategy code). */
+function institutionalDirectionOf(detail: InstitutionalDetail, investor: InvestorCode): 'BUY' | 'SELL' | undefined {
+  const side = investor === 'FOREIGN' ? detail.foreign : detail.trust
+  return side && 'direction' in side ? side.direction : undefined
+}
+
+/** 「法人籌碼型態必須標出是哪一方達標」— 「{達標方}」segment of「{策略名稱}（{達標方}）
+ * {signalDate}」, shared by the collapsed row's「命中策略與訊號日」cell and every expanded
+ * child row (same format, per spec). `matchedInvestors` order is already `FOREIGN`/`TRUST`
+ * (the backend's own order), so this never has to re-sort it. */
+function institutionalMatchLabel(detail: InstitutionalDetail): string {
+  return detail.matchedInvestors
+    .map((inv) => {
+      const direction = institutionalDirectionOf(detail, inv)
+      const directionLabel = direction === 'SELL' ? '賣超' : direction === 'BUY' ? '買超' : ''
+      return `${investorLabel(inv)}${directionLabel}`
+    })
+    .join('／')
+}
+
 interface UnionHit {
   strategyCode: StrategyCode
   signalDate: string
+  /** Only carried for institutional hits — feeds `institutionalMatchLabel`. Absent for the
+   * five price-pattern strategies, which never need it for「命中策略與訊號日」. */
+  detail?: StrategyDetail
 }
 
 /** One distinct buy date for a stock — 「以買進日去重，不以策略、也不以訊號日去重」. A
@@ -388,13 +451,18 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
         row = { stockId: item.stockId, stockName: item.stockName, hits: [] }
         map.set(item.stockId, row)
       }
-      row.hits.push({ strategyCode: strategyResult.strategy, signalDate: item.signalDate, buyDate: item.buyDate })
+      row.hits.push({
+        strategyCode: strategyResult.strategy,
+        signalDate: item.signalDate,
+        buyDate: item.buyDate,
+        detail: item.detail,
+      })
     }
   }
   const withGroups: UnionRow[] = Array.from(map.values()).map((row) => {
     const byBuyDate = new Map<string, UnionHit[]>()
     for (const hit of row.hits) {
-      const plainHit: UnionHit = { strategyCode: hit.strategyCode, signalDate: hit.signalDate }
+      const plainHit: UnionHit = { strategyCode: hit.strategyCode, signalDate: hit.signalDate, detail: hit.detail }
       const bucket = byBuyDate.get(hit.buyDate)
       if (bucket) bucket.push(plainHit)
       else byBuyDate.set(hit.buyDate, [plainHit])
@@ -406,7 +474,7 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
     return {
       stockId: row.stockId,
       stockName: row.stockName,
-      hits: row.hits.map((h) => ({ strategyCode: h.strategyCode, signalDate: h.signalDate })),
+      hits: row.hits.map((h) => ({ strategyCode: h.strategyCode, signalDate: h.signalDate, detail: h.detail })),
       latestSignalDate,
       buyDateGroups,
     }
@@ -650,6 +718,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // param's own `default` the first time its card is checked, then entirely in the user's
   // hands (no refill mechanism — there's no preset to switch).
   const [paramInputs, setParamInputs] = useState<Partial<Record<StrategyCode, Record<string, string>>>>({})
+  // Generic multiSelect param state (currently only the three institutional cards' own
+  // `investors`), keyed by strategy code then param `code`, value = the currently-checked
+  // option codes (not yet reordered to `options` order — that happens only when building the
+  // scan payload). Populated once from each param's own `default` the first time its card is
+  // checked, entirely data-driven off `params[].type === 'multiSelect'` — never keyed by a
+  // param or strategy `code` (specs/frontend/strategy.md「複選參數」).
+  const [multiSelectInputs, setMultiSelectInputs] = useState<Partial<Record<StrategyCode, Record<string, string[]>>>>({})
   // Optional param-group toggle state (currently only 反彈's `rise` group), keyed by
   // strategy code then group `code`. Populated from `paramGroups[].default` the first time
   // a params-driven card with groups is checked; purely data-driven off `paramGroups`.
@@ -916,7 +991,19 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       setParamInputs((inputs) => {
         if (inputs[code] !== undefined) return inputs
         const values: Record<string, string> = {}
-        for (const param of strategy?.params ?? []) values[param.code] = String(param.default)
+        for (const param of strategy?.params ?? []) {
+          if (param.type === 'multiSelect') continue
+          values[param.code] = String(param.default)
+        }
+        return { ...inputs, [code]: values }
+      })
+      setMultiSelectInputs((inputs) => {
+        if (inputs[code] !== undefined) return inputs
+        const values: Record<string, string[]> = {}
+        for (const param of strategy?.params ?? []) {
+          if (param.type !== 'multiSelect') continue
+          values[param.code] = Array.isArray(param.default) ? [...param.default] : []
+        }
         return { ...inputs, [code]: values }
       })
       setGroupEnabled((state) => {
@@ -952,6 +1039,18 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   const changeParamInput = (code: StrategyCode, paramCode: string, value: string) => {
     setParamInputs((inputs) => ({ ...inputs, [code]: { ...(inputs[code] ?? {}), [paramCode]: value } }))
+    setParamServerError((current) => (current?.code === code ? null : current))
+  }
+
+  /** Toggles one option of a `multiSelect` param — resolving the *current* effective
+   * selection (the user's own choice if any, else the param's own `default`) before
+   * flipping the one option clicked. */
+  const toggleMultiSelectOption = (code: StrategyCode, param: StrategyParam, optionCode: string) => {
+    setMultiSelectInputs((state) => {
+      const current = state[code]?.[param.code] ?? (Array.isArray(param.default) ? param.default : [])
+      const next = current.includes(optionCode) ? current.filter((c) => c !== optionCode) : [...current, optionCode]
+      return { ...state, [code]: { ...(state[code] ?? {}), [param.code]: next } }
+    })
     setParamServerError((current) => (current?.code === code ? null : current))
   }
 
@@ -1010,17 +1109,25 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         // out under `require<Group>`. None of this branches on `code` — it all comes from
         // this strategy's own `params`/`paramGroups`.
         const values = paramInputs[code] ?? {}
+        const multiValues = multiSelectInputs[code] ?? {}
         const groupState = groupEnabled[code] ?? {}
         const selection: ScanStrategySelection = { code }
         // Every field name below comes from the API's own data (a param's `code`, or
         // `require<Group>` derived from a group's `code`) — the object's shape can't be
         // known statically, so this is the one narrow spot that steps outside it.
-        const bag = selection as unknown as Record<string, number | boolean>
+        const bag = selection as unknown as Record<string, number | boolean | string[]>
         for (const group of strategy?.paramGroups ?? []) {
           bag[requireFieldName(group.code)] = groupState[group.code] ?? group.default
         }
         for (const param of strategy?.params ?? []) {
           if (!isGroupOn(strategy, groupEnabled, param)) continue
+          if (param.type === 'multiSelect') {
+            // 依 options 順序排列，例如 ["FOREIGN","TRUST"] — never the order the user
+            // happened to click them in.
+            const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
+            bag[param.code] = (param.options ?? []).map((o) => o.code).filter((c) => selectedCodes.includes(c))
+            continue
+          }
           bag[param.code] = Number(values[param.code] ?? param.default)
         }
         return selection
@@ -1048,6 +1155,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_DROP_DAYS: 'dropDays',
     INVALID_RISE_DAYS: 'riseDays',
     INVALID_DROP_PERCENT: 'dropPercent',
+    INVALID_WINDOW_DAYS: 'windowDays',
+    INVALID_RATIO_PERCENT: 'ratioPercent',
+    INVALID_BUY_DAYS: 'buyDays',
+    INVALID_TOP_N: 'topN',
   }
 
   /** Sends `POST /api/strategies/backtest` — called automatically once right after a scan
@@ -1162,6 +1273,18 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
+        if (err instanceof ApiError && err.code === 'INVALID_INVESTORS') {
+          // Backend fallback only — client-side `minSelected` validation already blocks
+          // this in normal use. Must name the offending card. The message names whichever
+          // `multiSelect` param the card declares (today always `investors`), found by
+          // `type`, never by a hard-coded `investors` code check.
+          const code = (err.strategy as StrategyCode) ?? null
+          const strategy = code ? catalog.find((s) => s.code === code) : undefined
+          const multiParam = strategy?.params?.find((p) => p.type === 'multiSelect')
+          if (code) setParamServerError({ code, message: multiParam ? paramErrorMessage(multiParam) : '請至少勾選一個法人' })
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
         if (
           err instanceof ApiError &&
           err.code !== null &&
@@ -1215,8 +1338,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     const strategy = catalog.find((s) => s.code === code)
     if (!isParamsDriven(strategy)) return false
     const values = paramInputs[code] ?? {}
+    const multiValues = multiSelectInputs[code] ?? {}
     return (strategy?.params ?? []).some((param) => {
       if (!isGroupOn(strategy, groupEnabled, param)) return false
+      if (param.type === 'multiSelect') {
+        const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
+        return selectedCodes.length < (param.minSelected ?? 0)
+      }
       return isParamInputInvalid(values[param.code] ?? '', param)
     })
   })
@@ -1350,9 +1478,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   /** 「本次採用參數」一行的其中一段 — always sourced from the scan RESPONSE, never from
    * the current (possibly since-edited) card inputs, so editing an input after scanning
    * can never retroactively rewrite what the results say they were computed with.
-   * `preset`/`days`/(`dropDays`+`dropPercent`[+`riseDays`+`risePercent`]) are mutually
-   * exclusive on the response — whichever is present decides the format, never a branch on
-   * `result.strategy`. */
+   * `preset`/`days`/(`dropDays`+`dropPercent`[+`riseDays`+`risePercent`])/(`investors`+…) are
+   * mutually exclusive on the response — whichever is present decides the format, never a
+   * branch on `result.strategy`. */
   const formatStrategyParams = (result: StrategyResult): string => {
     const name = strategyName(result.strategy)
     if (result.preset !== undefined) {
@@ -1369,6 +1497,21 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           : ''
       return `${name}（${dropPart}${risePart}）`
     }
+    if (result.investors !== undefined) {
+      const investorsPart = result.investors.map(investorLabel).join('／')
+      // 「法人資料至 {dataThroughDate}」／`dataThroughDate` 為 null 時「尚無法人資料」—
+      // 一律取自回應，不在畫面上另算。
+      const dataPart = result.dataThroughDate ? `法人資料至 ${result.dataThroughDate}` : '尚無法人資料'
+      if (result.ratioPercent !== undefined && result.windowDays !== undefined) {
+        return `${name}（${investorsPart}・${result.windowDays} 日合計 ≥ ${formatTrimmedPercent(result.ratioPercent)}%・${dataPart}）`
+      }
+      if (result.buyDays !== undefined) {
+        return `${name}（${investorsPart}・連 ${result.buyDays} 日・${dataPart}）`
+      }
+      if (result.topN !== undefined && result.windowDays !== undefined) {
+        return `${name}（${investorsPart}・${result.windowDays} 日強度・各前 ${result.topN} 名・${dataPart}）`
+      }
+    }
     return name
   }
 
@@ -1380,9 +1523,16 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           ・
         </span>,
       )
+      // 法人籌碼型態必須標出是哪一方達標 — 「{策略名稱}（{達標方}） {signalDate}」，展開後的子列
+      // 沿用同一份 renderUnionHits 因此自動採同一格式。Decided purely by whether this hit's
+      // own `detail` carries `matchedInvestors`, never by `strategyCode`.
+      const matchLabel = hit.detail && hasMatchedInvestors(hit.detail) ? institutionalMatchLabel(hit.detail) : null
       nodes.push(
         <span key={`${hit.strategyCode}-${idx}`} className="st-union-tag">
-          <span className="st-union-tag-name">{strategyName(hit.strategyCode)}</span>{' '}
+          <span className="st-union-tag-name">
+            {strategyName(hit.strategyCode)}
+            {matchLabel ? `（${matchLabel}）` : ''}
+          </span>{' '}
           <span className="st-union-tag-date">{hit.signalDate}</span>
         </span>,
       )
@@ -1563,32 +1713,37 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const renderScanNotes = () =>
     (scanResult?.results ?? []).flatMap((result) => {
       const notes: ReactNode[] = []
+      const isInstitutional = INSTITUTIONAL_STRATEGY_CODES.includes(result.strategy)
       if (result.insufficientData.length > 0) {
+        // 三個法人籌碼型態的原因可能是行情、也可能是法人資料不足，文字因此不同——其餘五個
+        // 價格型態的資料不足文字不變。
+        const reason = isInstitutional ? '因行情或法人資料不足而未納入判定' : '因區間前的歷史資料不足而未納入判定'
         notes.push(
           <ExpandableNote
             key={`${result.strategy}-insufficient`}
-            label={`${strategyName(result.strategy)}：另有 ${result.insufficientData.length} 檔因區間前的歷史資料不足而未納入判定`}
+            label={`${strategyName(result.strategy)}：另有 ${result.insufficientData.length} 檔${reason}`}
             ids={result.insufficientData}
           />,
         )
       }
-      if (result.strategy === 'BOX_BREAKOUT' && result.pendingConfirm.length > 0) {
-        notes.push(
-          <ExpandableNote
-            key={`${result.strategy}-pending`}
-            label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔已突破，但確認日尚未到`}
-            ids={result.pendingConfirm}
-          />,
-        )
-      }
-      if (result.strategy === 'RISING_SUPPORT' && result.pendingConfirm.length > 0) {
-        notes.push(
-          <ExpandableNote
-            key={`${result.strategy}-pending`}
-            label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔已上漲，但後兩日的確認尚未完成`}
-            ids={result.pendingConfirm}
-          />,
-        )
+      if (result.pendingConfirm.length > 0) {
+        const pendingLabel =
+          result.strategy === 'BOX_BREAKOUT'
+            ? '已突破，但確認日尚未到'
+            : result.strategy === 'RISING_SUPPORT'
+              ? '已上漲，但後兩日的確認尚未完成'
+              : isInstitutional
+                ? '已達標，但次一交易日尚未到'
+                : null
+        if (pendingLabel) {
+          notes.push(
+            <ExpandableNote
+              key={`${result.strategy}-pending`}
+              label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔${pendingLabel}`}
+              ids={result.pendingConfirm}
+            />,
+          )
+        }
       }
       return notes
     })
@@ -2058,15 +2213,20 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
               if (paramsDriven) {
                 const values = paramInputs[strategy.code] ?? {}
+                const multiValues = multiSelectInputs[strategy.code] ?? {}
                 const groups = strategy.paramGroups ?? []
                 const params = strategy.params ?? []
                 const ungrouped = params.filter((p) => !p.group)
                 // 「窗口只有當天」hint applies to the one ungrouped day-count param, paired
                 // with the one ungrouped amount param — e.g. 累積上漲's 天數/漲幅門檻,
                 // 反彈's 下跌天數/跌幅門檻. Purely derived from this strategy's own
-                // `params`, never from `code`.
-                const dayParam = ungrouped.find((p) => p.unit === '日')
-                const amountParam = ungrouped.find((p) => p !== dayParam)
+                // `params`, never from `code`. multiSelect params (e.g. 法人) never
+                // participate — they have neither a day-count `unit` nor an amount to hint
+                // about, and only ever appear alongside numeric params on the institutional
+                // cards, which aren't in `ONE_DAY_WINDOW_HINT` anyway.
+                const numericUngrouped = ungrouped.filter((p): p is StrategyNumberParam => p.type !== 'multiSelect')
+                const dayParam = numericUngrouped.find((p) => p.unit === '日')
+                const amountParam = numericUngrouped.find((p) => p !== dayParam)
                 const dayValue = dayParam ? (values[dayParam.code] ?? '') : ''
                 const amountValue = amountParam ? (values[amountParam.code] ?? '') : ''
                 const dayInvalid = !!dayParam && selected && isParamInputInvalid(dayValue, dayParam)
@@ -2085,6 +2245,35 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 const renderParamRow = (param: StrategyParam) => {
                   const groupOn = isGroupOn(strategy, groupEnabled, param)
                   const disabled = !selected || !groupOn
+
+                  // 複選參數（type: "multiSelect"）— one checkbox per `options` entry,
+                  // decided purely by `param.type`, never by `param.code`/`strategy.code`
+                  // (specs/frontend/strategy.md「複選參數」).
+                  if (param.type === 'multiSelect') {
+                    const options = param.options ?? []
+                    const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
+                    const invalid = selected && groupOn && selectedCodes.length < (param.minSelected ?? 0)
+                    return (
+                      <div key={param.code} className="st-param-block">
+                        <div className="st-multiselect-row">
+                          <span className="st-param-label">{param.name}</span>
+                          {options.map((option) => (
+                            <label key={option.code} className="st-multiselect-option">
+                              <input
+                                type="checkbox"
+                                disabled={disabled}
+                                checked={selectedCodes.includes(option.code)}
+                                onChange={() => toggleMultiSelectOption(strategy.code, param, option.code)}
+                              />
+                              {option.name}
+                            </label>
+                          ))}
+                        </div>
+                        {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
+                      </div>
+                    )
+                  }
+
                   const value = values[param.code] ?? ''
                   const invalid = selected && groupOn && isParamInputInvalid(value, param)
                   return (

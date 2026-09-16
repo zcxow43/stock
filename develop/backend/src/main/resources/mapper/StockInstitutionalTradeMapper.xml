@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.StockInstitutionalTradeMapper">
+
+    <insert id="upsert" parameterType="com.stock.domain.StockInstitutionalTrade">
+        INSERT INTO stock_institutional_trade
+            (stock_id, trade_date,
+             foreign_buy_shares, foreign_sell_shares, foreign_net_shares,
+             foreign_dealer_buy_shares, foreign_dealer_sell_shares, foreign_dealer_net_shares,
+             trust_buy_shares, trust_sell_shares, trust_net_shares,
+             dealer_net_shares, dealer_self_buy_shares, dealer_self_sell_shares, dealer_self_net_shares,
+             dealer_hedge_buy_shares, dealer_hedge_sell_shares, dealer_hedge_net_shares,
+             total_net_shares, source)
+        VALUES
+            (#{stockId}, #{tradeDate},
+             #{foreignBuyShares}, #{foreignSellShares}, #{foreignNetShares},
+             #{foreignDealerBuyShares}, #{foreignDealerSellShares}, #{foreignDealerNetShares},
+             #{trustBuyShares}, #{trustSellShares}, #{trustNetShares},
+             #{dealerNetShares}, #{dealerSelfBuyShares}, #{dealerSelfSellShares}, #{dealerSelfNetShares},
+             #{dealerHedgeBuyShares}, #{dealerHedgeSellShares}, #{dealerHedgeNetShares},
+             #{totalNetShares}, #{source})
+        ON DUPLICATE KEY UPDATE
+            foreign_buy_shares = VALUES(foreign_buy_shares),
+            foreign_sell_shares = VALUES(foreign_sell_shares),
+            foreign_net_shares = VALUES(foreign_net_shares),
+            foreign_dealer_buy_shares = VALUES(foreign_dealer_buy_shares),
+            foreign_dealer_sell_shares = VALUES(foreign_dealer_sell_shares),
+            foreign_dealer_net_shares = VALUES(foreign_dealer_net_shares),
+            trust_buy_shares = VALUES(trust_buy_shares),
+            trust_sell_shares = VALUES(trust_sell_shares),
+            trust_net_shares = VALUES(trust_net_shares),
+            dealer_net_shares = VALUES(dealer_net_shares),
+            dealer_self_buy_shares = VALUES(dealer_self_buy_shares),
+            dealer_self_sell_shares = VALUES(dealer_self_sell_shares),
+            dealer_self_net_shares = VALUES(dealer_self_net_shares),
+            dealer_hedge_buy_shares = VALUES(dealer_hedge_buy_shares),
+            dealer_hedge_sell_shares = VALUES(dealer_hedge_sell_shares),
+            dealer_hedge_net_shares = VALUES(dealer_hedge_net_shares),
+            total_net_shares = VALUES(total_net_shares),
+            source = VALUES(source)
+    </insert>
+
+    <select id="findOne" resultType="com.stock.domain.StockInstitutionalTrade">
+        SELECT stock_id, trade_date,
+               foreign_buy_shares, foreign_sell_shares, foreign_net_shares,
+               foreign_dealer_buy_shares, foreign_dealer_sell_shares, foreign_dealer_net_shares,
+               trust_buy_shares, trust_sell_shares, trust_net_shares,
+               dealer_net_shares, dealer_self_buy_shares, dealer_self_sell_shares, dealer_self_net_shares,
+               dealer_hedge_buy_shares, dealer_hedge_sell_shares, dealer_hedge_net_shares,
+               total_net_shares, source
+        FROM stock_institutional_trade
+        WHERE stock_id = #{stockId} AND trade_date = #{tradeDate}
+    </select>
+
+    <select id="countByTradeDate" resultType="int">
+        SELECT COUNT(*) FROM stock_institutional_trade WHERE trade_date = #{tradeDate}
+    </select>
+
+    <select id="findMissingTradeDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT dp.trade_date
+        FROM stock_daily_price dp
+        WHERE dp.trade_date BETWEEN #{startDate} AND #{endDate}
+          AND NOT EXISTS (
+              SELECT 1 FROM stock_institutional_trade it WHERE it.trade_date = dp.trade_date
+          )
+        ORDER BY dp.trade_date ASC
+    </select>
+
+    <select id="findByStockIdsAndDateRange" resultType="com.stock.domain.StockInstitutionalTrade">
+        SELECT stock_id, trade_date,
+               foreign_buy_shares, foreign_sell_shares, foreign_net_shares,
+               foreign_dealer_buy_shares, foreign_dealer_sell_shares, foreign_dealer_net_shares,
+               trust_buy_shares, trust_sell_shares, trust_net_shares,
+               dealer_net_shares, dealer_self_buy_shares, dealer_self_sell_shares, dealer_self_net_shares,
+               dealer_hedge_buy_shares, dealer_hedge_sell_shares, dealer_hedge_net_shares,
+               total_net_shares, source
+        FROM stock_institutional_trade
+        WHERE stock_id IN
+        <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY stock_id, trade_date ASC
+    </select>
+
+    <select id="findFetchedTradeDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT trade_date
+        FROM stock_institutional_trade
+        WHERE trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY trade_date ASC
+    </select>
+
+</mapper>

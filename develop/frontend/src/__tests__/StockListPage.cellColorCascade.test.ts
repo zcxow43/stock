@@ -890,5 +890,59 @@ describe.each(['dark', 'light'] as const)(
         await context.close()
       }
     })
+
+    // specs/frontend/strategy.md「複選參數（type: multiSelect）」— the three 法人籌碼 cards'
+    // 「法人」row (.st-multiselect-row/.st-multiselect-option, new classes this increment
+    // added). Markup lifted verbatim from StrategyTab.tsx's renderParamRow multiSelect
+    // branch. Reuses the exact same param-label text color and checkbox accent color as
+    // every other card control on this page — no new colors introduced — plus the
+    // 「請至少勾選一個法人」message, which reuses .st-inline-error verbatim.
+    it('renders the 法人 multiSelect row (label/option text, checkbox accent) and its 請至少勾選一個法人 message with existing Visual Style colors', async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>${css}</style></head>
+<body>
+  <div class="stock-list-page">
+    <div class="st-strategy-card st-strategy-card-selected">
+      <div class="st-param-block">
+        <div class="st-multiselect-row">
+          <span class="st-param-label" id="ms-label">法人</span>
+          <label class="st-multiselect-option" id="ms-option-checked">
+            <input type="checkbox" id="ms-checkbox-checked" checked />
+            外資
+          </label>
+          <label class="st-multiselect-option" id="ms-option-unchecked">
+            <input type="checkbox" id="ms-checkbox-unchecked" />
+            投信
+          </label>
+        </div>
+        <div class="st-inline-error" id="ms-error">請至少勾選一個法人</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`)
+        const result = await page.evaluate(() => {
+          const label = getComputedStyle(document.getElementById('ms-label')!).color
+          const optionChecked = getComputedStyle(document.getElementById('ms-option-checked')!).color
+          const optionUnchecked = getComputedStyle(document.getElementById('ms-option-unchecked')!).color
+          const checkboxCheckedAccent = getComputedStyle(document.getElementById('ms-checkbox-checked')!).accentColor
+          const checkboxUncheckedAccent = getComputedStyle(document.getElementById('ms-checkbox-unchecked')!).accentColor
+          const error = getComputedStyle(document.getElementById('ms-error')!).color
+          return { label, optionChecked, optionUnchecked, checkboxCheckedAccent, checkboxUncheckedAccent, error }
+        })
+        expect(result.label).toBe(FLAT) // #93A4B8 — 「參數輸入標籤與單位文字」
+        expect(result.optionChecked).toBe(FLAT) // #93A4B8 — same as every other param/group checkbox label
+        expect(result.optionUnchecked).toBe(FLAT)
+        expect(result.checkboxCheckedAccent).toBe(CHECKED_BG) // #3E8FD8 — 「勾選框已勾選背景／勾記」
+        expect(result.checkboxUncheckedAccent).toBe(CHECKED_BG) // accent-color is a static per-element declaration, same value regardless of checked state
+        expect(result.error).toBe(ERROR_TEXT) // #F09A94 — reuses .st-inline-error verbatim, not a new color
+      } finally {
+        await context.close()
+      }
+    })
   },
 )

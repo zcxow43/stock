@@ -156,6 +156,30 @@ public class ErrorResponse {
                 null);
     }
 
+    public static ErrorResponse invalidInvestors(String strategy) {
+        return new ErrorResponse("INVALID_INVESTORS", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidWindowDays(String strategy) {
+        return new ErrorResponse("INVALID_WINDOW_DAYS", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidRatioPercent(String strategy) {
+        return new ErrorResponse("INVALID_RATIO_PERCENT", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidBuyDays(String strategy) {
+        return new ErrorResponse("INVALID_BUY_DAYS", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidTopN(String strategy) {
+        return new ErrorResponse("INVALID_TOP_N", null, null, null, null, null, null, null, strategy, null, null);
+    }
+
     public static ErrorResponse duplicateBacktestItem(List<BacktestDuplicateItemDto> duplicatedItems) {
         return new ErrorResponse("DUPLICATE_BACKTEST_ITEM", null, null, null, null, null, null, null, null, null,
                 duplicatedItems);

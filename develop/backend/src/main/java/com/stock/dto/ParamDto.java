@@ -4,36 +4,50 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * One directly-typable parameter of a no-preset strategy (currently CUMULATIVE_RISE's `days`/
- * `risePercent` and REBOUND's `dropDays`/`dropPercent`/`riseDays`/`risePercent`) within the
+ * `risePercent`, REBOUND's `dropDays`/`dropPercent`/`riseDays`/`risePercent`, and the three
+ * institutional patterns' `investors`/`windowDays`/`ratioPercent`/`buyDays`/`topN`) within the
  * GET /api/strategies catalogue — see specs/backend/strategy-scan.md, "presets 與 params 的關係". The
  * wire field is literally named "default", a reserved word in Java, hence the {@code @JsonProperty}
  * on {@link #getDefaultValue()}. `group`, when present, names the {@link ParamGroupDto#getCode()}
  * this param belongs to (an optional, whole-group-togglable set of params) — see "選用參數群組";
  * omitted (not just null) for the ungrouped, always-effective params.
+ *
+ * <p>`defaultValue` is declared as {@code Object} rather than {@code BigDecimal} because it holds
+ * two different shapes depending on {@link #getType()}: a {@link BigDecimal} for the (default,
+ * {@code type} omitted) numeric params, or a {@code List<String>} of option codes for {@code type:
+ * "multiSelect"} params (currently only `investors`) — see specs/backend/strategy-scan.md, "參數型別".
+ * `unit`/`min`/`max`/`step` are meaningless for a multiSelect param and stay {@code null} (omitted);
+ * `type`/`options`/`minSelected` are the mirror image, {@code null} for every numeric param.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ParamDto {
 
     private String code;
     private String name;
+    private String type;
     private String unit;
-    private BigDecimal defaultValue;
+    private Object defaultValue;
     private BigDecimal min;
     private BigDecimal max;
     private BigDecimal step;
     private String group;
+    private List<ParamOptionDto> options;
+    private Integer minSelected;
 
     public ParamDto() {
     }
 
+    /** Numeric param, ungrouped. */
     public ParamDto(String code, String name, String unit, BigDecimal defaultValue, BigDecimal min, BigDecimal max,
                      BigDecimal step) {
         this(code, name, unit, defaultValue, min, max, step, null);
     }
 
+    /** Numeric param, optionally belonging to a {@link ParamGroupDto}. */
     public ParamDto(String code, String name, String unit, BigDecimal defaultValue, BigDecimal min, BigDecimal max,
                      BigDecimal step, String group) {
         this.code = code;
@@ -44,6 +58,21 @@ public class ParamDto {
         this.max = max;
         this.step = step;
         this.group = group;
+    }
+
+    /**
+     * {@code type: "multiSelect"} param — currently only `investors` (specs/backend/strategy-scan.md,
+     * "presets 與 params 的關係"): a set of {@code options}, a default subset of their codes, and the
+     * minimum number of options that must remain selected.
+     */
+    public ParamDto(String code, String name, String type, List<ParamOptionDto> options,
+                     List<String> defaultValue, Integer minSelected) {
+        this.code = code;
+        this.name = name;
+        this.type = type;
+        this.options = options;
+        this.defaultValue = defaultValue;
+        this.minSelected = minSelected;
     }
 
     public String getCode() {
@@ -62,6 +91,14 @@ public class ParamDto {
         this.name = name;
     }
 
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
     public String getUnit() {
         return unit;
     }
@@ -71,12 +108,12 @@ public class ParamDto {
     }
 
     @JsonProperty("default")
-    public BigDecimal getDefaultValue() {
+    public Object getDefaultValue() {
         return defaultValue;
     }
 
     @JsonProperty("default")
-    public void setDefaultValue(BigDecimal defaultValue) {
+    public void setDefaultValue(Object defaultValue) {
         this.defaultValue = defaultValue;
     }
 
@@ -110,5 +147,21 @@ public class ParamDto {
 
     public void setGroup(String group) {
         this.group = group;
+    }
+
+    public List<ParamOptionDto> getOptions() {
+        return options;
+    }
+
+    public void setOptions(List<ParamOptionDto> options) {
+        this.options = options;
+    }
+
+    public Integer getMinSelected() {
+        return minSelected;
+    }
+
+    public void setMinSelected(Integer minSelected) {
+        this.minSelected = minSelected;
     }
 }

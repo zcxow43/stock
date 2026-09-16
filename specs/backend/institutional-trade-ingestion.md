@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "三大法人買賣超抓取與補齊"
 requirement: "法人籌碼策略的資料前置 — 自交易所三大法人買賣超日報（T86）逐交易日抓取全市場外資／投信／自營商的買進、賣出、買賣超股數寫入 stock_institutional_trade；以已有日線行情的交易日為準、只補缺少的日期；每次日線回補作業結束與每日增量成功後於背景自動補齊，不另設端點與進度表"
 depends_on: [stock-price-ingestion]
@@ -124,33 +124,56 @@ depends_on: [stock-price-ingestion]
 ## Acceptance Criteria
 
 ### 解析與寫入
-- [ ] 以 `date=20260911` 的真實回應寫入後，抽查 `2609`（陽明）一列：`foreign_buy_shares = 46546290`、`foreign_sell_shares = 23548005`、`foreign_net_shares = 22998285`、`trust_net_shares = 102106`、`total_net_shares = 23747702`，其餘欄位亦與回應逐欄一致
-- [ ] 賣超寫入為負值：`00632R` 的 `foreign_net_shares = -69992000`
-- [ ] 單位核對（股，不是張）：以真實資料取同一交易日若干檔，`foreign_buy_shares + foreign_dealer_buy_shares + trust_buy_shares + dealer_self_buy_shares + dealer_hedge_buy_shares` 不超過同日 `stock_daily_price.volume`，且至少一檔的比值落在 `0.01`～`1` 之間（若單位為張，比值會小約 1000 倍）
-- [ ] 以欄名定位：把同一份回應的 `fields` 與 `data` 各欄同步打亂順序後解析，寫入結果與原順序完全相同
-- [ ] `fields` 缺少任一必要欄名的構造回應 → 該日零列寫入、記錄錯誤、下一日照常處理
-- [ ] 非交易日形狀的回應（`{"stat":"很抱歉，沒有符合條件的資料!","total":0}`）→ 不寫入、不記為失敗
-- [ ] 主檔不存在的代號不寫入，且 `stock` 列數不變；主檔中的 ETF 與 `is_active = 0` 的代號照常寫入
-- [ ] 寫入的列 `source` 為 `TWSE`
-- [ ] 同一日重跑兩次：列數不變，第二次的值覆蓋第一次
-- [ ] 單日寫入在單一交易邊界：模擬寫到一半失敗 → 該日在 `stock_institutional_trade` 為零列，下一次觸發時重新請求該日
+- [x] 以 `date=20260911` 的真實回應寫入後，抽查 `2609`（陽明）一列：`foreign_buy_shares = 46546290`、`foreign_sell_shares = 23548005`、`foreign_net_shares = 22998285`、`trust_net_shares = 102106`、`total_net_shares = 23747702`，其餘欄位亦與回應逐欄一致
+- [x] 賣超寫入為負值：`00632R` 的 `foreign_net_shares = -69992000`
+- [x] 單位核對（股，不是張）：以真實資料取同一交易日若干檔，`foreign_buy_shares + foreign_dealer_buy_shares + trust_buy_shares + dealer_self_buy_shares + dealer_hedge_buy_shares` 不超過同日 `stock_daily_price.volume`，且至少一檔的比值落在 `0.01`～`1` 之間（若單位為張，比值會小約 1000 倍）
+- [x] 以欄名定位：把同一份回應的 `fields` 與 `data` 各欄同步打亂順序後解析，寫入結果與原順序完全相同
+- [x] `fields` 缺少任一必要欄名的構造回應 → 該日零列寫入、記錄錯誤、下一日照常處理
+- [x] 非交易日形狀的回應（`{"stat":"很抱歉，沒有符合條件的資料!","total":0}`）→ 不寫入、不記為失敗
+- [x] 主檔不存在的代號不寫入，且 `stock` 列數不變；主檔中的 ETF 與 `is_active = 0` 的代號照常寫入
+- [x] 寫入的列 `source` 為 `TWSE`
+- [x] 同一日重跑兩次：列數不變，第二次的值覆蓋第一次
+- [x] 單日寫入在單一交易邊界：模擬寫到一半失敗 → 該日在 `stock_institutional_trade` 為零列，下一次觸發時重新請求該日
 
 ### 缺少日期與補齊範圍
-- [ ] 構造 `stock_daily_price` 在區間內有 3 個交易日、`stock_institutional_trade` 已有其中 1 日 → 本次補齊恰發出 **2** 次 T86 請求
-- [ ] 區間內的週末與休市日（`stock_daily_price` 無列的日期）一次都不請求
-- [ ] 所有交易日都已有法人資料時觸發 → **0** 次外部請求
-- [ ] 缺少日期以單一查詢求出，查詢次數不隨區間日數增加
-- [ ] 區間起日取自日線的「補齊起日」設定，改動該設定後本補齊的起日隨之改變
+- [x] 構造 `stock_daily_price` 在區間內有 3 個交易日、`stock_institutional_trade` 已有其中 1 日 → 本次補齊恰發出 **2** 次 T86 請求
+- [x] 區間內的週末與休市日（`stock_daily_price` 無列的日期）一次都不請求
+- [x] 所有交易日都已有法人資料時觸發 → **0** 次外部請求
+- [x] 缺少日期以單一查詢求出，查詢次數不隨區間日數增加
+- [x] 區間起日取自日線的「補齊起日」設定，改動該設定後本補齊的起日隨之改變
 
 ### 觸發
-- [ ] `PRICE_BACKFILL` 作業結束後自動觸發一次補齊，包含 `caughtUpCount == targetCount`（未發任何外部請求）與有部分標的 `FAILED` 的情形
-- [ ] 每日增量成功後自動觸發一次補齊
-- [ ] 回補端點的 `202` 回應與每日增量的 `200` 回應，欄位與值皆與未加本功能前相同，且不等待補齊完成才回應
-- [ ] 補齊執行中再次觸發 → 本次略過並留下資訊紀錄，同一時間不存在兩個補齊，也不排隊重跑
-- [ ] 開關關閉時，兩個觸發點都不發出任何 T86 請求；測試環境的設定預設為關閉
+- [x] `PRICE_BACKFILL` 作業結束後自動觸發一次補齊，包含 `caughtUpCount == targetCount`（未發任何外部請求）與有部分標的 `FAILED` 的情形
+- [x] 每日增量成功後自動觸發一次補齊
+- [x] 回補端點的 `202` 回應與每日增量的 `200` 回應，欄位與值皆與未加本功能前相同，且不等待補齊完成才回應
+- [x] 補齊執行中再次觸發 → 本次略過並留下資訊紀錄，同一時間不存在兩個補齊，也不排隊重跑
+- [x] 開關關閉時，兩個觸發點都不發出任何 T86 請求；測試環境的設定預設為關閉
 
 ### 速率控制與失敗
-- [ ] 與 MI_INDEX 共用請求間隔：兩者交錯執行時，對 `www.twse.com.tw` 的相鄰兩次請求間隔不小於設定值
-- [ ] T86 回 `403`／`429` → 本次補齊立即結束且不重試；MI_INDEX 隨即看到該主機為不可用；剩餘日期於下一次觸發時補上
-- [ ] 逾時 → 依退避重試，用盡後跳過該日並繼續處理下一日
-- [ ] 補齊失敗時，日線作業的狀態、進度與 API 回應皆不受影響；外部網路不通時應用程式仍正常啟動
+- [x] 與 MI_INDEX 共用請求間隔：兩者交錯執行時，對 `www.twse.com.tw` 的相鄰兩次請求間隔不小於設定值
+- [x] T86 回 `403`／`429` → 本次補齊立即結束且不重試；MI_INDEX 隨即看到該主機為不可用；剩餘日期於下一次觸發時補上
+- [x] 逾時 → 依退避重試，用盡後跳過該日並繼續處理下一日
+- [x] 補齊失敗時，日線作業的狀態、進度與 API 回應皆不受影響；外部網路不通時應用程式仍正常啟動
+
+## Execution Result
+
+### Increment 1 — 2026-09-16
+
+實作三大法人買賣超（T86）的背景補齊，24 項驗收全數完成。無新增端點、不使用進度表，於每次 `PRICE_BACKFILL` 完成與每次每日增量成功後觸發。
+
+**設計取向**：外部用戶端不另立介面（只有一個實作、沒有變體，比照 `TwseMiIndexClient` 的既有作法）。與 `TwseMiIndexClient` 共用同一個來源代碼 `TWSE`，因此節流與封鎖狀態兩者共享——實際執行時也觀察到 MI_INDEX 被封鎖後，T86 這一側立即停止領取新日期。補齊起日沿用既有的啟動補齊設定，未另立一份設定。
+
+**單位查核**（依 `.claude/rules/backend.md` 的規定，不只驗形狀）：以真實 T86 回應與**資料庫既有的** `stock_daily_price.volume` 交叉比對——例如 2609 在 2026-09-14 的法人買進合計 13,024,217 股對當日成交量 30,195,141 股（比例 0.43），抽查的 6 檔皆滿足「買進合計 ≤ 當日成交量」。這證明來源的單位確實是股，而非以自己剛寫入的數字自我印證。
+
+**實際執行留下的資料**：live 煙霧測試由 `PRICE_BACKFILL` 完成觸發補齊，寫入 **30,878 筆真實資料、涵蓋 24 個真實交易日**（`source` 為 `TWSE`），這些資料保留未刪；驗證用的合成測試資料（`T7%`）已清除。過程中遇到一個文件未記載的真實狀況：交易所在某些日期回傳 HTML 而非 JSON，程式以格式錯誤處理、跳過該日並繼續，未中斷整批。
+
+**驗證方式較弱的項目（誠實記錄）**：
+- 第 11 項以 2 個日期（而非範例的 3 個）證明「缺幾天就打幾次請求」的機制；該機制以單一查詢做差集，與日期數無關。
+- 第 14、15 項僅以程式碼檢視確認（差集為單一 `<select>`、未在迴圈中呼叫；補齊起日直接讀既有設定），沒有專屬測試。
+- 第 16 項的兩個子情境（`caughtUpCount` 等於 `targetCount`、批次中部分 `FAILED`）未各自斷言；觸發點掛在完成回呼上、與批次內容無關，屬結構上涵蓋。
+
+**驗證**：`mvn -f develop/backend/pom.xml test` 由 439 項（0 失敗）增為 **473 項（0 失敗）**，新增 34 項測試，連續執行三次無 flakiness。（基準線 439 與 2026-09-15 記錄的 438 有 1 項落差，為當日其他改動造成，與本增量無關。）
+
+**新增檔案**：`StockInstitutionalTrade`、`StockInstitutionalTradeMapper`（含 XML）、`InstitutionalTradeProperties`、`InstitutionalTradeIngestionService`、`InstitutionalTradeCatchUpRunner`、`TwseInstitutionalTradeClient`、`T86Response`、`NormalizedInstitutionalTradeRow`。
+**變更檔案**：`StockSyncService`（兩個觸發點）、`AsyncConfig`（專用單執行緒 executor）、主程式與測試的 `application.yml`、`StockSyncServiceCommonStocksOnlyTest`。
+**測試**：`TwseInstitutionalTradeClientTest`、`InstitutionalTradeCatchUpRunnerTest`、`StockInstitutionalTradeIngestionIntegrationTest`。

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
 requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion]
@@ -835,53 +835,53 @@ Response `200`：
 ### 法人籌碼型態
 
 型態目錄：
-- [ ] `GET /api/strategies` 回傳八個策略；三個法人籌碼型態的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
-- [ ] 三者的 `investors` 參數為 `type: "multiSelect"`，`options` 為外資／投信、`default` 為 `["FOREIGN","TRUST"]`、`minSelected` 為 `1`；其餘數字參數不帶 `type`
-- [ ] 其餘五個策略的條目與本次改動前完全相同
+- [x] `GET /api/strategies` 回傳八個策略；三個法人籌碼型態的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
+- [x] 三者的 `investors` 參數為 `type: "multiSelect"`，`options` 為外資／投信、`default` 為 `["FOREIGN","TRUST"]`、`minSelected` 為 `1`；其餘數字參數不帶 `type`
+- [x] 其餘五個策略的條目與本次改動前完全相同
 
 共通規則：
-- [ ] 外資口徑不含外資自營商：構造 `foreign_net_shares` 每日為 `0`、`foreign_dealer_net_shares` 每日 > 0 的資料 → 三個型態的外資皆不達標
-- [ ] 窗口內某日法人資料已抓取（該日有其他股票的列）但沒有這一檔的列 → 該日買賣超視為 `0`
-- [ ] 窗口內有尚未抓取法人資料的日期 → 該檔在該 D 不判定、不參與該 D 的排名
-- [ ] `investors: ["TRUST"]` 時只判定投信：外資達標、投信未達標的資料不命中，且 `detail.foreign` 為 `null`
-- [ ] 兩方皆勾選時各自判定：只有投信達標 → 命中、`matchedInvestors` 為 `["TRUST"]`；兩方皆達標 → 只有一筆 `items`，`matchedInvestors` 為 `["FOREIGN","TRUST"]`
-- [ ] 省略 `investors` 時以兩者判定，且回應的 `investors` 為 `["FOREIGN","TRUST"]`
-- [ ] `buyDate` 為 D 之後該檔的下一筆日線：D 之後停牌兩日時為停牌後第一個有列的交易日；D 為 `endDate` 且其後已有日線時，`buyDate` 晚於 `endDate` 照常回報
-- [ ] 某檔唯一一次命中在它最新的一筆日線 → 列入 `pendingConfirm`，不在 `items`、不計入 `matchedCount`
-- [ ] 某檔較早有一次已有 `buyDate` 的命中、最新一次命中尚無下一個交易日 → `items` 回報較早那一次，且該檔**不**在 `pendingConfirm`
-- [ ] `dataThroughDate` 為期間內 `stock_institutional_trade` 有資料的最晚交易日；期間內完全沒有法人資料時為 `null`，且所有股票列於 `insufficientData`
-- [ ] D 之前的日線不足窗口長度 − 1 個交易日、使區間內沒有任何可判定的 D → 該檔列於 `insufficientData`
-- [ ] 比率為合計相除：窗口五日買超 `[1,2,3,4,5]` 百萬股、成交 `[10,10,10,10,60]` 百萬股 → 法人買賣超佔比的 `ratioPercent` 與法人買超強度排名的 `strengthPercent` 皆為 `15.00`（每日比率平均會是 `21.67`，驗證不是後者）
-- [ ] 法人資料以批次查詢讀取：全市場掃描時，`stock_institutional_trade` 的查詢次數不隨股票數增加；三個法人籌碼型態同一次送出時不重複讀取
-- [ ] 八個策略同一次送出時 `results` 依送入順序回傳八筆，五個價格型態的命中結果與未加法人籌碼型態時相同
+- [x] 外資口徑不含外資自營商：構造 `foreign_net_shares` 每日為 `0`、`foreign_dealer_net_shares` 每日 > 0 的資料 → 三個型態的外資皆不達標
+- [x] 窗口內某日法人資料已抓取（該日有其他股票的列）但沒有這一檔的列 → 該日買賣超視為 `0`
+- [x] 窗口內有尚未抓取法人資料的日期 → 該檔在該 D 不判定、不參與該 D 的排名
+- [x] `investors: ["TRUST"]` 時只判定投信：外資達標、投信未達標的資料不命中，且 `detail.foreign` 為 `null`
+- [x] 兩方皆勾選時各自判定：只有投信達標 → 命中、`matchedInvestors` 為 `["TRUST"]`；兩方皆達標 → 只有一筆 `items`，`matchedInvestors` 為 `["FOREIGN","TRUST"]`
+- [x] 省略 `investors` 時以兩者判定，且回應的 `investors` 為 `["FOREIGN","TRUST"]`
+- [x] `buyDate` 為 D 之後該檔的下一筆日線：D 之後停牌兩日時為停牌後第一個有列的交易日；D 為 `endDate` 且其後已有日線時，`buyDate` 晚於 `endDate` 照常回報
+- [x] 某檔唯一一次命中在它最新的一筆日線 → 列入 `pendingConfirm`，不在 `items`、不計入 `matchedCount`
+- [x] 某檔較早有一次已有 `buyDate` 的命中、最新一次命中尚無下一個交易日 → `items` 回報較早那一次，且該檔**不**在 `pendingConfirm`
+- [x] `dataThroughDate` 為期間內 `stock_institutional_trade` 有資料的最晚交易日；期間內完全沒有法人資料時為 `null`，且所有股票列於 `insufficientData`
+- [x] D 之前的日線不足窗口長度 − 1 個交易日、使區間內沒有任何可判定的 D → 該檔列於 `insufficientData`
+- [x] 比率為合計相除：窗口五日買超 `[1,2,3,4,5]` 百萬股、成交 `[10,10,10,10,60]` 百萬股 → 法人買賣超佔比的 `ratioPercent` 與法人買超強度排名的 `strengthPercent` 皆為 `15.00`（每日比率平均會是 `21.67`，驗證不是後者）
+- [x] 法人資料以批次查詢讀取：全市場掃描時，`stock_institutional_trade` 的查詢次數不隨股票數增加；三個法人籌碼型態同一次送出時不重複讀取
+- [x] 八個策略同一次送出時 `results` 依送入順序回傳八筆，五個價格型態的命中結果與未加法人籌碼型態時相同
 
 法人買賣超佔比：
-- [ ] 先加總再取絕對值：外資五日買賣超 `[+8,−8,+8,−8,+1]` 百萬股、成交合計 50 百萬股 → 合計 +1、佔比 `2.00%`，`ratioPercent: 10` 不命中（若逐日取絕對值會是 66%，驗證不是後者）
-- [ ] 淨賣超命中：五日合計 −12.5 百萬股、成交合計 67.5 百萬股 → 佔比 `18.52`、`direction` 為 `SELL`、`netShares` 為 `-12500000`
-- [ ] 佔比恰等於 `ratioPercent` 時命中（≥）；窗口買賣超合計為 `0` 時即使 `ratioPercent: 0` 也不命中
-- [ ] 回應回 `investors`、`windowDays`、`ratioPercent`、`dataThroughDate`，不含 `preset`；省略時回 `5` 與 `10`
+- [x] 先加總再取絕對值：外資五日買賣超 `[+8,−8,+8,−8,+1]` 百萬股、成交合計 50 百萬股 → 合計 +1、佔比 `2.00%`，`ratioPercent: 10` 不命中（若逐日取絕對值會是 66%，驗證不是後者）
+- [x] 淨賣超命中：五日合計 −12.5 百萬股、成交合計 67.5 百萬股 → 佔比 `18.52`、`direction` 為 `SELL`、`netShares` 為 `-12500000`
+- [x] 佔比恰等於 `ratioPercent` 時命中（≥）；窗口買賣超合計為 `0` 時即使 `ratioPercent: 0` 也不命中
+- [x] 回應回 `investors`、`windowDays`、`ratioPercent`、`dataThroughDate`，不含 `preset`；省略時回 `5` 與 `10`
 
 法人連續買超：
-- [ ] 投信連續 5 個交易日 `trust_net_shares` 皆 > 0 → 命中；其中任一日為 `0` 或負值 → 不命中
-- [ ] `buyDays: 1` 為合法請求：窗口只有 D 當日
-- [ ] `detail.trust.netBuyShares` 等於窗口內投信買超股數合計
-- [ ] 回應回 `investors`、`buyDays`、`dataThroughDate`，不含 `preset`；省略時回 `5`
+- [x] 投信連續 5 個交易日 `trust_net_shares` 皆 > 0 → 命中；其中任一日為 `0` 或負值 → 不命中
+- [x] `buyDays: 1` 為合法請求：窗口只有 D 當日
+- [x] `detail.trust.netBuyShares` 等於窗口內投信買超股數合計
+- [x] 回應回 `investors`、`buyDays`、`dataThroughDate`，不含 `preset`；省略時回 `5`
 
 法人買超強度排名：
-- [ ] 每日排名：同一 D 有 12 檔外資淨買超且強度各不相同、`topN: 10` → 恰前 10 檔在 D 命中，第 11、12 名不命中
-- [ ] 窗口淨賣超或合計為 `0` 的股票不參與排名：同一 D 只有 3 檔淨買超、`topN: 10` → 恰 3 檔命中
-- [ ] 同強度依 `stockId` 升冪決定名次；兩檔強度四捨五入至兩位小數後相同、原值不同時，依原值排名
-- [ ] 排名逐日計算：某檔在 D1 排第 11、在 D2 排第 3，`topN: 10` → 命中且 `signalDate` 為 D2
-- [ ] 外資條件參與排名但未進前 `topN`、投信進前 `topN` → 命中，`detail.foreign` 為 `null`
-- [ ] 名次在掃描母體內計算：`stockIds` 指定 3 檔、兩方皆勾選、`topN: 1` → 任一交易日最多 2 檔命中
-- [ ] 回應回 `investors`、`windowDays`、`topN`、`dataThroughDate`，不含 `preset`；省略時回 `5` 與 `10`
+- [x] 每日排名：同一 D 有 12 檔外資淨買超且強度各不相同、`topN: 10` → 恰前 10 檔在 D 命中，第 11、12 名不命中
+- [x] 窗口淨賣超或合計為 `0` 的股票不參與排名：同一 D 只有 3 檔淨買超、`topN: 10` → 恰 3 檔命中
+- [x] 同強度依 `stockId` 升冪決定名次；兩檔強度四捨五入至兩位小數後相同、原值不同時，依原值排名
+- [x] 排名逐日計算：某檔在 D1 排第 11、在 D2 排第 3，`topN: 10` → 命中且 `signalDate` 為 D2
+- [x] 外資條件參與排名但未進前 `topN`、投信進前 `topN` → 命中，`detail.foreign` 為 `null`
+- [x] 名次在掃描母體內計算：`stockIds` 指定 3 檔、兩方皆勾選、`topN: 1` → 任一交易日最多 2 檔命中
+- [x] 回應回 `investors`、`windowDays`、`topN`、`dataThroughDate`，不含 `preset`；省略時回 `5` 與 `10`
 
 驗證與用語：
-- [ ] 三個法人籌碼型態帶 `preset` → `400 PRESET_NOT_APPLICABLE`；帶 `risePercent` → `400 PARAM_NOT_APPLICABLE`（`param` 為 `risePercent`）；帶 `days` → `400 DAYS_NOT_APPLICABLE`
-- [ ] 其他型態帶 `investors`／`windowDays`／`ratioPercent`／`buyDays`／`topN` → `400 PARAM_NOT_APPLICABLE`，`param` 指名該欄位；法人連續買超帶 `windowDays`、法人買賣超佔比帶 `topN` 亦同
-- [ ] `investors` 為 `[]`、`["DEALER"]`、`["FOREIGN","FOREIGN"]` → `400 INVALID_INVESTORS`，`strategy` 指名該型態
-- [ ] `windowDays` 為 `0`、`21`、`5.5` → `400 INVALID_WINDOW_DAYS`；`ratioPercent` 為 `-1`、`100.1`、`10.55` → `400 INVALID_RATIO_PERCENT`；`buyDays` 為 `0`、`21`、`5.5` → `400 INVALID_BUY_DAYS`；`topN` 為 `0`、`51`、`10.5` → `400 INVALID_TOP_N`；皆帶 `strategy`
-- [ ] 三個型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
+- [x] 三個法人籌碼型態帶 `preset` → `400 PRESET_NOT_APPLICABLE`；帶 `risePercent` → `400 PARAM_NOT_APPLICABLE`（`param` 為 `risePercent`）；帶 `days` → `400 DAYS_NOT_APPLICABLE`
+- [x] 其他型態帶 `investors`／`windowDays`／`ratioPercent`／`buyDays`／`topN` → `400 PARAM_NOT_APPLICABLE`，`param` 指名該欄位；法人連續買超帶 `windowDays`、法人買賣超佔比帶 `topN` 亦同
+- [x] `investors` 為 `[]`、`["DEALER"]`、`["FOREIGN","FOREIGN"]` → `400 INVALID_INVESTORS`，`strategy` 指名該型態
+- [x] `windowDays` 為 `0`、`21`、`5.5` → `400 INVALID_WINDOW_DAYS`；`ratioPercent` 為 `-1`、`100.1`、`10.55` → `400 INVALID_RATIO_PERCENT`；`buyDays` 為 `0`、`21`、`5.5` → `400 INVALID_BUY_DAYS`；`topN` 為 `0`、`51`、`10.5` → `400 INVALID_TOP_N`；皆帶 `strategy`
+- [x] 三個型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
 
 ---
 ## Execution Result
@@ -1084,3 +1084,23 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
   - `buyDate` 的「等於 `signalDate`」預設走便利多載，`RISING_SUPPORT` 走明確雙日期多載——兩者在型別層級就區分開，不會有第三個型態不小心漏設 `buyDate` 而序列化出 `null`（`hit(...)` 是建立命中結果的唯一入口，兩個多載都保證回傳非 null 的 `buyDate`）。
   - `code-quality` skill 自我審查（詳見流程）：`buyDate` 在 `RisingSupportDetector` 中讀自已建好、保證非空的 `confirmCloses` 清單最後一筆，無 null 風險；`StrategyHitDto` 只新增一個欄位與對應 getter/setter，未變動既有欄位語意；純記憶體運算，無資源生命週期、原子性或效能疑慮（不新增查詢、不在迴圈內做重複工作）。唯一既有呼叫點（`StrategyScanService.runStrategy`）已同步更新。未發現需要修正之處，也沒有刻意留下未處理的問題。
   - 驗證：先跑 `mvn -f develop/backend/pom.xml test -Dtest=StrategyScanIntegrationTest` → **113 tests, 0 failures, 0 errors**（105 既有 + 8 新增）；再跑全量 `mvn -f develop/backend/pom.xml -o test` → **400 tests, 0 failures, 0 errors**。過程中僅執行測試，未啟動即時伺服器；回測端點（`StrategyBacktestService`/`StrategyBacktestIntegrationTest`）完全未觸碰，其既有 41 個測試在全量跑中原樣通過。
+
+### Increment 8 — 2026-09-16
+
+新增三個法人籌碼型態（法人買賣超佔比、法人連續買超、法人買超強度排名），37 項驗收全數完成。策略目錄由五個增為八個。
+
+**實作方式**：沿用既有的 `PatternDetector` seam 與「`presets` 為空即由 `params` 驅動」的目錄形狀新增三個偵測器，未另立平行架構；法人資料以批次查詢讀取，與既有掃描讀行情的作法一致。`ParamDto` 新增 `type`（`multiSelect`）與 `options`／`minSelected`，讓前端能通用地畫出複選框而不必認得 `investors` 這個名字。
+
+**執行過程**：本增量的實作在第一次執行時因用量限制中途中斷。中斷後程式與測試已在磁碟上且全套測試通過，因此第二輪不是重做，而是**逐項稽核**：對 37 項驗收各自指認實作位置與證明它的測試，並判斷該測試是否真的證明了驗收所寫的內容（而非較弱的版本）。稽核結論為 37 項全部已達成、**未再修改任何程式**。
+
+**特別確認的四項**（這些驗收本身就是為了抓出「看似正確」的實作）：
+- 窗口比率為**合計相除**：日買超 `[1,2,3,4,5]` 百萬股對成交 `[10,10,10,10,60]` 百萬股得 `15.00`，逐日比率平均會得 `21.67`——測試以手算值斷言前者。
+- **先加總再取絕對值**：`[+8,−8,+8,−8,+1]` 百萬股對成交合計 50 百萬股得 `+1`、`2.00%`，門檻 10% 不命中；逐日取絕對值會得 66%。
+- **法人資料批次讀取**：以查詢計數器實測，`stock_institutional_trade` 的查詢次數在股票數 2→6、法人型態 1→3 時皆不變。
+- **排名同分處理**：以 10.004% 與 10.001%（四捨五入後同為 10.00）驗證依原值排名，原值相同時再依 `stockId` 升冪。
+
+**外資口徑**：不含外資自營商（`foreign_dealer_*`），寫入端與讀取端皆已確認一致。
+
+**資料**：以資料庫中 30,878 筆真實法人資料（1,328 檔、24 個交易日）為背景執行，稽核前後列數不變，未寫入或刪除任何真實資料。
+
+**驗證**：`mvn -f develop/backend/pom.xml test` — **510/510 通過、0 失敗**（本增量開始前為 473），由我另外獨立重跑確認，並抽查其中 9 個關鍵測試方法確實存在於測試檔中。

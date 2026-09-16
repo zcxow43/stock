@@ -3,8 +3,17 @@
 
 import { ApiError, type ApiErrorBody } from './stocks'
 
-export type StrategyCode = 'BOX_BREAKOUT' | 'HIGHER_LOWS' | 'RISING_SUPPORT' | 'REBOUND' | 'CUMULATIVE_RISE'
+export type StrategyCode =
+  | 'BOX_BREAKOUT'
+  | 'HIGHER_LOWS'
+  | 'RISING_SUPPORT'
+  | 'REBOUND'
+  | 'CUMULATIVE_RISE'
+  | 'INSTITUTIONAL_NET_RATIO'
+  | 'INSTITUTIONAL_CONSECUTIVE_BUY'
+  | 'INSTITUTIONAL_STRENGTH_RANK'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
+export type InvestorCode = 'FOREIGN' | 'TRUST'
 
 export interface PresetOption {
   code: PresetCode
@@ -12,25 +21,57 @@ export interface PresetOption {
   description: string
 }
 
-/** A single input a no-sensitivity strategy exposes (`CUMULATIVE_RISE`'s `days`/
- * `risePercent`, `REBOUND`'s `dropDays`/`dropPercent`/`riseDays`/`risePercent`).
- * Default/min/max/step all come from here — never hard-coded in the frontend, per
- * specs/backend/strategy-scan.md「presets 與 params 的關係」. `code` is deliberately a
- * plain `string`, not a fixed union — the set of param names is the backend's to grow,
- * and the frontend must render whatever it's given without a matching code change. */
-export interface StrategyParam {
+/** One option of a `multiSelect` param (e.g. `investors`'s `FOREIGN`/`TRUST`) — `code` is
+ * what goes out in the request array, `name` is the checkbox label. */
+export interface StrategyParamOption {
   code: string
   name: string
+}
+
+/** A field every `StrategyParam` variant shares regardless of `type`. `code` is deliberately
+ * a plain `string`, not a fixed union — the set of param names is the backend's to grow, and
+ * the frontend must render whatever it's given without a matching code change. `group`, when
+ * present, names an entry in the strategy's own `paramGroups` — this input is part of that
+ * optional, all-or-nothing group (see `ParamGroup`). Absent means the input always applies
+ * and can never be disabled. */
+interface StrategyParamBase {
+  code: string
+  name: string
+  group?: string
+}
+
+/** A plain numeric input (`CUMULATIVE_RISE`'s `days`/`risePercent`, `REBOUND`'s `dropDays`/
+ * `dropPercent`/`riseDays`/`risePercent`, the institutional cards' `windowDays`/
+ * `ratioPercent`/`buyDays`/`topN`). No `type` field — its absence is what distinguishes it
+ * from `StrategyMultiSelectParam` below. `unit`/`default`/`min`/`max`/`step` all come from
+ * here — never hard-coded in the frontend (specs/backend/strategy-scan.md「presets 與
+ * params 的關係」). */
+export interface StrategyNumberParam extends StrategyParamBase {
+  type?: undefined
   unit: string
   default: number
   min: number
   max: number
   step: number
-  /** When present, names an entry in the strategy's own `paramGroups` — this input is
-   * part of that optional, all-or-nothing group (see `ParamGroup`). Absent means the
-   * input always applies and can never be disabled. */
-  group?: string
 }
+
+/** A complex-select input (today only the institutional cards' `investors`) — one checkbox
+ * per `options` entry, `default` is the pre-checked option `code`s. The frontend decides to
+ * render checkboxes purely from `type === 'multiSelect'` — never from this param's own
+ * `code` or its strategy's `code` (specs/frontend/strategy.md「複選參數」). */
+export interface StrategyMultiSelectParam extends StrategyParamBase {
+  type: 'multiSelect'
+  options: StrategyParamOption[]
+  default: string[]
+  /** Minimum number of options that must stay checked; below this the card blocks
+   * submission with 「請至少勾選一個<name>」. */
+  minSelected: number
+}
+
+/** One card input, discriminated on `type` so TypeScript itself enforces that a caller
+ * narrows before reading a shape-specific field (`unit`/`min`/`max`/`step` only exist on the
+ * numeric variant; `options`/`minSelected` only on the multiSelect one). */
+export type StrategyParam = StrategyNumberParam | StrategyMultiSelectParam
 
 /** One optional, all-or-nothing group of `params` entries sharing the same `group` code
  * (currently only `REBOUND`'s `rise` group). Rendered as a single checkbox — unchecking
@@ -115,32 +156,66 @@ export interface CumulativeRiseDetail {
   risePercent: number
 }
 
+/** Shared by all three institutional (法人籌碼) detail shapes — `matchedInvestors` lists
+ * which side(s) actually hit (「FOREIGN」/「TRUST」 order), `foreign`/`trust` are `null`
+ * when that side wasn't requested or didn't hit. The per-strategy numeric fields inside
+ * `foreign`/`trust` (rank/strength/net shares…) are judgement detail this table never
+ * shows (specs/frontend/strategy.md「名次、佔比與強度屬於判定明細…不在表上呈現」) — only
+ * `matchedInvestors` and (`INSTITUTIONAL_NET_RATIO` only) `direction` feed the UI. */
+export interface InstitutionalNetRatioDetail {
+  windowStartDate: string
+  volumeShares: number
+  matchedInvestors: InvestorCode[]
+  foreign: { netShares: number; ratioPercent: number; direction: 'BUY' | 'SELL' } | null
+  trust: { netShares: number; ratioPercent: number; direction: 'BUY' | 'SELL' } | null
+}
+
+export interface InstitutionalConsecutiveBuyDetail {
+  windowStartDate: string
+  matchedInvestors: InvestorCode[]
+  foreign: { netBuyShares: number } | null
+  trust: { netBuyShares: number } | null
+}
+
+export interface InstitutionalStrengthRankDetail {
+  windowStartDate: string
+  volumeShares: number
+  matchedInvestors: InvestorCode[]
+  foreign: { rank: number; strengthPercent: number; netBuyShares: number } | null
+  trust: { rank: number; strengthPercent: number; netBuyShares: number } | null
+}
+
 export type StrategyDetail =
   | BoxBreakoutDetail
   | HigherLowsDetail
   | RisingSupportDetail
   | ReboundDetail
   | CumulativeRiseDetail
+  | InstitutionalNetRatioDetail
+  | InstitutionalConsecutiveBuyDetail
+  | InstitutionalStrengthRankDetail
 
 export interface StrategyHit {
   stockId: string
   stockName: string
   signalDate: string
   /** The entry date this hit reports for backtesting — for `RISING_SUPPORT` this is the
-   * confirmation-complete day D+2 (`signalDate` stays D); every other strategy's `buyDate`
-   * equals its `signalDate`. The frontend never recomputes this itself — it's a strategy
-   * definition detail owned by the backend (specs/backend/strategy-scan.md「buyDate 為
-   * 這一次命中的進場日」). */
+   * confirmation-complete day D+2 (`signalDate` stays D); for the three institutional
+   * strategies this is the next trading day after `signalDate` (法人日報收盤後才發布);
+   * every other strategy's `buyDate` equals its `signalDate`. The frontend never recomputes
+   * this itself — it's a strategy definition detail owned by the backend
+   * (specs/backend/strategy-scan.md「buyDate 為這一次命中的進場日」). */
   buyDate: string
   detail: StrategyDetail
 }
 
 export interface StrategyResult {
   strategy: StrategyCode
-  /** `preset`/`days`/(`dropDays` etc.) are mutually exclusive — a strategy with a
-   * sensitivity dropdown reports `preset`; `CUMULATIVE_RISE` reports `days`; `REBOUND`
-   * reports `requireRise`/`dropDays`/`dropPercent` (and `riseDays`/`risePercent` when
-   * `requireRise` is `true`) instead of either. */
+  /** `preset`/`days`/(`dropDays` etc.)/(`investors` etc.) are mutually exclusive — a
+   * strategy with a sensitivity dropdown reports `preset`; `CUMULATIVE_RISE` reports
+   * `days`; `REBOUND` reports `requireRise`/`dropDays`/`dropPercent` (and `riseDays`/
+   * `risePercent` when `requireRise` is `true`); the three institutional strategies report
+   * `investors` plus their own subset of `windowDays`/`ratioPercent`/`buyDays`/`topN`. */
   preset?: PresetCode
   days?: number
   requireRise?: boolean
@@ -148,6 +223,16 @@ export interface StrategyResult {
   dropPercent?: number
   riseDays?: number
   risePercent?: number
+  /** Institutional strategies only — the法人 actually applied, `FOREIGN`/`TRUST` order. */
+  investors?: InvestorCode[]
+  windowDays?: number
+  ratioPercent?: number
+  buyDays?: number
+  topN?: number
+  /** Institutional strategies only — latest trade date `stock_institutional_trade` has
+   * data through within the scanned period; `null` when there's none at all
+   * (specs/frontend/strategy.md「法人籌碼型態必須帶出法人資料的日期」). */
+  dataThroughDate?: string | null
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -174,6 +259,12 @@ export interface ScanStrategySelection {
   dropPercent?: number
   requireRise?: boolean
   riseDays?: number
+  /** Only sent by the three institutional strategies. */
+  investors?: InvestorCode[]
+  windowDays?: number
+  ratioPercent?: number
+  buyDays?: number
+  topN?: number
 }
 
 export interface ScanRequest {

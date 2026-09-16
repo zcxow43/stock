@@ -51,6 +51,24 @@ public class AsyncConfig {
     }
 
     /**
+     * Single-thread executor for the institutional-trade background catch-up (spec:
+     * specs/backend/institutional-trade-ingestion.md, 觸發時機). Dedicated so this fire-and-forget
+     * trigger — called from both the price-backfill completion path and the daily-increment path —
+     * never competes with {@link #backfillExecutor}'s per-stock workers or the dispatch executor for
+     * a thread; a single thread is enough since this runner itself processes dates sequentially.
+     */
+    @Bean
+    public Executor institutionalTradeCatchUpExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(10);
+        executor.setThreadNamePrefix("institutional-trade-catch-up-");
+        executor.initialize();
+        return executor;
+    }
+
+    /**
      * Dedicated executor for the indicator rebuild batch job (POST /api/stocks/indicators/rebuild).
      * No external rate limit applies here — the job only reads/writes our own database — so a small
      * pool is used purely to bound concurrency, not to throttle requests.
