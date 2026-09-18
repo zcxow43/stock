@@ -72,6 +72,14 @@
           <div class="rise"><span class="rl">天數</span><input value="5" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">取前幾名</span><input value="10" style="width:44px"><span class="pct">名</span></div>
           <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">MACD 黃金交叉</span></div>
+          <div class="desc">DIF（短期 EMA − 長期 EMA）由下往上穿越 DEA（DIF 的 9 日 EMA）當日為訊號日</div>
+          <div class="rise"><span class="rl">短期 EMA</span><input value="12" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">長期 EMA</span><input value="26" style="width:44px"><span class="pct">日</span></div>
+          <div class="desc">短期 EMA、長期 EMA 為回看的交易日數，不含週末與休市日</div></div>
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">KDJ 黃金交叉</span></div>
+          <div class="desc">KD(9,3,3) 的 J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 低於門檻</div>
+          <div class="rise"><span class="rl">J 門檻</span><input value="40.0"></div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
@@ -93,7 +101,7 @@
       <div class="totnote">另 1 筆尚無可賣出交易日，未計入</div>
       <div class="totnote">另 3 筆未勾選，未計入</div>
       <div class="totnote">另 3 筆已隱藏</div>
-      <div class="subrow"><div class="params">底底高（嚴格）・箱型突破（標準）・上漲支撐（標準）・反彈（3 日跌 10% → 1 日反彈 5%）・累積上漲（30 日）・法人買賣超佔比（外資／投信・5 日合計 ≥ 10%・法人資料至 2026-08-28）・法人連續買超（投信・連 5 日・法人資料至 2026-08-28）・法人買超強度排名（外資／投信・5 日強度・各前 10 名・法人資料至 2026-08-28）</div>
+      <div class="subrow"><div class="params">底底高（嚴格）・箱型突破（標準）・上漲支撐（標準）・反彈（3 日跌 10% → 1 日反彈 5%）・累積上漲（30 日）・法人買賣超佔比（外資／投信・5 日合計 ≥ 10%・法人資料至 2026-08-28）・法人連續買超（投信・連 5 日・法人資料至 2026-08-28）・法人買超強度排名（外資／投信・5 日強度・各前 10 名・法人資料至 2026-08-28）・MACD 黃金交叉（12／26／9）・KDJ 黃金交叉（前一日 J &lt; 40）</div>
         <div class="batchrow"><label class="allclear"><span class="acb"></span>取消全選</label>
           <label class="pxclear"><span class="acb on"></span>取消買進價高於<input class="pxamt dis" disabled value="500">元</label>
           <label class="hideinc"><span class="acb"></span>隱藏資料不齊（無賣出日）</label></div></div>
@@ -105,7 +113,7 @@
           <tr><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2603</td><td>長榮</td>
             <td class="hits"><span class="stag">反彈</span><span class="sdate">2026-08-26</span><span class="sep">・</span><span class="stag">法人買賣超佔比（外資賣超）</span><span class="sdate">2026-08-25</span></td><td>2026-08-26</td><td class="r">205.50</td><td>2026-08-27</td><td class="r">199.00</td><td class="r down">-3.16%</td><td class="r down">-6,500</td></tr>
           <tr><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">3231</td><td>緯創</td>
-            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-30</span></td><td>2026-08-30</td><td class="r">118.50</td><td class="dash">—</td><td class="r dash">—</td><td class="r dash">—</td><td class="r dash">—</td></tr>
+            <td class="hits"><span class="stag">累積上漲</span><span class="sdate">2026-08-30</span><span class="sep">・</span><span class="stag">KDJ 黃金交叉</span><span class="sdate">2026-08-30</span></td><td>2026-08-30</td><td class="r">118.50</td><td class="dash">—</td><td class="r dash">—</td><td class="r dash">—</td><td class="r dash">—</td></tr>
         </tbody>
       </table>
       <div class="note">底底高：另有 3 檔因區間前的歷史資料不足而未納入判定 ▸</div>

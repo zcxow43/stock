@@ -229,3 +229,11 @@
 /* the params line can now be longer than its row: let it wrap, never squeeze the batch checkboxes beside it */
 .page-strategy .subrow .params { flex:1 1 0; min-width:0; }
 .page-strategy .subrow > :not(.params) { flex:none; }
+
+/* ten strategy cards: on the compact result screens, lift 反彈's option-group checkbox onto its title line so the first card row loses its fourth line */
+.page-strategy.nodesc .cards .card { position:relative; }
+.page-strategy.nodesc .cards .card > .grp { position:absolute; top:5px; right:10px; }
+/* ten cards cost a third card row; take it back from the empty page padding rather than the content, on every screen of this page */
+.page-strategy .wrap { padding-top:12px; padding-bottom:6px; }
+.page-strategy.nodesc .tab { padding-top:7px; padding-bottom:7px; }
+.page-strategy.nodesc .cards .card:nth-child(n+7) { padding-top:1px; padding-bottom:1px; }
