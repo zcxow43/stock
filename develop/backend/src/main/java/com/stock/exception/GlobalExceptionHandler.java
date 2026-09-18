@@ -186,6 +186,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidTopN(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidFastPeriodException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidFastPeriod(InvalidFastPeriodException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidFastPeriod(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidSlowPeriodException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSlowPeriod(InvalidSlowPeriodException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSlowPeriod(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidMacdPeriodsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMacdPeriods(InvalidMacdPeriodsException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidMacdPeriods(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidJThresholdException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidJThreshold(InvalidJThresholdException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidJThreshold(e.getStrategy()));
+    }
+
     @ExceptionHandler(NoBacktestItemsException.class)
     public ResponseEntity<ErrorResponse> handleNoBacktestItems(NoBacktestItemsException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("NO_BACKTEST_ITEMS"));

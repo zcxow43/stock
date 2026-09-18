@@ -178,6 +178,66 @@ public interface PatternDetector {
         return false;
     }
 
+    /** Whether this detector accepts the request's `fastPeriod` field — true only for
+     *  MACD_GOLDEN_CROSS. */
+    default boolean acceptsFastPeriod() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `slowPeriod` field — true only for
+     *  MACD_GOLDEN_CROSS. */
+    default boolean acceptsSlowPeriod() {
+        return false;
+    }
+
+    /** Whether this detector accepts the request's `jThreshold` field — true only for
+     *  KDJ_GOLDEN_CROSS. */
+    default boolean acceptsJThreshold() {
+        return false;
+    }
+
+    /** Inclusive bounds/default for `fastPeriod` — meaningful only when {@link #acceptsFastPeriod()}
+     *  is true; see specs/backend/strategy-scan.md, "MACD 黃金交叉". */
+    default int getFastPeriodMin() {
+        return 0;
+    }
+
+    default int getFastPeriodMax() {
+        return 0;
+    }
+
+    default int getFastPeriodDefault() {
+        return 0;
+    }
+
+    /** Inclusive bounds/default for `slowPeriod` — meaningful only when {@link #acceptsSlowPeriod()}
+     *  is true; see specs/backend/strategy-scan.md, "MACD 黃金交叉". */
+    default int getSlowPeriodMin() {
+        return 0;
+    }
+
+    default int getSlowPeriodMax() {
+        return 0;
+    }
+
+    default int getSlowPeriodDefault() {
+        return 0;
+    }
+
+    /** Inclusive bounds/default for `jThreshold` — meaningful only when {@link #acceptsJThreshold()}
+     *  is true; see specs/backend/strategy-scan.md, "KDJ 黃金交叉". */
+    default BigDecimal getJThresholdMin() {
+        return BigDecimal.ZERO;
+    }
+
+    default BigDecimal getJThresholdMax() {
+        return BigDecimal.ZERO;
+    }
+
+    default BigDecimal getJThresholdDefault() {
+        return BigDecimal.ZERO;
+    }
+
     /**
      * Trading days of history required strictly before the scan's startDate for this selection —
      * drives how far back the batched lookback pre-fetch must reach (specs/backend/strategy-scan.md,

@@ -180,6 +180,26 @@ public class ErrorResponse {
         return new ErrorResponse("INVALID_TOP_N", null, null, null, null, null, null, null, strategy, null, null);
     }
 
+    public static ErrorResponse invalidFastPeriod(String strategy) {
+        return new ErrorResponse("INVALID_FAST_PERIOD", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidSlowPeriod(String strategy) {
+        return new ErrorResponse("INVALID_SLOW_PERIOD", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidMacdPeriods(String strategy) {
+        return new ErrorResponse("INVALID_MACD_PERIODS", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
+    public static ErrorResponse invalidJThreshold(String strategy) {
+        return new ErrorResponse("INVALID_J_THRESHOLD", null, null, null, null, null, null, null, strategy, null,
+                null);
+    }
+
     public static ErrorResponse duplicateBacktestItem(List<BacktestDuplicateItemDto> duplicatedItems) {
         return new ErrorResponse("DUPLICATE_BACKTEST_ITEM", null, null, null, null, null, null, null, null, null,
                 duplicatedItems);

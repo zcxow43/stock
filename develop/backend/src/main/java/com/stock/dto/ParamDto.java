@@ -22,6 +22,11 @@ import java.util.List;
  * "multiSelect"} params (currently only `investors`) — see specs/backend/strategy-scan.md, "參數型別".
  * `unit`/`min`/`max`/`step` are meaningless for a multiSelect param and stay {@code null} (omitted);
  * `type`/`options`/`minSelected` are the mirror image, {@code null} for every numeric param.
+ *
+ * <p>`lessThan`, when present, names another numeric param's {@code code} on the same strategy that
+ * this param's value must be strictly less than — currently only MACD_GOLDEN_CROSS's `fastPeriod`
+ * (`lessThan: "slowPeriod"`) — see specs/backend/strategy-scan.md, "參數間的大小限制". {@code null}
+ * (omitted) for every param without such a constraint.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ParamDto {
@@ -37,6 +42,7 @@ public class ParamDto {
     private String group;
     private List<ParamOptionDto> options;
     private Integer minSelected;
+    private String lessThan;
 
     public ParamDto() {
     }
@@ -58,6 +64,15 @@ public class ParamDto {
         this.max = max;
         this.step = step;
         this.group = group;
+    }
+
+    /** Numeric param, ungrouped, that must be strictly less than another named param — see
+     *  {@link #getLessThan()}. */
+    public static ParamDto numericLessThan(String code, String name, String unit, BigDecimal defaultValue,
+                                            BigDecimal min, BigDecimal max, BigDecimal step, String lessThan) {
+        ParamDto dto = new ParamDto(code, name, unit, defaultValue, min, max, step);
+        dto.lessThan = lessThan;
+        return dto;
     }
 
     /**
@@ -163,5 +178,13 @@ public class ParamDto {
 
     public void setMinSelected(Integer minSelected) {
         this.minSelected = minSelected;
+    }
+
+    public String getLessThan() {
+        return lessThan;
+    }
+
+    public void setLessThan(String lessThan) {
+        this.lessThan = lessThan;
     }
 }

@@ -18,6 +18,10 @@ import java.util.List;
  * `windowDays`/`ratioPercent`/`buyDays`/`topN`, and additionally `dataThroughDate` — the latest
  * trading day `stock_institutional_trade` actually covers within the pre-loaded period, or
  * {@code null} when it covers none at all — see specs/backend/strategy-scan.md, "法人籌碼型態".
+ *
+ * <p>MACD_GOLDEN_CROSS echoes `fastPeriod`/`slowPeriod`/`signalPeriod` (the latter always `9`);
+ * KDJ_GOLDEN_CROSS echoes `jThreshold` — neither echoes `preset` — see specs/backend/
+ * strategy-scan.md, "技術指標型態".
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StrategyResultDto {
@@ -35,6 +39,10 @@ public class StrategyResultDto {
     private BigDecimal ratioPercent;
     private Integer buyDays;
     private Integer topN;
+    private Integer fastPeriod;
+    private Integer slowPeriod;
+    private Integer signalPeriod;
+    private BigDecimal jThreshold;
     private LocalDate dataThroughDate;
     private int matchedCount;
     private List<StrategyHitDto> items;
@@ -146,6 +154,38 @@ public class StrategyResultDto {
 
     public void setTopN(Integer topN) {
         this.topN = topN;
+    }
+
+    public Integer getFastPeriod() {
+        return fastPeriod;
+    }
+
+    public void setFastPeriod(Integer fastPeriod) {
+        this.fastPeriod = fastPeriod;
+    }
+
+    public Integer getSlowPeriod() {
+        return slowPeriod;
+    }
+
+    public void setSlowPeriod(Integer slowPeriod) {
+        this.slowPeriod = slowPeriod;
+    }
+
+    public Integer getSignalPeriod() {
+        return signalPeriod;
+    }
+
+    public void setSignalPeriod(Integer signalPeriod) {
+        this.signalPeriod = signalPeriod;
+    }
+
+    public BigDecimal getJThreshold() {
+        return jThreshold;
+    }
+
+    public void setJThreshold(BigDecimal jThreshold) {
+        this.jThreshold = jThreshold;
     }
 
     public LocalDate getDataThroughDate() {

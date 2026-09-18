@@ -41,17 +41,23 @@ public class IndicatorCalculationService {
     private static final RoundingMode RM = RoundingMode.HALF_UP;
     private static final int KD_WINDOW = 9;
 
+    /** The system's one persisted param set — see {@link StockDailyIndicator#PARAM_KEY}. */
+    public static final int DEFAULT_FAST_PERIOD = 12;
+    public static final int DEFAULT_SLOW_PERIOD = 26;
+    private static final int SIGNAL_PERIOD = 9;
+
     private static final BigDecimal SEED_KD = new BigDecimal("50");
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal TWO = new BigDecimal("2");
     private static final BigDecimal THREE = new BigDecimal("3");
 
     /**
-     * Computes the full recursive series for one stock over the given ascending-by-date rows.
-     * The first row in {@code ascRows} is always treated as the synthetic start of the recursion
-     * (EMA seeded at that day's close, K/D seeded at 50) — this is what the spec's warmup mechanism
-     * relies on: callers fetch ~250 extra trading days before their real output start and pass the
-     * whole window in here, then mark everything before {@code outputStartDateOrNull} as warmup.
+     * Computes the full recursive series for one stock over the given ascending-by-date rows,
+     * using the system's default MACD periods (12/26/9). The first row in {@code ascRows} is
+     * always treated as the synthetic start of the recursion (EMA seeded at that day's close, K/D
+     * seeded at 50) — this is what the spec's warmup mechanism relies on: callers fetch ~250 extra
+     * trading days before their real output start and pass the whole window in here, then mark
+     * everything before {@code outputStartDateOrNull} as warmup.
      *
      * @param outputStartDateOrNull rows with tradeDate before this are flagged is_warmup=1;
      *                              null means "no artificial warmup boundary" (mark nothing as warmup —
@@ -61,6 +67,22 @@ public class IndicatorCalculationService {
     public List<StockDailyIndicator> computeFull(String stockId, String paramKey,
                                                   List<StockDailyPrice> ascRows,
                                                   LocalDate outputStartDateOrNull) {
+        return computeFull(stockId, paramKey, ascRows, outputStartDateOrNull, DEFAULT_FAST_PERIOD,
+                DEFAULT_SLOW_PERIOD);
+    }
+
+    /**
+     * Same recursion as {@link #computeFull(String, String, List, LocalDate)}, but with the
+     * DIF-driving fast/slow EMA periods taken as parameters instead of the fixed 12/26 — the single
+     * shared formula implementation strategy-scan.md's MACD_GOLDEN_CROSS reuses for its
+     * caller-supplied {@code fastPeriod}/{@code slowPeriod} (see specs/backend/strategy-scan.md,
+     * "必須與指標運算共用同一套公式實作，不得另寫一份"). The signal line (DEA = EMA9(DIF)) and the KD(9,3,3)
+     * recursion are never parameterized — both are fixed by spec regardless of caller.
+     */
+    public List<StockDailyIndicator> computeFull(String stockId, String paramKey,
+                                                  List<StockDailyPrice> ascRows,
+                                                  LocalDate outputStartDateOrNull,
+                                                  int fastPeriod, int slowPeriod) {
         List<StockDailyIndicator> results = new ArrayList<>(ascRows.size());
 
         BigDecimal emaFast = null;
@@ -80,10 +102,10 @@ public class IndicatorCalculationService {
                 dif = round(emaFast.subtract(emaSlow));
                 dea = round(dif);
             } else {
-                emaFast = ema(close, emaFast, 12);
-                emaSlow = ema(close, emaSlow, 26);
+                emaFast = ema(close, emaFast, fastPeriod);
+                emaSlow = ema(close, emaSlow, slowPeriod);
                 dif = round(emaFast.subtract(emaSlow));
-                dea = ema(dif, dea, 9);
+                dea = ema(dif, dea, SIGNAL_PERIOD);
             }
             BigDecimal osc = round(dif.subtract(dea));
 
@@ -118,10 +140,10 @@ public class IndicatorCalculationService {
         }
         BigDecimal close = current.getClosePrice();
 
-        BigDecimal emaFast = ema(close, previous.getEmaFast(), 12);
-        BigDecimal emaSlow = ema(close, previous.getEmaSlow(), 26);
+        BigDecimal emaFast = ema(close, previous.getEmaFast(), DEFAULT_FAST_PERIOD);
+        BigDecimal emaSlow = ema(close, previous.getEmaSlow(), DEFAULT_SLOW_PERIOD);
         BigDecimal dif = round(emaFast.subtract(emaSlow));
-        BigDecimal dea = ema(dif, previous.getDea(), 9);
+        BigDecimal dea = ema(dif, previous.getDea(), SIGNAL_PERIOD);
         BigDecimal osc = round(dif.subtract(dea));
 
         BigDecimal rsv = rsv(close, recentHighLow.getHighPrice(), recentHighLow.getLowPrice());

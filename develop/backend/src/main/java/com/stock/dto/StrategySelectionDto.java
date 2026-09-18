@@ -24,6 +24,10 @@ import java.util.List;
  * `ratioPercent`/`buyDays`/`topN` are declared as BigDecimal for the same reason `days` is: a
  * non-integer/out-of-scale value deserializes successfully so it can be rejected by this field's
  * own dedicated error code instead of a generic JSON-parsing 400.
+ *
+ * <p>`fastPeriod`/`slowPeriod` are accepted only by MACD_GOLDEN_CROSS; `jThreshold` only by
+ * KDJ_GOLDEN_CROSS — see specs/backend/strategy-scan.md, "技術指標型態". All three are declared as
+ * BigDecimal for the same reason as the fields above.
  */
 public class StrategySelectionDto {
 
@@ -40,6 +44,9 @@ public class StrategySelectionDto {
     private BigDecimal ratioPercent;
     private BigDecimal buyDays;
     private BigDecimal topN;
+    private BigDecimal fastPeriod;
+    private BigDecimal slowPeriod;
+    private BigDecimal jThreshold;
 
     public StrategySelectionDto() {
     }
@@ -146,5 +153,29 @@ public class StrategySelectionDto {
 
     public void setTopN(BigDecimal topN) {
         this.topN = topN;
+    }
+
+    public BigDecimal getFastPeriod() {
+        return fastPeriod;
+    }
+
+    public void setFastPeriod(BigDecimal fastPeriod) {
+        this.fastPeriod = fastPeriod;
+    }
+
+    public BigDecimal getSlowPeriod() {
+        return slowPeriod;
+    }
+
+    public void setSlowPeriod(BigDecimal slowPeriod) {
+        this.slowPeriod = slowPeriod;
+    }
+
+    public BigDecimal getJThreshold() {
+        return jThreshold;
+    }
+
+    public void setJThreshold(BigDecimal jThreshold) {
+        this.jThreshold = jThreshold;
     }
 }

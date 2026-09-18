@@ -2,9 +2,12 @@ package com.stock;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stock.domain.StockDailyIndicator;
+import com.stock.domain.StockDailyPrice;
 import com.stock.dto.ErrorResponse;
 import com.stock.dto.ScanRequestDto;
 import com.stock.dto.StrategySelectionDto;
+import com.stock.service.IndicatorCalculationService;
 import com.stock.support.QueryCountInterceptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,6 +31,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,6 +52,9 @@ class StrategyScanIntegrationTest {
 
     @Autowired
     private QueryCountInterceptor queryCountInterceptor;
+
+    @Autowired
+    private IndicatorCalculationService indicatorCalculationService;
 
     private JdbcTemplate jdbc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -3778,6 +3786,953 @@ class StrategyScanIntegrationTest {
         ResponseEntity<String> scanResponse = rest.postForEntity("/api/strategies/scan", request, String.class);
         assertNoAdviceWording(scanResponse.getBody());
         assertFalse(scanResponse.getBody().contains("進場"));
+    }
+
+    // ==================== Increment 9: MACD/KDJ golden cross ====================
+
+    private static final double SINE_BASELINE = 100.0;
+    private static final double SINE_AMPLITUDE = 20.0;
+    private static final int SINE_PERIOD_DAYS = 34;
+    private static final int MIN_JUDGE_INDEX = 100;
+
+    @Test
+    void catalog_returnsTenStrategies_macdAndKdjAppendedInOrderMatchingSpecJson() throws Exception {
+        JsonNode strategies = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody())
+                .get("strategies");
+        assertEquals(10, strategies.size());
+        assertEquals("MACD_GOLDEN_CROSS", strategies.get(8).get("code").asText());
+        assertEquals("KDJ_GOLDEN_CROSS", strategies.get(9).get("code").asText());
+
+        JsonNode macd = findByCode(strategies, "MACD_GOLDEN_CROSS");
+        assertEquals("MACD 黃金交叉", macd.get("name").asText());
+        assertEquals("DIF（短期 EMA − 長期 EMA）由下往上穿越 DEA（DIF 的 9 日 EMA）當日為訊號日",
+                macd.get("description").asText());
+        assertEquals(0, macd.get("presets").size());
+        JsonNode macdParams = macd.get("params");
+        assertEquals(2, macdParams.size());
+        JsonNode fastPeriod = findByCode(macdParams, "fastPeriod");
+        assertEquals("短期 EMA", fastPeriod.get("name").asText());
+        assertEquals("日", fastPeriod.get("unit").asText());
+        assertBigDecimalEquals("12", fastPeriod.get("default"));
+        assertBigDecimalEquals("2", fastPeriod.get("min"));
+        assertBigDecimalEquals("50", fastPeriod.get("max"));
+        assertBigDecimalEquals("1", fastPeriod.get("step"));
+        assertEquals("slowPeriod", fastPeriod.get("lessThan").asText());
+        JsonNode slowPeriod = findByCode(macdParams, "slowPeriod");
+        assertEquals("長期 EMA", slowPeriod.get("name").asText());
+        assertBigDecimalEquals("26", slowPeriod.get("default"));
+        assertBigDecimalEquals("3", slowPeriod.get("min"));
+        assertBigDecimalEquals("100", slowPeriod.get("max"));
+        assertTrue(slowPeriod.get("lessThan") == null || slowPeriod.get("lessThan").isNull());
+
+        JsonNode kdj = findByCode(strategies, "KDJ_GOLDEN_CROSS");
+        assertEquals("KDJ 黃金交叉", kdj.get("name").asText());
+        assertEquals("KD(9,3,3) 的 J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 低於門檻",
+                kdj.get("description").asText());
+        assertEquals(0, kdj.get("presets").size());
+        JsonNode kdjParams = kdj.get("params");
+        assertEquals(1, kdjParams.size());
+        JsonNode jThresholdParam = findByCode(kdjParams, "jThreshold");
+        assertEquals("J 門檻", jThresholdParam.get("name").asText());
+        assertEquals("", jThresholdParam.get("unit").asText());
+        assertBigDecimalEquals("40", jThresholdParam.get("default"));
+        assertBigDecimalEquals("-100", jThresholdParam.get("min"));
+        assertBigDecimalEquals("100", jThresholdParam.get("max"));
+    }
+
+    @Test
+    void catalog_existingEightStrategies_unaffected_noLessThanFieldAnywhere() throws Exception {
+        JsonNode strategies = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody())
+                .get("strategies");
+        assertEquals(10, strategies.size());
+        String[] existingCodes = {"BOX_BREAKOUT", "HIGHER_LOWS", "RISING_SUPPORT", "REBOUND", "CUMULATIVE_RISE",
+                "INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY", "INSTITUTIONAL_STRENGTH_RANK"};
+        for (String code : existingCodes) {
+            JsonNode params = findByCode(strategies, code).get("params");
+            if (params != null) {
+                for (JsonNode p : params) {
+                    assertTrue(p.get("lessThan") == null || p.get("lessThan").isNull(),
+                            code + "." + p.get("code").asText() + " must not have lessThan");
+                }
+            }
+        }
+    }
+
+    /** Deterministic sine-wave close series — oscillates enough to produce multiple real MACD/KD
+     *  golden crosses, used as ground truth against {@link IndicatorCalculationService} directly. */
+    private List<StockDailyPrice> buildSineSeries(String stockId, LocalDate start, int count) {
+        List<StockDailyPrice> rows = new ArrayList<>(count);
+        LocalDate d = start;
+        for (int i = 0; i < count; i++) {
+            double v = SINE_BASELINE + SINE_AMPLITUDE * Math.sin(2 * Math.PI * i / SINE_PERIOD_DAYS);
+            BigDecimal close = BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP);
+            StockDailyPrice row = new StockDailyPrice();
+            row.setStockId(stockId);
+            row.setTradeDate(d);
+            row.setOpenPrice(close);
+            row.setHighPrice(close);
+            row.setLowPrice(close);
+            row.setClosePrice(close);
+            row.setVolume(1000);
+            rows.add(row);
+            d = d.plusDays(1);
+        }
+        return rows;
+    }
+
+    private void insertSeries(List<StockDailyPrice> rows) {
+        for (StockDailyPrice row : rows) {
+            insertCloseOnlyRow(row.getStockId(), row.getTradeDate(), row.getClosePrice().toPlainString(),
+                    row.getVolume());
+        }
+    }
+
+    private List<StockDailyIndicator> groundTruth(List<StockDailyPrice> rows, int fastPeriod, int slowPeriod) {
+        return indicatorCalculationService.computeFull(rows.get(0).getStockId(), "TEST", rows, null, fastPeriod,
+                slowPeriod);
+    }
+
+    private List<Integer> findMacdCrossIndices(List<StockDailyIndicator> ind) {
+        List<Integer> result = new ArrayList<>();
+        for (int i = MIN_JUDGE_INDEX; i < ind.size(); i++) {
+            BigDecimal prevOsc = ind.get(i - 1).getOsc();
+            BigDecimal osc = ind.get(i).getOsc();
+            if (prevOsc.compareTo(BigDecimal.ZERO) <= 0 && osc.compareTo(BigDecimal.ZERO) > 0) {
+                result.add(i);
+            }
+        }
+        return result;
+    }
+
+    private List<Integer> findKdjCrossIndices(List<StockDailyIndicator> ind) {
+        List<Integer> result = new ArrayList<>();
+        for (int i = MIN_JUDGE_INDEX; i < ind.size(); i++) {
+            BigDecimal prevK = ind.get(i - 1).getKValue();
+            BigDecimal prevD = ind.get(i - 1).getDValue();
+            BigDecimal k = ind.get(i).getKValue();
+            BigDecimal d = ind.get(i).getDValue();
+            if (prevK.compareTo(prevD) <= 0 && k.compareTo(d) > 0) {
+                result.add(i);
+            }
+        }
+        return result;
+    }
+
+    private StrategySelectionDto macdSelection(Integer fastPeriod, Integer slowPeriod) {
+        StrategySelectionDto dto = new StrategySelectionDto();
+        dto.setCode("MACD_GOLDEN_CROSS");
+        if (fastPeriod != null) {
+            dto.setFastPeriod(BigDecimal.valueOf(fastPeriod));
+        }
+        if (slowPeriod != null) {
+            dto.setSlowPeriod(BigDecimal.valueOf(slowPeriod));
+        }
+        return dto;
+    }
+
+    private StrategySelectionDto kdjSelection(BigDecimal jThreshold) {
+        StrategySelectionDto dto = new StrategySelectionDto();
+        dto.setCode("KDJ_GOLDEN_CROSS");
+        dto.setJThreshold(jThreshold);
+        return dto;
+    }
+
+    @Test
+    void macdAndKdj_sharedFormula_scanDetailMatchesIndicatorCalculationServiceToFourDecimals() throws Exception {
+        String stockId = "SS8001";
+        seedStock(stockId, "共用公式測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+
+        List<StockDailyIndicator> macdGround = groundTruth(rows, 12, 26);
+        List<Integer> macdCrosses = findMacdCrossIndices(macdGround);
+        assertFalse(macdCrosses.isEmpty(), "expected at least one MACD golden cross in the synthetic series");
+        int mi = macdCrosses.get(macdCrosses.size() - 1);
+        LocalDate macdSignalDate = rows.get(mi).getTradeDate();
+
+        JsonNode macdRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), macdSignalDate, macdSignalDate));
+        JsonNode macdDetail = macdRoot.get("results").get(0).get("items").get(0).get("detail");
+        assertBigDecimalEquals(macdGround.get(mi).getDif().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                macdDetail.get("dif"));
+        assertBigDecimalEquals(macdGround.get(mi).getDea().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                macdDetail.get("dea"));
+        assertBigDecimalEquals(macdGround.get(mi).getOsc().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                macdDetail.get("osc"));
+        assertBigDecimalEquals(macdGround.get(mi - 1).getOsc().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                macdDetail.get("prevOsc"));
+
+        List<Integer> kdjCrosses = findKdjCrossIndices(macdGround);
+        assertFalse(kdjCrosses.isEmpty(), "expected at least one KD cross in the synthetic series");
+        int ki = kdjCrosses.get(kdjCrosses.size() - 1);
+        LocalDate kdjSignalDate = rows.get(ki).getTradeDate();
+
+        JsonNode kdjRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(new BigDecimal("100"))),
+                Collections.singletonList(stockId), kdjSignalDate, kdjSignalDate));
+        JsonNode kdjItems = kdjRoot.get("results").get(0).get("items");
+        assertEquals(1, kdjItems.size());
+        JsonNode kdjDetail = kdjItems.get(0).get("detail");
+        assertBigDecimalEquals(macdGround.get(ki).getKValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("k"));
+        assertBigDecimalEquals(macdGround.get(ki).getDValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("d"));
+        assertBigDecimalEquals(macdGround.get(ki).getJValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("j"));
+        assertBigDecimalEquals(macdGround.get(ki - 1).getKValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("prevK"));
+        assertBigDecimalEquals(macdGround.get(ki - 1).getDValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("prevD"));
+        assertBigDecimalEquals(macdGround.get(ki - 1).getJValue().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                kdjDetail.get("prevJ"));
+    }
+
+    @Test
+    void macdAndKdj_doNotReadOrWriteStockDailyIndicatorTable() throws Exception {
+        String stockId = "SS8002";
+        seedStock(stockId, "不讀寫指標表測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 200);
+        insertSeries(rows);
+        LocalDate startDate = rows.get(MIN_JUDGE_INDEX).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+
+        JsonNode before = postScan(scanRequestFromSelections(
+                Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+
+        // Pollute stock_daily_indicator with a row that would flip the outcome if it were read.
+        jdbc.update("INSERT INTO stock_daily_indicator (stock_id, trade_date, param_key, "
+                        + "ema_fast, ema_slow, dif, dea, osc, rsv, k_value, d_value, j_value, is_warmup) "
+                        + "VALUES (?, ?, 'BOGUS', 0, 0, 999.9999, -999.9999, 1999.9998, 50, 50, 50, 50, 0)",
+                stockId, endDate);
+        long countAfterInsert = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM stock_daily_indicator WHERE stock_id = ?", Long.class, stockId);
+
+        JsonNode afterPollute = postScan(scanRequestFromSelections(
+                Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        long countAfterScan = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM stock_daily_indicator WHERE stock_id = ?", Long.class, stockId);
+        assertEquals(countAfterInsert, countAfterScan, "scan must never write to stock_daily_indicator");
+        assertEquals(before.toString(), afterPollute.toString(),
+                "a bogus stock_daily_indicator row must not change the scan outcome");
+
+        jdbc.update("DELETE FROM stock_daily_indicator WHERE stock_id = ?", stockId);
+        JsonNode afterDelete = postScan(scanRequestFromSelections(
+                Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        assertEquals(before.toString(), afterDelete.toString(),
+                "deleting all stock_daily_indicator rows for this stock must not change the scan outcome");
+    }
+
+    @Test
+    void macdAndKdj_warmupCap250_changingBarsBeforeTheCutoffDoesNotChangeResult() throws Exception {
+        String stockId = "SS8003";
+        seedStock(stockId, "暖身上限測試", true);
+        // 400 lookback days + a further window so a real crossing exists within [startDate, endDate].
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2023, 1, 1), 500);
+        insertSeries(rows);
+        LocalDate startDate = rows.get(400).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+
+        JsonNode before = postScan(scanRequestFromSelections(
+                Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+
+        // Only the most recent 250 trading days before startDate are ever fetched (400 - 250 = 150
+        // oldest lookback rows are never read) — corrupting them must not move the result at all.
+        LocalDate cutoff = rows.get(400 - 250).getTradeDate();
+        jdbc.update("UPDATE stock_daily_price SET close_price = 9999.99, high_price = 9999.99, "
+                + "low_price = 9999.99, open_price = 9999.99 WHERE stock_id = ? AND trade_date < ?",
+                stockId, cutoff);
+
+        JsonNode after = postScan(scanRequestFromSelections(
+                Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        assertEquals(before.toString(), after.toString(),
+                "changing bars beyond the 250-trading-day warmup cap must not change the result");
+    }
+
+    @Test
+    void macdAndKdj_warmupFloor_99DaysNotJudged_100DaysJudged() throws Exception {
+        String shortId = "SS8004";
+        String longId = "SS8005";
+        seedStock(shortId, "暖身不足99根", true);
+        seedStock(longId, "暖身恰100根", true);
+
+        List<StockDailyPrice> shortRows = buildSineSeries(shortId, LocalDate.of(2025, 1, 1), 100); // 99 before D + D
+        insertSeries(shortRows);
+        List<StockDailyPrice> longRows = buildSineSeries(longId, LocalDate.of(2024, 12, 31), 101); // 100 before D + D
+        insertSeries(longRows);
+
+        LocalDate shortD = shortRows.get(shortRows.size() - 1).getTradeDate();
+        LocalDate longD = longRows.get(longRows.size() - 1).getTradeDate();
+        assertEquals(shortD, longD, "both fixtures must place D on the same calendar day for a fair comparison");
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Arrays.asList(shortId, longId), shortD, shortD));
+        JsonNode result = root.get("results").get(0);
+        assertTrue(toStringList(result.get("insufficientData")).contains(shortId),
+                "99 trading days before D must not be enough to judge it");
+        assertFalse(toStringList(result.get("insufficientData")).contains(longId),
+                "100 trading days before D must be enough to judge it");
+    }
+
+    @Test
+    void macdAndKdj_between100And250Days_notInsufficientData_judgesNormally() throws Exception {
+        String stockId = "SS8006";
+        seedStock(stockId, "170根暖身測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2025, 6, 1), 170);
+        insertSeries(rows);
+
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> crosses = findMacdCrossIndices(ground);
+        assertFalse(crosses.isEmpty(), "expected at least one MACD cross within a 170-bar series");
+        int mi = crosses.get(crosses.size() - 1);
+        LocalDate signalDate = rows.get(mi).getTradeDate();
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        JsonNode result = root.get("results").get(0);
+        assertFalse(toStringList(result.get("insufficientData")).contains(stockId));
+        assertEquals(1, result.get("matchedCount").asInt());
+        assertEquals(signalDate.toString(), result.get("items").get(0).get("signalDate").asText());
+    }
+
+    @Test
+    void macdAndKdj_buyDateEqualsSignalDate_pendingConfirmAlwaysEmpty_evenAtLatestBar() throws Exception {
+        String stockId = "SS8007";
+        seedStock(stockId, "進場日等於訊號日測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> macdCrosses = findMacdCrossIndices(ground);
+        // Pick the LAST cross in the whole series and scan a range that ends exactly on it, so D is
+        // also this stock's newest bar in the fetched series.
+        int mi = macdCrosses.get(macdCrosses.size() - 1);
+        LocalDate signalDate = rows.get(mi).getTradeDate();
+        LocalDate startDate = rows.get(MIN_JUDGE_INDEX).getTradeDate();
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), startDate, signalDate));
+        JsonNode result = root.get("results").get(0);
+        JsonNode item = result.get("items").get(0);
+        assertEquals(signalDate.toString(), item.get("signalDate").asText());
+        assertEquals(signalDate.toString(), item.get("buyDate").asText());
+        assertEquals(0, result.get("pendingConfirm").size());
+    }
+
+    @Test
+    void macdAndKdj_sameStockTwoCrossesInRange_reportsLatestOnly() throws Exception {
+        String stockId = "SS8008";
+        seedStock(stockId, "多次交叉測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> crosses = findMacdCrossIndices(ground);
+        assertTrue(crosses.size() >= 2, "expected at least two MACD crosses to test 'latest only' collapsing");
+        int first = crosses.get(0);
+        int last = crosses.get(crosses.size() - 1);
+        assertNotEquals(first, last);
+
+        LocalDate startDate = rows.get(MIN_JUDGE_INDEX).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        JsonNode result = root.get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        assertEquals(rows.get(last).getTradeDate().toString(), result.get("items").get(0).get("signalDate").asText());
+    }
+
+    @Test
+    void macdAndKdj_adjacentTradingDayComparison_calendarGapDoesNotChangeResult() throws Exception {
+        String noGapId = "SS8009";
+        String gapId = "SS8010";
+        seedStock(noGapId, "無間隔測試", true);
+        seedStock(gapId, "有間隔測試", true);
+
+        List<StockDailyPrice> rows = buildSineSeries(noGapId, LocalDate.of(2024, 1, 1), 200);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> crosses = findMacdCrossIndices(ground);
+        assertFalse(crosses.isEmpty());
+        int mi = crosses.get(crosses.size() - 1);
+
+        // Same row content and order as `rows`, but with a 3-calendar-day gap (a suspension)
+        // inserted 20 rows before the crossing — adjacency is by list position, not calendar date.
+        int gapAfterIndex = mi - 20;
+        LocalDate d = LocalDate.of(2024, 1, 1);
+        List<LocalDate> gapDates = new ArrayList<>(rows.size());
+        for (int i = 0; i < rows.size(); i++) {
+            gapDates.add(d);
+            d = d.plusDays(i == gapAfterIndex ? 4 : 1);
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            insertCloseOnlyRow(gapId, gapDates.get(i), rows.get(i).getClosePrice().toPlainString(),
+                    rows.get(i).getVolume());
+        }
+
+        LocalDate startDate = rows.get(MIN_JUDGE_INDEX).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+        JsonNode noGapRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(noGapId), startDate, endDate));
+
+        LocalDate gapStart = gapDates.get(MIN_JUDGE_INDEX);
+        LocalDate gapEnd = gapDates.get(gapDates.size() - 1);
+        JsonNode gapRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(gapId), gapStart, gapEnd));
+
+        JsonNode noGapResult = noGapRoot.get("results").get(0);
+        JsonNode gapResult = gapRoot.get("results").get(0);
+        assertEquals(noGapResult.get("matchedCount").asInt(), gapResult.get("matchedCount").asInt());
+        JsonNode noGapDetail = noGapResult.get("items").get(0).get("detail");
+        JsonNode gapDetail = gapResult.get("items").get(0).get("detail");
+        assertEquals(noGapDetail.get("dif").decimalValue(), gapDetail.get("dif").decimalValue());
+        assertEquals(noGapDetail.get("osc").decimalValue(), gapDetail.get("osc").decimalValue());
+        // The reported signalDate is the actual (post-gap) calendar date, not the no-gap date.
+        assertEquals(gapDates.get(mi).toString(), gapResult.get("items").get(0).get("signalDate").asText());
+    }
+
+    @Test
+    void macdAndKdj_priceQueriesAreBatched_macdAndKdjTogetherSameCountAsEitherAlone() throws Exception {
+        String stockId = "SS8011";
+        seedStock(stockId, "批次查詢測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 300);
+        insertSeries(rows);
+        LocalDate startDate = rows.get(150).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+
+        queryCountInterceptor.reset(MAPPER_NAMESPACE);
+        postScan(scanRequestFromSelections(Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        int macdOnlyCount = queryCountInterceptor.getCount();
+
+        queryCountInterceptor.reset(MAPPER_NAMESPACE);
+        postScan(scanRequestFromSelections(Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        int bothCount = queryCountInterceptor.getCount();
+
+        assertEquals(macdOnlyCount, bothCount,
+                "sending MACD_GOLDEN_CROSS and KDJ_GOLDEN_CROSS together must not add price queries");
+    }
+
+    @Test
+    void tenStrategiesTogether_resultsInSubmittedOrder_existingEightStrategiesUnaffected() throws Exception {
+        String stockId = "SS8012";
+        seedStock(stockId, "十個策略同時送出測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 300);
+        insertSeries(rows);
+        LocalDate startDate = rows.get(150).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+
+        List<StrategySelectionDto> tenSelections = Arrays.asList(
+                selection("BOX_BREAKOUT", "LOOSE"),
+                selection("HIGHER_LOWS", "LOOSE"),
+                selection("RISING_SUPPORT", "LOOSE"),
+                reboundSelection(null, null, null, null, null),
+                selectionDays("CUMULATIVE_RISE", null, null),
+                netRatioSelection(null, null, null),
+                consecutiveBuySelection(null, null),
+                strengthRankSelection(null, null, null),
+                macdSelection(null, null),
+                kdjSelection(null));
+
+        JsonNode eightRoot = postScan(scanRequestFromSelections(tenSelections.subList(0, 8),
+                Collections.singletonList(stockId), startDate, endDate));
+        JsonNode tenRoot = postScan(scanRequestFromSelections(tenSelections,
+                Collections.singletonList(stockId), startDate, endDate));
+
+        JsonNode tenResults = tenRoot.get("results");
+        assertEquals(10, tenResults.size());
+        String[] expectedOrder = {"BOX_BREAKOUT", "HIGHER_LOWS", "RISING_SUPPORT", "REBOUND", "CUMULATIVE_RISE",
+                "INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY", "INSTITUTIONAL_STRENGTH_RANK",
+                "MACD_GOLDEN_CROSS", "KDJ_GOLDEN_CROSS"};
+        for (int i = 0; i < expectedOrder.length; i++) {
+            assertEquals(expectedOrder[i], tenResults.get(i).get("strategy").asText());
+        }
+        for (int i = 0; i < 8; i++) {
+            assertEquals(eightRoot.get("results").get(i).toString(), tenResults.get(i).toString(),
+                    "adding MACD/KDJ must not change the other eight strategies' own results: " + expectedOrder[i]);
+        }
+    }
+
+    // ---------- MACD_GOLDEN_CROSS specific ----------
+
+    @Test
+    void macdGoldenCross_flatThenJump_prevOscZeroOrNegativeAndCurrPositive_hits_bothPositiveOrZero_doesNotHit()
+            throws Exception {
+        String stockId = "SS8013";
+        seedStock(stockId, "OSC邊界測試", true);
+        LocalDate start = LocalDate.of(2024, 1, 1);
+        LocalDate d = start;
+        // 150 flat days at 100.00 -> DIF/DEA/OSC settle to exactly 0 for every one of these days
+        // (EMA of a constant series is a fixed point at that constant).
+        for (int i = 0; i < 150; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 1000);
+            d = d.plusDays(1);
+        }
+        LocalDate jumpDate = d; // OSC(jumpDate-1) == 0 exactly; a same-day jump should push OSC > 0
+        insertCloseOnlyRow(stockId, jumpDate, "130.00", 1000);
+        LocalDate dayAfterJump = jumpDate.plusDays(1);
+        insertCloseOnlyRow(stockId, dayAfterJump, "132.00", 1000); // still rising -> OSC stays > 0
+
+        // D-1 OSC == 0 (<=0), D OSC > 0 -> hit, signalDate == jumpDate.
+        JsonNode hitRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), jumpDate, jumpDate));
+        JsonNode hitResult = hitRoot.get("results").get(0);
+        assertEquals(1, hitResult.get("matchedCount").asInt());
+        assertEquals(jumpDate.toString(), hitResult.get("items").get(0).get("signalDate").asText());
+
+        // D-1 OSC > 0, D OSC > 0 (both positive, continued rally) -> no additional hit on this day.
+        JsonNode noHitRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), dayAfterJump, dayAfterJump));
+        JsonNode noHitResult = noHitRoot.get("results").get(0);
+        assertEquals(0, noHitResult.get("matchedCount").asInt());
+        assertFalse(toStringList(noHitResult.get("insufficientData")).contains(stockId));
+    }
+
+    @Test
+    void macdGoldenCross_zeroAxisAboveAndBelow_bothCountAsHit() throws Exception {
+        String stockId = "SS8014";
+        seedStock(stockId, "零軸上下交叉測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> crosses = findMacdCrossIndices(ground);
+
+        Integer aboveIdx = null;
+        Integer belowIdx = null;
+        for (int idx : crosses) {
+            BigDecimal dif = ground.get(idx).getDif();
+            if (dif.compareTo(BigDecimal.ZERO) > 0 && aboveIdx == null) {
+                aboveIdx = idx;
+            }
+            if (dif.compareTo(BigDecimal.ZERO) < 0 && belowIdx == null) {
+                belowIdx = idx;
+            }
+        }
+        assertNotEquals(null, aboveIdx, "expected at least one golden cross with DIF above the zero axis");
+        assertNotEquals(null, belowIdx, "expected at least one golden cross with DIF below the zero axis");
+
+        for (int idx : new int[]{aboveIdx, belowIdx}) {
+            LocalDate signalDate = rows.get(idx).getTradeDate();
+            JsonNode root = postScan(scanRequestFromSelections(
+                    Collections.singletonList(macdSelection(null, null)),
+                    Collections.singletonList(stockId), signalDate, signalDate));
+            JsonNode result = root.get("results").get(0);
+            assertEquals(1, result.get("matchedCount").asInt(),
+                    "cross at index " + idx + " (dif=" + ground.get(idx).getDif() + ") must count as a hit");
+        }
+    }
+
+    @Test
+    void macdGoldenCross_customPeriods_differFromDefault_matchHandCalc() throws Exception {
+        String stockId = "SS8015";
+        seedStock(stockId, "自訂天數測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+
+        List<StockDailyIndicator> defaultGround = groundTruth(rows, 12, 26);
+        List<StockDailyIndicator> customGround = groundTruth(rows, 5, 10);
+        List<Integer> defaultCrosses = findMacdCrossIndices(defaultGround);
+        List<Integer> customCrosses = findMacdCrossIndices(customGround);
+        assertFalse(defaultCrosses.isEmpty());
+        assertFalse(customCrosses.isEmpty());
+
+        int defaultIdx = defaultCrosses.get(defaultCrosses.size() - 1);
+        int customIdx = customCrosses.get(customCrosses.size() - 1);
+        LocalDate defaultDate = rows.get(defaultIdx).getTradeDate();
+        LocalDate customDate = rows.get(customIdx).getTradeDate();
+
+        JsonNode defaultRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), defaultDate, defaultDate));
+        assertEquals(defaultDate.toString(),
+                defaultRoot.get("results").get(0).get("items").get(0).get("signalDate").asText());
+
+        JsonNode customRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(5, 10)),
+                Collections.singletonList(stockId), customDate, customDate));
+        JsonNode customResult = customRoot.get("results").get(0);
+        assertEquals(1, customResult.get("matchedCount").asInt());
+        assertEquals(customDate.toString(), customResult.get("items").get(0).get("signalDate").asText());
+        assertBigDecimalEquals(customGround.get(customIdx).getDif().setScale(4, RoundingMode.HALF_UP).toPlainString(),
+                customResult.get("items").get(0).get("detail").get("dif"));
+    }
+
+    @Test
+    void macdGoldenCross_detailOscMatchesDifMinusDea_withinRoundingTolerance() throws Exception {
+        String stockId = "SS8016";
+        seedStock(stockId, "OSC等於DIF減DEA測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        List<Integer> crosses = findMacdCrossIndices(ground);
+        int idx = crosses.get(crosses.size() - 1);
+        LocalDate signalDate = rows.get(idx).getTradeDate();
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        JsonNode detail = root.get("results").get(0).get("items").get(0).get("detail");
+        BigDecimal dif = detail.get("dif").decimalValue();
+        BigDecimal dea = detail.get("dea").decimalValue();
+        BigDecimal osc = detail.get("osc").decimalValue();
+        BigDecimal diff = osc.subtract(dif.subtract(dea)).abs();
+        assertTrue(diff.compareTo(new BigDecimal("0.0001")) <= 0,
+                "osc must equal dif - dea within rounding tolerance, diff was " + diff);
+    }
+
+    @Test
+    void macdGoldenCross_responseEchoesFastSlowSignalPeriod_defaultsWhenOmitted() throws Exception {
+        String stockId = "SS8017";
+        seedStock(stockId, "回應欄位測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 200);
+        insertSeries(rows);
+        LocalDate startDate = rows.get(MIN_JUDGE_INDEX).getTradeDate();
+        LocalDate endDate = rows.get(rows.size() - 1).getTradeDate();
+
+        JsonNode omittedRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(null, null)),
+                Collections.singletonList(stockId), startDate, endDate));
+        JsonNode omittedResult = omittedRoot.get("results").get(0);
+        assertEquals(12, omittedResult.get("fastPeriod").asInt());
+        assertEquals(26, omittedResult.get("slowPeriod").asInt());
+        assertEquals(9, omittedResult.get("signalPeriod").asInt());
+        assertTrue(omittedResult.get("preset") == null || omittedResult.get("preset").isNull());
+
+        JsonNode explicitRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(macdSelection(5, 10)),
+                Collections.singletonList(stockId), startDate, endDate));
+        JsonNode explicitResult = explicitRoot.get("results").get(0);
+        assertEquals(5, explicitResult.get("fastPeriod").asInt());
+        assertEquals(10, explicitResult.get("slowPeriod").asInt());
+        assertEquals(9, explicitResult.get("signalPeriod").asInt());
+    }
+
+    // ---------- KDJ_GOLDEN_CROSS specific ----------
+
+    /** Finds a KD cross where prevJ sits comfortably inside (-90, 90) so +/-10 threshold offsets
+     *  used by the tests below always stay within the valid [-100, 100] range. */
+    private int findKdjCrossWithModeratePrevJ(List<StockDailyPrice> rows, List<StockDailyIndicator> ground) {
+        for (int idx : findKdjCrossIndices(ground)) {
+            BigDecimal prevJ = ground.get(idx - 1).getJValue();
+            if (prevJ.compareTo(new BigDecimal("-90")) > 0 && prevJ.compareTo(new BigDecimal("90")) < 0) {
+                return idx;
+            }
+        }
+        throw new AssertionError("no KD cross found with a moderate prevJ in the synthetic series");
+    }
+
+    @Test
+    void kdjGoldenCross_realCrossing_prevJBelowThreshold_hits_signalDateIsD() throws Exception {
+        String stockId = "SS8018";
+        seedStock(stockId, "KDJ構造交叉測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        int idx = findKdjCrossWithModeratePrevJ(rows, ground);
+        LocalDate signalDate = rows.get(idx).getTradeDate();
+        BigDecimal prevJ = ground.get(idx - 1).getJValue();
+        BigDecimal hitThreshold = prevJ.setScale(1, RoundingMode.CEILING).add(BigDecimal.TEN);
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(hitThreshold)),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        JsonNode result = root.get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt());
+        assertEquals(signalDate.toString(), result.get("items").get(0).get("signalDate").asText());
+    }
+
+    @Test
+    void kdjGoldenCross_prevJEqualOrAboveThreshold_doesNotHit_strictlyLessThan() throws Exception {
+        String stockId = "SS8019";
+        seedStock(stockId, "J門檻嚴格小於測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        int idx = findKdjCrossWithModeratePrevJ(rows, ground);
+        LocalDate signalDate = rows.get(idx).getTradeDate();
+        BigDecimal prevJ = ground.get(idx - 1).getJValue();
+        // FLOOR-rounded to 1 decimal is guaranteed <= the raw prevJ, so "prevJ < threshold" is false
+        // both when they land exactly equal and when the threshold is set further below still.
+        BigDecimal notBelowThreshold = prevJ.setScale(1, RoundingMode.FLOOR);
+        BigDecimal belowThreshold = notBelowThreshold.subtract(BigDecimal.TEN);
+
+        for (BigDecimal threshold : new BigDecimal[]{notBelowThreshold, belowThreshold}) {
+            JsonNode root = postScan(scanRequestFromSelections(
+                    Collections.singletonList(kdjSelection(threshold)),
+                    Collections.singletonList(stockId), signalDate, signalDate));
+            JsonNode result = root.get("results").get(0);
+            assertEquals(0, result.get("matchedCount").asInt(),
+                    "jThreshold=" + threshold + " (prevJ=" + prevJ + ") must not hit");
+        }
+    }
+
+    @Test
+    void kdjGoldenCross_jThresholdCanBeNegative_hitsAndDoesNotHit() throws Exception {
+        // A sharper, shorter-period zigzag to induce K/D/J overshoot below zero.
+        String stockId = "SS8020";
+        seedStock(stockId, "負門檻測試", true);
+        LocalDate start = LocalDate.of(2024, 1, 1);
+        List<StockDailyPrice> rows = new ArrayList<>();
+        LocalDate d = start;
+        double baseline = 100.0;
+        for (int i = 0; i < 400; i++) {
+            double v = baseline + 45.0 * Math.sin(2 * Math.PI * i / 8.0);
+            BigDecimal close = BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP);
+            StockDailyPrice row = new StockDailyPrice();
+            row.setStockId(stockId);
+            row.setTradeDate(d);
+            row.setOpenPrice(close);
+            row.setHighPrice(close);
+            row.setLowPrice(close);
+            row.setClosePrice(close);
+            row.setVolume(1000);
+            rows.add(row);
+            d = d.plusDays(1);
+        }
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+
+        Integer negativeIdx = null;
+        for (int idx : findKdjCrossIndices(ground)) {
+            BigDecimal prevJ = ground.get(idx - 1).getJValue();
+            if (prevJ.compareTo(BigDecimal.ZERO) < 0 && prevJ.compareTo(new BigDecimal("-90")) > 0) {
+                negativeIdx = idx;
+                break;
+            }
+        }
+        assertNotEquals(null, negativeIdx, "expected at least one KD cross with a negative prevJ");
+        LocalDate signalDate = rows.get(negativeIdx).getTradeDate();
+        BigDecimal prevJ = ground.get(negativeIdx - 1).getJValue();
+
+        BigDecimal hitThreshold = prevJ.setScale(1, RoundingMode.CEILING).add(BigDecimal.TEN);
+        JsonNode hitRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(hitThreshold)),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        assertEquals(1, hitRoot.get("results").get(0).get("matchedCount").asInt());
+
+        BigDecimal notHitThreshold = prevJ.setScale(1, RoundingMode.FLOOR).subtract(BigDecimal.TEN);
+        JsonNode notHitRoot = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(notHitThreshold)),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        assertEquals(0, notHitRoot.get("results").get(0).get("matchedCount").asInt());
+    }
+
+    @Test
+    void kdjGoldenCross_judgedByKDComparison_notJDirectly() throws Exception {
+        String stockId = "SS8021";
+        seedStock(stockId, "以KD而非J判定測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+
+        for (int idx : findKdjCrossIndices(ground)) {
+            BigDecimal prevK = ground.get(idx - 1).getKValue();
+            BigDecimal prevD = ground.get(idx - 1).getDValue();
+            BigDecimal k = ground.get(idx).getKValue();
+            BigDecimal d = ground.get(idx).getDValue();
+            assertTrue(prevK.compareTo(prevD) <= 0, "prevK must be <= prevD for a genuine crossing");
+            assertTrue(k.compareTo(d) > 0, "k must be > d for a genuine crossing");
+        }
+        // The detector's own comparisons in KdjGoldenCrossDetector are written directly against
+        // K/D (never J vs K/D) — this test documents/pins that every index the shared ground truth
+        // flags as a K/D cross is exactly what the scan endpoint also flags, proving both sides use
+        // the same K/D-based definition rather than an independent J-vs-K/D comparison.
+        List<Integer> crosses = findKdjCrossIndices(ground);
+        assertFalse(crosses.isEmpty());
+        int idx = crosses.get(crosses.size() - 1);
+        LocalDate signalDate = rows.get(idx).getTradeDate();
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(new BigDecimal("100"))),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        assertEquals(1, root.get("results").get(0).get("matchedCount").asInt());
+    }
+
+    @Test
+    void kdjGoldenCross_detailJFormula_matchesThreeKMinusTwoD_echoesJThreshold() throws Exception {
+        String stockId = "SS8022";
+        seedStock(stockId, "J公式與門檻回應測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        int idx = findKdjCrossWithModeratePrevJ(rows, ground);
+        LocalDate signalDate = rows.get(idx).getTradeDate();
+
+        JsonNode root = postScan(scanRequestFromSelections(
+                Collections.singletonList(kdjSelection(new BigDecimal("90"))),
+                Collections.singletonList(stockId), signalDate, signalDate));
+        JsonNode result = root.get("results").get(0);
+        assertEquals(new BigDecimal("90").setScale(0), result.get("jThreshold").decimalValue().setScale(0));
+        assertTrue(result.get("preset") == null || result.get("preset").isNull());
+        JsonNode detail = result.get("items").get(0).get("detail");
+        BigDecimal k = detail.get("k").decimalValue();
+        BigDecimal d = detail.get("d").decimalValue();
+        BigDecimal j = detail.get("j").decimalValue();
+        BigDecimal expectedJ = k.multiply(BigDecimal.valueOf(3)).subtract(d.multiply(BigDecimal.valueOf(2)));
+        assertTrue(j.subtract(expectedJ).abs().compareTo(new BigDecimal("0.0003")) <= 0);
+
+        BigDecimal prevK = detail.get("prevK").decimalValue();
+        BigDecimal prevD = detail.get("prevD").decimalValue();
+        BigDecimal prevJ = detail.get("prevJ").decimalValue();
+        BigDecimal expectedPrevJ = prevK.multiply(BigDecimal.valueOf(3)).subtract(prevD.multiply(BigDecimal.valueOf(2)));
+        assertTrue(prevJ.subtract(expectedPrevJ).abs().compareTo(new BigDecimal("0.0003")) <= 0);
+    }
+
+    // ---------- Validation ----------
+
+    @Test
+    void macdAndKdj_presetRisePercentDaysNotApplicable() {
+        for (StrategySelectionDto sel : Arrays.asList(macdSelection(null, null), kdjSelection(null))) {
+            sel.setPreset("STANDARD");
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("PRESET_NOT_APPLICABLE", err.getCode());
+            assertEquals(sel.getCode(), err.getStrategy());
+        }
+        for (StrategySelectionDto sel : Arrays.asList(macdSelection(null, null), kdjSelection(null))) {
+            sel.setRisePercent(new BigDecimal("5"));
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("PARAM_NOT_APPLICABLE", err.getCode());
+            assertEquals("risePercent", err.getParam());
+            assertEquals(sel.getCode(), err.getStrategy());
+        }
+        for (StrategySelectionDto sel : Arrays.asList(macdSelection(null, null), kdjSelection(null))) {
+            sel.setDays(BigDecimal.valueOf(20));
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("DAYS_NOT_APPLICABLE", err.getCode());
+            assertEquals(sel.getCode(), err.getStrategy());
+        }
+    }
+
+    @Test
+    void otherStrategiesRejectFastSlowJThreshold_macdRejectsJThreshold_kdjRejectsFastPeriod() {
+        StrategySelectionDto boxWithFast = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithFast.setFastPeriod(BigDecimal.valueOf(12));
+        ErrorResponse err1 = postScanExpectingError(boxWithFast);
+        assertEquals("PARAM_NOT_APPLICABLE", err1.getCode());
+        assertEquals("fastPeriod", err1.getParam());
+        assertEquals("BOX_BREAKOUT", err1.getStrategy());
+
+        StrategySelectionDto boxWithSlow = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithSlow.setSlowPeriod(BigDecimal.valueOf(26));
+        ErrorResponse err2 = postScanExpectingError(boxWithSlow);
+        assertEquals("PARAM_NOT_APPLICABLE", err2.getCode());
+        assertEquals("slowPeriod", err2.getParam());
+
+        StrategySelectionDto boxWithJ = selection("BOX_BREAKOUT", "STANDARD");
+        boxWithJ.setJThreshold(BigDecimal.valueOf(40));
+        ErrorResponse err3 = postScanExpectingError(boxWithJ);
+        assertEquals("PARAM_NOT_APPLICABLE", err3.getCode());
+        assertEquals("jThreshold", err3.getParam());
+
+        StrategySelectionDto macdWithJ = macdSelection(null, null);
+        macdWithJ.setJThreshold(BigDecimal.valueOf(40));
+        ErrorResponse err4 = postScanExpectingError(macdWithJ);
+        assertEquals("PARAM_NOT_APPLICABLE", err4.getCode());
+        assertEquals("jThreshold", err4.getParam());
+        assertEquals("MACD_GOLDEN_CROSS", err4.getStrategy());
+
+        StrategySelectionDto kdjWithFast = kdjSelection(null);
+        kdjWithFast.setFastPeriod(BigDecimal.valueOf(12));
+        ErrorResponse err5 = postScanExpectingError(kdjWithFast);
+        assertEquals("PARAM_NOT_APPLICABLE", err5.getCode());
+        assertEquals("fastPeriod", err5.getParam());
+        assertEquals("KDJ_GOLDEN_CROSS", err5.getStrategy());
+    }
+
+    @Test
+    void macdGoldenCross_invalidFastPeriodAndSlowPeriod() {
+        for (BigDecimal v : Arrays.asList(BigDecimal.ONE, new BigDecimal("51"), new BigDecimal("12.5"))) {
+            StrategySelectionDto sel = macdSelection(null, null);
+            sel.setFastPeriod(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_FAST_PERIOD", err.getCode());
+            assertEquals("MACD_GOLDEN_CROSS", err.getStrategy());
+        }
+        for (BigDecimal v : Arrays.asList(new BigDecimal("2"), new BigDecimal("101"), new BigDecimal("26.5"))) {
+            StrategySelectionDto sel = macdSelection(null, null);
+            sel.setSlowPeriod(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_SLOW_PERIOD", err.getCode());
+            assertEquals("MACD_GOLDEN_CROSS", err.getStrategy());
+        }
+    }
+
+    @Test
+    void macdGoldenCross_invalidMacdPeriods_fastNotStrictlyLessThanSlow() {
+        ErrorResponse err1 = postScanExpectingError(macdSelection(26, 26));
+        assertEquals("INVALID_MACD_PERIODS", err1.getCode());
+        assertEquals("MACD_GOLDEN_CROSS", err1.getStrategy());
+
+        ErrorResponse err2 = postScanExpectingError(macdSelection(30, 20));
+        assertEquals("INVALID_MACD_PERIODS", err2.getCode());
+
+        ErrorResponse err3 = postScanExpectingError(macdSelection(30, null)); // slowPeriod defaults to 26
+        assertEquals("INVALID_MACD_PERIODS", err3.getCode());
+
+        // Field-level range errors take priority over the cross-field comparison.
+        ErrorResponse err4 = postScanExpectingError(macdSelection(60, 20));
+        assertEquals("INVALID_FAST_PERIOD", err4.getCode());
+    }
+
+    @Test
+    void kdjGoldenCross_invalidJThreshold_boundariesAndValidValues() throws Exception {
+        for (BigDecimal v : Arrays.asList(new BigDecimal("-100.1"), new BigDecimal("100.1"),
+                new BigDecimal("40.25"))) {
+            StrategySelectionDto sel = kdjSelection(v);
+            ErrorResponse err = postScanExpectingError(sel);
+            assertEquals("INVALID_J_THRESHOLD", err.getCode());
+            assertEquals("KDJ_GOLDEN_CROSS", err.getStrategy());
+        }
+
+        String stockId = "SS8023";
+        seedStock(stockId, "J門檻合法邊界測試", true);
+        LocalDate d = LocalDate.of(2026, 1, 1);
+        for (int i = 0; i < 5; i++) {
+            insertCloseOnlyRow(stockId, d, "100.00", 1000);
+            d = d.plusDays(1);
+        }
+        for (BigDecimal v : Arrays.asList(new BigDecimal("-100"), new BigDecimal("100"), new BigDecimal("-12.5"))) {
+            JsonNode root = postScan(scanRequestFromSelections(
+                    Collections.singletonList(kdjSelection(v)),
+                    Collections.singletonList(stockId), d.minusDays(1), d.minusDays(1)));
+            assertEquals(HttpStatus.OK, HttpStatus.OK); // reaching here without exception means 200
+            assertEquals(v.setScale(1).doubleValue(), root.get("results").get(0).get("jThreshold").asDouble(), 1e-9);
+        }
+    }
+
+    @Test
+    void macdAndKdj_noAdviceOrEntryExitWording() throws Exception {
+        ResponseEntity<String> catalogResponse = rest.getForEntity("/api/strategies", String.class);
+        assertNoAdviceWording(catalogResponse.getBody());
+        assertFalse(catalogResponse.getBody().contains("進場"));
+
+        String stockId = "SS8024";
+        seedStock(stockId, "MACD/KDJ用語測試", true);
+        List<StockDailyPrice> rows = buildSineSeries(stockId, LocalDate.of(2024, 1, 1), 400);
+        insertSeries(rows);
+        List<StockDailyIndicator> ground = groundTruth(rows, 12, 26);
+        int mi = findMacdCrossIndices(ground).get(findMacdCrossIndices(ground).size() - 1);
+        LocalDate signalDate = rows.get(mi).getTradeDate();
+
+        JsonNode root = objectMapper.readTree(rest.postForEntity("/api/strategies/scan",
+                scanRequestFromSelections(Arrays.asList(macdSelection(null, null), kdjSelection(null)),
+                        Collections.singletonList(stockId), signalDate, signalDate),
+                String.class).getBody());
+        assertNoAdviceWording(root.toString());
+        assertFalse(root.toString().contains("進場"));
     }
 
     // ==================== helpers ====================

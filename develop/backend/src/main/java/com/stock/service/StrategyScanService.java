@@ -14,10 +14,14 @@ import com.stock.exception.InvalidBuyDaysException;
 import com.stock.exception.InvalidDateRangeException;
 import com.stock.exception.InvalidDropDaysException;
 import com.stock.exception.InvalidDropPercentException;
+import com.stock.exception.InvalidFastPeriodException;
 import com.stock.exception.InvalidInvestorsException;
+import com.stock.exception.InvalidJThresholdException;
+import com.stock.exception.InvalidMacdPeriodsException;
 import com.stock.exception.InvalidRatioPercentException;
 import com.stock.exception.InvalidRiseDaysException;
 import com.stock.exception.InvalidRisePercentException;
+import com.stock.exception.InvalidSlowPeriodException;
 import com.stock.exception.InvalidStrategyDaysException;
 import com.stock.exception.InvalidTopNException;
 import com.stock.exception.InvalidWindowDaysException;
@@ -191,6 +195,7 @@ public class StrategyScanService {
                 }
             }
             validateInstitutionalParams(selection, detector);
+            validateIndicatorParams(selection, detector);
             if (selection.getRisePercent() != null && !detector.acceptsRisePercent()) {
                 // The three institutional patterns judge shares/volume, never a price rise — a
                 // risePercent sent to them must be rejected, not silently ignored (specs/backend/
@@ -244,6 +249,50 @@ public class StrategyScanService {
         }
         if (detector.acceptsTopN()) {
             validateIntInRange(selection.getTopN(), TOP_N_MIN, TOP_N_MAX, () -> new InvalidTopNException(code));
+        }
+    }
+
+    /**
+     * Validates the three indicator-only fields (`fastPeriod`/`slowPeriod`/`jThreshold`) uniformly:
+     * rejects any of them sent to a detector that does not declare {@code acceptsXxx()} for that
+     * field (PARAM_NOT_APPLICABLE, naming the field), then range/shape-validates the ones the
+     * detector does accept, and — only for MACD_GOLDEN_CROSS, only once both fields' own ranges
+     * have already passed — rejects `fastPeriod >= slowPeriod` (each resolved to its own default
+     * when omitted) as a request that could never match — see specs/backend/strategy-scan.md,
+     * "技術指標型態" 共通規則 and 驗證與用語.
+     */
+    private void validateIndicatorParams(StrategySelectionDto selection, PatternDetector detector) {
+        String code = selection.getCode();
+        if (selection.getFastPeriod() != null && !detector.acceptsFastPeriod()) {
+            throw new ParamNotApplicableException(code, "fastPeriod");
+        }
+        if (selection.getSlowPeriod() != null && !detector.acceptsSlowPeriod()) {
+            throw new ParamNotApplicableException(code, "slowPeriod");
+        }
+        if (selection.getJThreshold() != null && !detector.acceptsJThreshold()) {
+            throw new ParamNotApplicableException(code, "jThreshold");
+        }
+
+        if (detector.acceptsFastPeriod()) {
+            validateIntInRange(selection.getFastPeriod(), detector.getFastPeriodMin(), detector.getFastPeriodMax(),
+                    () -> new InvalidFastPeriodException(code));
+        }
+        if (detector.acceptsSlowPeriod()) {
+            validateIntInRange(selection.getSlowPeriod(), detector.getSlowPeriodMin(), detector.getSlowPeriodMax(),
+                    () -> new InvalidSlowPeriodException(code));
+        }
+        if (detector.acceptsFastPeriod() && detector.acceptsSlowPeriod()) {
+            int fast = selection.getFastPeriod() != null
+                    ? selection.getFastPeriod().intValue() : detector.getFastPeriodDefault();
+            int slow = selection.getSlowPeriod() != null
+                    ? selection.getSlowPeriod().intValue() : detector.getSlowPeriodDefault();
+            if (fast >= slow) {
+                throw new InvalidMacdPeriodsException(code);
+            }
+        }
+        if (detector.acceptsJThreshold()) {
+            validateRangeAndScale(selection.getJThreshold(), detector.getJThresholdMin(),
+                    detector.getJThresholdMax(), RISE_PERCENT_MAX_SCALE, () -> new InvalidJThresholdException(code));
         }
     }
 
@@ -342,6 +391,26 @@ public class StrategyScanService {
         }
         try {
             value.setScale(RISE_PERCENT_MAX_SCALE, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException e) {
+            throw exceptionSupplier.get();
+        }
+    }
+
+    /**
+     * Generalization of {@link #validatePercentInRange} for fields whose lower bound is not
+     * necessarily {@code 0} — currently only `jThreshold` (range [-100, 100]) — see
+     * specs/backend/strategy-scan.md, "KDJ 黃金交叉".
+     */
+    private void validateRangeAndScale(BigDecimal value, BigDecimal min, BigDecimal max, int scale,
+                                        Supplier<RuntimeException> exceptionSupplier) {
+        if (value == null) {
+            return;
+        }
+        if (value.compareTo(min) < 0 || value.compareTo(max) > 0) {
+            throw exceptionSupplier.get();
+        }
+        try {
+            value.setScale(scale, RoundingMode.UNNECESSARY);
         } catch (ArithmeticException e) {
             throw exceptionSupplier.get();
         }
