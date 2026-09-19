@@ -1319,6 +1319,85 @@
   color: #3e8fd8;
 }
 
+/* 視窗寬 ≤ 1280px：買進日／賣出日、買進價／賣出價各自疊成一欄 (「視窗寬 ≤ 1280px：日期與
+   價格各自疊成一欄」). Only the header/cell layout changes — every color and the sort
+   cycle are the exact same rules reused from the wide-window columns above; nothing here
+   introduces a new color or a `prefers-color-scheme` branch. */
+.st-stacked-header-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-stacked-header-lines-r {
+  align-items: flex-end;
+}
+
+/* The stacked price header's 「買進價」 line is the actual sort control — same cursor,
+   hover and active-color rules as `th.st-sortable` above, just scoped to the inner line
+   instead of the whole `<th>` (the 「賣出價」 line beneath it stays plain, unclickable
+   header text). */
+.st-union-table th .st-stacked-sort-line {
+  cursor: pointer;
+  user-select: none;
+}
+
+.st-union-table th .st-stacked-sort-line:hover {
+  color: #e6edf5;
+}
+
+.st-union-table th .st-stacked-sort-line.st-sort-header-active {
+  color: #e6edf5;
+}
+
+/* Stacked data cells (買進日／賣出日 pair, 買進價／賣出價 pair) — each cell holds two
+   stacked lines instead of two separate `<td>`s. `sl-muted` on an inner line reuses the
+   exact same weak-text color/class the wide-window cells already use for the same value. */
+.st-stacked-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* One 買進日／賣出日 pair per lot in a multi-lot parent row's date column — a small gap
+   between lots (not between the two lines of the same lot) keeps each lot visually
+   grouped as「買對買、賣對賣」rather than reading as one long list of unrelated lines. */
+.st-stacked-parent-cell {
+  gap: 6px;
+}
+
+.st-stacked-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 960px（1920 螢幕的一半）時，回測後的表格不出現水平捲軸，報酬率與收益兩欄完整可見 — the
+   stacked layout already drops four columns to two; this tightens padding/font-size on the
+   merged table only (scoped to `.st-union-table`, never the other tables on this page) so
+   the remaining nine columns fit inside a 960px-wide viewport without widening the page.
+   No color changes, only spacing/sizing. */
+@media (max-width: 1280px) {
+  .st-union-table.sl-table thead th {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .st-union-table.sl-table tbody td {
+    padding: 8px 8px;
+    font-size: 13px;
+  }
+
+  .st-union-table .st-union-hits {
+    gap: 4px;
+  }
+
+  .st-union-table .st-union-tag {
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+}
+
 .st-uncounted-notes {
   padding: 6px 18px 0;
 }

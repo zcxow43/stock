@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略命中回測 API"
-requirement: "策略掃描結果回測：以每一筆命中的進場日（`buyDate`，由掃描回報；上漲支撐為確認完成日 D+2，其餘型態等於訊號日）收盤買進，其後至今日之間以最高開盤價賣出，逐筆回報買進日／買進價／賣出日／賣出價／報酬率／收益，加上彙總總報酬率與總收益。一檔股票每有一個相異買進日就是獨立的一筆（各 1 張、各自計入彙總），同一買進日不得重複送出"
+requirement: "策略掃描結果回測：以每一筆命中的進場日（`buyDate`，由掃描回報；上漲支撐為確認完成日 D+2，其餘型態等於訊號日）收盤買進，其後至今日之間以最高開盤價賣出，收益與報酬率扣除買賣手續費（0.1425%，不打折、無最低）與證交稅（0.3%，賣出時），逐筆回報買進日／買進價／賣出日／賣出價／成本／報酬率／收益，加上彙總總報酬率與總收益。一檔股票每有一個相異買進日就是獨立的一筆（各 1 張、各自計入彙總），同一買進日不得重複送出"
 depends_on: [strategy-scan, stock-price-ingestion]
 ---
 
@@ -29,8 +29,10 @@ depends_on: [strategy-scan, stock-price-ingestion]
 | 賣出價 | 賣出窗口內**最高的開盤價** |
 | 賣出日 | 該最高開盤價**第一次出現**的交易日 |
 | 部位 | **每一筆**固定 1 張＝ 1,000 股；一檔有幾個相異買進日就有幾筆，各佔 1 張 |
-| 報酬率 | `(賣出價 − 買進價) ÷ 買進價 × 100`，四捨五入至小數第二位 |
-| 收益 | `(賣出價 − 買進價) × 1000`，四捨五入至元 |
+| 交易成本 | 買進與賣出各收手續費、賣出另收證交稅，算法見下方「交易成本」 |
+| 成本 | `買進價 × 1000 ＋ 買進手續費` |
+| 收益 | `賣出價 × 1000 − 賣出手續費 − 證交稅 − 成本`（元，整數） |
+| 報酬率 | `收益 ÷ 成本 × 100`，四捨五入至小數第二位 |
 
 #### 買進日由請求指定，本端點不推算
 
@@ -56,11 +58,29 @@ depends_on: [strategy-scan, stock-price-ingestion]
 
 「最高開盤價」是**這段期間開盤價的最大值**，不是「最好的出場點」，更不是「保證獲利的出場點」。一檔訊號後一路下跌的股票，它最高的開盤價仍然可能低於買進日的收盤價，此時報酬率為負。**負值必須如實回報**，不得夾為 `0`、不得改成「不賣出」、不得改挑別的日子。夾住負值會讓這份回測變成一個永遠不會虧錢的工具，那比沒有回測更有害。
 
+#### 交易成本
+
+收益與報酬率都是**扣除交易成本之後**的數字。一筆回測的交易成本只有下列三項：
+
+| 項目 | 算法 |
+|---|---|
+| 買進手續費 | `買進價 × 1000 × 0.1425%`，**無條件捨去至元** |
+| 賣出手續費 | `賣出價 × 1000 × 0.1425%`，無條件捨去至元 |
+| 證交稅 | `賣出價 × 1000 × 0.3%`，無條件捨去至元（只在賣出時收） |
+
+- **手續費率 0.1425% 不打券商折扣，也不設最低手續費。** 不打折是最保守的估計——實際折扣因人而異，用全額算出來的收益只會比實際少、不會比實際多。不設最低收費，因此一筆手續費可以低於 20 元（買進價 10 元時為 14 元）。
+- **證交稅一律 0.3%**，不依標的種類區分。ETF 等實際稅率較低的標的會因此被多扣，收益偏保守。
+- **三項各自捨去後再相加**，不是先加總再捨去——券商與證交稅都是逐項計收、逐項捨去。
+- **須以精確的十進位運算，不得用二進位浮點數。** `200.00 × 1000 × 0.1425%` 恰為 `285`，浮點數可能算成 `284.999…` 再被捨去成 `284`，少了 1 元且無從解釋。
+- **成本含買進手續費。** 報酬率的分母是「買進這一筆實際付出去的錢」，只用成交金額當分母，會讓報酬率與收益在同一列上無法互相驗算。
+- **賣出價等於買進價時收益為負**（例：買賣皆 1,150 元，收益 `−6,726`），不是 `0`——平盤出場仍要付兩次手續費與一次證交稅。與「負值必須如實回報」是同一條原則。
+- 回應帶回兩個費率（`feeRatePercent`、`taxRatePercent`），讓呼叫端不必自己知道這個約定就能說明收益扣了什麼，理由與 `lotSize` 相同。
+
 ### 彙總
 
 | 欄位 | 算法 |
 |---|---|
-| 總成本 | `Σ(買進價 × 1000)`，只計**可回測**的筆（同一檔的多筆各計一次） |
+| 總成本 | `Σ(成本)`（成本含買進手續費），只計**可回測**的筆（同一檔的多筆各計一次） |
 | 總收益 | `Σ(收益)`，只計可回測的筆 |
 | 總報酬率 | `總收益 ÷ 總成本 × 100`，四捨五入至小數第二位 |
 
@@ -96,7 +116,7 @@ depends_on: [strategy-scan, stock-price-ingestion]
 ### 已知限制，必須寫在文件上
 
 - **價格是原始成交價，未經除權息還原**（見 `specs/dba/stock-daily-price.md`）。標的在買進日之後除權息時，除權息當日的開盤價會低於還原後的真實價值，本回測會把它當成真實跌價。因此**有除權息事件的標的，回測報酬率會系統性偏低**。這是全系統一致的價格約定造成的，不在本模組修正——修正它需要一份還原因子資料，那是另一個需求。
-- **不計任何交易成本**：手續費、證交稅、滑價一律不計。實際報酬率會低於本回測的數字。
+- **只計手續費與證交稅，不計滑價**，手續費也不打券商折扣（見「交易成本」）。實際成交價與收盤價、開盤價之間的落差不在本回測內。
 - **不做部位管理**：每檔各自獨立 1 張，不考慮總資金上限、不考慮同時持有幾檔、不考慮先賣先買。這是一份「逐檔最高開盤價出場」的統計，不是一個交易策略的績效模擬。
 
 ### 效能
@@ -157,10 +177,12 @@ Response `200`：
 {
   "asOfDate": "2026-09-10",
   "lotSize": 1000,
-  "totalCost": 1150000,
-  "totalProfit": 55000,
-  "totalReturnPercent": 4.78,
-  "backtestedCount": 1,
+  "feeRatePercent": 0.1425,
+  "taxRatePercent": 0.3,
+  "totalCost": 2333319,
+  "totalProfit": 70995,
+  "totalReturnPercent": 3.04,
+  "backtestedCount": 2,
   "items": [
     {
       "stockId": "2330",
@@ -168,8 +190,12 @@ Response `200`：
       "buyPrice": 1150.00,
       "sellDate": "2026-09-03",
       "sellPrice": 1205.00,
-      "returnPercent": 4.78,
-      "profit": 55000
+      "buyFee": 1638,
+      "sellFee": 1717,
+      "sellTax": 3615,
+      "cost": 1151638,
+      "returnPercent": 4.17,
+      "profit": 48030
     },
     {
       "stockId": "2330",
@@ -177,8 +203,12 @@ Response `200`：
       "buyPrice": 1180.00,
       "sellDate": "2026-09-05",
       "sellPrice": 1210.00,
-      "returnPercent": 2.54,
-      "profit": 30000
+      "buyFee": 1681,
+      "sellFee": 1724,
+      "sellTax": 3630,
+      "cost": 1181681,
+      "returnPercent": 1.94,
+      "profit": 22965
     },
     {
       "stockId": "2317",
@@ -186,6 +216,10 @@ Response `200`：
       "buyPrice": 215.50,
       "sellDate": null,
       "sellPrice": null,
+      "buyFee": 307,
+      "sellFee": null,
+      "sellTax": null,
+      "cost": 215807,
       "returnPercent": null,
       "profit": null
     }
@@ -197,7 +231,9 @@ Response `200`：
 |---|---|---|
 | `asOfDate` | date | 本次回測的窗口迄日，即今日（台北日曆日） |
 | `lotSize` | int | 每檔的股數，恆為 `1000`。回報它是為了讓呼叫端不必自己知道這個約定就能解釋「收益」的單位 |
-| `totalCost` | number | 可回測標的的買進成本總和；無可回測標的時為 `0` |
+| `feeRatePercent` | number | 手續費率（百分比），恆為 `0.1425` |
+| `taxRatePercent` | number | 證交稅率（百分比），恆為 `0.3` |
+| `totalCost` | number | 可回測各筆 `cost` 的總和（含買進手續費）；無可回測標的時為 `0` |
 | `totalProfit` | number | 可回測標的的收益總和；無可回測標的時為 `0` |
 | `totalReturnPercent` | number \| null | 總收益 ÷ 總成本 × 100；**無可回測標的時為 `null`** |
 | `backtestedCount` | int | 實際計入彙總的**筆數**，即 `sellDate` 非 `null` 的筆數。它與 `items` 長度的差就是無法回測的筆數 |
@@ -205,8 +241,12 @@ Response `200`：
 | `items[].buyPrice` | number \| null | 買進日收盤價，即**買進價**；買進日無該檔資料或收盤價為 `0` 時為 `null` |
 | `items[].sellDate` | date \| null | 最高開盤價第一次出現的交易日；無法回測時為 `null` |
 | `items[].sellPrice` | number \| null | 賣出窗口內的最高開盤價；無法回測時為 `null` |
-| `items[].returnPercent` | number \| null | 兩位小數；**可為負值**；無法回測時為 `null` |
-| `items[].profit` | number \| null | 以元為單位；**可為負值**；無法回測時為 `null` |
+| `items[].buyFee` | int \| null | 買進手續費（元）；`buyPrice` 為 `null` 時為 `null` |
+| `items[].sellFee` | int \| null | 賣出手續費（元）；`sellDate` 為 `null` 時為 `null` |
+| `items[].sellTax` | int \| null | 證交稅（元）；`sellDate` 為 `null` 時為 `null` |
+| `items[].cost` | int \| null | 成本＝`buyPrice × lotSize ＋ buyFee`（元）；`buyPrice` 為 `null` 時為 `null`。`buyPrice` 有值但無法賣出的筆照樣回報，但不計入 `totalCost` |
+| `items[].returnPercent` | number \| null | `profit ÷ cost × 100`，兩位小數；**可為負值**；無法回測時為 `null` |
+| `items[].profit` | int \| null | 扣除手續費與證交稅後的收益（元）；**可為負值**；無法回測時為 `null` |
 
 `items` 的順序與請求中 `items` 的順序一致，本端點不重新排序——排序是呼叫端已經決定好的事（見 `specs/frontend/strategy.md` 的排序規則），回一份順序不同的清單只會逼呼叫端再做一次對應。
 
@@ -230,7 +270,7 @@ Response `200`：
 4. 逐筆計算（一筆＝一個 `(stockId, buyDate)`，同一檔的多筆各自獨立計算，彼此不影響）：
    - 買進日無收盤價（或收盤價為 `0`） → `buyPrice` 為 `null`，該檔其餘欄位皆 `null`，不計入彙總。
    - 賣出窗口內無任何列 → `buyPrice` 有值，其餘欄位 `null`，不計入彙總。
-   - 否則取窗口內 `open_price` 的最大值為 `sellPrice`，其**最早**出現的 `trade_date` 為 `sellDate`，依「回測規則」算出 `returnPercent` 與 `profit`，計入彙總。
+   - 否則取窗口內 `open_price` 的最大值為 `sellPrice`，其**最早**出現的 `trade_date` 為 `sellDate`，依「回測規則」與「交易成本」算出 `sellFee`／`sellTax`／`returnPercent`／`profit`，計入彙總。`buyPrice` 有值的筆一律算出 `buyFee` 與 `cost`。
 5. 彙總 `totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount`，依請求順序組出 `items`。
 
 **本端點不寫入任何資料表**，也不建立任何 `stock_sync_progress` 列——它是同步的純讀取運算，沒有進度可追蹤，也沒有併發鎖需要持有。
@@ -253,8 +293,8 @@ Response `200`：
 - [x] `sellPrice` 等於該檔「買進日之後至今日」區間內 `open_price` 的最大值，且 `sellDate` 為該值所在的交易日
 - [x] **買進日當天的開盤價不納入賣出窗口**：構造一檔其買進日開盤價高於其後所有開盤價的資料，回應的 `sellDate` 不等於買進日，`sellPrice` 不等於買進日的開盤價
 - [x] 最高開盤價在多個交易日出現相同數值時，`sellDate` 為其中**最早**的那一天
-- [x] `returnPercent` 等於 `(sellPrice − buyPrice) ÷ buyPrice × 100` 四捨五入至小數第二位
-- [x] `profit` 等於 `(sellPrice − buyPrice) × 1000` 四捨五入至元，且 `lotSize` 回傳 `1000`
+- [x] `returnPercent` 等於 `profit ÷ cost × 100` 四捨五入至小數第二位
+- [x] `profit` 等於 `sellPrice × 1000 − sellFee − sellTax − cost`，且 `lotSize` 回傳 `1000`
 - [x] 訊號後一路下跌的標的其 `returnPercent` 與 `profit` **為負值**，未被夾為 `0`，也未改挑其他日期
 - [x] 停牌造成的缺列不會成為 `sellDate`（該日在 `stock_daily_price` 無列，自然不在候選中）
 - [x] **買進日收盤價為 `0` 時該筆無法回測**：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，**不得回 `500`**（不得對 `0` 做除法）
@@ -263,7 +303,7 @@ Response `200`：
 - [x] 上述三種情形皆**不計入** `totalCost`／`totalProfit`／`backtestedCount`，且該筆仍留在 `items` 中
 
 ### 彙總
-- [x] `totalCost` 等於各可回測標的 `buyPrice × 1000` 的總和
+- [x] `totalCost` 等於各可回測筆 `cost`（含買進手續費）的總和
 - [x] `totalProfit` 等於各可回測標的 `profit` 的總和
 - [x] `totalReturnPercent` 等於 `totalProfit ÷ totalCost × 100`，兩位小數
 - [x] 以兩檔股價差距懸殊（例如 `1150` 與 `21.5`）的資料驗證：`totalReturnPercent` **不等於**兩檔 `returnPercent` 的算術平均，且等於成本加權的結果
@@ -285,7 +325,7 @@ Response `200`：
 ### 一檔多買進日
 - [x] 同一 `stockId` 帶**兩個不同 `buyDate`** 送出時回 `200`，`items` 回**兩筆**，各自有自己的 `buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit`
 - [x] 同一檔的兩筆各自獨立計算：以構造資料驗證，第二筆的 `sellDate` 只在其自己的 `(buyDate, asOfDate]` 窗口內選取，不受第一筆的窗口影響
-- [x] 同一檔的兩筆**各自計入一次成本與收益**：`totalCost` 等於兩筆 `buyPrice × 1000` 的總和，`backtestedCount` 為 `2`
+- [x] 同一檔的兩筆**各自計入一次成本與收益**：`totalCost` 等於兩筆 `cost` 的總和，`backtestedCount` 為 `2`
 - [x] 同一 `(stockId, buyDate)` 組合出現兩次時回 `400`，`{"code":"DUPLICATE_BACKTEST_ITEM","duplicatedItems":[{"stockId":"...","buyDate":"..."}]}`，且**不**默默合併成一筆
 - [x] 同一 `stockId` 搭配**不同** `buyDate` 不觸發上述錯誤
 - [x] `items` 的順序仍與請求一致，同一檔的多筆維持送入順序
@@ -296,6 +336,16 @@ Response `200`：
 - [x] 已下市（`is_active = 0`）的股票可正常回測，不因下市被拒絕或被排除
 - [x] 本端點不寫入 `stock_daily_price`、`stock`、`stock_sync_progress` 任何一張表：一次回測前後三張表的列數與內容完全不變
 - [x] 本端點不建立 `stock_sync_progress` 列，也不與 `PRICE_BACKFILL`／`INDICATOR_REBUILD` 的併發鎖互斥：回補進行中呼叫回測正常回 `200`，不回 `409`
+
+### 交易成本
+- [x] 買 `1150.00`、賣 `1205.00`：`buyFee` `1638`、`sellFee` `1717`、`sellTax` `3615`、`cost` `1151638`、`profit` `48030`、`returnPercent` `4.17`
+- [x] 尾數無條件捨去：買 `21.55`、賣 `23.10`：`buyFee` `30`（30.70875）、`sellFee` `32`（32.9175）、`sellTax` `69`（69.3）、`cost` `21580`、`profit` `1419`、`returnPercent` `6.58`
+- [x] 精確十進位：買賣皆 `200.00` 時 `buyFee` 與 `sellFee` 皆為 `285`（不是 `284`）、`sellTax` `600`、`profit` `−1170`
+- [x] 無最低手續費：買賣皆 `10.00` 時 `buyFee` 與 `sellFee` 皆為 `14`（不被墊高為 `20`）、`profit` `−58`、`returnPercent` `−0.58`
+- [x] 賣出價等於買進價（皆 `1150.00`）時 `profit` 為 `−6726`、`returnPercent` 為 `−0.58`，不是 `0`
+- [x] 回應帶 `feeRatePercent: 0.1425`、`taxRatePercent: 0.3`；每筆帶 `buyFee`／`sellFee`／`sellTax`／`cost`
+- [x] 買進日為最新交易日（無可賣出日）的筆：`buyFee` 與 `cost` 有值、`sellFee`／`sellTax`／`profit`／`returnPercent` 為 `null`，且其 `cost` 不計入 `totalCost`；`buyPrice` 為 `null` 的筆 `buyFee`／`sellFee`／`sellTax`／`cost` 皆為 `null`
+- [x] 兩筆（`1150→1205`、`1180→1210`）一起回測：`totalCost` `2333319`、`totalProfit` `70995`、`totalReturnPercent` `3.04`
 
 ### 效能
 - [x] 一份 50 檔的清單，其價格查詢次數不隨檔數線性增加（以查詢計數斷言，非以耗時推測），不得逐檔各發一次查詢
@@ -433,3 +483,42 @@ Response `200`：
 
 - Anything NOT independently verified, and why:
   - No manual/live-server check via `spring-boot:run` — verification is entirely through the integration test suite against the real test database, consistent with every prior execution result for this spec.
+
+### Increment 5 — 2026-09-19
+- Status: DONE
+
+- Scope: net-of-trading-cost rewrite. Profit and returnPercent are now net of buy/sell brokerage fees (0.1425%, no discount, no minimum) and sell-side securities transaction tax (0.3%), per the new `#### 交易成本` section. Added `feeRatePercent`/`taxRatePercent` to the top-level response and `buyFee`/`sellFee`/`sellTax`/`cost` to each item.
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/dto/BacktestResultItemDto.java` — added `buyFee`/`sellFee`/`sellTax`/`cost` fields (all `BigDecimal`, nullable) with getters/setters; javadoc updated to state their null/non-null rules (`buyFee`/`cost` present whenever `buyPrice` is non-null; `sellFee`/`sellTax` only when `sellDate` is non-null).
+  - `develop/backend/src/main/java/com/stock/dto/BacktestResponseDto.java` — added `feeRatePercent`/`taxRatePercent` fields (constants echoed back, same rationale as `lotSize`) with getters/setters.
+  - `develop/backend/src/main/java/com/stock/service/StrategyBacktestService.java` — added `FEE_RATE_PERCENT`/`TAX_RATE_PERCENT` (`0.1425`/`0.3`, `BigDecimal(String)` literals) and their derived per-unit multipliers `FEE_RATE`/`TAX_RATE`; the backtest loop now computes `buyFee`/`cost` whenever `buyPrice` is non-null (even with no sell day) and `sellFee`/`sellTax`/`profit`/`returnPercent` only when a sell day is found; `totalCost` now accumulates `cost` (not raw `buyPrice × lotSize`) for backtestable items only; response now sets `feeRatePercent`/`taxRatePercent`. Replaced the old two-argument `computeProfit(buyPrice, sellPrice)`/`computeReturnPercent(buyPrice, sellPrice)` with `computeFeeOrTax(price, rate)` (one line item, floored independently), `computeCost(buyPrice, buyFee)`, `computeProfit(sellPrice, sellFee, sellTax, cost)`, and `computeReturnPercent(profit, cost)`.
+  - `develop/backend/src/test/java/com/stock/StrategyBacktestIntegrationTest.java` — updated 7 pre-existing tests whose hardcoded expectations were computed under the old gross formula (`returnPercent_matchesFormula_roundedToTwoDecimals`, `profit_matchesFormula_roundedToYuan_andLotSizeIs1000`, `declineAfterBuyDate_returnPercentAndProfitAreNegative_notClampedOrRedirected`, `totals_costWeighted_notArithmeticMean_ofTwoWidelyDifferingPricedStocks`, `totalCost_equalsSumOfBuyPriceTimes1000_forBacktestableItemsOnly`, `totalProfit_equalsSumOfProfit_forBacktestableItemsOnly`, `sameStockId_twoBuyDates_eachCountsOnceInTotals`, `zeroPriceItems_stayInItemsButAreExcludedFromTotals` — 8 total) to the net-of-cost numbers; added a new `### 交易成本` test block (9 tests) covering all 8 unchecked acceptance criteria plus a `seedSellWindow` helper fixture (buy-day close + a single later day whose open is the only sell candidate, with any further day's open pinned low so it never contends for the max).
+
+- Design decisions:
+  - **Each of the three cost line items (buy fee, sell fee, sell tax) is floored independently** via one shared `computeFeeOrTax(price, rate)` helper, never summed first and floored once — this directly implements "三項各自捨去後再相加" and is what makes the `21.55/23.10` fixture (`30.70875→30`, `32.9175→32`, `69.3→69`, not a combined floor) come out right.
+  - **`FEE_RATE`/`TAX_RATE` (the raw per-unit multipliers `0.001425`/`0.003`) are derived from `FEE_RATE_PERCENT`/`TAX_RATE_PERCENT` (`0.1425`/`0.3`, the values echoed in the response) via `divide(BigDecimal.valueOf(100))` at class-init time**, rather than being declared as a second pair of independent literals — one spec-given number (0.1425) has exactly one place it is written down; the computation and the wire value can never drift apart. The division is exact (both `0.1425/100` and `0.3/100` terminate), so this cannot throw `ArithmeticException` at startup.
+  - **All rate/fee arithmetic uses `BigDecimal(String)` literals, never `double`**, per the spec's explicit `200.00 × 1000 × 0.1425% = 285` acceptance criterion (`tradingCost_exactDecimalArithmetic_buySell200_feeIsExactly285NotDouble284`) — verified this lands on exactly `285`, not `284`, confirming no binary-float rounding crept in anywhere in the multiply/floor chain.
+  - **`cost` is computed and attached the moment `buyPrice` is known, independently of whether a sell day is later found** — this matches "buyFee 與 cost 是「買進日」發生了什麼，不是「賣出日」發生了什麼" (a buy has already cost a fee even if there's nothing to sell yet) and is exercised by `tradingCost_noSellDay_buyFeeAndCostPresent_sellFieldsNull_costExcludedFromTotal`, which also checks that this same `cost` is excluded from `totalCost` (only `sellDate != null` items are summed).
+  - **`totalCost` accumulation switched from `buyPrice × lotSize` to `cost`** (which already includes `buyFee`) — a one-line change at the single accumulation site in the loop, not a new aggregate; `totalProfit` accumulation was already correct (it already summed the per-item `profit`, whose formula moved to net-of-cost).
+  - **No behavior change to buy-day/sell-day selection, the 0-price exclusion rules, the batching, or the validation/error paths** — this increment is scoped exactly to the fee/tax/cost/profit/returnPercent arithmetic and the two new response fields; grepped the diff to confirm `findBuyPrice`/`findSellPick`/`validate`/`loadSeries` are byte-for-byte unchanged.
+
+- Verification (real command output tails):
+  - Recomputed every new/changed expected number independently in Python `Decimal` (not by hand) before writing it into the Java test, to catch any arithmetic transcription error before compiling: buy `1150.00`/sell `1205.00` → `buyFee=1638, sellFee=1717, sellTax=3615, cost=1151638, profit=48030, returnPercent=4.17`; buy `21.55`/sell `23.10` → `buyFee=30, sellFee=32, sellTax=69, cost=21580, profit=1419, returnPercent=6.58`; buy/sell `200.00` → `buyFee=sellFee=285, sellTax=600, profit=-1170`; buy/sell `10.00` → `buyFee=sellFee=14, profit=-58, returnPercent=-0.58`; buy/sell `1150.00` → `profit=-6726, returnPercent=-0.58`; two-lot totals → `totalCost=2333319, totalProfit=70995, totalReturnPercent=3.04` — all match the spec's own numbers exactly (the spec's worked examples were themselves the source of truth, this was a cross-check, not a derivation).
+  - `mvn -f develop/backend/pom.xml -o compile` → `BUILD SUCCESS`.
+  - `mvn -f develop/backend/pom.xml -o -Dtest=StrategyBacktestIntegrationTest test` → `Tests run: 54, Failures: 0, Errors: 0, Skipped: 0` — `BUILD SUCCESS` (45 pre-existing, 8 with updated expected numbers, + 9 new).
+  - `mvn -f develop/backend/pom.xml -o -Dtest=StrategyBacktestIntegrationTest,StrategyScanIntegrationTest test` → `Tests run: 235, Failures: 0, Errors: 0, Skipped: 0` — `BUILD SUCCESS` (confirms no cross-test-class interference).
+  - Full suite: `mvn -f develop/backend/pom.xml -o test` →
+    ```
+    [INFO] Tests run: 54, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.007 s - in com.stock.StrategyBacktestIntegrationTest
+    [INFO] Tests run: 181, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 20.483 s - in com.stock.StrategyScanIntegrationTest
+    [INFO] Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.625 s - in com.stock.StockUniverseImportIntegrationTest
+    [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0 - in com.stock.util.NormalizeUtilTest
+    [ERROR] Tests run: 550, Failures: 6, Errors: 0, Skipped: 0
+    ```
+    The 6 failures are all in `StockInstitutionalTradeIngestionIntegrationTest` (`applyDay_midBatchFailure_rollsBackWholeDay_dayStaysMissingForNextTrigger`, `masterFilter_unknownIdNeverWritten_stockRowCountUnchanged_inactiveAndEtfLikeIdsWrittenNormally`, `nonTradingDayAndMalformedDates_bothSkippedWithoutFailure_validDateStillWritten`, `priceBackfillCompletion_triggersInstitutionalCatchUp_writesTheNewlyBackfilledDate`, `realT86Fixture_2609And00632R_matchDocumentedValues_sourceIsTwse`, `timeout_retriedThenSkipped_continuesToNextDate`) — confirmed pre-existing and unrelated: grepped that file and found every affected test hardcodes `LocalDate.of(2026, 3, ...)` fixture dates against `LocalDate.now()`-relative logic, exactly the known, out-of-scope issue called out in this task. 544/550 pass; every test in scope of this spec passes.
+  - Confirmed no leftover `BT%`-prefixed rows in the real `stock` database after the run: `SELECT COUNT(*) FROM stock/stock_daily_price/stock_sync_progress WHERE stock_id LIKE 'BT%'` → `0`/`0`/`0` on all three tables.
+  - Did not start `spring-boot:run` — verification is entirely through `mvn test`'s own embedded random-port `@SpringBootTest` context, so the already-running dev instance (if any) on port 8080 was left untouched, and port 5173 was never touched.
+  - `code-quality` skill self-review: reviewed the diff against the checklist (null/absence safety, error handling, resource lifecycle, atomicity, performance, DRY/KISS). No Critical or Important findings — `cost`/`buyFee` are only computed inside the `buyPrice != null` branch (no NPE risk), `computeReturnPercent`'s denominator (`cost`) is always positive whenever it's called (only reachable when `buyPrice` is non-null, and `findBuyPrice` already excludes non-positive closes), the fee/tax line-item computation is factored into one shared helper reused for all three lines (no drift risk), and the endpoint remains read-only/single-query with no new atomicity or concurrency surface. Nothing left unfixed.
+
+- All acceptance criteria in this spec are now checked; `status` set to `done`.

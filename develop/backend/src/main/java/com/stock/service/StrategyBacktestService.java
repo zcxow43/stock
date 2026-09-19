@@ -57,6 +57,17 @@ public class StrategyBacktestService {
     public static final int MAX_ITEMS = 20000;
     public static final int LOT_SIZE = 1000;
 
+    /**
+     * Fee/tax rates as literal decimals (specs/backend/strategy-backtest.md, "交易成本"). Declared
+     * with {@code BigDecimal(String)}, never {@code double}: the spec's own example —
+     * {@code 200.00 × 1000 × 0.1425%} must land exactly on {@code 285}, and a binary-float route
+     * there can silently produce {@code 284.999...} that then floors to the wrong yuan.
+     */
+    private static final BigDecimal FEE_RATE_PERCENT = new BigDecimal("0.1425");
+    private static final BigDecimal TAX_RATE_PERCENT = new BigDecimal("0.3");
+    private static final BigDecimal FEE_RATE = FEE_RATE_PERCENT.divide(BigDecimal.valueOf(100));
+    private static final BigDecimal TAX_RATE = TAX_RATE_PERCENT.divide(BigDecimal.valueOf(100));
+
     private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
     private static final int PERCENT_SCALE = 2;
     private static final int YUAN_SCALE = 0;
@@ -114,16 +125,28 @@ public class StrategyBacktestService {
             resultItem.setBuyPrice(buyPrice);
 
             if (buyPrice != null) {
+                // buyFee/cost exist the moment there is a buyPrice at all — a buy has already cost
+                // a fee even when no sell day exists yet (specs/backend/strategy-backtest.md,
+                // "buyFee 與 cost 是「買進日」發生了什麼，不是「賣出日」發生了什麼").
+                BigDecimal buyFee = computeFeeOrTax(buyPrice, FEE_RATE);
+                BigDecimal cost = computeCost(buyPrice, buyFee);
+                resultItem.setBuyFee(buyFee);
+                resultItem.setCost(cost);
+
                 SellPick pick = findSellPick(rows, item.getBuyDate());
                 if (pick != null) {
-                    BigDecimal returnPercent = computeReturnPercent(buyPrice, pick.openPrice);
-                    BigDecimal profit = computeProfit(buyPrice, pick.openPrice);
+                    BigDecimal sellFee = computeFeeOrTax(pick.openPrice, FEE_RATE);
+                    BigDecimal sellTax = computeFeeOrTax(pick.openPrice, TAX_RATE);
+                    BigDecimal profit = computeProfit(pick.openPrice, sellFee, sellTax, cost);
+                    BigDecimal returnPercent = computeReturnPercent(profit, cost);
                     resultItem.setSellDate(pick.tradeDate);
                     resultItem.setSellPrice(pick.openPrice);
+                    resultItem.setSellFee(sellFee);
+                    resultItem.setSellTax(sellTax);
                     resultItem.setReturnPercent(returnPercent);
                     resultItem.setProfit(profit);
 
-                    totalCost = totalCost.add(buyPrice.multiply(LOT_SIZE_DECIMAL));
+                    totalCost = totalCost.add(cost);
                     totalProfit = totalProfit.add(profit);
                     backtestedCount++;
                 }
@@ -134,6 +157,8 @@ public class StrategyBacktestService {
         BacktestResponseDto response = new BacktestResponseDto();
         response.setAsOfDate(asOfDate);
         response.setLotSize(LOT_SIZE);
+        response.setFeeRatePercent(FEE_RATE_PERCENT);
+        response.setTaxRatePercent(TAX_RATE_PERCENT);
         response.setTotalCost(totalCost.setScale(YUAN_SCALE, RoundingMode.HALF_UP));
         response.setTotalProfit(totalProfit.setScale(YUAN_SCALE, RoundingMode.HALF_UP));
         response.setTotalReturnPercent(backtestedCount == 0 ? null : computeTotalReturnPercent(totalProfit, totalCost));
@@ -266,15 +291,35 @@ public class StrategyBacktestService {
         return maxOpen == null ? null : new SellPick(maxDate, maxOpen);
     }
 
-    private BigDecimal computeReturnPercent(BigDecimal buyPrice, BigDecimal sellPrice) {
-        return sellPrice.subtract(buyPrice)
-                .divide(buyPrice, DIVISION_SCALE, RoundingMode.HALF_UP)
-                .multiply(HUNDRED)
-                .setScale(PERCENT_SCALE, RoundingMode.HALF_UP);
+    /**
+     * A single trading cost line item (buy fee, sell fee, or sell tax): {@code price × 1000 × rate},
+     * floored to whole yuan on its own — each of the three costs is floored independently, never
+     * summed first and floored once (specs/backend/strategy-backtest.md, "三項各自捨去後再相加"). No
+     * broker discount and no minimum fee are applied.
+     */
+    private BigDecimal computeFeeOrTax(BigDecimal price, BigDecimal rate) {
+        return price.multiply(LOT_SIZE_DECIMAL).multiply(rate).setScale(YUAN_SCALE, RoundingMode.FLOOR);
     }
 
-    private BigDecimal computeProfit(BigDecimal buyPrice, BigDecimal sellPrice) {
-        return sellPrice.subtract(buyPrice).multiply(LOT_SIZE_DECIMAL).setScale(YUAN_SCALE, RoundingMode.HALF_UP);
+    /** 成本 = 買進價 × 1000 ＋ 買進手續費（元）— the denominator of returnPercent. */
+    private BigDecimal computeCost(BigDecimal buyPrice, BigDecimal buyFee) {
+        return buyPrice.multiply(LOT_SIZE_DECIMAL).add(buyFee).setScale(YUAN_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /** 收益 = 賣出價 × 1000 − 賣出手續費 − 證交稅 − 成本（元，可為負值）。 */
+    private BigDecimal computeProfit(BigDecimal sellPrice, BigDecimal sellFee, BigDecimal sellTax, BigDecimal cost) {
+        return sellPrice.multiply(LOT_SIZE_DECIMAL)
+                .subtract(sellFee)
+                .subtract(sellTax)
+                .subtract(cost)
+                .setScale(YUAN_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /** 報酬率 = 收益 ÷ 成本 × 100，四捨五入至小數第二位（可為負值）。 */
+    private BigDecimal computeReturnPercent(BigDecimal profit, BigDecimal cost) {
+        return profit.divide(cost, DIVISION_SCALE, RoundingMode.HALF_UP)
+                .multiply(HUNDRED)
+                .setScale(PERCENT_SCALE, RoundingMode.HALF_UP);
     }
 
     private BigDecimal computeTotalReturnPercent(BigDecimal totalProfit, BigDecimal totalCost) {

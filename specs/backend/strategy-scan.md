@@ -1,7 +1,7 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 12／26，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 等於訊號日"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 等於訊號日"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion, stock-indicator-statistics]
 ---
 
@@ -307,12 +307,12 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 
 | 參數 | 型別 | 預設 | 範圍 | 說明 |
 |---|---|---|---|---|
-| `fastPeriod` | 整數 | `12` | `2` ~ `50` | 短期 EMA 的天數（交易日） |
-| `slowPeriod` | 整數 | `26` | `3` ~ `100` | 長期 EMA 的天數（交易日） |
+| `fastPeriod` | 整數 | `5` | `2` ~ `50` | 短期 EMA 的天數（交易日） |
+| `slowPeriod` | 整數 | `20` | `3` ~ `100` | 長期 EMA 的天數（交易日） |
 
 **`fastPeriod` 必須小於 `slowPeriod`。** 兩者相等時 DIF 恆為 0、永遠不會交叉；快線天數大於慢線時 DIF 的正負號整個反轉，「黃金交叉」實際上變成死亡交叉。兩者都是永遠得不到使用者要的結果的請求，依本 spec「永遠不可能命中的請求應該被拒絕」的原則回 `400`。
 
-預設 12／26 與系統既有指標參數相同，因此不指定任何參數時，命中日與日 K 圖上的 MACD 交叉日一致。
+預設為 5／20，**與系統既有指標參數（12／26／9，日 K 圖的 MACD 副圖即以此繪製，見 `specs/dba/stock-daily-indicator.md`）不同**：不指定參數時回報的是 5／20 的交叉，交叉日不必與日 K 圖上看到的 MACD 交叉日相同。要與日 K 圖一致，呼叫端須明確指定 `fastPeriod: 12`、`slowPeriod: 26`。訊號線天數仍固定為 `9`。
 
 **不附加零軸條件**：交叉發生在零軸之上或之下都算命中。`detail` 回報交叉當日的 `dif`，使用者可據以自行區分。
 
@@ -468,8 +468,8 @@ Response `200`：
       "description": "DIF（短期 EMA − 長期 EMA）由下往上穿越 DEA（DIF 的 9 日 EMA）當日為訊號日",
       "presets": [],
       "params": [
-        { "code": "fastPeriod", "name": "短期 EMA", "unit": "日", "default": 12, "min": 2, "max": 50,  "step": 1, "lessThan": "slowPeriod" },
-        { "code": "slowPeriod", "name": "長期 EMA", "unit": "日", "default": 26, "min": 3, "max": 100, "step": 1 }
+        { "code": "fastPeriod", "name": "短期 EMA", "unit": "日", "default": 5, "min": 2, "max": 50,  "step": 1, "lessThan": "slowPeriod" },
+        { "code": "slowPeriod", "name": "長期 EMA", "unit": "日", "default": 20, "min": 3, "max": 100, "step": 1 }
       ]
     },
     {
@@ -528,8 +528,8 @@ Request：
 | `strategies[].ratioPercent` | number | 否 | **只有 `INSTITUTIONAL_NET_RATIO` 接受本欄位**。佔比門檻，範圍 `0`～`100`，最多一位小數；省略時為 `10` |
 | `strategies[].buyDays` | int | 否 | **只有 `INSTITUTIONAL_CONSECUTIVE_BUY` 接受本欄位**。連續買超的交易日數（含訊號日），整數，範圍 `1`～`20`；省略時為 `5` |
 | `strategies[].topN` | int | 否 | **只有 `INSTITUTIONAL_STRENGTH_RANK` 接受本欄位**。每一方每個交易日取的名次數，整數，範圍 `1`～`50`；省略時為 `10` |
-| `strategies[].fastPeriod` | int | 否 | **只有 `MACD_GOLDEN_CROSS` 接受本欄位**。短期 EMA 天數，整數，範圍 `2`～`50`，且須小於 `slowPeriod`（其一省略時以其預設值比較）；省略時為 `12` |
-| `strategies[].slowPeriod` | int | 否 | **只有 `MACD_GOLDEN_CROSS` 接受本欄位**。長期 EMA 天數，整數，範圍 `3`～`100`；省略時為 `26` |
+| `strategies[].fastPeriod` | int | 否 | **只有 `MACD_GOLDEN_CROSS` 接受本欄位**。短期 EMA 天數，整數，範圍 `2`～`50`，且須小於 `slowPeriod`（其一省略時以其預設值比較）；省略時為 `5` |
+| `strategies[].slowPeriod` | int | 否 | **只有 `MACD_GOLDEN_CROSS` 接受本欄位**。長期 EMA 天數，整數，範圍 `3`～`100`；省略時為 `20` |
 | `strategies[].jThreshold` | number | 否 | **只有 `KDJ_GOLDEN_CROSS` 接受本欄位**。交叉前一交易日 J 的上限（不含），範圍 `-100`～`100`，最多一位小數；省略時為 `40` |
 | `strategies[].days` | int | 否 | **只有 `CUMULATIVE_RISE` 接受本欄位**，其餘型態帶了視為無效。回看窗口的交易日數，整數，範圍 `1`～`90`；省略時為 `20` |
 | `strategies[].requireRise` | boolean | 否 | **只有 `REBOUND` 接受本欄位**。是否套用漲段條件；省略時為 `true`。為 `false` 時 `riseDays` 與 `risePercent` 不得帶 |
@@ -742,8 +742,8 @@ Response `200`：
     },
     {
       "strategy": "MACD_GOLDEN_CROSS",
-      "fastPeriod": 12,
-      "slowPeriod": 26,
+      "fastPeriod": 5,
+      "slowPeriod": 20,
       "signalPeriod": 9,
       "matchedCount": 1,
       "items": [
@@ -1016,44 +1016,51 @@ Response `200`：
 ### 技術指標型態（MACD／KDJ，本次新增）
 
 型態目錄：
-- [ ] `GET /api/strategies` 回傳十個策略，既有八個之後依序為 `MACD_GOLDEN_CROSS`、`KDJ_GOLDEN_CROSS`；兩者的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
-- [ ] `MACD_GOLDEN_CROSS` 的 `fastPeriod` 帶 `lessThan: "slowPeriod"`，`slowPeriod` 不帶；`KDJ_GOLDEN_CROSS` 的 `jThreshold` 之 `unit` 為空字串、`min` 為 `-100`
-- [ ] 既有八個策略的條目與本次改動前完全相同（皆不帶 `lessThan`）
+- [x] `GET /api/strategies` 回傳十個策略，既有八個之後依序為 `MACD_GOLDEN_CROSS`、`KDJ_GOLDEN_CROSS`；兩者的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
+- [x] `MACD_GOLDEN_CROSS` 的 `fastPeriod` 帶 `lessThan: "slowPeriod"`，`slowPeriod` 不帶；`KDJ_GOLDEN_CROSS` 的 `jThreshold` 之 `unit` 為空字串、`min` 為 `-100`
+- [x] 既有八個策略的條目與本次改動前完全相同（皆不帶 `lessThan`）
 
 共通規則：
-- [ ] 公式共用：同一段行情以 `fastPeriod: 12`、`slowPeriod: 26` 運算時，逐日 DIF／DEA／OSC 與 K／D／J 和指標運算（`specs/backend/stock-indicator-statistics.md`）自同一起點運算的結果到小數第四位一致；程式中只有一套 MACD／KD 遞迴公式實作，EMA 天數以參數傳入
-- [ ] 不讀 `stock_daily_indicator`：刪除某檔在該表的全部列後掃描，該檔命中結果不變；掃描前後該表列數不變
-- [ ] 暖身上限：某檔在 `startDate` 之前有 400 個交易日行情時，只從 `startDate` 之前第 250 個交易日起運算——改動更早（第 251 根之前）的行情，命中與 `detail` 完全不變
-- [ ] 暖身下限：D 之前恰有 99 個交易日時 D 不判定、恰 100 個時 D 照常判定；區間內所有 D 皆不足 100 根的股票列於 `insufficientData`，不在 `items`、不計入 `matchedCount`
-- [ ] 行情自 `2026-01-01` 起、不足 250 根但超過 100 根的股票不列入 `insufficientData`，照常判定
-- [ ] `buyDate` 等於 `signalDate`；`pendingConfirm` 恆為空陣列；交叉發生在該檔最新一筆日線時照常命中
-- [ ] 同一檔在區間內兩次交叉 → 只回報最近一次
-- [ ] 以相鄰交易日比較：D−1 與 D 之間有停牌造成的日曆間隔時，判定結果與無間隔時一致
-- [ ] 行情以批次查詢讀取：全市場掃描時查詢次數不隨股票數增加；MACD 與 KDJ 同一次送出時行情查詢次數與只送其中一個時相同
-- [ ] 十個策略同一次送出時 `results` 依送入順序回傳十筆，既有八個型態的命中結果與未加本功能時相同
+- [x] 公式共用：同一段行情以 `fastPeriod: 12`、`slowPeriod: 26` 運算時，逐日 DIF／DEA／OSC 與 K／D／J 和指標運算（`specs/backend/stock-indicator-statistics.md`）自同一起點運算的結果到小數第四位一致；程式中只有一套 MACD／KD 遞迴公式實作，EMA 天數以參數傳入
+- [x] 不讀 `stock_daily_indicator`：刪除某檔在該表的全部列後掃描，該檔命中結果不變；掃描前後該表列數不變
+- [x] 暖身上限：某檔在 `startDate` 之前有 400 個交易日行情時，只從 `startDate` 之前第 250 個交易日起運算——改動更早（第 251 根之前）的行情，命中與 `detail` 完全不變
+- [x] 暖身下限：D 之前恰有 99 個交易日時 D 不判定、恰 100 個時 D 照常判定；區間內所有 D 皆不足 100 根的股票列於 `insufficientData`，不在 `items`、不計入 `matchedCount`
+- [x] 行情自 `2026-01-01` 起、不足 250 根但超過 100 根的股票不列入 `insufficientData`，照常判定
+- [x] `buyDate` 等於 `signalDate`；`pendingConfirm` 恆為空陣列；交叉發生在該檔最新一筆日線時照常命中
+- [x] 同一檔在區間內兩次交叉 → 只回報最近一次
+- [x] 以相鄰交易日比較：D−1 與 D 之間有停牌造成的日曆間隔時，判定結果與無間隔時一致
+- [x] 行情以批次查詢讀取：全市場掃描時查詢次數不隨股票數增加；MACD 與 KDJ 同一次送出時行情查詢次數與只送其中一個時相同
+- [x] 十個策略同一次送出時 `results` 依送入順序回傳十筆，既有八個型態的命中結果與未加本功能時相同
 
 MACD 黃金交叉：
-- [ ] D−1 `OSC < 0`、D `OSC > 0` → 命中，`signalDate` 為 D；D−1 `OSC = 0`、D `OSC > 0` → 命中（前一日為 ≤ 0）；D−1 與 D 皆 > 0 → 不命中；D−1 < 0、D `OSC = 0` → 不命中（當日須 > 0）
-- [ ] 零軸之上與零軸之下的交叉皆命中（構造 DIF 為正、為負的交叉各驗一次）
-- [ ] 自訂天數生效：同一段行情以 `fastPeriod: 5, slowPeriod: 10` 與預設 `12／26` 掃描得到不同的命中日，且各自等於以該組天數依公式手算的交叉日
-- [ ] `detail` 為 `dif`／`dea`／`osc`／`prevOsc` 四位小數，`osc` 與 `dif − dea` 相差不超過捨入誤差 `0.0001`
-- [ ] 回應回 `fastPeriod`、`slowPeriod`、`signalPeriod`（`9`），不含 `preset`；省略參數時回 `12` 與 `26`
+- [x] D−1 `OSC < 0`、D `OSC > 0` → 命中，`signalDate` 為 D；D−1 `OSC = 0`、D `OSC > 0` → 命中（前一日為 ≤ 0）；D−1 與 D 皆 > 0 → 不命中；D−1 < 0、D `OSC = 0` → 不命中（當日須 > 0）
+- [x] 零軸之上與零軸之下的交叉皆命中（構造 DIF 為正、為負的交叉各驗一次）
+- [x] 自訂天數生效：同一段行情以 `fastPeriod: 5, slowPeriod: 10` 與預設 `5／20` 掃描得到不同的命中日，且各自等於以該組天數依公式手算的交叉日
+- [x] `detail` 為 `dif`／`dea`／`osc`／`prevOsc` 四位小數，`osc` 與 `dif − dea` 相差不超過捨入誤差 `0.0001`
+- [x] 回應回 `fastPeriod`、`slowPeriod`、`signalPeriod`（`9`），不含 `preset`；省略參數時回 `5` 與 `20`
 
 KDJ 黃金交叉：
-- [ ] 構造 D−1 `K < D`、`J = 19.04`，D 當日 `K > D`，`jThreshold: 40` → 命中，`signalDate` 為 D
-- [ ] 同一交叉、D−1 的 J 恰等於 `jThreshold` → 不命中（嚴格小於）；D−1 的 J 高於 `jThreshold` → 不命中
-- [ ] `jThreshold` 可為負：D−1 的 `J = -12.3` 的交叉，`jThreshold: -10` 命中、`jThreshold: -15` 不命中
-- [ ] 判定以 K、D 比較：D−1 `K = D`（此時 J = K = D，未「同時高於」）、D 當日 `K > D` → 命中；D−1 `K > D` → 不命中（前一日已在上方，不是穿越）
-- [ ] `detail` 的 `j` 與 `3k − 2d`、`prevJ` 與 `3·prevK − 2·prevD` 相差不超過捨入誤差 `0.0003`
-- [ ] 回應回 `jThreshold`，不含 `preset`；省略時回 `40`
+- [x] 構造 D−1 `K < D`、`J = 19.04`，D 當日 `K > D`，`jThreshold: 40` → 命中，`signalDate` 為 D
+- [x] 同一交叉、D−1 的 J 恰等於 `jThreshold` → 不命中（嚴格小於）；D−1 的 J 高於 `jThreshold` → 不命中
+- [x] `jThreshold` 可為負：D−1 的 `J = -12.3` 的交叉，`jThreshold: -10` 命中、`jThreshold: -15` 不命中
+- [x] 判定以 K、D 比較：D−1 `K = D`（此時 J = K = D，未「同時高於」）、D 當日 `K > D` → 命中；D−1 `K > D` → 不命中（前一日已在上方，不是穿越）
+- [x] `detail` 的 `j` 與 `3k − 2d`、`prevJ` 與 `3·prevK − 2·prevD` 相差不超過捨入誤差 `0.0003`
+- [x] 回應回 `jThreshold`，不含 `preset`；省略時回 `40`
 
 驗證與用語：
-- [ ] 兩型態帶 `preset` → `400 PRESET_NOT_APPLICABLE`；帶 `risePercent` → `400 PARAM_NOT_APPLICABLE`（`param` 為 `risePercent`）；帶 `days` → `400 DAYS_NOT_APPLICABLE`
-- [ ] 其他型態帶 `fastPeriod`／`slowPeriod`／`jThreshold`，或 MACD 帶 `jThreshold`、KDJ 帶 `fastPeriod` → `400 PARAM_NOT_APPLICABLE`，`param` 指名該欄位
-- [ ] `fastPeriod` 為 `1`、`51`、`12.5` → `400 INVALID_FAST_PERIOD`；`slowPeriod` 為 `2`、`101`、`26.5` → `400 INVALID_SLOW_PERIOD`；皆帶 `strategy: "MACD_GOLDEN_CROSS"`
-- [ ] `fastPeriod: 26, slowPeriod: 26`、`fastPeriod: 30, slowPeriod: 20`、只送 `fastPeriod: 30`（`slowPeriod` 取預設 26）→ `400 INVALID_MACD_PERIODS`；`fastPeriod: 60, slowPeriod: 20` 回 `INVALID_FAST_PERIOD`（範圍錯誤優先）
-- [ ] `jThreshold` 為 `-100.1`、`100.1`、`40.25` → `400 INVALID_J_THRESHOLD`；`-100`、`100`、`-12.5` 為合法請求
-- [ ] 兩型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
+- [x] 兩型態帶 `preset` → `400 PRESET_NOT_APPLICABLE`；帶 `risePercent` → `400 PARAM_NOT_APPLICABLE`（`param` 為 `risePercent`）；帶 `days` → `400 DAYS_NOT_APPLICABLE`
+- [x] 其他型態帶 `fastPeriod`／`slowPeriod`／`jThreshold`，或 MACD 帶 `jThreshold`、KDJ 帶 `fastPeriod` → `400 PARAM_NOT_APPLICABLE`，`param` 指名該欄位
+- [x] `fastPeriod` 為 `1`、`51`、`12.5` → `400 INVALID_FAST_PERIOD`；`slowPeriod` 為 `2`、`101`、`26.5` → `400 INVALID_SLOW_PERIOD`；皆帶 `strategy: "MACD_GOLDEN_CROSS"`
+- [x] `fastPeriod: 26, slowPeriod: 26`、`fastPeriod: 30, slowPeriod: 20`、只送 `fastPeriod: 30`（`slowPeriod` 取預設 20）→ `400 INVALID_MACD_PERIODS`；`fastPeriod: 60, slowPeriod: 20` 回 `INVALID_FAST_PERIOD`（範圍錯誤優先）
+- [x] `jThreshold` 為 `-100.1`、`100.1`、`40.25` → `400 INVALID_J_THRESHOLD`；`-100`、`100`、`-12.5` 為合法請求
+- [x] 兩型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
+
+### MACD 預設天數改為 5／20
+
+- [x] `GET /api/strategies` 中 `MACD_GOLDEN_CROSS` 的 `fastPeriod.default` 為 `5`、`slowPeriod.default` 為 `20`；兩者的 `min`／`max`／`step`／`lessThan` 與 `KDJ_GOLDEN_CROSS`、其餘八個策略的條目皆不變
+- [x] `MACD_GOLDEN_CROSS` 不帶 `fastPeriod`／`slowPeriod` 掃描，結果與明確送 `fastPeriod: 5, slowPeriod: 20` 完全相同（`items`、`insufficientData`、`matchedCount`），回應回 `fastPeriod: 5`、`slowPeriod: 20`、`signalPeriod: 9`
+- [x] 明確送 `fastPeriod: 12, slowPeriod: 26` 時，命中日仍與日 K 圖所用指標（`specs/backend/stock-indicator-statistics.md`）的 MACD 黃金交叉日一致——改預設不影響指定 12／26 的結果
+- [x] 以其一省略時的預設值比較 `lessThan`：只送 `slowPeriod: 5`（`fastPeriod` 取預設 5）或 `slowPeriod: 3` → `400 INVALID_MACD_PERIODS`；只送 `slowPeriod: 6` → 合法；只送 `fastPeriod: 19` → 合法、只送 `fastPeriod: 20` → `400 INVALID_MACD_PERIODS`
 
 ---
 ## Execution Result
@@ -1276,3 +1283,74 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
 **資料**：以資料庫中 30,878 筆真實法人資料（1,328 檔、24 個交易日）為背景執行，稽核前後列數不變，未寫入或刪除任何真實資料。
 
 **驗證**：`mvn -f develop/backend/pom.xml test` — **510/510 通過、0 失敗**（本增量開始前為 473），由我另外獨立重跑確認，並抽查其中 9 個關鍵測試方法確實存在於測試檔中。
+
+### Increment 9 — 2026-09-19
+
+本次執行的是「MACD 黃金交叉 / KDJ 黃金交叉」增量：`技術指標型態` 一節的 30 項未勾選驗收全數完成。策略目錄由八個增為十個。
+
+**執行前的實際狀態**：commit `3825736`「Add MACD and KDJ golden-cross strategy scans」（已在 `main` 分支上）已經實作了 `MacdGoldenCrossDetector`、`KdjGoldenCrossDetector`、相關 DTO／例外／驗證邏輯，並在同一次提交中新增了 955 行測試，但未勾選任何驗收項、也未寫 Execution Result。本次的工作因此主要是**逐項稽核**：對照 30 項驗收，逐一確認實作與測試是否真的證明了驗收所寫的內容，而不是重做整個功能。
+
+**稽核方式**：逐一讀過 `MacdGoldenCrossDetector`／`KdjGoldenCrossDetector`／`IndicatorCalculationService`／`PatternDetector`／`StrategyScanService`（驗證與批次讀取部分）／`StrategyCatalogService`／相關 DTO 與例外類別，對照 spec 的「技術指標型態」共通規則與兩個型態各自的判定規則，並執行既有的 25 個 MACD/KDJ 專屬測試方法逐一核對其斷言是否對應到驗收項本身（而非較弱的版本）。
+
+**稽核中發現並修正的三個真實缺陷**（皆非"稽核字面正確、實測卻失敗"式問題，而是先跑過全套測試才發現的）：
+
+1. **`jThreshold` 的實際 wire 欄位名是 `jthreshold`（全小寫），不是 spec 要求的 `jThreshold`**——這是本次稽核中唯一真正影響 API 契約的缺陷。`StrategySelectionDto`／`StrategyResultDto` 的 getter/setter 命名為 `getJThreshold()`/`setJThreshold()`；因為方法名去掉 `get`/`set` 前綴後前兩個字元都是大寫（`JT`），Jackson 預設（legacy）的 bean 屬性命名演算法對這種「開頭連續兩個大寫字母」的名稱會整段轉小寫，產生 `jthreshold` 而非一般情況下的 `jThreshold`（對照 `getFastPeriod()`→`fastPeriod`、`getK()`→`k` 皆無此問題，因為它們的開頭不是連續兩個大寫字母）。由於本專案的整合測試是用同一個 Java `RestTemplate` 物件序列化請求、又用同一套 Jackson 規則反序列化，兩邊用的是同一個（錯誤的）欄位名，因此「送 `jThreshold` 給後端、後端真的照這個值判定」這條路徑「碰巧」測試綠燈；但任何照 spec 送出字面 `{"jThreshold": 90}` 的真實用戶端（例如前端），這個值都不會被後端讀到（靜默改用預設值 `40`），而後端回應中也不會出現 `jThreshold` 這個鍵，只有 `jthreshold`。已在 `StrategySelectionDto`／`StrategyResultDto` 的 `getJThreshold`/`setJThreshold` 加上 `@JsonProperty("jThreshold")`，把 wire 名稱釘死，不依賴 Jackson 的命名演算法。
+2. `kdjGoldenCross_detailJFormula_matchesThreeKMinusTwoD_echoesJThreshold` 與 `kdjGoldenCross_invalidJThreshold_boundariesAndValidValues` 兩個既有測試原本應該會抓到上述缺陷（皆會讀取回應的 `jThreshold` 欄位），但實際執行時拋出 `NullPointerException` 而非有意義的斷言失敗——這正是本次全套測試跑出來、而非稽核閱讀程式碼能單靠肉眼發現的問題。修正後兩者皆綠燈，不需改動測試本身的斷言邏輯。
+3. `macdGoldenCross_zeroAxisAboveAndBelow_bothCountAsHit` 與 `kdjGoldenCross_jThresholdCanBeNegative_hitsAndDoesNotHit` 兩個測試的**夾具**（既有 commit 自帶的測試碼，非本次新寫）用的是單一週期性正弦波行情；正弦波的 MACD/KD 遞迴一旦收斂進入穩態，同一相位會不斷重複，導致同一種黃金交叉（同一種 DIF 正負號、同一個 `prevJ` 值）在整段序列裡永遠只出現一種，另一種（DIF 為負／`prevJ` 為負）永遠不會出現——用手算（Python 重現同一套 `IndicatorCalculationService` 遞迴公式）驗證後確認：400 天、振幅 20、週期 34 天的正弦波在 [100,400) 內的 9 次黃金交叉 DIF 恆為負；振幅 45、週期 8 天的正弦波的 37 次交叉 `prevJ` 恆為 +25.02。這不是實作缺陷，是這兩個測試自己的夾具設計缺陷（無法達成它們自己宣稱要驗證的兩種情境）。已將夾具改為：
+   - MACD 測試改用兩檔獨立的「持續趨勢 + 中途短暫逆勢回檔」序列（漲勢配合回檔製造 DIF 為正的交叉；跌勢配合反彈製造 DIF 為負的交叉），取代單一正弦波、單一股票。
+   - KDJ 測試改用「120 日走平（讓 K/D 收斂至中性 50）→ 10 日持續破底下跌（K 因直接反應 RSV 而比 D 跌得快，拉出負值 J）→ 急彈 + 短暫回升」的構造序列，取代原本的正弦波，穩定產生 `prevJ` 為負（實測 `prevJ ≈ -4.91`）的交叉。
+   - 兩個新夾具的產生方式與其不可行的原因，皆已記錄在新增的 `buildTrendWithDip`／`buildDeclineThenBounceSeries` 方法註解中。
+
+**其餘 27 項驗收**：逐一核對後皆已由既有測試正確涵蓋，不需改動實作或測試（詳見下方測試對照）。
+
+**測試對照**（30 項 → 測試方法，*標記為本次修正過的測試）：
+- 型態目錄 3 項 → `catalog_returnsTenStrategies_macdAndKdjAppendedInOrderMatchingSpecJson`（含 lessThan／unit／min 斷言）、`catalog_existingEightStrategies_unaffected_noLessThanFieldAnywhere`
+- 共通規則 9 項 → `macdAndKdj_sharedFormula_scanDetailMatchesIndicatorCalculationServiceToFourDecimals`、`macdAndKdj_doNotReadOrWriteStockDailyIndicatorTable`、`macdAndKdj_warmupCap250_changingBarsBeforeTheCutoffDoesNotChangeResult`、`macdAndKdj_warmupFloor_99DaysNotJudged_100DaysJudged`、`macdAndKdj_between100And250Days_notInsufficientData_judgesNormally`、`macdAndKdj_buyDateEqualsSignalDate_pendingConfirmAlwaysEmpty_evenAtLatestBar`、`macdAndKdj_sameStockTwoCrossesInRange_reportsLatestOnly`、`macdAndKdj_adjacentTradingDayComparison_calendarGapDoesNotChangeResult`、`macdAndKdj_priceQueriesAreBatched_macdAndKdjTogetherSameCountAsEitherAlone`、`tenStrategiesTogether_resultsInSubmittedOrder_existingEightStrategiesUnaffected`
+- MACD 5 項 → `macdGoldenCross_flatThenJump_prevOscZeroOrNegativeAndCurrPositive_hits_bothPositiveOrZero_doesNotHit`、`macdGoldenCross_zeroAxisAboveAndBelow_bothCountAsHit`*、`macdGoldenCross_customPeriods_differFromDefault_matchHandCalc`、`macdGoldenCross_detailOscMatchesDifMinusDea_withinRoundingTolerance`、`macdGoldenCross_responseEchoesFastSlowSignalPeriod_defaultsWhenOmitted`
+- KDJ 6 項 → `kdjGoldenCross_realCrossing_prevJBelowThreshold_hits_signalDateIsD`、`kdjGoldenCross_prevJEqualOrAboveThreshold_doesNotHit_strictlyLessThan`、`kdjGoldenCross_jThresholdCanBeNegative_hitsAndDoesNotHit`*、`kdjGoldenCross_judgedByKDComparison_notJDirectly`、`kdjGoldenCross_detailJFormula_matchesThreeKMinusTwoD_echoesJThreshold`*
+- 驗證與用語 6 項 → `macdAndKdj_presetRisePercentDaysNotApplicable`、`otherStrategiesRejectFastSlowJThreshold_macdRejectsJThreshold_kdjRejectsFastPeriod`、`macdGoldenCross_invalidFastPeriodAndSlowPeriod`、`macdGoldenCross_invalidMacdPeriods_fastNotStrictlyLessThanSlow`、`kdjGoldenCross_invalidJThreshold_boundariesAndValidValues`*、`macdAndKdj_noAdviceOrEntryExitWording`
+
+**額外修正（與本增量的產品程式碼無關，純測試維護）**：`catalog_containsBoxBreakoutAndHigherLowsWithThreePresetsEachMatchingSpecWording`／`catalog_returnsThreeStrategiesIncludingRisingSupportMatchingSpecWording`／`catalog_returnsFiveStrategiesIncludingReboundAndCumulativeRiseMatchingSpecWording`／`catalog_returnsEightStrategiesIncludingInstitutionalPatternsMatchingSpecWording`／`catalog_cumulativeRise_hasEmptyPresetsPlusDescriptionAndParams` 五個既有測試斷言策略總數為 `8`，本次新增兩個型態後理應為 `10`；沿用 increment 2～4 的既有慣例（型態目錄合法成長時更新過期的計數斷言）更新為 `10`，未改動這些測試原本要驗證的其餘內容。另外 `institutional_noDataAtAllInPeriod_dataThroughDateNull_allInsufficientData` 原本寫死 `2026-03-10` 為「保證沒有法人資料」的日期，但隨真實資料日復一日累積，該日期已經有真實法人資料（`SELECT COUNT(*) FROM stock_institutional_trade WHERE trade_date BETWEEN '2026-03-06' AND '2026-03-11'` → 5203 筆），導致此測試變得脆弱；改為 `LocalDate.now().plusYears(5)`，使其不受時間推移影響。
+
+**`design-patterns` skill**：未使用。`MacdGoldenCrossDetector`／`KdjGoldenCrossDetector` 是既有 `PatternDetector` Strategy 介面的第 9、10 個實作，延續既有的擴充點，非新設計；本次工作也主要是稽核既有程式碼與修正測試，沒有新增需要套用設計模式的結構。
+
+**`code-quality` skill 自我審查**：這次審查直接發現了上述缺陷 1（`jThreshold` 的 wire 命名）——這正是「API contract」一類要檢查的項目：回應/請求的欄位名稱是否真的等於文件宣稱的名稱，而不是「程式碼看起來對」就假設沒問題。修正方式是在 getter/setter 加上明確的 `@JsonProperty`，把 wire 契約與 Java 方法命名脫鉤，不依賴 Jackson 演算法的隱含行為；其餘 DTO 逐一檢查過，沒有其他「開頭連續兩個大寫字母」的 getter/setter（`getK`/`getD`/`getJ`/`getDif`/`getDea`/`getOsc`/`getPrevOsc`/`getPrevK`/`getPrevD`/`getPrevJ`/`getFastPeriod`/`getSlowPeriod`/`getSignalPeriod` 皆無此問題）。另確認 `StockDailyIndicator.getKValue()`/`getDValue()`/`getJValue()`（同樣命名形狀）**不會**被序列化到任何回應——它是 MyBatis 內部 domain 物件，對外的 K/D/J 走的是 `StatisticsSeriesRowDto` 的獨立 `k`/`d`/`j` 欄位；記錄於此供未來若真的把 `StockDailyIndicator` 直接序列化時參考，本次未改動該類別。空值安全、例外處理、資源生命週期、原子性、效能（批次查詢）皆已在既有實作中妥善處理，無需修正。
+
+**驗證**：`mvn -f develop/backend/pom.xml -o test-compile` 乾淨編譯；`mvn -f develop/backend/pom.xml -o test -Dtest=StrategyScanIntegrationTest` → **178/178 通過**；全量 `mvn -f develop/backend/pom.xml -o test` → **538 之中 532 通過、6 個失敗**，失敗全部集中在 `StockInstitutionalTradeIngestionIntegrationTest`（`specs/backend/institutional-trade-ingestion.md` 的測試，非本 spec 範圍），確認為既有、與本次改動無關的日期漂移問題——該測試以 `LocalDate.now()` 與寫死在 2026-03 的 `MockRestServiceServer` 期望值搭配使用，隨著系統日期推進到 2026-09-19，`findMissingTradeDates` 計算出的「缺漏日期」範圍已超出測試當初寫死的期望請求集合，導致「Further request(s) expected」。此檔案自 commit `a657d0a`（不屬於本次任何一個 strategy-scan 增量）後未再變動，且與 MACD/KDJ 的程式碼、DTO、驗證邏輯完全無交集（不同的 controller、service、mapper），故判定為超出本次任務範圍，予以記錄但未修正。
+
+**未能驗證的部分**：無（就本 spec 的 30 項驗收而言）。上述 `StockInstitutionalTradeIngestionIntegrationTest` 的 6 個失敗屬於另一份 spec 的既有缺陷，留待該 spec 的下一次 `/dev` 執行處理。
+
+**變更檔案**：
+- `develop/backend/src/main/java/com/stock/dto/StrategySelectionDto.java`（修正：`getJThreshold`/`setJThreshold` 加上 `@JsonProperty("jThreshold")`，修正 wire 命名缺陷）
+- `develop/backend/src/main/java/com/stock/dto/StrategyResultDto.java`（同上）
+- `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java`（新增 `buildTrendWithDip`／`buildDeclineThenBounceSeries`／`closeOnlyRow` 三個測試輔助方法；重寫 `macdGoldenCross_zeroAxisAboveAndBelow_bothCountAsHit`／`kdjGoldenCross_jThresholdCanBeNegative_hitsAndDoesNotHit` 的夾具；更新 5 個既有型態目錄測試的過期策略總數斷言（`8`→`10`）；`institutional_noDataAtAllInPeriod_dataThroughDateNull_allInsufficientData` 改用相對未來日期）
+- `specs/backend/strategy-scan.md`（本檔：勾選 30 項驗收、frontmatter 改為 `status: done`、新增本節）
+
+未變動 `MacdGoldenCrossDetector`／`KdjGoldenCrossDetector`／`IndicatorCalculationService`／`PatternDetector`／`StrategyScanService`／`StrategyCatalogService`／`ParamDto`／`ErrorResponse`／`GlobalExceptionHandler`／四個新例外類別——commit `3825736` 原本的產品程式碼（`jThreshold` 命名缺陷所在的兩個 DTO 除外）經逐項稽核與全套測試驗證後判定正確，無需重寫。
+
+### Increment 10 — 2026-09-19
+
+本次執行的是「MACD 黃金交叉預設天數由 12／26 改為 5／20」增量：`### MACD 預設天數改為 5／20` 一節的 4 項驗收，以及「驗證與用語」清單中因此改寫的 3 項（自訂天數生效；省略參數回 5／20；只送 `fastPeriod: 30` → `INVALID_MACD_PERIODS`，`slowPeriod` 取新預設 20），共 7 項全數完成。訊號線固定為 9、`fastPeriod`／`slowPeriod` 的範圍與 `lessThan` 機制、KDJ 與其餘八個型態皆未改動。
+
+**實作**：`MacdGoldenCrossDetector.FAST_PERIOD_DEFAULT`／`SLOW_PERIOD_DEFAULT` 原本直接借用 `IndicatorCalculationService.DEFAULT_FAST_PERIOD`／`DEFAULT_SLOW_PERIOD`（即 `12`／`26`）。這兩個 `IndicatorCalculationService` 常數是 `stock_daily_indicator` 表固定寫入的日 K 圖 MACD 副圖參數（`specs/dba/stock-daily-indicator.md`），必須維持 `12`／`26` 不變；本次把 `MacdGoldenCrossDetector` 的掃描預設改為它自己的常數 `5`／`20`，與指標表的持久化預設解耦，不再共用同一組常數。`StrategyScanService` 的 `fastPeriod`／`slowPeriod` 範圍驗證與 `lessThan` 比較（`fast >= slow` 時擲 `InvalidMacdPeriodsException`）本就呼叫 `detector.getFastPeriodDefault()`／`getSlowPeriodDefault()` 而非寫死數字，`StrategyCatalogService` 的 `GET /api/strategies` 也只是原樣回傳 `detector.getParams()`；兩者因此不需要任何程式碼改動，改常數後自動生效。
+
+**測試**：`StrategyScanIntegrationTest` 中原本有 9 處測試以 `groundTruth(rows, 12, 26)` 搭配 `macdSelection(null, null)`（省略參數走預設值）比對命中日／`detail`，這些原本隱含假設「預設 = 12／26」，改預設後全部需要更新為 `groundTruth(rows, 5, 20)`：`catalog_returnsTenStrategies_macdAndKdjAppendedInOrderMatchingSpecJson`（`fastPeriod.default`／`slowPeriod.default` 斷言改為 `5`／`20`）、`macdAndKdj_between100And250Days_notInsufficientData_judgesNormally`、`macdAndKdj_buyDateEqualsSignalDate_pendingConfirmAlwaysEmpty_evenAtLatestBar`、`macdAndKdj_sameStockTwoCrossesInRange_reportsLatestOnly`、`macdAndKdj_adjacentTradingDayComparison_calendarGapDoesNotChangeResult`、`macdGoldenCross_zeroAxisAboveAndBelow_bothCountAsHit`、`macdGoldenCross_customPeriods_differFromDefault_matchHandCalc`（`defaultGround`）、`macdGoldenCross_detailOscMatchesDifMinusDea_withinRoundingTolerance`、`macdGoldenCross_responseEchoesFastSlowSignalPeriod_defaultsWhenOmitted`（省略時的回應斷言改為 `5`／`20`）、`macdAndKdj_noAdviceOrEntryExitWording`。`macdAndKdj_sharedFormula_scanDetailMatchesIndicatorCalculationServiceToFourDecimals` 原本也以省略參數依賴舊預設 12／26 來驗證公式共用，本次改為明確送 `macdSelection(12, 26)`，讓它繼續驗證「明確指定 12／26 時公式仍與指標運算逐日一致到小數第四位」這件事，而不是巧合地依賴預設值。
+
+新增 4 個測試方法，逐一對應本次改寫的驗收：
+- `macdGoldenCross_customPeriods_differFromDefault_matchHandCalc` 內補上 `assertNotEquals(defaultDate, customDate)` 斷言——原測試只各自驗證命中日符合手算交叉日，未斷言兩者確實不同，這正是「自訂天數生效」要求的「得到不同的命中日」。
+- `macdGoldenCross_omittedPeriods_matchesExplicitFiveTwenty_itemsInsufficientDataMatchedCount`：省略參數與明確送 `fastPeriod: 5, slowPeriod: 20` 比對 `items`／`insufficientData`／`matchedCount` 完全相同，並確認回應欄位為 `5`／`20`／`9`。
+- `macdGoldenCross_explicitTwelveTwentySix_unaffectedByDefaultChange`：明確送 `12`／`26` 時命中日與指標運算的 ground truth 一致，證明改預設不影響指定 12／26 的結果。
+- `macdGoldenCross_lessThanComparesAgainstNewDefaults_whenOtherFieldOmitted`：只送 `slowPeriod: 5`／`slowPeriod: 3` → `INVALID_MACD_PERIODS`（`fastPeriod` 取新預設 `5`）；只送 `slowPeriod: 6`／`fastPeriod: 19` → 200（`fastPeriod`／`slowPeriod` 取新預設後仍嚴格小於）；只送 `fastPeriod: 20` → `INVALID_MACD_PERIODS`（取新預設 `slowPeriod: 20` 後相等）。
+
+`macdGoldenCross_invalidMacdPeriods_fastNotStrictlyLessThanSlow` 的既有斷言（`fastPeriod: 26/slowPeriod: 26`、`fastPeriod: 30/slowPeriod: 20`、只送 `fastPeriod: 30`、`fastPeriod: 60/slowPeriod: 20`）本身邏輯不受預設改動影響（`30 >= 20` 新舊預設皆成立），僅更正一行過期註解（`// slowPeriod defaults to 26` → `20`），不影響斷言結果，對應驗收「只送 `fastPeriod: 30`（`slowPeriod` 取預設 20）→ `400 INVALID_MACD_PERIODS`」。
+
+**驗證**：`mvn -f develop/backend/pom.xml compile` 與 `test-compile` 皆乾淨通過；`mvn -f develop/backend/pom.xml test` → **541 之中 535 通過、6 個失敗**，全部集中在 `StockInstitutionalTradeIngestionIntegrationTest`（`applyDay_midBatchFailure_rollsBackWholeDay_dayStaysMissingForNextTrigger`、`masterFilter_unknownIdNeverWritten_stockRowCountUnchanged_inactiveAndEtfLikeIdsWrittenNormally`、`nonTradingDayAndMalformedDates_bothSkippedWithoutFailure_validDateStillWritten`、`priceBackfillCompletion_triggersInstitutionalCatchUp_writesTheNewlyBackfilledDate`、`realT86Fixture_2609And00632R_matchDocumentedValues_sourceIsTwse`、`timeout_retriedThenSkipped_continuesToNextDate`）——與 Increment 9 記錄的成因相同（測試以寫死在 2026-03 的 `MockRestServiceServer` 期望值搭配 `LocalDate.now()`，隨系統日期推進到 2026-09-19 而失準），與本次 MACD 預設值改動無交集，依任務範圍界定不予修正。`StrategyScanIntegrationTest` 本身 **181/181 全數通過**。
+
+**`design-patterns` skill**：未使用。本次只是把既有 `PatternDetector` 實作內的兩個預設值常數改指向新字面值，並解除與另一服務常數的耦合，沒有新增結構或擴充點。
+
+**`code-quality` skill 自我審查**：確認改動後 `MacdGoldenCrossDetector` 的預設值常數不再與 `IndicatorCalculationService`（持久化指標表用）共用，避免「改一個地方、兩種語意的常數一起變動」的耦合風險；`StrategyScanService` 的驗證邏輯本就透過 `detector.getFastPeriodDefault()`／`getSlowPeriodDefault()` 存取，未寫死數字，因此範圍檢查與 `lessThan` 比較在改常數後行為正確、無需修改。未發現需要修正的空值安全、例外處理或效能問題。
+
+**變更檔案**：
+- `develop/backend/src/main/java/com/stock/service/pattern/MacdGoldenCrossDetector.java`（`FAST_PERIOD_DEFAULT`／`SLOW_PERIOD_DEFAULT` 由借用 `IndicatorCalculationService` 的 `12`／`26` 改為自有常數 `5`／`20`）
+- `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java`（更新 9 處依賴舊預設 12／26 的既有測試；`macdAndKdj_sharedFormula_...` 改為明確送 12／26；新增 4 個測試方法；更正 1 行過期註解）
+- `specs/backend/strategy-scan.md`（本檔：勾選 7 項驗收、frontmatter 改為 `status: done`、新增本節）

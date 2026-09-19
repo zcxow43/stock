@@ -141,8 +141,10 @@ class StrategyBacktestIntegrationTest {
         seedBaseWindow("BT005", buyDate, today);
 
         JsonNode item = singleItemResult("BT005", buyDate);
-        // (110.00 - 100.00) / 100.00 * 100 = 10.00
-        assertEquals(0, new BigDecimal("10.00").compareTo(item.get("returnPercent").decimalValue()));
+        // buy 100.00 -> sell 110.00: buyFee=142 (100000*0.001425=142.5, floor), cost=100142;
+        // sellFee=156 (110000*0.001425=156.75, floor), sellTax=330 (110000*0.003=330);
+        // profit = 110000-156-330-100142 = 9372; returnPercent = 9372/100142*100 = 9.3608...-> 9.36
+        assertEquals(0, new BigDecimal("9.36").compareTo(item.get("returnPercent").decimalValue()));
     }
 
     @Test
@@ -158,8 +160,8 @@ class StrategyBacktestIntegrationTest {
         JsonNode root = objectMapper.readTree(response.getBody());
         assertEquals(1000, root.get("lotSize").asInt());
         JsonNode item = root.get("items").get(0);
-        // (110.00 - 100.00) * 1000 = 10000
-        assertEquals(0, new BigDecimal("10000").compareTo(item.get("profit").decimalValue()));
+        // profit = sellPrice*1000 - sellFee - sellTax - cost = 110000-156-330-100142 = 9372
+        assertEquals(0, new BigDecimal("9372").compareTo(item.get("profit").decimalValue()));
     }
 
     @Test
@@ -174,10 +176,12 @@ class StrategyBacktestIntegrationTest {
         insertPriceRow("BT007", today, "70.00", "71.00", "69.00", "69.00", 1000);
 
         JsonNode item = singleItemResult("BT007", buyDate);
-        // Highest open after buy day is 90.00 (day+1); buy was 100.00 -> -10.00% / -10000
+        // Highest open after buy day is 90.00 (day+1); buy 100.00 -> cost=100142 (buyFee=142.5 floor 142)
+        // sellFee=floor(90000*0.001425)=128, sellTax=floor(90000*0.003)=270
+        // profit = 90000-128-270-100142 = -10540; returnPercent = -10540/100142*100 = -10.5276 -> -10.53
         assertEquals(0, new BigDecimal("90.00").compareTo(item.get("sellPrice").decimalValue()));
-        assertEquals(0, new BigDecimal("-10.00").compareTo(item.get("returnPercent").decimalValue()));
-        assertEquals(0, new BigDecimal("-10000").compareTo(item.get("profit").decimalValue()));
+        assertEquals(0, new BigDecimal("-10.53").compareTo(item.get("returnPercent").decimalValue()));
+        assertEquals(0, new BigDecimal("-10540").compareTo(item.get("profit").decimalValue()));
     }
 
     @Test
@@ -219,14 +223,16 @@ class StrategyBacktestIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
 
-        assertEquals(0, new BigDecimal("1020000").compareTo(root.get("totalCost").decimalValue()));
-        assertEquals(0, new BigDecimal("200200").compareTo(root.get("totalProfit").decimalValue()));
+        // BT101: cost=1001425 (buyFee=1425), profit=193265 (sellFee=1710, sellTax=3600) -> 19.30%
+        // BT102: cost=20028 (buyFee=28), profit=84 (sellFee=28, sellTax=60) -> 0.42%
+        assertEquals(0, new BigDecimal("1021453").compareTo(root.get("totalCost").decimalValue()));
+        assertEquals(0, new BigDecimal("193349").compareTo(root.get("totalProfit").decimalValue()));
         BigDecimal totalReturnPercent = root.get("totalReturnPercent").decimalValue();
-        assertEquals(0, new BigDecimal("19.63").compareTo(totalReturnPercent));
+        assertEquals(0, new BigDecimal("18.93").compareTo(totalReturnPercent));
 
-        // Arithmetic mean of the two per-stock returns (20.00 and 1.00) is 10.50 — the weighted
+        // Arithmetic mean of the two per-stock returns (19.30 and 0.42) is 9.86 — the weighted
         // total must not equal it.
-        BigDecimal arithmeticMean = new BigDecimal("10.50");
+        BigDecimal arithmeticMean = new BigDecimal("9.86");
         assertNotEquals(0, arithmeticMean.compareTo(totalReturnPercent));
         assertEquals(2, root.get("backtestedCount").asInt());
     }
@@ -245,8 +251,9 @@ class StrategyBacktestIntegrationTest {
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
                 backtestRequest(Arrays.asList(item("BT103", buyDate), item("BT104", buyDate))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
-        // 50*1000 + 60*1000
-        assertEquals(0, new BigDecimal("110000").compareTo(root.get("totalCost").decimalValue()));
+        // cost(50.00)=50000+71=50071 (buyFee=floor(50000*0.001425)=71)
+        // cost(60.00)=60000+85=60085 (buyFee=floor(60000*0.001425)=85)
+        assertEquals(0, new BigDecimal("110156").compareTo(root.get("totalCost").decimalValue()));
     }
 
     @Test
@@ -263,8 +270,9 @@ class StrategyBacktestIntegrationTest {
         ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
                 backtestRequest(Arrays.asList(item("BT105", buyDate), item("BT106", buyDate))), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
-        // (55-50)*1000 + (65-60)*1000 = 5000 + 5000
-        assertEquals(0, new BigDecimal("10000").compareTo(root.get("totalProfit").decimalValue()));
+        // buy50->sell55: cost=50071, sellFee=78, sellTax=165, profit=55000-78-165-50071=4686
+        // buy60->sell65: cost=60085, sellFee=92, sellTax=195, profit=65000-92-195-60085=4628
+        assertEquals(0, new BigDecimal("9314").compareTo(root.get("totalProfit").decimalValue()));
     }
 
     @Test
@@ -629,8 +637,9 @@ class StrategyBacktestIntegrationTest {
                 String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode root = objectMapper.readTree(response.getBody());
-        // totalCost = 50*1000 (first) + 62*1000 (second) = 112000
-        assertEquals(0, new BigDecimal("112000").compareTo(root.get("totalCost").decimalValue()));
+        // totalCost = cost(50.00) + cost(62.00) = 50071 + 62088 = 112159
+        // (buyFee(50.00)=floor(50000*0.001425)=71, buyFee(62.00)=floor(62000*0.001425)=88)
+        assertEquals(0, new BigDecimal("112159").compareTo(root.get("totalCost").decimalValue()));
         assertEquals(2, root.get("backtestedCount").asInt());
     }
 
@@ -857,8 +866,8 @@ class StrategyBacktestIntegrationTest {
 
         assertEquals(2, root.get("items").size(), "the zero-price item must stay in items");
         assertEquals(1, root.get("backtestedCount").asInt());
-        // Only BT6ZA's 100.00 x 1000 is counted.
-        assertEquals(0, new BigDecimal("100000").compareTo(root.get("totalCost").decimalValue()));
+        // Only BT6ZA's cost is counted: buyPrice 100.00 -> cost = 100000 + buyFee(142) = 100142.
+        assertEquals(0, new BigDecimal("100142").compareTo(root.get("totalCost").decimalValue()));
     }
 
     // ==================== 以進場日買進（上漲支撐 D+2） ====================
@@ -974,7 +983,183 @@ class StrategyBacktestIntegrationTest {
                 "identical (stockId, buyDate) must produce an identical item regardless of origin");
     }
 
+    // ==================== 交易成本 ====================
+
+    @Test
+    void tradingCost_buy1150Sell1205_matchesSpecExactNumbers() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT501", "交易成本1150→1205", true);
+        seedSellWindow("BT501", buyDate, today, "1150.00", "1205.00");
+
+        JsonNode item = singleItemResult("BT501", buyDate);
+        assertEquals(0, new BigDecimal("1638").compareTo(item.get("buyFee").decimalValue()));
+        assertEquals(0, new BigDecimal("1717").compareTo(item.get("sellFee").decimalValue()));
+        assertEquals(0, new BigDecimal("3615").compareTo(item.get("sellTax").decimalValue()));
+        assertEquals(0, new BigDecimal("1151638").compareTo(item.get("cost").decimalValue()));
+        assertEquals(0, new BigDecimal("48030").compareTo(item.get("profit").decimalValue()));
+        assertEquals(0, new BigDecimal("4.17").compareTo(item.get("returnPercent").decimalValue()));
+    }
+
+    @Test
+    void tradingCost_fractionalYuan_flooredNotRounded_buy2155Sell2310() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT502", "尾數無條件捨去", true);
+        seedSellWindow("BT502", buyDate, today, "21.55", "23.10");
+
+        JsonNode item = singleItemResult("BT502", buyDate);
+        // buyFee = floor(21550*0.001425) = floor(30.70875) = 30 (not rounded to 31)
+        assertEquals(0, new BigDecimal("30").compareTo(item.get("buyFee").decimalValue()));
+        // sellFee = floor(23100*0.001425) = floor(32.9175) = 32
+        assertEquals(0, new BigDecimal("32").compareTo(item.get("sellFee").decimalValue()));
+        // sellTax = floor(23100*0.003) = floor(69.3) = 69
+        assertEquals(0, new BigDecimal("69").compareTo(item.get("sellTax").decimalValue()));
+        assertEquals(0, new BigDecimal("21580").compareTo(item.get("cost").decimalValue()));
+        assertEquals(0, new BigDecimal("1419").compareTo(item.get("profit").decimalValue()));
+        assertEquals(0, new BigDecimal("6.58").compareTo(item.get("returnPercent").decimalValue()));
+    }
+
+    /**
+     * Regression the DBA rule for this spec warns about explicitly: {@code 200.00 × 1000 × 0.1425%}
+     * is exactly {@code 285}; a binary-float route to that number can land on {@code 284.999...}
+     * and floor to {@code 284} instead. This asserts the exact decimal result.
+     */
+    @Test
+    void tradingCost_exactDecimalArithmetic_buySell200_feeIsExactly285NotDouble284() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT503", "精確十進位測試", true);
+        seedSellWindow("BT503", buyDate, today, "200.00", "200.00");
+
+        JsonNode item = singleItemResult("BT503", buyDate);
+        assertEquals(0, new BigDecimal("285").compareTo(item.get("buyFee").decimalValue()),
+                "200.00 * 1000 * 0.1425% must be exactly 285, never 284");
+        assertEquals(0, new BigDecimal("285").compareTo(item.get("sellFee").decimalValue()));
+        assertEquals(0, new BigDecimal("600").compareTo(item.get("sellTax").decimalValue()));
+        assertEquals(0, new BigDecimal("-1170").compareTo(item.get("profit").decimalValue()));
+    }
+
+    @Test
+    void tradingCost_noMinimumFee_buySell10_feeNotPaddedTo20() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT504", "無最低手續費測試", true);
+        seedSellWindow("BT504", buyDate, today, "10.00", "10.00");
+
+        JsonNode item = singleItemResult("BT504", buyDate);
+        assertEquals(0, new BigDecimal("14").compareTo(item.get("buyFee").decimalValue()),
+                "fee below 20 yuan must not be padded up to a minimum");
+        assertEquals(0, new BigDecimal("14").compareTo(item.get("sellFee").decimalValue()));
+        assertEquals(0, new BigDecimal("-58").compareTo(item.get("profit").decimalValue()));
+        assertEquals(0, new BigDecimal("-0.58").compareTo(item.get("returnPercent").decimalValue()));
+    }
+
+    @Test
+    void tradingCost_sellPriceEqualsBuyPrice_profitIsNegativeNotZero() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT505", "平盤出場測試", true);
+        seedSellWindow("BT505", buyDate, today, "1150.00", "1150.00");
+
+        JsonNode item = singleItemResult("BT505", buyDate);
+        assertEquals(0, new BigDecimal("-6726").compareTo(item.get("profit").decimalValue()),
+                "a flat exit still pays two fees and one tax, so profit must be negative, not 0");
+        assertEquals(0, new BigDecimal("-0.58").compareTo(item.get("returnPercent").decimalValue()));
+    }
+
+    @Test
+    void tradingCost_responseCarriesFeeAndTaxRates_andEveryItemCarriesFeeFields() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT506", "費率回傳測試", true);
+        seedSellWindow("BT506", buyDate, today, "100.00", "105.00");
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT506", buyDate))), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        assertEquals(0, new BigDecimal("0.1425").compareTo(root.get("feeRatePercent").decimalValue()));
+        assertEquals(0, new BigDecimal("0.3").compareTo(root.get("taxRatePercent").decimalValue()));
+
+        JsonNode item = root.get("items").get(0);
+        assertFalse(item.get("buyFee").isNull());
+        assertFalse(item.get("sellFee").isNull());
+        assertFalse(item.get("sellTax").isNull());
+        assertFalse(item.get("cost").isNull());
+    }
+
+    @Test
+    void tradingCost_noSellDay_buyFeeAndCostPresent_sellFieldsNull_costExcludedFromTotal() throws Exception {
+        LocalDate today = LocalDate.now();
+        seedStock("BT507", "無可賣出日費用測試", true);
+        insertPriceRow("BT507", today, "88.00", "89.00", "87.00", "88.00", 1000);
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT507", today))), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        JsonNode item = root.get("items").get(0);
+
+        // buyFee = floor(88000*0.001425) = floor(125.4) = 125; cost = 88000+125 = 88125.
+        assertEquals(0, new BigDecimal("125").compareTo(item.get("buyFee").decimalValue()));
+        assertEquals(0, new BigDecimal("88125").compareTo(item.get("cost").decimalValue()));
+        assertTrue(item.get("sellFee").isNull());
+        assertTrue(item.get("sellTax").isNull());
+        assertTrue(item.get("profit").isNull());
+        assertTrue(item.get("returnPercent").isNull());
+        // This item has no sellDate, so its cost must not be counted in totalCost.
+        assertEquals(0, BigDecimal.ZERO.compareTo(root.get("totalCost").decimalValue()));
+        assertEquals(0, root.get("backtestedCount").asInt());
+    }
+
+    @Test
+    void tradingCost_buyPriceNull_allFeeFieldsNull() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT508", "買進價為null費用測試", true);
+        // No price rows at all for BT508 -> buyPrice stays null.
+
+        JsonNode item = singleItemResult("BT508", buyDate);
+        assertTrue(item.get("buyPrice").isNull());
+        assertTrue(item.get("buyFee").isNull());
+        assertTrue(item.get("sellFee").isNull());
+        assertTrue(item.get("sellTax").isNull());
+        assertTrue(item.get("cost").isNull());
+    }
+
+    @Test
+    void tradingCost_twoItems_totalCostTotalProfitTotalReturnPercent_matchSpecExactNumbers() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate buyDate = today.minusDays(3);
+        seedStock("BT509", "交易成本彙總A", true);
+        seedStock("BT510", "交易成本彙總B", true);
+        seedSellWindow("BT509", buyDate, today, "1150.00", "1205.00");
+        seedSellWindow("BT510", buyDate, today, "1180.00", "1210.00");
+
+        ResponseEntity<String> response = rest.postForEntity("/api/strategies/backtest",
+                backtestRequest(Arrays.asList(item("BT509", buyDate), item("BT510", buyDate))), String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
+        JsonNode root = objectMapper.readTree(response.getBody());
+        assertEquals(0, new BigDecimal("2333319").compareTo(root.get("totalCost").decimalValue()));
+        assertEquals(0, new BigDecimal("70995").compareTo(root.get("totalProfit").decimalValue()));
+        assertEquals(0, new BigDecimal("3.04").compareTo(root.get("totalReturnPercent").decimalValue()));
+    }
+
     // ==================== helpers ====================
+
+    /** Buy-day close + one later day whose open is the (only) sell candidate — the minimal fixture
+     *  the 交易成本 tests need: a buy price and exactly one sell price, nothing else contending for
+     *  "highest open". */
+    private void seedSellWindow(String stockId, LocalDate buyDate, LocalDate today, String buyClose,
+                                 String sellOpen) {
+        insertPriceRow(stockId, buyDate, buyClose, buyClose, buyClose, buyClose, 1000);
+        insertPriceRow(stockId, buyDate.plusDays(1), sellOpen, sellOpen, sellOpen, sellOpen, 1000);
+        if (buyDate.plusDays(1).isBefore(today)) {
+            // Keep every later day's open below sellOpen so it never wins the max.
+            insertPriceRow(stockId, today, "0.01", "0.01", "0.01", "0.01", 1000);
+        }
+    }
 
     /** 5 close-only opening bars: buy day close=100.00; +1d open=105, +2d open=110 (max),
      *  +3d open=95, today open=98. Used by the plain-vanilla buy/sell/return/profit tests. */

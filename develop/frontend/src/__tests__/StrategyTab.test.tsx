@@ -126,6 +126,30 @@ const CATALOG = {
         { code: 'topN', name: '取前幾名', unit: '名', default: 10, min: 1, max: 50, step: 1 },
       ],
     },
+    {
+      code: 'MACD_GOLDEN_CROSS',
+      name: 'MACD 黃金交叉',
+      description: 'DIF（短期 EMA − 長期 EMA）由下往上穿越 DEA（DIF 的 9 日 EMA）當日為訊號日',
+      presets: [],
+      // Defaults 5／20 — matching the real backend catalogue (specs/backend/strategy-scan.md
+      // 「MACD 預設天數改為 5／20」), NOT the system's own day-K MACD (12／26). Kept
+      // deliberately different from `macdScanResponse()`'s own echoed 12／26 below, so a test
+      // that scans without touching the inputs and asserts the request/params-line shows
+      // 5／20 (catalogue default) is distinguishable from a test that asserts 本次採用參數
+      // shows whatever the RESPONSE echoes (12／26), proving the latter is response-driven,
+      // not catalogue-driven.
+      params: [
+        { code: 'fastPeriod', name: '短期 EMA', unit: '日', default: 5, min: 2, max: 50, step: 1, lessThan: 'slowPeriod' },
+        { code: 'slowPeriod', name: '長期 EMA', unit: '日', default: 20, min: 3, max: 100, step: 1 },
+      ],
+    },
+    {
+      code: 'KDJ_GOLDEN_CROSS',
+      name: 'KDJ 黃金交叉',
+      description: 'KD(9,3,3) 的 J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 低於門檻',
+      presets: [],
+      params: [{ code: 'jThreshold', name: 'J 門檻', unit: '', default: 40, min: -100, max: 100, step: 0.1 }],
+    },
   ],
 }
 
@@ -414,6 +438,101 @@ function strengthRankScanResponse() {
   }
 }
 
+// MACD 黃金交叉 — one hit, one insufficientData; buyDate === signalDate (unlike the three
+// institutional strategies). fastPeriod/slowPeriod/signalPeriod all echoed from the response.
+function macdScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'MACD_GOLDEN_CROSS',
+        fastPeriod: 12,
+        slowPeriod: 26,
+        signalPeriod: 9,
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '2330',
+            stockName: '台積電',
+            signalDate: '2026-08-26',
+            buyDate: '2026-08-26',
+            detail: { dif: -1.2034, dea: -1.312, osc: 0.1086, prevOsc: -0.0452 },
+          },
+        ],
+        insufficientData: ['6949'],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// Same shape as `macdScanResponse()` but echoes the REAL default (5／20) — used by the
+// 「MACD 預設天數改為 5／20」tests that scan WITHOUT touching the inputs, so the request
+// and the 本次採用參數 line both reflect the catalogue's own default, not a stale 12／26.
+function macdDefaultScanResponse() {
+  const response = macdScanResponse()
+  response.results[0].fastPeriod = 5
+  response.results[0].slowPeriod = 20
+  return response
+}
+
+// KDJ 黃金交叉 — one hit, `jThreshold` negative (-10) to exercise「前一日 J < -10」formatting.
+function kdjScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 3,
+    results: [
+      {
+        strategy: 'KDJ_GOLDEN_CROSS',
+        jThreshold: -10,
+        matchedCount: 1,
+        items: [
+          {
+            stockId: '2317',
+            stockName: '鴻海',
+            signalDate: '2026-08-27',
+            buyDate: '2026-08-27',
+            detail: { k: 28.441, d: 27.9025, j: 29.518, prevK: 24.1037, prevD: 26.6333, prevJ: -12.3 },
+          },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+function macdBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 242000,
+    totalProfit: 3000,
+    totalReturnPercent: 1.24,
+    backtestedCount: 1,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
+    items: [
+      {
+        stockId: '2330',
+        buyDate: '2026-08-26',
+        buyPrice: 242,
+        sellDate: '2026-09-01',
+        sellPrice: 245,
+        returnPercent: 1.24,
+        profit: 3000,
+        buyFee: 345,
+        sellFee: 349,
+        sellTax: 735,
+        cost: 242000,
+      },
+    ],
+  }
+}
+
 function netRatioBacktestResponse() {
   return {
     asOfDate: '2026-09-10',
@@ -422,8 +541,22 @@ function netRatioBacktestResponse() {
     totalProfit: 500,
     totalReturnPercent: 2.5,
     backtestedCount: 1,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2609', buyDate: '2026-08-28', buyPrice: 20, sellDate: '2026-09-01', sellPrice: 20.5, returnPercent: 2.5, profit: 500 },
+      {
+        stockId: '2609',
+        buyDate: '2026-08-28',
+        buyPrice: 20,
+        sellDate: '2026-09-01',
+        sellPrice: 20.5,
+        returnPercent: 2.5,
+        profit: 500,
+        buyFee: 3,
+        sellFee: 3,
+        sellTax: 6,
+        cost: 20000,
+      },
     ],
   }
 }
@@ -620,8 +753,22 @@ function singleBacktestResponse() {
     totalProfit: 30000,
     totalReturnPercent: 1.24,
     backtestedCount: 1,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2450, returnPercent: 1.24, profit: 30000 },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-27',
+        buyPrice: 2420,
+        sellDate: '2026-09-01',
+        sellPrice: 2450,
+        returnPercent: 1.24,
+        profit: 30000,
+        buyFee: 3448,
+        sellFee: 3491,
+        sellTax: 7350,
+        cost: 2420000,
+      },
     ],
   }
 }
@@ -636,7 +783,23 @@ function allUnbacktestableResponse() {
     totalProfit: 0,
     totalReturnPercent: null,
     backtestedCount: 0,
-    items: [{ stockId: '2330', buyDate: '2026-08-27', buyPrice: 2420, sellDate: null, sellPrice: null, returnPercent: null, profit: null }],
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
+    items: [
+      {
+        stockId: '2330',
+        buyDate: '2026-08-27',
+        buyPrice: 2420,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: 3448,
+        sellFee: null,
+        sellTax: null,
+        cost: 2420000,
+      },
+    ],
   }
 }
 
@@ -661,11 +824,61 @@ function unionBacktestResponse() {
     totalProfit: -40000,
     totalReturnPercent: -0.82,
     backtestedCount: 3,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2317', buyDate: '2026-08-28', buyPrice: 100, sellDate: '2026-09-01', sellPrice: 110, returnPercent: 10, profit: 10000 },
-      { stockId: '2330', buyDate: '2026-08-28', buyPrice: 2400, sellDate: '2026-09-02', sellPrice: 2300, returnPercent: -4.17, profit: -100000 },
-      { stockId: '2330', buyDate: '2026-08-25', buyPrice: 2350, sellDate: '2026-08-29', sellPrice: 2400, returnPercent: 2.13, profit: 50000 },
-      { stockId: '2454', buyDate: '2026-08-20', buyPrice: 900, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+      {
+        stockId: '2317',
+        buyDate: '2026-08-28',
+        buyPrice: 100,
+        sellDate: '2026-09-01',
+        sellPrice: 110,
+        returnPercent: 10,
+        profit: 10000,
+        buyFee: 142,
+        sellFee: 156,
+        sellTax: 330,
+        cost: 100000,
+      },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-28',
+        buyPrice: 2400,
+        sellDate: '2026-09-02',
+        sellPrice: 2300,
+        returnPercent: -4.17,
+        profit: -100000,
+        buyFee: 3420,
+        sellFee: 3277,
+        sellTax: 6900,
+        cost: 2400000,
+      },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-25',
+        buyPrice: 2350,
+        sellDate: '2026-08-29',
+        sellPrice: 2400,
+        returnPercent: 2.13,
+        profit: 50000,
+        buyFee: 3349,
+        sellFee: 3420,
+        sellTax: 7200,
+        cost: 2350000,
+      },
+      {
+        stockId: '2454',
+        buyDate: '2026-08-20',
+        buyPrice: 900,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: 1282,
+        sellFee: null,
+        sellTax: null,
+        cost: 900000,
+      },
     ],
   }
 }
@@ -734,9 +947,35 @@ function twoDateSingleStockBacktestResponse() {
     totalProfit: -990000,
     totalReturnPercent: -9.8,
     backtestedCount: 2,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 100, sellDate: '2026-08-28', sellPrice: 110, returnPercent: 10, profit: 10000 },
-      { stockId: '2330', buyDate: '2026-08-20', buyPrice: 10000, sellDate: '2026-08-25', sellPrice: 9000, returnPercent: -10, profit: -1000000 },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-27',
+        buyPrice: 100,
+        sellDate: '2026-08-28',
+        sellPrice: 110,
+        returnPercent: 10,
+        profit: 10000,
+        buyFee: 142,
+        sellFee: 156,
+        sellTax: 330,
+        cost: 100000,
+      },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-20',
+        buyPrice: 10000,
+        sellDate: '2026-08-25',
+        sellPrice: 9000,
+        returnPercent: -10,
+        profit: -1000000,
+        buyFee: 14250,
+        sellFee: 12825,
+        sellTax: 27000,
+        cost: 10000000,
+      },
     ],
   }
 }
@@ -815,9 +1054,35 @@ function sameDaySignalBacktestResponse() {
     totalProfit: 5000,
     totalReturnPercent: 2.62,
     backtestedCount: 2,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '3231', buyDate: '2026-08-25', buyPrice: 101, sellDate: '2026-08-29', sellPrice: 104, returnPercent: 2.97, profit: 3000 },
-      { stockId: '3231', buyDate: '2026-08-20', buyPrice: 90, sellDate: '2026-08-26', sellPrice: 92, returnPercent: 2.22, profit: 2000 },
+      {
+        stockId: '3231',
+        buyDate: '2026-08-25',
+        buyPrice: 101,
+        sellDate: '2026-08-29',
+        sellPrice: 104,
+        returnPercent: 2.97,
+        profit: 3000,
+        buyFee: 144,
+        sellFee: 148,
+        sellTax: 312,
+        cost: 101000,
+      },
+      {
+        stockId: '3231',
+        buyDate: '2026-08-20',
+        buyPrice: 90,
+        sellDate: '2026-08-26',
+        sellPrice: 92,
+        returnPercent: 2.22,
+        profit: 2000,
+        buyFee: 128,
+        sellFee: 131,
+        sellTax: 276,
+        cost: 90000,
+      },
     ],
   }
 }
@@ -860,10 +1125,48 @@ function sortableBacktestResponse() {
     totalProfit: -1000,
     totalReturnPercent: -0.33,
     backtestedCount: 2,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: 'AAAA', buyDate: '2026-08-20', buyPrice: 100, sellDate: '2026-08-21', sellPrice: 105, returnPercent: 5, profit: 5000 },
-      { stockId: 'BBBB', buyDate: '2026-08-25', buyPrice: 200, sellDate: '2026-08-26', sellPrice: 194, returnPercent: -3, profit: -6000 },
-      { stockId: 'CCCC', buyDate: '2026-08-15', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+      {
+        stockId: 'AAAA',
+        buyDate: '2026-08-20',
+        buyPrice: 100,
+        sellDate: '2026-08-21',
+        sellPrice: 105,
+        returnPercent: 5,
+        profit: 5000,
+        buyFee: 142,
+        sellFee: 149,
+        sellTax: 315,
+        cost: 100000,
+      },
+      {
+        stockId: 'BBBB',
+        buyDate: '2026-08-25',
+        buyPrice: 200,
+        sellDate: '2026-08-26',
+        sellPrice: 194,
+        returnPercent: -3,
+        profit: -6000,
+        buyFee: 285,
+        sellFee: 276,
+        sellTax: 582,
+        cost: 200000,
+      },
+      {
+        stockId: 'CCCC',
+        buyDate: '2026-08-15',
+        buyPrice: null,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: null,
+        sellFee: null,
+        sellTax: null,
+        cost: null,
+      },
     ],
   }
 }
@@ -901,9 +1204,35 @@ function tieBacktestResponse() {
     totalProfit: 14000,
     totalReturnPercent: 7,
     backtestedCount: 2,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: 'EEEE', buyDate: '2026-08-18', buyPrice: 100, sellDate: '2026-08-19', sellPrice: 107, returnPercent: 7, profit: 7000 },
-      { stockId: 'FFFF', buyDate: '2026-08-19', buyPrice: 100, sellDate: '2026-08-20', sellPrice: 107, returnPercent: 7, profit: 7000 },
+      {
+        stockId: 'EEEE',
+        buyDate: '2026-08-18',
+        buyPrice: 100,
+        sellDate: '2026-08-19',
+        sellPrice: 107,
+        returnPercent: 7,
+        profit: 7000,
+        buyFee: 142,
+        sellFee: 152,
+        sellTax: 321,
+        cost: 100000,
+      },
+      {
+        stockId: 'FFFF',
+        buyDate: '2026-08-19',
+        buyPrice: 100,
+        sellDate: '2026-08-20',
+        sellPrice: 107,
+        returnPercent: 7,
+        profit: 7000,
+        buyFee: 142,
+        sellFee: 152,
+        sellTax: 321,
+        cost: 100000,
+      },
     ],
   }
 }
@@ -953,11 +1282,61 @@ function parentSortBacktestResponse() {
     totalProfit: -970000,
     totalReturnPercent: -9.42,
     backtestedCount: 4,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 100, sellDate: '2026-08-28', sellPrice: 110, returnPercent: 10, profit: 10000 },
-      { stockId: '2330', buyDate: '2026-08-20', buyPrice: 10000, sellDate: '2026-08-25', sellPrice: 9000, returnPercent: -10, profit: -1000000 },
-      { stockId: '9999', buyDate: '2026-08-22', buyPrice: 100, sellDate: '2026-08-23', sellPrice: 120, returnPercent: 20, profit: 20000 },
-      { stockId: '8888', buyDate: '2026-08-21', buyPrice: 100, sellDate: '2026-08-22', sellPrice: 100, returnPercent: 0, profit: 0 },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-27',
+        buyPrice: 100,
+        sellDate: '2026-08-28',
+        sellPrice: 110,
+        returnPercent: 10,
+        profit: 10000,
+        buyFee: 142,
+        sellFee: 156,
+        sellTax: 330,
+        cost: 100000,
+      },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-20',
+        buyPrice: 10000,
+        sellDate: '2026-08-25',
+        sellPrice: 9000,
+        returnPercent: -10,
+        profit: -1000000,
+        buyFee: 14250,
+        sellFee: 12825,
+        sellTax: 27000,
+        cost: 10000000,
+      },
+      {
+        stockId: '9999',
+        buyDate: '2026-08-22',
+        buyPrice: 100,
+        sellDate: '2026-08-23',
+        sellPrice: 120,
+        returnPercent: 20,
+        profit: 20000,
+        buyFee: 142,
+        sellFee: 171,
+        sellTax: 360,
+        cost: 100000,
+      },
+      {
+        stockId: '8888',
+        buyDate: '2026-08-21',
+        buyPrice: 100,
+        sellDate: '2026-08-22',
+        sellPrice: 100,
+        returnPercent: 0,
+        profit: 0,
+        buyFee: 142,
+        sellFee: 142,
+        sellTax: 300,
+        cost: 100000,
+      },
     ],
   }
 }
@@ -1014,13 +1393,87 @@ function priceThresholdBacktestResponse() {
     totalProfit: 20000,
     totalReturnPercent: 1.25,
     backtestedCount: 4,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
     items: [
-      { stockId: '2330', buyDate: '2026-08-27', buyPrice: 480, sellDate: '2026-08-28', sellPrice: 500, returnPercent: 4.17, profit: 20000 },
-      { stockId: '2330', buyDate: '2026-08-20', buyPrice: 520, sellDate: '2026-08-25', sellPrice: 500, returnPercent: -3.85, profit: -20000 },
-      { stockId: '1101', buyDate: '2026-08-25', buyPrice: 500, sellDate: '2026-08-26', sellPrice: 510, returnPercent: 2, profit: 10000 },
-      { stockId: '3008', buyDate: '2026-08-24', buyPrice: 600, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
-      { stockId: 'AAAA', buyDate: '2026-08-23', buyPrice: 100, sellDate: '2026-08-24', sellPrice: 110, returnPercent: 10, profit: 10000 },
-      { stockId: 'CCCC', buyDate: '2026-08-22', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-27',
+        buyPrice: 480,
+        sellDate: '2026-08-28',
+        sellPrice: 500,
+        returnPercent: 4.17,
+        profit: 20000,
+        buyFee: 684,
+        sellFee: 713,
+        sellTax: 1500,
+        cost: 480000,
+      },
+      {
+        stockId: '2330',
+        buyDate: '2026-08-20',
+        buyPrice: 520,
+        sellDate: '2026-08-25',
+        sellPrice: 500,
+        returnPercent: -3.85,
+        profit: -20000,
+        buyFee: 741,
+        sellFee: 713,
+        sellTax: 1500,
+        cost: 520000,
+      },
+      {
+        stockId: '1101',
+        buyDate: '2026-08-25',
+        buyPrice: 500,
+        sellDate: '2026-08-26',
+        sellPrice: 510,
+        returnPercent: 2,
+        profit: 10000,
+        buyFee: 712,
+        sellFee: 726,
+        sellTax: 1530,
+        cost: 500000,
+      },
+      {
+        stockId: '3008',
+        buyDate: '2026-08-24',
+        buyPrice: 600,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: 855,
+        sellFee: null,
+        sellTax: null,
+        cost: 600000,
+      },
+      {
+        stockId: 'AAAA',
+        buyDate: '2026-08-23',
+        buyPrice: 100,
+        sellDate: '2026-08-24',
+        sellPrice: 110,
+        returnPercent: 10,
+        profit: 10000,
+        buyFee: 142,
+        sellFee: 156,
+        sellTax: 330,
+        cost: 100000,
+      },
+      {
+        stockId: 'CCCC',
+        buyDate: '2026-08-22',
+        buyPrice: null,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: null,
+        sellFee: null,
+        sellTax: null,
+        cost: null,
+      },
     ],
   }
 }
@@ -1066,15 +1519,18 @@ function topLevelRowStockIds(): string[] {
     .map((r) => within(r).getAllByRole('cell')[2].textContent ?? '')
 }
 
+type SortableHeaderLabel = '買進價' | '報酬率' | '收益（每筆 1 張）'
+
 /** Clicks a sortable header by its exact label text (buyPrice → 買進價, returnPercent →
- * 報酬率) — the label lives in its own `<span class="st-sort-label">`, separate from the
- * icon, so `getByText` matches it uniquely and the click still bubbles to the `<th>`'s own
- * handler (no `stopPropagation` on the label span). */
-function clickSortHeader(label: '買進價' | '報酬率'): void {
+ * 報酬率, profit → 收益（每筆 1 張）) — the label lives in its own `<span
+ * class="st-sort-label">`, separate from the icon, so `getByText` matches it uniquely and
+ * the click still bubbles to the `<th>`'s own handler (no `stopPropagation` on the label
+ * span). */
+function clickSortHeader(label: SortableHeaderLabel): void {
   fireEvent.click(screen.getByText(label))
 }
 
-function sortHeaderIcon(label: '買進價' | '報酬率'): string | null {
+function sortHeaderIcon(label: SortableHeaderLabel): string | null {
   const th = screen.getByText(label).closest('th')!
   return th.querySelector('.st-sort-icon')?.textContent ?? null
 }
@@ -3010,9 +3466,9 @@ describe('StrategyTab', () => {
     ;(within(unionTableEl).getAllByRole('checkbox') as HTMLInputElement[]).forEach((cb) => expect(cb.checked).toBe(true))
 
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    // 買進價／報酬率 are the two sortable headers — freshly post-backtest, before any
-    // header click, both show the idle 「↕」 indicator (specs/frontend/strategy.md
-    // 「買進價與報酬率欄排序」表頭呈現).
+    // 買進價／報酬率／收益 are the three sortable headers — freshly post-backtest, before
+    // any header click, all three show the idle 「↕」 indicator (specs/frontend/strategy.md
+    // 「買進價、報酬率與收益欄排序」表頭呈現).
     expect(headers).toEqual([
       '',
       '',
@@ -3023,7 +3479,7 @@ describe('StrategyTab', () => {
       '賣出日',
       '賣出價',
       '報酬率↕',
-      '收益（每筆 1 張）',
+      '收益（每筆 1 張）↕',
     ])
 
     // Row order is unchanged by the backtest — still newest-signalDate desc / stockId asc.
@@ -3373,19 +3829,36 @@ describe('StrategyTab', () => {
     expect(screen.queryByText(/未勾選，未計入/)).not.toBeInTheDocument()
   })
 
-  it('computes the total cost from the response lotSize, not a hard-coded 1000', async () => {
+  it('computes 總成本 from the response items[].cost (fee-inclusive), never a self-computed buyPrice × lotSize', async () => {
     scanResponder = () => boxScanResponse()
     backtestResponder = () => ({
       status: 200,
       body: {
         asOfDate: '2026-09-10',
-        lotSize: 500,
-        totalCost: 1210000,
+        lotSize: 1000,
+        totalCost: 2423448,
         totalProfit: 15000,
-        totalReturnPercent: 1.24,
+        totalReturnPercent: 0.62,
         backtestedCount: 1,
+        feeRatePercent: 0.1425,
+        taxRatePercent: 0.3,
         items: [
-          { stockId: '2330', buyDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2450, returnPercent: 1.24, profit: 15000 },
+          {
+            stockId: '2330',
+            buyDate: '2026-08-27',
+            buyPrice: 2420,
+            sellDate: '2026-09-01',
+            sellPrice: 2450,
+            returnPercent: 0.62,
+            profit: 15000,
+            buyFee: 3448,
+            sellFee: 3491,
+            sellTax: 7350,
+            // Deliberately NOT equal to buyPrice × lotSize (2,420,000) — it includes buyFee
+            // (2,420,000 + 3,448), so a frontend that self-computed `buyPrice × lotSize`
+            // instead of summing this field would show a different (wrong) total.
+            cost: 2423448,
+          },
         ],
       },
     })
@@ -3394,14 +3867,12 @@ describe('StrategyTab', () => {
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    // If the frontend hard-coded lotSize=1000, totalCost would be double (2,420,000) and
-    // totalReturnPercent would come out 0.62%, not the correct (lotSize=500) 1.24%.
-    // (Both the row's own cell and the total label read 1.24% here, hence getAllByText.)
-    await waitFor(() => expect(screen.getAllByText('1.24%').length).toBeGreaterThan(0))
+    // (Both the row's own cell and the total label read 0.62% here, hence getAllByText.)
+    await waitFor(() => expect(screen.getAllByText('0.62%').length).toBeGreaterThan(0))
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
-    // 總成本 must also come from lotSize=500 (buyPrice 2420 × 500 = 1,210,000), not a
-    // hard-coded 1000 (which would read 2,420,000 instead).
-    expect(totalValues).toEqual(['1,210,000', '1.24%', '15,000'])
+    // 總成本 must equal the response's own fee-inclusive `cost` (2,423,448), not
+    // buyPrice × lotSize (which would read 2,420,000 instead).
+    expect(totalValues).toEqual(['2,423,448', '0.62%', '15,000'])
   })
 
   it('unchecking a row updates the totals to exclude it, and rechecking restores the original totals', async () => {
@@ -3515,8 +3986,22 @@ describe('StrategyTab', () => {
         totalProfit: 0,
         totalReturnPercent: 0,
         backtestedCount: 1,
+        feeRatePercent: 0.1425,
+        taxRatePercent: 0.3,
         items: [
-          { stockId: '2330', buyDate: '2026-08-27', buyPrice: 2420, sellDate: '2026-09-01', sellPrice: 2420, returnPercent: 0, profit: 0 },
+          {
+            stockId: '2330',
+            buyDate: '2026-08-27',
+            buyPrice: 2420,
+            sellDate: '2026-09-01',
+            sellPrice: 2420,
+            returnPercent: 0,
+            profit: 0,
+            buyFee: 3448,
+            sellFee: 3448,
+            sellTax: 7260,
+            cost: 2420000,
+          },
         ],
       },
     })
@@ -4520,8 +5005,22 @@ describe('StrategyTab', () => {
       totalProfit: 12000,
       totalReturnPercent: 0.96,
       backtestedCount: 1,
+      feeRatePercent: 0.1425,
+      taxRatePercent: 0.3,
       items: [
-        { stockId: '2454', buyDate: '2026-08-28', buyPrice: 1248, sellDate: '2026-09-01', sellPrice: 1260, returnPercent: 0.96, profit: 12000 },
+        {
+          stockId: '2454',
+          buyDate: '2026-08-28',
+          buyPrice: 1248,
+          sellDate: '2026-09-01',
+          sellPrice: 1260,
+          returnPercent: 0.96,
+          profit: 12000,
+          buyFee: 1778,
+          sellFee: 1795,
+          sellTax: 3780,
+          cost: 1248000,
+        },
       ],
     }
   }
@@ -4647,9 +5146,35 @@ describe('StrategyTab', () => {
         totalProfit: 22000,
         totalReturnPercent: 0.9,
         backtestedCount: 2,
+        feeRatePercent: 0.1425,
+        taxRatePercent: 0.3,
         items: [
-          { stockId: '2454', buyDate: '2026-08-28', buyPrice: 1248, sellDate: '2026-09-01', sellPrice: 1260, returnPercent: 0.96, profit: 12000 },
-          { stockId: '2454', buyDate: '2026-08-26', buyPrice: 1200, sellDate: '2026-08-27', sellPrice: 1210, returnPercent: 0.83, profit: 10000 },
+          {
+            stockId: '2454',
+            buyDate: '2026-08-28',
+            buyPrice: 1248,
+            sellDate: '2026-09-01',
+            sellPrice: 1260,
+            returnPercent: 0.96,
+            profit: 12000,
+            buyFee: 1778,
+            sellFee: 1795,
+            sellTax: 3780,
+            cost: 1248000,
+          },
+          {
+            stockId: '2454',
+            buyDate: '2026-08-26',
+            buyPrice: 1200,
+            sellDate: '2026-08-27',
+            sellPrice: 1210,
+            returnPercent: 0.83,
+            profit: 10000,
+            buyFee: 1710,
+            sellFee: 1724,
+            sellTax: 3630,
+            cost: 1200000,
+          },
         ],
       },
     })
@@ -4749,7 +5274,7 @@ describe('StrategyTab', () => {
 
   // ---------------- 買進價／報酬率欄排序 ----------------
 
-  it('has no sortable headers before 回測 completes, and exactly 買進價／報酬率 sortable (with the idle 「↕」 icon) once it does', async () => {
+  it('has no sortable headers before 回測 completes, and exactly 買進價／報酬率／收益 sortable (with the idle 「↕」 icon) once it does', async () => {
     scanResponder = () => sortableScanResponse()
     // Deferred (never-yet-resolved) backtest response — same technique the pre-existing
     // 「shows the merged table with no checkbox column while the auto-triggered 回測 is in
@@ -4780,7 +5305,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
     const sortableHeaders = Array.from(document.querySelectorAll('.st-sortable')).map((el) => el.textContent)
-    expect(sortableHeaders).toEqual(['買進價↕', '報酬率↕'])
+    expect(sortableHeaders).toEqual(['買進價↕', '報酬率↕', '收益（每筆 1 張）↕'])
   })
 
   it('shows the default order (latest signalDate desc, tie stockId asc) immediately after 回測, before any header click', async () => {
@@ -5051,6 +5576,368 @@ describe('StrategyTab', () => {
     expect(sortHeaderIcon('報酬率')).toBe('↕')
     expect(sortHeaderIcon('買進價')).toBe('↕')
     expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+  })
+
+  // ---------------- 收益欄排序 ----------------
+
+  it('cycles 收益 through 降冪 → 升冪 → 還原預設排序 → 降冪… on repeated clicks, independently of 買進價／報酬率', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+
+    clickSortHeader('收益（每筆 1 張）') // 1st: 降冪 — AAAA 5,000 > BBBB -6,000 > CCCC 「—」(min)
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+
+    clickSortHeader('收益（每筆 1 張）') // 2nd: 升冪 — CCCC 「—」(min) first
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('▲')
+    expect(topLevelRowStockIds()).toEqual(['CCCC C股', 'BBBB B股', 'AAAA A股'])
+
+    clickSortHeader('收益（每筆 1 張）') // 3rd: 還原預設排序
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+
+    clickSortHeader('收益（每筆 1 張）') // 4th: 降冪 again
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+  })
+
+  it('shows only one sort indicator at a time — sorting by 收益 clears 買進價／報酬率, and vice versa', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+
+    clickSortHeader('收益（每筆 1 張）')
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('▼')
+    expect(sortHeaderIcon('買進價')).toBe('↕')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
+
+    clickSortHeader('報酬率') // switching column -> 收益's indicator clears
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+
+    clickSortHeader('買進價') // switching again -> 報酬率's indicator clears too
+    expect(sortHeaderIcon('買進價')).toBe('▼')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+  })
+
+  it('treats 收益「—」(unbacktestable, or a parent with every child unchecked) as the minimum, and breaks ties on the default order', async () => {
+    // Null case: CCCC has no sellable day (profit null) -> last on 降冪, first on 升冪.
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    const first = renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    clickSortHeader('收益（每筆 1 張）') // 降冪
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+    clickSortHeader('收益（每筆 1 張）') // 升冪
+    expect(topLevelRowStockIds()).toEqual(['CCCC C股', 'BBBB B股', 'AAAA A股'])
+    first.unmount()
+
+    // Tie case: EEEE and FFFF both have profit 7,000 -> tie broken by default order
+    // (latest signalDate first — FFFF 08-19 before EEEE 08-18).
+    scanResponder = () => tieScanResponse()
+    backtestResponder = () => ({ status: 200, body: tieBacktestResponse() })
+    const second = renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    expect(topLevelRowStockIds()).toEqual(['FFFF F股', 'EEEE E股'])
+    clickSortHeader('收益（每筆 1 張）')
+    expect(topLevelRowStockIds()).toEqual(['FFFF F股', 'EEEE E股'])
+    second.unmount()
+
+    // Parent-all-unchecked case: 2330's two children both unchecked -> displays 「—」,
+    // sorts last on 降冪.
+    scanResponder = () => parentSortScanResponse()
+    backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    fireEvent.click(row2330) // fully checked -> click unchecks every child
+    await waitFor(() => expect(within(row2330).getAllByText('—').length).toBeGreaterThan(0))
+    clickSortHeader('收益（每筆 1 張）') // 降冪: 2330 now displays 「—」, sorts last
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+  })
+
+  it("sorts a multi-buy-date parent row by its DISPLAYED 收益 (sum of checked children's profit), and sorts its expanded child rows the same direction — collapsed buyDate/sellDate lines stay newest-first", async () => {
+    scanResponder = () => parentSortScanResponse()
+    backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    // 2330's displayed 收益 is the sum of its two checked children: 10,000 + (-1,000,000).
+    expect(within(row2330).getByText('-990,000')).toBeInTheDocument()
+
+    clickSortHeader('收益（每筆 1 張）') // 降冪: 9999 20,000 > 8888 0 > 2330 -990,000
+    expect(topLevelRowStockIds()).toEqual(['9999 玖玖', '8888 捌捌', '2330 台積電'])
+
+    // 父列摺疊時逐行列出的買進日／賣出日順序不變 — collapsed listing stays buyDate-desc
+    // under any active sort, per the same rule 買進價／報酬率排序 already exercises.
+    const buyDateCell = within(row2330).getAllByRole('cell')[4]
+    const dates = () => within(buyDateCell).getAllByText(/^\d{4}-\d{2}-\d{2}$/).map((el) => el.textContent)
+    expect(dates()).toEqual(['2026-08-27', '2026-08-20'])
+
+    // Now the single-buy-date-per-stock fixture, expanded, to check the CHILD rows' own
+    // order under 收益 sort (its two children: +10,000 (08-27) and -1,000,000 (08-20)).
+    scanResponder = () => twoDateSingleStockScanResponse()
+    backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+
+    const table = screen.getByRole('table')
+    const childBuyDates = () =>
+      within(table)
+        .getAllByRole('row')
+        .filter((r) => r.className.includes('st-child-row'))
+        .map((r) => within(r).getAllByRole('cell')[4].textContent)
+
+    clickSortHeader('收益（每筆 1 張）') // 降冪: +10,000 (08-27) then -1,000,000 (08-20) — matches default here
+    expect(childBuyDates()).toEqual(['2026-08-27', '2026-08-20'])
+
+    clickSortHeader('收益（每筆 1 張）') // 升冪: -1,000,000 (08-20) first — differs from default order
+    expect(childBuyDates()).toEqual(['2026-08-20', '2026-08-27'])
+
+    clickSortHeader('收益（每筆 1 張）') // 還原預設排序
+    expect(childBuyDates()).toEqual(['2026-08-27', '2026-08-20'])
+  })
+
+  it('sorting by 收益 does not move rows on a checkbox toggle, resets to default on 重新掃描／重試回測 success, and never issues a network request', async () => {
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+
+    clickSortHeader('收益（每筆 1 張）') // 降冪: AAAA > BBBB > CCCC
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+
+    const callsBefore = fetchMock.mock.calls.length
+    fireEvent.click(screen.getByLabelText('納入 BBBB 計算')) // toggling a checkbox never reorders
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
+    expect(fetchMock.mock.calls.length).toBe(callsBefore) // no network request either
+
+    // 重新掃描 resets the sort to default.
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+
+    // 「重試回測」success also lands on default order.
+    scanResponder = () => sortableScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    revealIncompletePositions()
+    expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+  })
+
+  // ---------------- 收益扣手續費與證交稅 ----------------
+
+  it('renders 收益／報酬率 exactly as returned by the backend (already net of fee/tax) — never a self-computed (賣出價 − 買進價) × 1000', async () => {
+    scanResponder = () => boxScanResponse() // hits 2330, buyDate 2026-08-27
+    backtestResponder = () => ({
+      status: 200,
+      body: {
+        asOfDate: '2026-09-10',
+        lotSize: 1000,
+        totalCost: 2423448,
+        totalProfit: 15000,
+        totalReturnPercent: 0.62,
+        backtestedCount: 1,
+        feeRatePercent: 0.1425,
+        taxRatePercent: 0.3,
+        items: [
+          {
+            stockId: '2330',
+            buyDate: '2026-08-27',
+            buyPrice: 2420,
+            sellDate: '2026-09-01',
+            sellPrice: 2450,
+            // Deliberately NOT the gross (賣出價 − 買進價) ÷ 買進價 × 100 = 1.24% /
+            // (賣出價 − 買進價) × 1000 = 30,000 — these are the net-of-cost figures.
+            returnPercent: 0.62,
+            profit: 15000,
+            buyFee: 3448,
+            sellFee: 3491,
+            sellTax: 7350,
+            cost: 2423448,
+          },
+        ],
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    // The gross figures a naive (賣出價 − 買進價) calc would produce must never appear.
+    expect(screen.queryByText('1.24%')).not.toBeInTheDocument()
+    expect(screen.queryByText('30,000')).not.toBeInTheDocument()
+    // The response's own net-of-cost figures, rendered verbatim.
+    expect(screen.getAllByText('0.62%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('15,000').length).toBeGreaterThan(0)
+  })
+
+  it("parent-row 報酬率 = Σ checked children's profit ÷ Σ checked children's cost × 100 (cost is the response's fee-inclusive field, not buyPrice × lotSize); with everything checked, 總成本／總報酬率／總收益 equal the response's totalCost/totalReturnPercent/totalProfit", async () => {
+    scanResponder = () => twoDateSingleStockScanResponse()
+    backtestResponder = () => ({
+      status: 200,
+      body: {
+        asOfDate: '2026-09-10',
+        lotSize: 1000,
+        totalCost: 10111000,
+        totalProfit: -991000,
+        totalReturnPercent: -9.8,
+        backtestedCount: 2,
+        feeRatePercent: 0.1425,
+        taxRatePercent: 0.3,
+        items: [
+          {
+            stockId: '2330',
+            buyDate: '2026-08-27',
+            buyPrice: 100,
+            sellDate: '2026-08-28',
+            sellPrice: 110,
+            returnPercent: 8.91,
+            profit: 9000,
+            buyFee: 142,
+            sellFee: 157,
+            sellTax: 330,
+            cost: 101000, // buyPrice × lotSize (100,000) + buyFee — NOT equal to the former alone
+          },
+          {
+            stockId: '2330',
+            buyDate: '2026-08-20',
+            buyPrice: 10000,
+            sellDate: '2026-08-25',
+            sellPrice: 9000,
+            returnPercent: -9.99,
+            profit: -1000000,
+            buyFee: 14250,
+            sellFee: 12825,
+            sellTax: 27000,
+            cost: 10010000,
+          },
+        ],
+      },
+    })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
+    // (9,000 + -1,000,000) ÷ (101,000 + 10,010,000) × 100 = -9.80% — using `cost`, not
+    // buyPrice × lotSize (which would give a different denominator and a different number).
+    expect(within(row2330).getByText('-9.80%')).toBeInTheDocument()
+
+    const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+    expect(totalValues).toEqual(['10,111,000', '-9.80%', '-991,000'])
+  })
+
+  it('shows 「收益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%」 sourced from the response, changes when feeRatePercent changes, and only exists after a successful 回測', async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 500, body: {} })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    expect(screen.queryByText(/收益已扣手續費/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByText(/收益已扣手續費/)).not.toBeInTheDocument() // 回測進行中
+
+    await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
+    expect(screen.queryByText(/收益已扣手續費/)).not.toBeInTheDocument() // 回測失敗
+
+    backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+    fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+    await waitFor(() =>
+      expect(screen.getByText('收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%')).toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    expect(screen.queryByText(/收益已扣手續費/)).not.toBeInTheDocument() // 重新掃描時消失
+  })
+
+  it("reflects the response's own feeRatePercent verbatim — changing the mock response's feeRatePercent to 0.1 changes what is displayed", async () => {
+    scanResponder = () => boxScanResponse()
+    backtestResponder = () => ({ status: 200, body: { ...singleBacktestResponse(), feeRatePercent: 0.1 } })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    selectStrategy('箱型突破')
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() =>
+      expect(screen.getByText('收益已扣手續費 0.1%（買賣各一次）與證交稅 0.3%')).toBeInTheDocument(),
+    )
+  })
+
+  it('places 「收益已扣手續費…」directly above the 「未計入」lines, using the same 次要文字色 class, and never inside the floating totals block', async () => {
+    scanResponder = () => unionScanResponse()
+    backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
+    renderTab()
+    await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+    const feeNote = screen.getByText('收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%')
+    // Same class (and therefore same 次要文字色 #93a4b8) as the 「未計入」lines.
+    expect(feeNote.className).toBe('st-uncounted-note')
+
+    const notesBlock = feeNote.closest('.st-uncounted-notes') as HTMLElement
+    expect(notesBlock).not.toBeNull()
+    // unionBacktestResponse has an uncountable position (2454, no sellDate) — its 「未計入」
+    // line must exist, and the fee note must be the FIRST child, i.e. above it.
+    const noteTexts = Array.from(notesBlock.children).map((el) => el.textContent)
+    expect(noteTexts[0]).toBe('收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%')
+    expect(noteTexts.some((t) => t?.includes('未計入'))).toBe(true)
+
+    // Never part of the floating totals — only the three totals themselves float.
+    expect(feeNote.closest('.st-floating-totals')).toBeNull()
   })
 
   // ---------------- 「取消買進價高於 N 元」勾選框 ----------------
@@ -5381,7 +6268,19 @@ describe('StrategyTab', () => {
       detail: {},
     })
     const backtest = priceThresholdBacktestResponse()
-    backtest.items.push({ stockId: '2330', buyDate: '2026-08-29', buyPrice: null, sellDate: null, sellPrice: null, returnPercent: null, profit: null })
+    backtest.items.push({
+      stockId: '2330',
+      buyDate: '2026-08-29',
+      buyPrice: null,
+      sellDate: null,
+      sellPrice: null,
+      returnPercent: null,
+      profit: null,
+      buyFee: null,
+      sellFee: null,
+      sellTax: null,
+      cost: null,
+    })
     scanResponder = () => scan
     backtestResponder = () => ({ status: 200, body: backtest })
     renderTab()
@@ -5527,7 +6426,9 @@ describe('StrategyTab', () => {
     mockFloatingRects(-40, 300, 900)
     window.dispatchEvent(new Event('scroll'))
     const floating = await waitForFloatingTotals()
-    // window.innerWidth defaults to 1024 in jsdom; panel right edge mocked at 900.
+    // `window.innerWidth` reads whatever the suite's current width is (1920 by default,
+    // see setupTests.ts) — this assertion is width-agnostic on purpose; panel right edge
+    // mocked at 900.
     expect(floating.style.right).toBe(`${window.innerWidth - 900}px`)
   })
 
@@ -5623,7 +6524,7 @@ describe('StrategyTab', () => {
       expect((within(rankCard).getByLabelText('取前幾名') as HTMLInputElement).value).toBe('10')
     })
 
-    it('renders all eight cards in the shared responsive grid, with every institutional param rendered as its own real input (none dropped to fit)', async () => {
+    it('renders all ten cards in the shared responsive grid, with every institutional param rendered as its own real input (none dropped to fit)', async () => {
       renderTab()
       await waitFor(() => expect(screen.getByText('法人買超強度排名')).toBeInTheDocument())
       // .st-strategy-cards is an unmodified `grid-template-columns: repeat(auto-fill,
@@ -5631,7 +6532,7 @@ describe('StrategyTab', () => {
       // width without a fixed column count — adding three more cards exercises the same,
       // already-correct wrapping mechanism, not new layout code.
       const cards = document.querySelectorAll('.st-strategy-cards > .st-strategy-card')
-      expect(cards.length).toBe(8)
+      expect(cards.length).toBe(10)
       expect(within(cardFor('法人買賣超佔比')).getByLabelText('天數')).toBeInTheDocument()
       expect(within(cardFor('法人買賣超佔比')).getByLabelText('佔比門檻')).toBeInTheDocument()
       expect(within(cardFor('法人連續買超')).getByLabelText('連續買超天數')).toBeInTheDocument()
@@ -5929,6 +6830,577 @@ describe('StrategyTab', () => {
       expect(text).not.toContain('建議')
       expect(text).not.toContain('推薦')
       expect(text).not.toContain('可進場')
+    })
+  })
+
+  describe('技術指標卡片', () => {
+    it('renders MACD/KDJ cards after the institutional cards, with name/description/params from GET /api/strategies and no sensitivity dropdown', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      expect(screen.getByText('KDJ 黃金交叉')).toBeInTheDocument()
+
+      const cardNames = Array.from(document.querySelectorAll('.st-strategy-cards > .st-strategy-card')).map(
+        (c) => c.querySelector('.st-strategy-name')?.textContent,
+      )
+      expect(cardNames.slice(-2)).toEqual(['MACD 黃金交叉', 'KDJ 黃金交叉'])
+
+      const macdCard = cardFor('MACD 黃金交叉')
+      expect(
+        within(macdCard).getByText('DIF（短期 EMA − 長期 EMA）由下往上穿越 DEA（DIF 的 9 日 EMA）當日為訊號日'),
+      ).toBeInTheDocument()
+      expect(within(macdCard).queryByRole('combobox')).not.toBeInTheDocument()
+      const kdjCard = cardFor('KDJ 黃金交叉')
+      expect(within(kdjCard).queryByRole('combobox')).not.toBeInTheDocument()
+
+      selectStrategy('MACD 黃金交叉')
+      expect((within(macdCard).getByLabelText('短期 EMA') as HTMLInputElement).value).toBe('5')
+      expect((within(macdCard).getByLabelText('長期 EMA') as HTMLInputElement).value).toBe('20')
+      selectStrategy('KDJ 黃金交叉')
+      expect((within(kdjCard).getByLabelText('J 門檻') as HTMLInputElement).value).toBe('40')
+    })
+
+    it('shows the 回看的交易日數 hint under both MACD EMA inputs (unit 日)', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      expect(within(card).getAllByText('回看的交易日數，不含週末與休市日')).toHaveLength(2)
+    })
+
+    it('draws no suffix box for KDJ「J 門檻」(empty unit) and accepts a negative value', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('KDJ 黃金交叉')).toBeInTheDocument())
+      selectStrategy('KDJ 黃金交叉')
+      const card = cardFor('KDJ 黃金交叉')
+      const row = within(card).getByLabelText('J 門檻').closest('.st-param-input-row') as HTMLElement
+      expect(row.querySelector('.st-param-suffix')).toBeNull()
+
+      fireEvent.change(within(card).getByLabelText('J 門檻'), { target: { value: '-12.5' } })
+      expect(within(card).queryByText(/J 門檻需介於/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+    })
+
+    it.each([
+      ['-100.1', true],
+      ['100.1', true],
+      ['40.25', true],
+      ['-100', false],
+      ['100', false],
+    ])('J 門檻＝%s → blocked: %s', async (value, shouldBlock) => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('KDJ 黃金交叉')).toBeInTheDocument())
+      selectStrategy('KDJ 黃金交叉')
+      const card = cardFor('KDJ 黃金交叉')
+      fireEvent.change(within(card).getByLabelText('J 門檻'), { target: { value } })
+      if (shouldBlock) {
+        expect(within(card).getByText('J 門檻需介於 -100 ~ 100')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+      } else {
+        expect(within(card).queryByText('J 門檻需介於 -100 ~ 100')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+      }
+    })
+
+    it.each([
+      ['短期 EMA', '1', '短期 EMA需介於 2 ~ 50 的整數'],
+      ['短期 EMA', '51', '短期 EMA需介於 2 ~ 50 的整數'],
+      ['短期 EMA', '12.5', '短期 EMA需介於 2 ~ 50 的整數'],
+      ['長期 EMA', '2', '長期 EMA需介於 3 ~ 100 的整數'],
+      ['長期 EMA', '101', '長期 EMA需介於 3 ~ 100 的整數'],
+    ])('blocks the scan and shows the range error for %s＝%s (message: %s)', async (label, bad, expected) => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      fireEvent.change(within(card).getByLabelText(label), { target: { value: bad } })
+      expect(within(card).getByText(expected)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+    })
+
+    it.each([
+      ['26', '26'],
+      ['30', '20'],
+    ])('blocks the scan and shows 短期 EMA需小於長期 EMA when 短期 EMA ≥ 長期 EMA (%s／%s); fixing either side clears it', async (fast, slow) => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      fireEvent.change(within(card).getByLabelText('短期 EMA'), { target: { value: fast } })
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: slow } })
+
+      expect(within(card).getByText('短期 EMA需小於長期 EMA')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: '100' } })
+      expect(within(card).queryByText('短期 EMA需小於長期 EMA')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+    })
+
+    it('shows only the range error, not 短期 EMA需小於長期 EMA, when one side is itself out of range', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      fireEvent.change(within(card).getByLabelText('短期 EMA'), { target: { value: '51' } })
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: '10' } }) // would also violate lessThan
+
+      expect(within(card).getByText('短期 EMA需介於 2 ~ 50 的整數')).toBeInTheDocument()
+      expect(within(card).queryByText('短期 EMA需小於長期 EMA')).not.toBeInTheDocument()
+    })
+
+    it('stops blocking 短期 EMA ≥ 長期 EMA once the catalogue response omits lessThan (proves the check is data-driven, not hard-coded to fastPeriod/slowPeriod)', async () => {
+      const noLessThanCatalog = {
+        strategies: CATALOG.strategies.map((s) => {
+          if (s.code !== 'MACD_GOLDEN_CROSS') return s
+          return {
+            ...s,
+            params: (s.params as unknown[]).map((p) => {
+              const copy = { ...(p as Record<string, unknown>) }
+              delete copy.lessThan
+              return copy
+            }),
+          }
+        }),
+      }
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, scanResponder()))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, noLessThanCatalog))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      fireEvent.change(within(card).getByLabelText('短期 EMA'), { target: { value: '26' } })
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: '26' } })
+
+      expect(within(card).queryByText('短期 EMA需小於長期 EMA')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+    })
+
+    it('sends { code, fastPeriod, slowPeriod } for MACD and { code, jThreshold } for KDJ — never preset/risePercent/days', async () => {
+      scanResponder = () => macdScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      selectStrategy('KDJ 黃金交叉')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([
+        { code: 'MACD_GOLDEN_CROSS', fastPeriod: 5, slowPeriod: 20 },
+        { code: 'KDJ_GOLDEN_CROSS', jThreshold: 40 },
+      ])
+    })
+
+    it("disables both cards' inputs when unchecked, and omits an unchecked strategy from the scan request", async () => {
+      scanResponder = () => macdScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      const macdCard = cardFor('MACD 黃金交叉')
+      expect((within(macdCard).getByLabelText('短期 EMA') as HTMLInputElement).disabled).toBe(true)
+      expect((within(macdCard).getByLabelText('長期 EMA') as HTMLInputElement).disabled).toBe(true)
+      const kdjCard = cardFor('KDJ 黃金交叉')
+      expect((within(kdjCard).getByLabelText('J 門檻') as HTMLInputElement).disabled).toBe(true)
+
+      selectStrategy('MACD 黃金交叉') // only MACD checked
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'MACD_GOLDEN_CROSS', fastPeriod: 5, slowPeriod: 20 }])
+    })
+
+    it.each([
+      ['INVALID_FAST_PERIOD', 'MACD_GOLDEN_CROSS', 'MACD 黃金交叉', '短期 EMA需介於 2 ~ 50 的整數'],
+      ['INVALID_SLOW_PERIOD', 'MACD_GOLDEN_CROSS', 'MACD 黃金交叉', '長期 EMA需介於 3 ~ 100 的整數'],
+      ['INVALID_MACD_PERIODS', 'MACD_GOLDEN_CROSS', 'MACD 黃金交叉', '短期 EMA需小於長期 EMA'],
+      ['INVALID_J_THRESHOLD', 'KDJ_GOLDEN_CROSS', 'KDJ 黃金交叉', 'J 門檻需介於 -100 ~ 100'],
+    ])('shows the backend %s error under the %s card (%s), not as a page-wide error', async (code, strategyCode, cardName, expected) => {
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(400, { code, strategy: strategyCode }))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText(cardName)).toBeInTheDocument())
+      selectStrategy(cardName)
+      const card = cardFor(cardName)
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(within(card).getByText(expected)).toBeInTheDocument())
+      expect(screen.queryByText('掃描失敗，請稍後再試')).not.toBeInTheDocument()
+    })
+
+    it.each([
+      [() => macdScanResponse(), 'MACD 黃金交叉', 'MACD 黃金交叉（12／26／9）'],
+      [() => kdjScanResponse(), 'KDJ 黃金交叉', 'KDJ 黃金交叉（前一日 J < -10）'],
+    ])('shows 本次採用參數 for %s sourced from the scan response — not the current inputs', async (responder, cardName, expected) => {
+      scanResponder = responder
+      renderTab()
+      await waitFor(() => expect(screen.getByText(cardName)).toBeInTheDocument())
+      selectStrategy(cardName)
+      // Edit an input after selecting but before scanning — the params line must still
+      // reflect what the RESPONSE says was actually used, never this unsaved edit. (`6`
+      // stays below the catalogue's own 長期 EMA default of 20, so this edit alone never
+      // trips 「短期 EMA需小於長期 EMA」 and blocks the scan.)
+      const card = cardFor(cardName)
+      const emaInput = within(card).queryByLabelText('短期 EMA')
+      if (emaInput) fireEvent.change(emaInput, { target: { value: '6' } })
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() => expect(screen.getByText(expected)).toBeInTheDocument())
+    })
+
+    it('shows 「MACD 黃金交叉 {signalDate}」in 命中策略與訊號日, 買進日 equal to signalDate, and sends that buyDate to 回測', async () => {
+      scanResponder = () => macdScanResponse()
+      backtestResponder = () => ({ status: 200, body: macdBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      expect(document.querySelector('.st-union-tag')?.textContent).toBe('MACD 黃金交叉 2026-08-26')
+      const row = screen.getByLabelText('納入 2330 計算').closest('tr') as HTMLElement
+      const cells = within(row).getAllByRole('cell')
+      expect(cells[3].textContent).toContain('2026-08-26') // 命中策略與訊號日：signalDate
+      expect(cells[4].textContent).toBe('2026-08-26') // 買進日：等於 signalDate
+
+      const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))
+      const body = JSON.parse((backtestCall![1] as RequestInit).body as string)
+      expect(body.items).toEqual([{ stockId: '2330', buyDate: '2026-08-26' }])
+    })
+
+    it('shows 「MACD 黃金交叉：另有 N 檔因區間前的歷史資料不足而未納入判定」for insufficientData; no 待確認 line for either technical-indicator strategy', async () => {
+      scanResponder = () => macdScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      await waitFor(() =>
+        expect(screen.getByText('MACD 黃金交叉：另有 1 檔因區間前的歷史資料不足而未納入判定')).toBeInTheDocument(),
+      )
+      expect(screen.queryByText(/已達標，但次一交易日尚未到/)).not.toBeInTheDocument()
+    })
+
+    it('never uses 建議／推薦／可進場 wording anywhere in the two technical-indicator cards or their scan-result text', async () => {
+      scanResponder = () => macdScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      const text = document.body.textContent ?? ''
+      expect(text).not.toContain('建議')
+      expect(text).not.toContain('推薦')
+      expect(text).not.toContain('可進場')
+    })
+  })
+
+  describe('MACD 預設天數改為 5／20', () => {
+    it('shows 短期 EMA=5／長期 EMA=20 sourced from GET /api/strategies「default」— never hard-coded, changing the mock default changes what the card shows', async () => {
+      const first = renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      expect((within(card).getByLabelText('短期 EMA') as HTMLInputElement).value).toBe('5')
+      expect((within(card).getByLabelText('長期 EMA') as HTMLInputElement).value).toBe('20')
+      first.unmount()
+
+      // Change the mock catalogue's own default to an arbitrary different pair (7／15) —
+      // if the frontend hard-coded 5／20 anywhere, the card would still show 5／20 here.
+      const otherDefaultCatalog = {
+        strategies: CATALOG.strategies.map((s) => {
+          if (s.code !== 'MACD_GOLDEN_CROSS') return s
+          return {
+            ...s,
+            params: (s.params as unknown[]).map((p) => {
+              const param = p as Record<string, unknown>
+              if (param.code === 'fastPeriod') return { ...param, default: 7 }
+              if (param.code === 'slowPeriod') return { ...param, default: 15 }
+              return param
+            }),
+          }
+        }),
+      }
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, scanResponder()))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, otherDefaultCatalog))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card2 = cardFor('MACD 黃金交叉')
+      expect((within(card2).getByLabelText('短期 EMA') as HTMLInputElement).value).toBe('7')
+      expect((within(card2).getByLabelText('長期 EMA') as HTMLInputElement).value).toBe('15')
+    })
+
+    it('scans with the default inputs untouched → sends { code: "MACD_GOLDEN_CROSS", fastPeriod: 5, slowPeriod: 20 }, and 本次採用參數 shows 「MACD 黃金交叉（5／20／9）」', async () => {
+      scanResponder = () => macdDefaultScanResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'MACD_GOLDEN_CROSS', fastPeriod: 5, slowPeriod: 20 }])
+
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉（5／20／9）')).toBeInTheDocument())
+    })
+
+    it('default 5／20 does not trigger 短期 EMA需小於長期 EMA; setting 長期 EMA to 5 triggers it and blocks the scan, restoring it to 6+ clears it', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('MACD 黃金交叉')).toBeInTheDocument())
+      selectStrategy('MACD 黃金交叉')
+      const card = cardFor('MACD 黃金交叉')
+      expect(within(card).queryByText('短期 EMA需小於長期 EMA')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: '5' } })
+      expect(within(card).getByText('短期 EMA需小於長期 EMA')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).toBeDisabled()
+
+      fireEvent.change(within(card).getByLabelText('長期 EMA'), { target: { value: '6' } })
+      expect(within(card).queryByText('短期 EMA需小於長期 EMA')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
+    })
+  })
+
+  describe('視窗寬 ≤ 1280px 日期與價格疊欄', () => {
+    function setInnerWidth(width: number): void {
+      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width })
+    }
+
+    afterEach(() => {
+      // setupTests.ts defaults `window.innerWidth` to 1920 (wide) for every other test in
+      // this suite — restore it so a narrow width set in one test here never leaks into the
+      // next (this file's own top-level `afterEach` never touches `innerWidth`).
+      setInnerWidth(1920)
+    })
+
+    it('merges 買進日／賣出日 and 買進價／賣出價 into two stacked, buy-over-sell columns at 1280px, and restores the four independent columns at 1281px — same values/format', async () => {
+      setInnerWidth(1280)
+      scanResponder = () => sortableScanResponse()
+      backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      revealIncompletePositions()
+
+      const table = screen.getByRole('table')
+      // 展開/勾選/代號/命中/日期(合併)/價格(合併)/報酬率/收益 = 8 headers when stacked,
+      // vs. 10 when the four columns are independent.
+      expect(within(table).getAllByRole('columnheader')).toHaveLength(8)
+
+      // AAAA: buyDate 2026-08-20 buyPrice 100 / sellDate 2026-08-21 sellPrice 105.
+      const rowAAAA = screen.getByText('AAAA A股').closest('tr') as HTMLElement
+      const cells = within(rowAAAA).getAllByRole('cell')
+      // Flex layouts must live INSIDE the <td>: a `display:flex` class on a <td> takes it out
+      // of table layout, and adjacent non-table-cell <td>s get merged into one anonymous cell —
+      // the hits tags, the dates and the prices then all stack in a single column.
+      for (const td of within(table).getAllByRole('cell')) {
+        expect(td).not.toHaveClass('st-stacked-cell')
+        expect(td).not.toHaveClass('st-union-hits')
+      }
+      expect(cells[4].firstElementChild).toHaveClass('st-stacked-cell')
+      expect(cells[5].firstElementChild).toHaveClass('st-stacked-cell')
+      // 上行買進、下行賣出 — 買對買、賣對賣, not date-over-price.
+      expect(cells[4].firstElementChild!.children[0].textContent).toBe('2026-08-20')
+      expect(cells[4].firstElementChild!.children[1].textContent).toBe('2026-08-21')
+      expect(cells[5].firstElementChild!.children[0].textContent).toBe('100.00')
+      expect(cells[5].firstElementChild!.children[1].textContent).toBe('105.00')
+      // 報酬率／收益 stay their own columns, values/format unchanged.
+      expect(cells[6].textContent).toBe('5.00%')
+      expect(cells[7].textContent).toBe('5,000')
+
+      // 1281px restores the four independent, unmerged columns — same values.
+      setInnerWidth(1281)
+      window.dispatchEvent(new Event('resize'))
+      await waitFor(() => expect(within(table).getAllByRole('columnheader')).toHaveLength(10))
+      const cellsWide = within(rowAAAA).getAllByRole('cell')
+      expect(cellsWide[4].textContent).toBe('2026-08-20')
+      expect(cellsWide[5].textContent).toBe('100.00')
+      expect(cellsWide[6].textContent).toBe('2026-08-21')
+      expect(cellsWide[7].textContent).toBe('105.00')
+      expect(cellsWide[8].textContent).toBe('5.00%')
+      expect(cellsWide[9].textContent).toBe('5,000')
+    })
+
+    it('shows a muted「—」on the lower line for an unbacktestable position, and grays both stacked lines on an unchecked row — same as the wide-window columns', async () => {
+      setInnerWidth(1024)
+      scanResponder = () => sortableScanResponse()
+      backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      revealIncompletePositions()
+
+      // CCCC has no sellable trading day at all — buyPrice/sellDate/sellPrice all null.
+      const rowCCCC = screen.getByText('CCCC C股').closest('tr') as HTMLElement
+      const cellsCCCC = within(rowCCCC).getAllByRole('cell')
+      expect(cellsCCCC[4].firstElementChild!.children[0].textContent).toBe('2026-08-15') // buyDate always present
+      expect(within(cellsCCCC[4]).getByText('—')).toHaveClass('sl-muted')
+      expect(within(cellsCCCC[5]).getAllByText('—').every((el) => el.className === 'sl-muted')).toBe(true)
+
+      // Unchecking a row grays every line in both stacked cells (whole-row override).
+      const rowAAAA = screen.getByLabelText('納入 AAAA 計算').closest('tr') as HTMLElement
+      fireEvent.click(rowAAAA)
+      expect(rowAAAA.className).toContain('st-row-unchecked')
+      const cellsAAAA = within(rowAAAA).getAllByRole('cell')
+      expect(cellsAAAA[4].firstElementChild!.children[0].textContent).toBe('2026-08-20')
+      expect(cellsAAAA[4].firstElementChild!.children[1].textContent).toBe('2026-08-21')
+    })
+
+    it('stacks a multi-lot parent row as buy/sell pairs per lot (newest buy first) with correct checked/unchecked coloring, and shows the cost-weighted average buy price over a muted「—」', async () => {
+      setInnerWidth(1024)
+      scanResponder = () => parentSortScanResponse()
+      backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      revealIncompletePositions()
+
+      const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
+      const parentRow = parentCheckbox.closest('tr') as HTMLElement
+      let cells = within(parentRow).getAllByRole('cell')
+      let pairs = cells[4].querySelectorAll('.st-stacked-pair')
+      // Newest buy first (08-27 before 08-20); buy-over-sell within each pair.
+      expect(pairs).toHaveLength(2)
+      expect(pairs[0].children[0].textContent).toBe('2026-08-27')
+      expect(pairs[0].children[1].textContent).toBe('2026-08-28')
+      expect(pairs[1].children[0].textContent).toBe('2026-08-20')
+      expect(pairs[1].children[1].textContent).toBe('2026-08-25')
+      // Both lots checked by default -> neither line muted.
+      expect(pairs[0].children[0].className).toBe('')
+      expect(pairs[1].children[0].className).toBe('')
+
+      // Price column: cost-weighted average buy price on top ((100×1000+10000×1000)÷2000
+      // = 5050.00), muted「—」below (no single aggregate sell price for multiple lots).
+      expect(cells[5].firstElementChild!.children[0].textContent).toBe('5050.00')
+      expect(within(cells[5].firstElementChild!.children[1] as HTMLElement).getByText('—')).toHaveClass('sl-muted')
+
+      // Uncheck the older (08-20) lot and confirm only its pair grays out.
+      fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+      fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算'))
+      fireEvent.click(screen.getByRole('button', { name: '收合 2330 的訊號日明細' }))
+
+      cells = within(parentRow).getAllByRole('cell')
+      pairs = cells[4].querySelectorAll('.st-stacked-pair')
+      expect(pairs[0].children[0].className).toBe('') // 08-27 still checked
+      expect(pairs[1].children[0].className).toBe('sl-muted') // 08-20 now unchecked
+      expect(pairs[1].children[1].className).toBe('sl-muted')
+    })
+
+    it('sorts by the 買進價 line of the stacked price header exactly like the wide-window 買進價 header; the other three stacked lines are not sortable', async () => {
+      setInnerWidth(1024)
+      scanResponder = () => sortableScanResponse()
+      backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      revealIncompletePositions()
+
+      expect(sortHeaderIcon('買進價')).toBe('↕')
+      clickSortHeader('買進價') // 1st: 降冪 — BBBB 200 > AAAA 100 > CCCC 「—」(min)
+      expect(sortHeaderIcon('買進價')).toBe('▼')
+      expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+
+      clickSortHeader('買進價') // 2nd: 升冪
+      expect(sortHeaderIcon('買進價')).toBe('▲')
+      expect(topLevelRowStockIds()).toEqual(['CCCC C股', 'AAAA A股', 'BBBB B股'])
+
+      clickSortHeader('買進價') // 3rd: 還原預設排序
+      expect(sortHeaderIcon('買進價')).toBe('↕')
+      expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+
+      // 「賣出價」「買進日」「賣出日」都不可排序 — clicking them changes nothing.
+      const orderBefore = topLevelRowStockIds()
+      fireEvent.click(screen.getByText('賣出價'))
+      fireEvent.click(screen.getByText('買進日'))
+      fireEvent.click(screen.getByText('賣出日'))
+      expect(sortHeaderIcon('買進價')).toBe('↕')
+      expect(topLevelRowStockIds()).toEqual(orderBefore)
+    })
+
+    it('switches live across the 1280px breakpoint with no reload and no network request, preserving checks, expand, hidden rows, sort and floating totals', async () => {
+      setInnerWidth(1920)
+      scanResponder = () => parentSortScanResponse()
+      backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      revealIncompletePositions()
+
+      // Build up state at the wide width: uncheck a row, expand the parent, sort by 買進價.
+      fireEvent.click(screen.getByLabelText('納入 9999 計算'))
+      fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+      clickSortHeader('買進價')
+      expect(sortHeaderIcon('買進價')).toBe('▼')
+
+      mockFloatingRects(-40, 300)
+      window.dispatchEvent(new Event('scroll'))
+      const floatingBefore = await waitForFloatingTotals()
+      const floatingValuesBefore = Array.from(floatingBefore.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+
+      const table = screen.getByRole('table')
+      expect(within(table).getAllByRole('columnheader')).toHaveLength(10) // wide: 4 独立欄位
+      const orderBefore = topLevelRowStockIds()
+      const callsBefore = fetchMock.mock.calls.length
+
+      // Cross the breakpoint downward — live, no reload, no network request.
+      setInnerWidth(1280)
+      window.dispatchEvent(new Event('resize'))
+      await waitFor(() => expect(within(table).getAllByRole('columnheader')).toHaveLength(8))
+      expect(fetchMock.mock.calls.length).toBe(callsBefore)
+
+      // State preserved: unchecked row, expanded parent, sort, floating totals.
+      expect((screen.getByLabelText('納入 9999 計算') as HTMLInputElement).checked).toBe(false)
+      expect(screen.getByRole('button', { name: '收合 2330 的訊號日明細' })).toBeInTheDocument()
+      expect(sortHeaderIcon('買進價')).toBe('▼')
+      expect(topLevelRowStockIds()).toEqual(orderBefore)
+      const floatingAfter = await waitForFloatingTotals()
+      const floatingValuesAfter = Array.from(floatingAfter.querySelectorAll('.st-total-value')).map((el) => el.textContent)
+      expect(floatingValuesAfter).toEqual(floatingValuesBefore)
+
+      // And back up across the breakpoint — still no network request, state still intact.
+      setInnerWidth(1281)
+      window.dispatchEvent(new Event('resize'))
+      await waitFor(() => expect(within(table).getAllByRole('columnheader')).toHaveLength(10))
+      expect(fetchMock.mock.calls.length).toBe(callsBefore)
+      expect((screen.getByLabelText('納入 9999 計算') as HTMLInputElement).checked).toBe(false)
+      expect(screen.getByRole('button', { name: '收合 2330 的訊號日明細' })).toBeInTheDocument()
+      expect(sortHeaderIcon('買進價')).toBe('▼')
+      expect(topLevelRowStockIds()).toEqual(orderBefore)
     })
   })
 })

@@ -12,6 +12,8 @@ export type StrategyCode =
   | 'INSTITUTIONAL_NET_RATIO'
   | 'INSTITUTIONAL_CONSECUTIVE_BUY'
   | 'INSTITUTIONAL_STRENGTH_RANK'
+  | 'MACD_GOLDEN_CROSS'
+  | 'KDJ_GOLDEN_CROSS'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 export type InvestorCode = 'FOREIGN' | 'TRUST'
 
@@ -53,6 +55,12 @@ export interface StrategyNumberParam extends StrategyParamBase {
   min: number
   max: number
   step: number
+  /** Names another numeric param `code` on the SAME strategy that this param's value must
+   * stay strictly less than (today only `MACD_GOLDEN_CROSS`'s `fastPeriod`, pointing at
+   * `slowPeriod`). Absent means no such relationship. The frontend enforces this purely off
+   * the field's presence — never off a strategy or param `code` (specs/frontend/
+   * strategy.md「參數間的大小限制（lessThan）」). */
+  lessThan?: string
 }
 
 /** A complex-select input (today only the institutional cards' `investors`) — one checkbox
@@ -185,6 +193,28 @@ export interface InstitutionalStrengthRankDetail {
   trust: { rank: number; strengthPercent: number; netBuyShares: number } | null
 }
 
+/** `MACD_GOLDEN_CROSS`'s judgement detail — signal-day `dif`/`dea`/`osc` plus the prior
+ * trading day's `osc`, four-decimal precision (specs/backend/strategy-scan.md「技術指標
+ * 型態」). Not rendered anywhere in the merged table (「判定明細…不在本表呈現」) — modeled
+ * here purely so `item.detail`'s shape matches the wire contract exactly. */
+export interface MacdGoldenCrossDetail {
+  dif: number
+  dea: number
+  osc: number
+  prevOsc: number
+}
+
+/** `KDJ_GOLDEN_CROSS`'s judgement detail — signal-day `k`/`d`/`j` plus the prior trading
+ * day's `k`/`d`/`j`. Same non-rendering rationale as `MacdGoldenCrossDetail`. */
+export interface KdjGoldenCrossDetail {
+  k: number
+  d: number
+  j: number
+  prevK: number
+  prevD: number
+  prevJ: number
+}
+
 export type StrategyDetail =
   | BoxBreakoutDetail
   | HigherLowsDetail
@@ -194,6 +224,8 @@ export type StrategyDetail =
   | InstitutionalNetRatioDetail
   | InstitutionalConsecutiveBuyDetail
   | InstitutionalStrengthRankDetail
+  | MacdGoldenCrossDetail
+  | KdjGoldenCrossDetail
 
 export interface StrategyHit {
   stockId: string
@@ -233,6 +265,14 @@ export interface StrategyResult {
    * data through within the scanned period; `null` when there's none at all
    * (specs/frontend/strategy.md「法人籌碼型態必須帶出法人資料的日期」). */
   dataThroughDate?: string | null
+  /** `MACD_GOLDEN_CROSS` only — echoes the fast/slow EMA periods actually used, plus the
+   * fixed signal-line period (always `9`, but read from here rather than hard-coded — see
+   * specs/frontend/strategy.md「signalPeriod 亦取自回應」). */
+  fastPeriod?: number
+  slowPeriod?: number
+  signalPeriod?: number
+  /** `KDJ_GOLDEN_CROSS` only. */
+  jThreshold?: number
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -265,6 +305,11 @@ export interface ScanStrategySelection {
   ratioPercent?: number
   buyDays?: number
   topN?: number
+  /** Only sent by `MACD_GOLDEN_CROSS`. */
+  fastPeriod?: number
+  slowPeriod?: number
+  /** Only sent by `KDJ_GOLDEN_CROSS`. */
+  jThreshold?: number
 }
 
 export interface ScanRequest {
@@ -315,8 +360,25 @@ export interface BacktestResultItem {
    * in `items` and must still render, just with dashes, per the same spec section. */
   sellDate: string | null
   sellPrice: number | null
+  /** `profit ÷ cost × 100`, already net of trading cost — the frontend never derives this
+   * from `buyPrice`/`sellPrice` itself (specs/backend/strategy-backtest.md「交易成本」). */
   returnPercent: number | null
+  /** Net of buy/sell brokerage fee and sell-side securities transaction tax — `null` only
+   * when unbacktestable. The frontend renders this value as-is; it must never recompute a
+   * gross `(sellPrice − buyPrice) × lotSize` figure itself. */
   profit: number | null
+  /** Buy-side brokerage fee (元); present whenever `buyPrice` is non-null, independent of
+   * whether a sell day was found. */
+  buyFee: number | null
+  /** Sell-side brokerage fee (元); `null` whenever `sellDate` is `null`. */
+  sellFee: number | null
+  /** Securities transaction tax (元); `null` whenever `sellDate` is `null`. */
+  sellTax: number | null
+  /** `buyPrice × lotSize + buyFee` (元) — the frontend sums THIS field for 總成本／父列合計,
+   * never `buyPrice × lotSize` on its own (specs/frontend/strategy.md「總成本以回應各筆的
+   * cost 加總，前端未寫死 1000，也未自行計算手續費」). Present whenever `buyPrice` is
+   * non-null, `null` otherwise. */
+  cost: number | null
 }
 
 export interface BacktestResponse {
@@ -330,6 +392,11 @@ export interface BacktestResponse {
   totalReturnPercent: number | null
   backtestedCount: number
   items: BacktestResultItem[]
+  /** Brokerage fee rate (percentage), always `0.1425` — echoed back rather than hard-coded
+   * in the frontend, same rationale as `lotSize` (specs/backend/strategy-backtest.md). */
+  feeRatePercent: number
+  /** Securities transaction tax rate (percentage), always `0.3`. */
+  taxRatePercent: number
 }
 
 /** POST /api/strategies/backtest — sends every hit stock regardless of the UI's checkbox

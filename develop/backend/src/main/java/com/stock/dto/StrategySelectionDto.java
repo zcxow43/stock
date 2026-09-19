@@ -1,5 +1,7 @@
 package com.stock.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -171,10 +173,17 @@ public class StrategySelectionDto {
         this.slowPeriod = slowPeriod;
     }
 
+    // Jackson's default (legacy) getter/setter name mangling lower-cases a *whole* leading run of
+    // consecutive capitals, so "getJThreshold"/"setJThreshold" would otherwise bind to the wire
+    // property "jthreshold" (all lower-case), not the spec's `jThreshold` — see specs/backend/
+    // strategy-scan.md, "回應回 jThreshold". Pin the wire name explicitly rather than rely on the
+    // mangling algorithm for this one two-capital-letter name.
+    @JsonProperty("jThreshold")
     public BigDecimal getJThreshold() {
         return jThreshold;
     }
 
+    @JsonProperty("jThreshold")
     public void setJThreshold(BigDecimal jThreshold) {
         this.jThreshold = jThreshold;
     }

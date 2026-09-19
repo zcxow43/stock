@@ -39,9 +39,9 @@ type ScanStatus = 'idle' | 'scanning' | 'success' | 'error'
 type SyncStatus = 'idle' | 'running'
 type ShortcutKey = '1m' | '3m' | '6m'
 type BacktestStatus = 'idle' | 'running' | 'success' | 'error'
-/** 買進價／報酬率欄排序 — the only two sortable columns, and the only two directions in
- * their click cycle (降冪 → 升冪 → 還原預設排序, `null` state meaning the latter). */
-type SortColumn = 'buyPrice' | 'returnPercent'
+/** 買進價／報酬率／收益欄排序 — the only three sortable columns, and the only two directions
+ * in their click cycle (降冪 → 升冪 → 還原預設排序, `null` state meaning the latter). */
+type SortColumn = 'buyPrice' | 'returnPercent' | 'profit'
 type SortDirection = 'desc' | 'asc'
 type SortState = { column: SortColumn; direction: SortDirection }
 
@@ -326,6 +326,41 @@ function isParamInputInvalid(value: string, param: StrategyNumberParam): boolean
   return Math.abs(rounded - num) > 1e-9
 }
 
+/** The `lessThan` param and the param it points to, for a params-driven strategy — `null`
+ * when the strategy has no such relationship (today only `MACD_GOLDEN_CROSS`'s `fastPeriod`
+ * → `slowPeriod`). Purely data-driven off each param's own `lessThan` field — never keyed by
+ * a strategy or param `code` (specs/frontend/strategy.md「參數間的大小限制（lessThan）」). */
+function lessThanPair(
+  strategy: StrategyCatalogItem | undefined,
+): { param: StrategyNumberParam; other: StrategyNumberParam } | null {
+  const param = strategy?.params?.find((p): p is StrategyNumberParam => p.type !== 'multiSelect' && !!p.lessThan)
+  if (!param?.lessThan) return null
+  const other = getStrategyParam(strategy, param.lessThan)
+  if (!other || other.type === 'multiSelect') return null
+  return { param, other }
+}
+
+/** 「{本參數名}需小於{對方參數名}」— shared by the live input check below and the backend
+ * `INVALID_MACD_PERIODS` fallback, so both read the exact same names off the same pair. */
+function lessThanErrorMessage(pair: { param: StrategyNumberParam; other: StrategyNumberParam }): string {
+  return `${pair.param.name}需小於${pair.other.name}`
+}
+
+/** Live client-side check for a params-driven card's `lessThan` relationship — `null`
+ * unless it's currently violated. A range error on either side always takes priority
+ * (「任一格本身超出範圍時先顯示範圍錯誤，不同時顯示兩則」), so this only evaluates once both
+ * sides are individually in range. Recomputed straight from render-time `values` on every
+ * change to either field — no separate effect needed for 「兩格任一改變時即時重新檢查」. */
+function lessThanViolationMessage(strategy: StrategyCatalogItem | undefined, values: Record<string, string>): string | null {
+  const pair = lessThanPair(strategy)
+  if (!pair) return null
+  const ownValue = values[pair.param.code] ?? ''
+  const otherValue = values[pair.other.code] ?? ''
+  if (isParamInputInvalid(ownValue, pair.param) || isParamInputInvalid(otherValue, pair.other)) return null
+  if (Number(ownValue) < Number(otherValue)) return null
+  return lessThanErrorMessage(pair)
+}
+
 /** Accepts either variant so a caller that only knows "this is *some* `params` entry" (e.g.
  * a backend validation-error fallback naming a param by code) doesn't have to narrow first —
  * the `multiSelect` branch mirrors「複選參數」's own 「請至少勾選一個<參數名>」 wording. */
@@ -519,15 +554,16 @@ interface BacktestTotals {
   uncountedUnchecked: number
 }
 
-/** Recomputes the two merged-table totals client-side from the backtest response's own
- * per-item `buyPrice`/`profit` and `lotSize` (never a hard-coded 1000) — so toggling a
- * checkbox never has to re-call the endpoint. Iterates `result.items` directly (one entry
- * per `(stockId, buyDate)` position already, per the current backend contract) rather
- * than the union rows' grouping, so the totals are exactly「已勾選且可回測的各筆」regardless
- * of expand/collapse state. With every row checked this must equal the response's own
- * `totalCost`/`totalProfit`/`totalReturnPercent` exactly (specs/frontend/strategy.md「全部
- * 勾選時…這兩條路徑必須交會」), since it excludes exactly the same `sellDate === null`
- * items the backend already excludes and applies the same weighted formula. */
+/** Recomputes the three merged-table totals client-side from the backtest response's own
+ * per-item `cost`/`profit` (never a hard-coded 1000, never a self-computed fee/tax) — so
+ * toggling a checkbox never has to re-call the endpoint. Iterates `result.items` directly
+ * (one entry per `(stockId, buyDate)` position already, per the current backend contract)
+ * rather than the union rows' grouping, so the totals are exactly「已勾選且可回測的各筆」
+ * regardless of expand/collapse state. With every row checked this must equal the
+ * response's own `totalCost`/`totalProfit`/`totalReturnPercent` exactly (specs/frontend/
+ * strategy.md「全部勾選時…這兩條路徑必須交會」), since it excludes exactly the same
+ * `sellDate === null` items the backend already excludes, sums the SAME `cost` field the
+ * backend summed into its own `totalCost`, and applies the same weighted formula. */
 function computeBacktestTotals(result: BacktestResponse, checkedItemKeys: Set<string>): BacktestTotals {
   let totalCost = 0
   let totalProfit = 0
@@ -544,7 +580,7 @@ function computeBacktestTotals(result: BacktestResponse, checkedItemKeys: Set<st
       continue
     }
     includedCount += 1
-    totalCost += (item.buyPrice ?? 0) * result.lotSize
+    totalCost += item.cost ?? 0
     totalProfit += item.profit ?? 0
   }
   const totalReturnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
@@ -580,6 +616,11 @@ function computeParentAggregate(
 ): ParentAggregate {
   let checkedChildren = 0
   let includedCount = 0
+  // 買進價 is `buyPrice × lotSize` 的總和 ÷ lotSize — unrelated to trading cost, so this
+  // accumulator stays on the raw price. 報酬率 is cost-weighted on the response's own `cost`
+  // (含買進手續費) — a SEPARATE accumulator, never derived from `totalBuyAmount` above, so
+  // the frontend never has to compute a fee itself to get the denominator right.
+  let totalBuyAmount = 0
   let totalCost = 0
   let totalProfit = 0
   for (const group of groups) {
@@ -588,10 +629,11 @@ function computeParentAggregate(
     const item = backtestItemsByKey.get(itemKey(stockId, group.buyDate))
     if (!checked || !item || item.sellDate === null) continue
     includedCount += 1
-    totalCost += (item.buyPrice ?? 0) * lotSize
+    totalBuyAmount += (item.buyPrice ?? 0) * lotSize
+    totalCost += item.cost ?? 0
     totalProfit += item.profit ?? 0
   }
-  const avgBuyPrice = includedCount > 0 ? totalCost / (lotSize * includedCount) : null
+  const avgBuyPrice = includedCount > 0 ? totalBuyAmount / (lotSize * includedCount) : null
   const returnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
   return { checkedChildren, totalChildren: groups.length, includedCount, avgBuyPrice, totalProfit, returnPercent }
 }
@@ -625,12 +667,18 @@ function rowSortValue(
 ): number | null {
   if (row.buyDateGroups.length >= 2) {
     const agg = computeParentAggregate(row.stockId, row.buyDateGroups, backtestItemsByKey, checkedItemKeys, lotSize)
-    return column === 'buyPrice' ? agg.avgBuyPrice : agg.returnPercent
+    if (column === 'buyPrice') return agg.avgBuyPrice
+    if (column === 'returnPercent') return agg.returnPercent
+    // 收益：已勾選子筆 profit 的總和 — same「子筆全被取消勾選時顯示「—」」rule as the other
+    // two aggregates (`totalProfit` is otherwise a real, displayable `0`).
+    return agg.includedCount > 0 ? agg.totalProfit : null
   }
   const group = row.buyDateGroups[0]
   if (!group) return null
   const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
-  return column === 'buyPrice' ? (item?.buyPrice ?? null) : (item?.returnPercent ?? null)
+  if (column === 'buyPrice') return item?.buyPrice ?? null
+  if (column === 'returnPercent') return item?.returnPercent ?? null
+  return item?.profit ?? null
 }
 
 /** A checkbox that can additionally render the browser's native indeterminate (半選) glyph
@@ -810,6 +858,18 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // Default collapsed. Only meaningful for a stock with ≥ 2 distinct buy dates; toggling
   // it never re-fetches anything.
   const [expandedStockIds, setExpandedStockIds] = useState<Set<string>>(new Set())
+
+  // ---------- 視窗寬 ≤ 1280px：買進日／賣出日、買進價／賣出價各自疊成一欄 ----------
+  // Pure viewport-width state, independent of any backtest/scan state — the merge only
+  // ever shows up once `backtestResult` exists (the four columns don't exist before that),
+  // but the listener itself is unconditional so a resize crossing 1280px while a backtest
+  // is already on screen re-renders immediately, with no reload and no network request.
+  const [isNarrow, setIsNarrow] = useState(() => window.innerWidth <= 1280)
+  useEffect(() => {
+    const measure = () => setIsNarrow(window.innerWidth <= 1280)
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
 
   // ---------- 買進價／報酬率欄排序 (front-end only; only meaningful once backtestResult
   // exists, reset to default — both `null` — on every 開始掃描) ----------
@@ -1159,6 +1219,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_RATIO_PERCENT: 'ratioPercent',
     INVALID_BUY_DAYS: 'buyDays',
     INVALID_TOP_N: 'topN',
+    INVALID_FAST_PERIOD: 'fastPeriod',
+    INVALID_SLOW_PERIOD: 'slowPeriod',
+    INVALID_J_THRESHOLD: 'jThreshold',
   }
 
   /** Sends `POST /api/strategies/backtest` — called automatically once right after a scan
@@ -1285,6 +1348,17 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
+        if (err instanceof ApiError && err.code === 'INVALID_MACD_PERIODS') {
+          // Backend fallback only — client-side `lessThanViolationMessage` already blocks
+          // this in normal use. Same message either way, derived from the same `lessThan`
+          // pair, never hard-coded to `fastPeriod`/`slowPeriod`'s own names.
+          const code = (err.strategy as StrategyCode) ?? null
+          const strategy = code ? catalog.find((s) => s.code === code) : undefined
+          const pair = lessThanPair(strategy)
+          if (code) setParamServerError({ code, message: pair ? lessThanErrorMessage(pair) : '參數不合法' })
+          setScanStatus(scanResult ? 'success' : 'idle')
+          return
+        }
         if (
           err instanceof ApiError &&
           err.code !== null &&
@@ -1339,7 +1413,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     if (!isParamsDriven(strategy)) return false
     const values = paramInputs[code] ?? {}
     const multiValues = multiSelectInputs[code] ?? {}
-    return (strategy?.params ?? []).some((param) => {
+    const rangeOrSelectionInvalid = (strategy?.params ?? []).some((param) => {
       if (!isGroupOn(strategy, groupEnabled, param)) return false
       if (param.type === 'multiSelect') {
         const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
@@ -1347,6 +1421,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       }
       return isParamInputInvalid(values[param.code] ?? '', param)
     })
+    if (rangeOrSelectionInvalid) return true
+    return lessThanViolationMessage(strategy, values) !== null
   })
   const canScan =
     !noStrategySelected &&
@@ -1511,6 +1587,16 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       if (result.topN !== undefined && result.windowDays !== undefined) {
         return `${name}（${investorsPart}・${result.windowDays} 日強度・各前 ${result.topN} 名・${dataPart}）`
       }
+    }
+    if (result.fastPeriod !== undefined && result.slowPeriod !== undefined) {
+      // `signalPeriod` is always echoed by the backend (fixed at 9) but read from the
+      // response here rather than hard-coded — see「MACD 的訊號線天數同樣取自回應的
+      // signalPeriod，不在前端寫死 9」.
+      const signalPart = result.signalPeriod !== undefined ? `／${result.signalPeriod}` : ''
+      return `${name}（${result.fastPeriod}／${result.slowPeriod}${signalPart}）`
+    }
+    if (result.jThreshold !== undefined) {
+      return `${name}（前一日 J < ${formatTrimmedPercent(result.jThreshold)}）`
     }
     return name
   }
@@ -1753,10 +1839,31 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * row, so the null-dash handling and formatting live in exactly one place. */
   const renderPositionCells = (buyDate: string, item: BacktestResultItem | null) => (
     <>
-      <td>{buyDate}</td>
-      <td className="sl-r">{item?.buyPrice != null ? formatPrice2(item.buyPrice) : <span className="sl-muted">—</span>}</td>
-      <td>{item?.sellDate ?? <span className="sl-muted">—</span>}</td>
-      <td className="sl-r">{item?.sellPrice != null ? formatPrice2(item.sellPrice) : <span className="sl-muted">—</span>}</td>
+      {isNarrow ? (
+        <>
+          {/* 視窗寬 ≤ 1280px：買進日／賣出日疊成一欄，上行買進、下行賣出 — 買對買、賣對
+              賣，不是「日期與價格疊一起」。數值、格式與顏色完全不變，只是換位置。 */}
+          <td>
+            <div className="st-stacked-cell">
+              <div>{buyDate}</div>
+              <div>{item?.sellDate ?? <span className="sl-muted">—</span>}</div>
+            </div>
+          </td>
+          <td className="sl-r">
+            <div className="st-stacked-cell">
+              <div>{item?.buyPrice != null ? formatPrice2(item.buyPrice) : <span className="sl-muted">—</span>}</div>
+              <div>{item?.sellPrice != null ? formatPrice2(item.sellPrice) : <span className="sl-muted">—</span>}</div>
+            </div>
+          </td>
+        </>
+      ) : (
+        <>
+          <td>{buyDate}</td>
+          <td className="sl-r">{item?.buyPrice != null ? formatPrice2(item.buyPrice) : <span className="sl-muted">—</span>}</td>
+          <td>{item?.sellDate ?? <span className="sl-muted">—</span>}</td>
+          <td className="sl-r">{item?.sellPrice != null ? formatPrice2(item.sellPrice) : <span className="sl-muted">—</span>}</td>
+        </>
+      )}
       <td className={`sl-r ${signColorClass(item?.returnPercent)}`}>
         {item?.returnPercent == null ? <span className="sl-muted">—</span> : formatPercent2(item.returnPercent)}
       </td>
@@ -1781,6 +1888,39 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       >
         <span className="st-sort-label">{label}</span>
         <span className={`st-sort-icon ${active ? 'st-sort-icon-active' : 'st-sort-icon-idle'}`}>{icon}</span>
+      </th>
+    )
+  }
+
+  /** 視窗寬 ≤ 1280px 的日期表頭：兩行「買進日」「賣出日」，兩行皆不可排序. */
+  const renderStackedDateHeader = () => (
+    <th>
+      <div className="st-stacked-header-lines">
+        <div>買進日</div>
+        <div>賣出日</div>
+      </div>
+    </th>
+  )
+
+  /** 視窗寬 ≤ 1280px 的價格表頭：上行「買進價」是買進價的排序控制（外觀與行為與寬視窗時的
+   * 「買進價」表頭完全相同），下行「賣出價」不可排序、純文字. */
+  const renderStackedPriceHeader = () => {
+    const column: SortColumn = 'buyPrice'
+    const active = sortState?.column === column
+    const icon = active ? (sortState!.direction === 'desc' ? '▼' : '▲') : '↕'
+    return (
+      <th className="sl-r">
+        <div className="st-stacked-header-lines st-stacked-header-lines-r">
+          <div
+            className={`st-sortable st-stacked-sort-line${active ? ' st-sort-header-active' : ''}`}
+            onClick={() => handleSortClick(column)}
+            aria-sort={active ? (sortState!.direction === 'desc' ? 'descending' : 'ascending') : 'none'}
+          >
+            <span className="st-sort-label">買進價</span>
+            <span className={`st-sort-icon ${active ? 'st-sort-icon-active' : 'st-sort-icon-idle'}`}>{icon}</span>
+          </div>
+          <div>賣出價</div>
+        </div>
       </th>
     )
   }
@@ -1868,6 +2008,16 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       </div>
       {backtestTotals ? (
         <div className="st-uncounted-notes">
+          {/* 收益與報酬率必須讓使用者知道已扣交易成本 — fixed position directly under the
+              three totals, above the 「未計入」/「已隱藏」lines, never floating (it isn't
+              part of `renderTotalsTriplet`, which is the only thing that floats). The two
+              rates are echoed from the response AS-IS (never rounded/trimmed) so a
+              feeRatePercent like `0.1425` renders exactly `0.1425`, not `0.14`. */}
+          {backtestResult ? (
+            <p className="st-uncounted-note">
+              收益已扣手續費 {backtestResult.feeRatePercent}%（買賣各一次）與證交稅 {backtestResult.taxRatePercent}%
+            </p>
+          ) : null}
           {backtestTotals.includedCount === 0 ? (
             <p className="st-uncounted-note">
               {backtestResult?.totalReturnPercent === null ? '沒有可回測的標的' : '未勾選任何標的'}
@@ -1896,12 +2046,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               {backtestResult ? <th className="st-checkbox-col" aria-label="納入計算"></th> : null}
               <th>代號 / 名稱</th>
               <th>命中策略與訊號日</th>
-              {backtestResult ? <th>買進日</th> : null}
-              {backtestResult ? renderSortableHeader('buyPrice', '買進價') : null}
-              {backtestResult ? <th>賣出日</th> : null}
-              {backtestResult ? <th className="sl-r">賣出價</th> : null}
+              {backtestResult ? (isNarrow ? renderStackedDateHeader() : <th>買進日</th>) : null}
+              {backtestResult ? (isNarrow ? renderStackedPriceHeader() : renderSortableHeader('buyPrice', '買進價')) : null}
+              {backtestResult && !isNarrow ? <th>賣出日</th> : null}
+              {backtestResult && !isNarrow ? <th className="sl-r">賣出價</th> : null}
               {backtestResult ? renderSortableHeader('returnPercent', '報酬率') : null}
-              {backtestResult ? <th className="sl-r">收益（每筆 1 張）</th> : null}
+              {backtestResult ? renderSortableHeader('profit', '收益（每筆 1 張）') : null}
             </tr>
           </thead>
           <tbody>
@@ -1923,41 +2073,80 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   parentIndeterminate = agg.checkedChildren > 0 && agg.checkedChildren < agg.totalChildren
                   backtestCells = (
                     <>
-                      {/* 買進日：該檔每一筆的 buyDate，由新到舊逐行列出，一行一筆；已勾選
-                          為主要文字色（繼承 td 預設值），未勾選為弱化色（重用 sl-muted）。 */}
-                      <td>
-                        {groups.map((group) => {
-                          const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
-                          return (
-                            <div key={group.buyDate} className={checked ? undefined : 'sl-muted'}>
-                              {group.buyDate}
+                      {isNarrow ? (
+                        <>
+                          {/* 視窗寬 ≤ 1280px：日期欄每一筆佔上下兩行（上行買進日、下行賣出
+                              日），筆與筆之間依買進日由新到舊（groups 本身已是這個順序）；
+                              已勾選／未勾選配色與寬視窗時的兩個獨立欄位完全相同，只是同一筆
+                              的買、賣兩行現在相鄰。 */}
+                          <td>
+                            <div className="st-stacked-cell st-stacked-parent-cell">
+                            {groups.map((group) => {
+                              const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                              const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
+                              const sellDate = item?.sellDate ?? null
+                              const sellMuted = !checked || sellDate == null
+                              return (
+                                <div key={group.buyDate} className="st-stacked-pair">
+                                  <div className={checked ? undefined : 'sl-muted'}>{group.buyDate}</div>
+                                  <div className={sellMuted ? 'sl-muted' : undefined}>{sellDate ?? '—'}</div>
+                                </div>
+                              )
+                            })}
                             </div>
-                          )
-                        })}
-                      </td>
-                      <td className="sl-r">
-                        {agg.avgBuyPrice != null ? formatPrice2(agg.avgBuyPrice) : <span className="sl-muted">—</span>}
-                      </td>
-                      {/* 賣出日：與買進日欄同一順序、同一行數，第 k 行屬於同一筆；無法回測的
-                          那一筆該行為弱化色「—」，已勾選／未勾選的配色同買進日欄。 */}
-                      <td>
-                        {groups.map((group) => {
-                          const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
-                          const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
-                          const sellDate = item?.sellDate ?? null
-                          const muted = !checked || sellDate == null
-                          return (
-                            <div key={group.buyDate} className={muted ? 'sl-muted' : undefined}>
-                              {sellDate ?? '—'}
+                          </td>
+                          {/* 價格欄：上行為成本加權均價、下行為弱化色「—」（多筆沒有單一賣出
+                              價，理由同寬視窗時的賣出價欄）。 */}
+                          <td className="sl-r">
+                            <div className="st-stacked-cell">
+                              <div>
+                                {agg.avgBuyPrice != null ? formatPrice2(agg.avgBuyPrice) : <span className="sl-muted">—</span>}
+                              </div>
+                              <div>
+                                <span className="sl-muted">—</span>
+                              </div>
                             </div>
-                          )
-                        })}
-                      </td>
-                      {/* 賣出價：恆為弱化色「—」（多筆各有各的賣出價，沒有單一合計值），且
-                          需與同欄其他列的賣出價同樣靠右對齊（sl-r，過去這裡漏掉，造成錯位）。 */}
-                      <td className="sl-r">
-                        <span className="sl-muted">—</span>
-                      </td>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* 買進日：該檔每一筆的 buyDate，由新到舊逐行列出，一行一筆；已勾選
+                              為主要文字色（繼承 td 預設值），未勾選為弱化色（重用 sl-muted）。 */}
+                          <td>
+                            {groups.map((group) => {
+                              const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                              return (
+                                <div key={group.buyDate} className={checked ? undefined : 'sl-muted'}>
+                                  {group.buyDate}
+                                </div>
+                              )
+                            })}
+                          </td>
+                          <td className="sl-r">
+                            {agg.avgBuyPrice != null ? formatPrice2(agg.avgBuyPrice) : <span className="sl-muted">—</span>}
+                          </td>
+                          {/* 賣出日：與買進日欄同一順序、同一行數，第 k 行屬於同一筆；無法回測的
+                              那一筆該行為弱化色「—」，已勾選／未勾選的配色同買進日欄。 */}
+                          <td>
+                            {groups.map((group) => {
+                              const checked = checkedItemKeys.has(itemKey(row.stockId, group.buyDate))
+                              const item = backtestItemsByKey.get(itemKey(row.stockId, group.buyDate)) ?? null
+                              const sellDate = item?.sellDate ?? null
+                              const muted = !checked || sellDate == null
+                              return (
+                                <div key={group.buyDate} className={muted ? 'sl-muted' : undefined}>
+                                  {sellDate ?? '—'}
+                                </div>
+                              )
+                            })}
+                          </td>
+                          {/* 賣出價：恆為弱化色「—」（多筆各有各的賣出價，沒有單一合計值），且
+                              需與同欄其他列的賣出價同樣靠右對齊（sl-r，過去這裡漏掉，造成錯位）。 */}
+                          <td className="sl-r">
+                            <span className="sl-muted">—</span>
+                          </td>
+                        </>
+                      )}
                       <td className={`sl-r ${agg.includedCount > 0 ? signColorClass(agg.returnPercent) : 'sl-muted'}`}>
                         {agg.includedCount > 0 && agg.returnPercent != null ? (
                           formatPercent2(agg.returnPercent)
@@ -2042,7 +2231,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   <td>
                     {row.stockId} {row.stockName}
                   </td>
-                  <td className="st-union-hits">{renderUnionHits(groups.flatMap((group) => group.hits))}</td>
+                  <td>
+                    <div className="st-union-hits">{renderUnionHits(groups.flatMap((group) => group.hits))}</div>
+                  </td>
                   {backtestCells}
                 </tr>
               )
@@ -2052,16 +2243,19 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               // 展開中的子列依同一欄、同一方向排序，「—」同樣視為最小值、值相同依買進日由
               // 新到舊；還原預設排序（sortState === null）時就是 `groups` 自己已經有的
               // 由新到舊順序，不必另外排。This is independent of `sortedRowOrder`'s
-              // top-level freeze — a child's own buyPrice/returnPercent never changes with
-              // a checkbox toggle, so re-deriving this order every render can't move a
-              // child row underneath the user either.
+              // top-level freeze — a child's own buyPrice/returnPercent/profit never
+              // changes with a checkbox toggle, so re-deriving this order every render
+              // can't move a child row underneath the user either.
+              const childSortValue = (item: BacktestResultItem | null): number | null => {
+                if (sortState!.column === 'buyPrice') return item?.buyPrice ?? null
+                if (sortState!.column === 'returnPercent') return item?.returnPercent ?? null
+                return item?.profit ?? null
+              }
               const childOrderGroups = sortState
                 ? [...groups].sort((a, b) => {
                     const aItem = backtestItemsByKey.get(itemKey(row.stockId, a.buyDate)) ?? null
                     const bItem = backtestItemsByKey.get(itemKey(row.stockId, b.buyDate)) ?? null
-                    const aValue = sortState.column === 'buyPrice' ? (aItem?.buyPrice ?? null) : (aItem?.returnPercent ?? null)
-                    const bValue = sortState.column === 'buyPrice' ? (bItem?.buyPrice ?? null) : (bItem?.returnPercent ?? null)
-                    const cmp = compareBySortDirection(aValue, bValue, sortState.direction)
+                    const cmp = compareBySortDirection(childSortValue(aItem), childSortValue(bItem), sortState.direction)
                     return cmp !== 0 ? cmp : a.buyDate < b.buyDate ? 1 : a.buyDate > b.buyDate ? -1 : 0
                   })
                 : groups
@@ -2089,7 +2283,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                     <td className="st-child-indent">
                       {row.stockId} {row.stockName}
                     </td>
-                    <td className="st-union-hits">{renderUnionHits(group.hits)}</td>
+                    <td>
+                      <div className="st-union-hits">{renderUnionHits(group.hits)}</div>
+                    </td>
                     {backtestResult ? renderPositionCells(group.buyDate, item) : null}
                   </tr>
                 )
@@ -2242,6 +2438,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   Number(amountValue) > 0 &&
                   !!oneDayHintText
 
+                // 「參數間的大小限制（lessThan）」— card-level message (not per-field), only
+                // once this card is selected. `null` while the relationship holds or either
+                // side is itself out of range (range error takes priority, shown per-field
+                // by `renderParamRow` above).
+                const lessThanMessage = selected ? lessThanViolationMessage(strategy, values) : null
+
                 const renderParamRow = (param: StrategyParam) => {
                   const groupOn = isGroupOn(strategy, groupEnabled, param)
                   const disabled = !selected || !groupOn
@@ -2293,7 +2495,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                           value={value}
                           onChange={(e) => changeParamInput(strategy.code, param.code, e.target.value)}
                         />
-                        <span className="st-param-suffix">{param.unit}</span>
+                        {/* `unit` empty string (今為 KDJ 黃金交叉的 jThreshold) draws no
+                            suffix box at all — not an empty one — per specs/frontend/
+                            strategy.md「無後綴（unit 為空字串，不畫空白後綴框）」. */}
+                        {param.unit ? <span className="st-param-suffix">{param.unit}</span> : null}
                       </div>
                       {param.unit === '日' ? <p className="st-param-hint">回看的交易日數，不含週末與休市日</p> : null}
                       {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
@@ -2329,6 +2534,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                       )
                     })}
                     {showOneDayHint ? <div className="st-days-one-hint">{oneDayHintText}</div> : null}
+                    {lessThanMessage ? <div className="st-inline-error">{lessThanMessage}</div> : null}
                     {paramServerError?.code === strategy.code ? (
                       <div className="st-inline-error">{paramServerError.message}</div>
                     ) : null}

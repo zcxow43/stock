@@ -8,11 +8,17 @@ import java.util.List;
  * POST /api/strategies/backtest response body. `totalReturnPercent` is null only when
  * `backtestedCount` is 0 — `totalCost`/`totalProfit` are `0` in that case, never null (see
  * specs/backend/strategy-backtest.md, "彙總").
+ *
+ * <p>`feeRatePercent`/`taxRatePercent` are constants echoed back so the caller can explain what
+ * `profit`/`returnPercent` were net of without hard-coding the rates itself (specs/backend/
+ * strategy-backtest.md, "交易成本" — same rationale as `lotSize`).
  */
 public class BacktestResponseDto {
 
     private LocalDate asOfDate;
     private int lotSize;
+    private BigDecimal feeRatePercent;
+    private BigDecimal taxRatePercent;
     private BigDecimal totalCost;
     private BigDecimal totalProfit;
     private BigDecimal totalReturnPercent;
@@ -36,6 +42,22 @@ public class BacktestResponseDto {
 
     public void setLotSize(int lotSize) {
         this.lotSize = lotSize;
+    }
+
+    public BigDecimal getFeeRatePercent() {
+        return feeRatePercent;
+    }
+
+    public void setFeeRatePercent(BigDecimal feeRatePercent) {
+        this.feeRatePercent = feeRatePercent;
+    }
+
+    public BigDecimal getTaxRatePercent() {
+        return taxRatePercent;
+    }
+
+    public void setTaxRatePercent(BigDecimal taxRatePercent) {
+        this.taxRatePercent = taxRatePercent;
     }
 
     public BigDecimal getTotalCost() {

@@ -40,10 +40,14 @@ public class MacdGoldenCrossDetector implements PatternDetector {
 
     public static final int FAST_PERIOD_MIN = 2;
     public static final int FAST_PERIOD_MAX = 50;
-    public static final int FAST_PERIOD_DEFAULT = IndicatorCalculationService.DEFAULT_FAST_PERIOD;
+    // Scan default is 5/20 — intentionally different from IndicatorCalculationService's
+    // DEFAULT_FAST_PERIOD/DEFAULT_SLOW_PERIOD (12/26), which are the fixed params persisted into
+    // stock_daily_indicator for the daily-chart MACD sub-chart. Omitting fastPeriod/slowPeriod here
+    // scans 5/20, not 12/26 — see specs/backend/strategy-scan.md, "MACD 預設天數改為 5／20".
+    public static final int FAST_PERIOD_DEFAULT = 5;
     public static final int SLOW_PERIOD_MIN = 3;
     public static final int SLOW_PERIOD_MAX = 100;
-    public static final int SLOW_PERIOD_DEFAULT = IndicatorCalculationService.DEFAULT_SLOW_PERIOD;
+    public static final int SLOW_PERIOD_DEFAULT = 20;
     public static final int SIGNAL_PERIOD = 9;
 
     // At least 100 trading days of history strictly before D are required for the recursion to

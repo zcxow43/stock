@@ -1,6 +1,7 @@
 package com.stock.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -180,10 +181,15 @@ public class StrategyResultDto {
         this.signalPeriod = signalPeriod;
     }
 
+    // See StrategySelectionDto#getJThreshold for why this name must be pinned explicitly: Jackson's
+    // default getter/setter mangling would otherwise serialize this as "jthreshold", not the spec's
+    // `jThreshold`.
+    @JsonProperty("jThreshold")
     public BigDecimal getJThreshold() {
         return jThreshold;
     }
 
+    @JsonProperty("jThreshold")
     public void setJThreshold(BigDecimal jThreshold) {
         this.jThreshold = jThreshold;
     }

@@ -100,7 +100,7 @@ function pageHtml(): string {
         <tbody>
           <tr class="sl-row" id="cursor-row-pre-backtest">
             <td>2330 台積電</td>
-            <td class="st-union-hits">箱型突破 2026-08-27</td>
+            <td><div class="st-union-hits">箱型突破 2026-08-27</div></td>
           </tr>
         </tbody>
       </table>
@@ -109,7 +109,7 @@ function pageHtml(): string {
           <tr class="sl-row" id="cursor-row-post-backtest">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td id="st-cell-plain">2330 台積電</td>
-            <td class="st-union-hits">箱型突破 2026-08-27</td>
+            <td><div class="st-union-hits">箱型突破 2026-08-27</div></td>
             <td id="st-cell-selldate">2026-09-01</td>
             <td class="sl-r sl-up" id="st-cell-return-up">1.24%</td>
             <td class="sl-r sl-up" id="st-cell-profit-up">30,000</td>
@@ -117,7 +117,7 @@ function pageHtml(): string {
           <tr class="sl-row">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td>2317 鴻海</td>
-            <td class="st-union-hits">底底高 2026-08-28</td>
+            <td><div class="st-union-hits">底底高 2026-08-28</div></td>
             <td>2026-09-02</td>
             <td class="sl-r sl-down" id="st-cell-return-down">-4.17%</td>
             <td class="sl-r sl-down" id="st-cell-profit-down">-100,000</td>
@@ -125,7 +125,7 @@ function pageHtml(): string {
           <tr class="sl-row">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td>2454 聯發科</td>
-            <td class="st-union-hits">箱型突破 2026-08-20</td>
+            <td><div class="st-union-hits">箱型突破 2026-08-20</div></td>
             <td><span class="sl-muted" id="st-cell-selldate-null">—</span></td>
             <td class="sl-r sl-muted" id="st-cell-return-null"><span class="sl-muted">—</span></td>
             <td class="sl-r sl-muted" id="st-cell-profit-null"><span class="sl-muted">—</span></td>
@@ -133,7 +133,7 @@ function pageHtml(): string {
           <tr class="sl-row st-row-unchecked">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" /></td>
             <td id="st-cell-unchecked-plain">2454 聯發科</td>
-            <td class="st-union-hits">箱型突破 2026-08-20</td>
+            <td><div class="st-union-hits">箱型突破 2026-08-20</div></td>
             <td id="st-cell-unchecked-selldate">2026-09-01</td>
             <td class="sl-r sl-up" id="st-cell-unchecked-return">1.24%</td>
             <td class="sl-r sl-up" id="st-cell-unchecked-profit">30,000</td>
@@ -172,7 +172,7 @@ function pageHtml(): string {
           <tr class="sl-row">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td>2330 台積電</td>
-            <td class="st-union-hits">箱型突破 2026-08-27・底底高 2026-08-25</td>
+            <td><div class="st-union-hits">箱型突破 2026-08-27・底底高 2026-08-25</div></td>
             <td>
               <div id="parent-buydate-checked">2026-08-27</div>
               <div class="sl-muted" id="parent-buydate-unchecked">2026-08-20</div>
@@ -189,7 +189,7 @@ function pageHtml(): string {
           <tr class="sl-row">
             <td class="st-checkbox-col"><input type="checkbox" class="st-row-checkbox" checked /></td>
             <td>2317 鴻海</td>
-            <td class="st-union-hits">底底高 2026-08-28</td>
+            <td><div class="st-union-hits">底底高 2026-08-28</div></td>
             <td>2026-08-28</td>
             <td class="sl-r">100.00</td>
             <td>2026-09-01</td>
