@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>模擬交易分頁</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-simtrade">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,032</b> 檔</div>
+    </div>
+    <div class="pageopt"><span class="cb"></span>只看上市普通股（排除 ETF、特別股、TDR）</div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab">策略</button>
+      <button class="tab">動態</button>
+      <button class="tab on">模擬交易</button>
+    </div>
+    <div class="addbar">
+      <div class="addrow">
+        <div class="codein focus" data-target>2330<span class="caret"></span></div>
+        <button class="addbtn" data-trigger>加入</button>
+      </div>
+      <div class="addhint">以今日以前最後一個交易日的收盤價買進 1 張（每筆 1,000 股）</div>
+    </div>
+    <div class="sumbox">
+      <div class="summary">
+        <div class="cnt">共 <b>0</b> 筆</div>
+        <div class="kv"><span class="k">總成本</span><span class="v none">—</span></div>
+        <div class="kv"><span class="k">總未實現損益</span><span class="v none">—</span></div>
+        <div class="kv"><span class="k">總報酬率</span><span class="v none">—</span></div>
+      </div>
+      <div class="feenote">未實現損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，賣出成本以現價估算</div>
+    </div>
+    <div class="empty">尚無模擬持股，輸入股票代號加入第一筆</div>
+  </div>
+</body>
+</html>

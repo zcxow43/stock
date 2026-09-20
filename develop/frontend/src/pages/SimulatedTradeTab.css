@@ -1,0 +1,194 @@
+/* 模擬交易 tab (specs/frontend/simulated-trade.md) — fixed dark palette, the exact same
+   table as specs/frontend/strategy.md / stock-list.md (「同一個頁面的不同分頁不得有兩套顏色」).
+   Literal hex only; must never shift with prefers-color-scheme. This file is owned solely by
+   this tab — it reuses a handful of `StockListPage.css`'s generic, page-shell-level classes
+   (.sl-table, .sl-btn, .sl-up/.sl-down/.sl-flat/.sl-muted, .sl-empty, .sl-error, .sl-toast)
+   rather than redefining them, so a color change to those shared rules still applies here. */
+
+.simulated-trade-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- 加入列 ---------- */
+
+.sim-add-bar {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.sim-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sim-add-input {
+  width: 280px;
+  height: 38px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.sim-add-input::placeholder {
+  color: #6b7c90;
+}
+
+.sim-add-input:focus {
+  border-color: #3e8fd8;
+}
+
+.sim-add-error {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: inline-block;
+}
+
+.sim-add-hint {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #93a4b8;
+}
+
+/* ---------- 摘要列 ---------- */
+
+.sim-summary {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.sim-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.sim-summary-count {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.sim-summary-count b {
+  color: #e6edf5;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sim-summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sim-summary-label {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+/* No `color` declared here on purpose — the default #e6edf5 comes from inheriting
+   `.stock-list-page`'s own `color: #e6edf5` (see StockListPage.css's header comment on the
+   same cascade issue); .sl-up/.sl-down/.sl-flat/.sl-muted set their own explicit color and
+   always win over an inherited value regardless of stylesheet load order. */
+.sim-summary-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-fee-note {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #93a4b8;
+}
+
+/* ---------- 載入中 ---------- */
+
+.sim-loading {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 56px 24px;
+  text-align: center;
+  color: #93a4b8;
+  font-size: 14px;
+}
+
+/* ---------- 持股表格 ---------- */
+
+.sim-stock-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sim-stock-name {
+  font-size: 13px;
+}
+
+/* 現價日不等於 asOfDate 時的次要文字色 — the one cell-level color override this table needs
+   beyond the shared 漲跌 classes. */
+.sim-stale-date {
+  color: #93a4b8;
+}
+
+.sim-del-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: #93a4b8;
+  cursor: pointer;
+}
+
+.sim-del-btn:hover:not(:disabled) {
+  color: #e04b45;
+}
+
+.sim-del-btn:disabled {
+  color: #4a5866;
+  cursor: default;
+}
+
+/* Rows are not clickable (spec: 「列本體不可點、游標為預設箭頭」), so this table
+   deliberately does not use the shared `.sl-row` class (which also sets `cursor: pointer`).
+   The hover background is still shown, per `## Visual Style`「表格列 hover 背景」. */
+.sim-holdings-table tbody tr:hover td {
+  background: #1d2a38;
+}
+
+/* 加入成功時的列閃爍 — one iteration, same background as the row-hover color. */
+@keyframes sim-row-flash {
+  0% {
+    background: transparent;
+  }
+  25% {
+    background: #1d2a38;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.sim-row-flash td {
+  animation: sim-row-flash 1.2s ease;
+}

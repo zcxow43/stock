@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stock.mapper.SimulatedTradeMapper">
+
+    <insert id="insert" parameterType="com.stock.domain.SimulatedTrade"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO simulated_trade (stock_id, buy_date, buy_price, shares)
+        VALUES (#{stockId}, #{buyDate}, #{buyPrice}, #{shares})
+    </insert>
+
+    <select id="findAllOrderedByBuyDateDescStockIdAsc" resultType="com.stock.domain.SimulatedTrade">
+        SELECT id, stock_id, buy_date, buy_price, shares, created_at, updated_at
+        FROM simulated_trade
+        ORDER BY buy_date DESC, stock_id ASC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM simulated_trade WHERE id = #{id}
+    </delete>
+
+</mapper>

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -35,13 +36,20 @@ public class ErrorResponse {
     // (UNKNOWN_STOCK_ID). The uniqueness key here is the (stockId, buyDate) combination, not
     // stockId alone (specs/backend/strategy-backtest.md, "一筆＝一個買進日").
     private final List<BacktestDuplicateItemDto> duplicatedItems;
+    // simulated-trade.md wire contract: DUPLICATE_SIMULATED_TRADE's "buyDate" key, paired with the
+    // existing "stockId" field above — distinct from DUPLICATE_BACKTEST_ITEM's "duplicatedItems"
+    // array, since this endpoint only ever names the one already-existing (stockId, buyDate) pair.
+    private final LocalDate buyDate;
+    // simulated-trade.md wire contract: SIMULATED_TRADE_NOT_FOUND's "id" key — the path {id} that
+    // matched no row.
+    private final Long id;
 
     public ErrorResponse(String code) {
-        this(code, null, null, null, null, null, null, null, null, null, null);
+        this(code, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public ErrorResponse(String code, List<String> unknownIds) {
-        this(code, unknownIds, null, null, null, null, null, null, null, null, null);
+        this(code, unknownIds, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
@@ -58,7 +66,9 @@ public class ErrorResponse {
                            @JsonProperty("duplicated") List<String> duplicated,
                            @JsonProperty("strategy") String strategy,
                            @JsonProperty("param") String param,
-                           @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems) {
+                           @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems,
+                           @JsonProperty("buyDate") LocalDate buyDate,
+                           @JsonProperty("id") Long id) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -70,139 +80,166 @@ public class ErrorResponse {
         this.strategy = strategy;
         this.param = param;
         this.duplicatedItems = duplicatedItems;
+        this.buyDate = buyDate;
+        this.id = id;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
-        return new ErrorResponse("PAGE_SIZE_EXCEEDED", null, limit, null, null, null, null, null, null, null, null);
+        return new ErrorResponse("PAGE_SIZE_EXCEEDED", null, limit, null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     public static ErrorResponse tooManyStockIds(int limit) {
-        return new ErrorResponse("TOO_MANY_STOCK_IDS", null, limit, null, null, null, null, null, null, null, null);
+        return new ErrorResponse("TOO_MANY_STOCK_IDS", null, limit, null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     public static ErrorResponse invalidSortField(List<String> allowed) {
         return new ErrorResponse("INVALID_SORT_FIELD", null, null, allowed, null, null, null, null, null, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse stockNotFound(String stockId) {
-        return new ErrorResponse("STOCK_NOT_FOUND", null, null, null, stockId, null, null, null, null, null, null);
+        return new ErrorResponse("STOCK_NOT_FOUND", null, null, null, stockId, null, null, null, null, null, null,
+                null, null);
     }
 
     public static ErrorResponse invalidInterval(List<Integer> allowedIntervals) {
         return new ErrorResponse("INVALID_INTERVAL", null, null, allowedIntervals, null, null, null, null, null,
-                null, null);
+                null, null, null, null);
     }
 
     public static ErrorResponse invalidStockPayload(List<String> fields) {
         return new ErrorResponse("INVALID_STOCK_PAYLOAD", null, null, null, null, fields, null, null, null, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse unknownStrategy(List<String> unknown) {
-        return new ErrorResponse("UNKNOWN_STRATEGY", null, null, null, null, null, unknown, null, null, null, null);
+        return new ErrorResponse("UNKNOWN_STRATEGY", null, null, null, null, null, unknown, null, null, null, null,
+                null, null);
     }
 
     public static ErrorResponse duplicateStrategy(List<String> duplicated) {
         return new ErrorResponse("DUPLICATE_STRATEGY", null, null, null, null, null, null, duplicated, null, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse tooManyStocks() {
-        return new ErrorResponse("TOO_MANY_STOCKS", null, null, null, null, null, null, null, null, null, null);
+        return new ErrorResponse("TOO_MANY_STOCKS", null, null, null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     public static ErrorResponse invalidRisePercent(String strategy) {
         return new ErrorResponse("INVALID_RISE_PERCENT", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse presetNotApplicable(String strategy) {
         return new ErrorResponse("PRESET_NOT_APPLICABLE", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse daysNotApplicable(String strategy) {
         return new ErrorResponse("DAYS_NOT_APPLICABLE", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidStrategyDays(String strategy) {
-        return new ErrorResponse("INVALID_DAYS", null, null, null, null, null, null, null, strategy, null, null);
+        return new ErrorResponse("INVALID_DAYS", null, null, null, null, null, null, null, strategy, null, null,
+                null, null);
     }
 
     public static ErrorResponse paramNotApplicable(String strategy, String param) {
         return new ErrorResponse("PARAM_NOT_APPLICABLE", null, null, null, null, null, null, null, strategy, param,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidDropDays(String strategy) {
         return new ErrorResponse("INVALID_DROP_DAYS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidRiseDays(String strategy) {
         return new ErrorResponse("INVALID_RISE_DAYS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidDropPercent(String strategy) {
         return new ErrorResponse("INVALID_DROP_PERCENT", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidBuyDate(String stockId) {
         return new ErrorResponse("INVALID_BUY_DATE", null, null, null, stockId, null, null, null, null, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidInvestors(String strategy) {
         return new ErrorResponse("INVALID_INVESTORS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidWindowDays(String strategy) {
         return new ErrorResponse("INVALID_WINDOW_DAYS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidRatioPercent(String strategy) {
         return new ErrorResponse("INVALID_RATIO_PERCENT", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidBuyDays(String strategy) {
         return new ErrorResponse("INVALID_BUY_DAYS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidTopN(String strategy) {
-        return new ErrorResponse("INVALID_TOP_N", null, null, null, null, null, null, null, strategy, null, null);
+        return new ErrorResponse("INVALID_TOP_N", null, null, null, null, null, null, null, strategy, null, null,
+                null, null);
     }
 
     public static ErrorResponse invalidFastPeriod(String strategy) {
         return new ErrorResponse("INVALID_FAST_PERIOD", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidSlowPeriod(String strategy) {
         return new ErrorResponse("INVALID_SLOW_PERIOD", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidMacdPeriods(String strategy) {
         return new ErrorResponse("INVALID_MACD_PERIODS", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse invalidJThreshold(String strategy) {
         return new ErrorResponse("INVALID_J_THRESHOLD", null, null, null, null, null, null, null, strategy, null,
-                null);
+                null, null, null);
     }
 
     public static ErrorResponse duplicateBacktestItem(List<BacktestDuplicateItemDto> duplicatedItems) {
         return new ErrorResponse("DUPLICATE_BACKTEST_ITEM", null, null, null, null, null, null, null, null, null,
-                duplicatedItems);
+                duplicatedItems, null, null);
+    }
+
+    /** NO_PRICE_BEFORE_TODAY (specs/backend/simulated-trade.md, "驗證與錯誤") reuses the "stockId" key. */
+    public static ErrorResponse noPriceBeforeToday(String stockId) {
+        return new ErrorResponse("NO_PRICE_BEFORE_TODAY", null, null, null, stockId, null, null, null, null, null,
+                null, null, null);
+    }
+
+    /** DUPLICATE_SIMULATED_TRADE (specs/backend/simulated-trade.md, "驗證與錯誤"): {stockId, buyDate}. */
+    public static ErrorResponse duplicateSimulatedTrade(String stockId, LocalDate buyDate) {
+        return new ErrorResponse("DUPLICATE_SIMULATED_TRADE", null, null, null, stockId, null, null, null, null,
+                null, null, buyDate, null);
+    }
+
+    /** SIMULATED_TRADE_NOT_FOUND (specs/backend/simulated-trade.md, "驗證與錯誤"): {id}. */
+    public static ErrorResponse simulatedTradeNotFound(Long id) {
+        return new ErrorResponse("SIMULATED_TRADE_NOT_FOUND", null, null, null, null, null, null, null, null, null,
+                null, null, id);
     }
 
     public String getCode() {
@@ -247,5 +284,13 @@ public class ErrorResponse {
 
     public List<BacktestDuplicateItemDto> getDuplicatedItems() {
         return duplicatedItems;
+    }
+
+    public LocalDate getBuyDate() {
+        return buyDate;
+    }
+
+    public Long getId() {
+        return id;
     }
 }

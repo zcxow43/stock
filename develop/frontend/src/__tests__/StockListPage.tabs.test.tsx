@@ -87,11 +87,11 @@ describe('StockListPage tabs', () => {
     expect(screen.getByRole('tab', { name: '總覽' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('shows three tabs in order 總覽／策略／動態', async () => {
+  it('shows four tabs in order 總覽／策略／動態／模擬交易', async () => {
     renderAt('/stocks')
     await waitFor(() => expect(screen.getByText('台積電')).toBeInTheDocument())
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['總覽', '策略', '動態'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['總覽', '策略', '動態', '模擬交易'])
   })
 
   it('lands on 動態 when the URL already has ?tab=momentum', async () => {

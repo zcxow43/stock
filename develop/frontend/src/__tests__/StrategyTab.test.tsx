@@ -6001,7 +6001,12 @@ describe('StrategyTab', () => {
     }
     expect(idx.cancelAll).toBe(-1)
     expect(idx.priceThreshold).toBe(-1)
-    expect(Array.from(document.querySelectorAll('.st-batch-controls input[type=checkbox]')).map((el) => el.getAttribute('aria-label'))).toEqual(['取消全選', '取消買進價高於金額元', '隱藏資料不齊（無賣出日）'])
+    expect(Array.from(document.querySelectorAll('.st-batch-controls input[type=checkbox]')).map((el) => el.getAttribute('aria-label'))).toEqual([
+      '取消全選',
+      '取消買進價高於金額元',
+      '僅選取報酬率百分比以上',
+      '隱藏資料不齊（無賣出日）',
+    ])
     expect(idx.cost).toBeLessThan(idx.returnPct)
     expect(idx.returnPct).toBeLessThan(idx.profit)
   })
@@ -7401,6 +7406,219 @@ describe('StrategyTab', () => {
       expect(screen.getByRole('button', { name: '收合 2330 的訊號日明細' })).toBeInTheDocument()
       expect(sortHeaderIcon('買進價')).toBe('▼')
       expect(topLevelRowStockIds()).toEqual(orderBefore)
+    })
+  })
+
+  // ---------------- 「僅選取報酬率 n% 以上」勾選框 ----------------
+  describe('「僅選取報酬率 n% 以上」勾選框', () => {
+    // Reuses `priceThresholdScanResponse`/`priceThresholdBacktestResponse` verbatim: 2330 has
+    // two buy dates (08-27 @ 4.17%, 08-20 @ -3.85%, straddling the default n=2 threshold so
+    // the parent must go 半選 either way), 1101 sits at exactly 2.00% (the 「含等於」 boundary),
+    // 3008 has a buy price but no sell date (`returnPercent: null`, hidden by 隱藏資料不齊 by
+    // default), AAAA is a clean 10% winner, CCCC has neither buyPrice nor sellDate (also
+    // hidden by default). `runPriceThresholdScan` additionally reveals both via
+    // `revealIncompletePositions()`.
+
+    function returnThresholdCheckbox(): HTMLInputElement {
+      return screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement
+    }
+
+    function returnThresholdInputEl(): HTMLInputElement {
+      return screen.getByLabelText('僅選取報酬率的百分比門檻') as HTMLInputElement
+    }
+
+    it('places 僅選取報酬率 between 取消買進價高於 and 隱藏資料不齊, defaults to unchecked with n=2, and exists only after a successful 回測', async () => {
+      scanResponder = () => boxScanResponse()
+      backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+
+      expect(screen.queryByLabelText('僅選取報酬率百分比以上')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      expect(screen.queryByLabelText('僅選取報酬率百分比以上')).not.toBeInTheDocument() // 掃描成功、回測進行中
+
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      expect(returnThresholdCheckbox()).not.toBeChecked()
+      expect(returnThresholdInputEl().value).toBe('2')
+
+      expect(
+        Array.from(document.querySelectorAll('.st-batch-controls input[type=checkbox]')).map((el) => el.getAttribute('aria-label')),
+      ).toEqual(['取消全選', '取消買進價高於金額元', '僅選取報酬率百分比以上', '隱藏資料不齊（無賣出日）'])
+
+      // 重新掃描時移除
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      expect(screen.queryByLabelText('僅選取報酬率百分比以上')).not.toBeInTheDocument()
+    })
+
+    it('checking it unchecks visible sub-threshold and null-return lots (still shown, grayed), keeps qualifying lots checked (含等於), sorts by 報酬率 descending, and only qualifying lots count toward totals', async () => {
+      await runPriceThresholdScan()
+      fireEvent.click(returnThresholdCheckbox())
+
+      // 達標（≥2%，含恰為 2.00% 的 1101）維持／勾回勾選。
+      expect(screen.getByLabelText('納入 1101 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 AAAA 計算')).toBeChecked()
+      // 不達標（含 null）取消勾選，但仍顯示在表上、整列反灰。
+      expect(screen.getByLabelText('納入 3008 計算')).not.toBeChecked()
+      expect(screen.getByLabelText('納入 CCCC 計算')).not.toBeChecked()
+      const row3008 = screen.getByText('3008 大立光').closest('tr') as HTMLElement
+      expect(row3008.className).toContain('st-row-unchecked')
+
+      // 逐筆判斷：2330 兩筆一勾一不勾（都可見，未被其他兩個框隱藏），父列呈半選。
+      const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
+      expect(parentCheckbox.checked).toBe(false)
+      expect(parentCheckbox.indeterminate).toBe(true)
+
+      // 「共 N 檔」與「另 K 筆已隱藏」不受影響。
+      expect(screen.getByText('命中彙總 — 共 5 檔')).toBeInTheDocument()
+      expect(screen.queryByText(/已隱藏/)).not.toBeInTheDocument()
+
+      // 「另 M 筆未勾選，未計入」隨之更新；「另 N 筆尚無可賣出交易日，未計入」不變（3008／
+      // CCCC 原本就因無賣出日而未計入，不因此再多算一次未勾選）。
+      expect(screen.getByText('另 2 筆尚無可賣出交易日，未計入')).toBeInTheDocument()
+      expect(screen.getByText('另 1 筆未勾選，未計入')).toBeInTheDocument()
+
+      // 三個總計只含達標的筆：2330@0827(480,20000)、1101(500,10000)、AAAA(100,10000)。
+      expect(Array.from(document.querySelectorAll('.st-totals-anchor .st-total-value')).map((el) => el.textContent)).toEqual([
+        '1,080,000',
+        '3.70%',
+        '40,000',
+      ])
+
+      // 勾選的同時改為依報酬率降冪排序。
+      expect(sortHeaderIcon('報酬率')).toBe('▼')
+      expect(sortHeaderIcon('買進價')).toBe('↕')
+      expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+      const returnHeader = screen.getByText('報酬率').closest('th') as HTMLElement
+      expect(returnHeader.className).toContain('st-sort-header-active')
+      expect(topLevelRowStockIds()).toEqual(['AAAA A股', '2330 台積電', '1101 台泥', '3008 大立光', 'CCCC C股'])
+    })
+
+    it('unchecking rechecks exactly the lots it unchecked, leaves the sort unchanged, and never touches a manually-unchecked qualifying lot', async () => {
+      await runPriceThresholdScan()
+      // 先手動取消一筆達標的筆（不在本框的取消範圍內）。
+      fireEvent.click(screen.getByLabelText('納入 AAAA 計算'))
+      expect(screen.getByLabelText('納入 AAAA 計算')).not.toBeChecked()
+
+      fireEvent.click(returnThresholdCheckbox()) // 勾選 -> 取消 2330@0820／3008／CCCC
+      fireEvent.click(returnThresholdCheckbox()) // 取消勾選 -> 只把它取消掉的那些筆勾回
+
+      expect(sortHeaderIcon('報酬率')).toBe('▼') // 取消勾選不還原排序
+
+      fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+      expect(screen.getByLabelText('納入 2330 2026-08-27 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked() // 它取消掉的筆已勾回
+      expect(screen.getByLabelText('納入 3008 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 CCCC 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 1101 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 AAAA 計算')).not.toBeChecked() // 其餘筆（手動取消的達標筆）完全不動
+    })
+
+    it('leaves lots hidden by 隱藏資料不齊（無賣出日） completely untouched', async () => {
+      await runPriceThresholdScan()
+      fireEvent.click(screen.getByLabelText('隱藏資料不齊（無賣出日）')) // 重新藏起 3008／CCCC
+      expect(screen.queryByLabelText('納入 3008 計算')).not.toBeInTheDocument()
+
+      fireEvent.click(returnThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
+
+      fireEvent.click(screen.getByLabelText('隱藏資料不齊（無賣出日）')) // 重新顯示以檢查勾選狀態
+      expect(screen.getByLabelText('納入 3008 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 CCCC 計算')).toBeChecked()
+    })
+
+    it('leaves lots hidden by 取消買進價高於 N 元 completely untouched', async () => {
+      await runPriceThresholdScan()
+      fireEvent.click(priceThresholdCheckbox()) // 隱藏 2330@0820(520) 與 3008(600)，兩者連帶取消勾選
+
+      fireEvent.click(returnThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
+
+      fireEvent.click(priceThresholdCheckbox()) // 取消勾選 -> 重新顯示並勾回，未受本框影響
+      fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+      expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked()
+      expect(screen.getByLabelText('納入 3008 計算')).toBeChecked()
+    })
+
+    it('remains checked when a below-threshold row is manually rechecked, and 取消全選 clears it without touching the sort', async () => {
+      await runPriceThresholdScan()
+      fireEvent.click(returnThresholdCheckbox())
+      fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+      fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算')) // 手動勾回一筆低於門檻的列
+      expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked()
+      expect(returnThresholdCheckbox()).toBeChecked() // 本框仍維持勾選
+      expect(sortHeaderIcon('報酬率')).toBe('▼')
+
+      fireEvent.click(screen.getByLabelText('取消全選'))
+      expect(returnThresholdCheckbox()).not.toBeChecked()
+      expect(sortHeaderIcon('報酬率')).toBe('▼') // 排序不因此改變
+    })
+
+    it('disables the number input while checked, and edits while unchecked toggle nothing', async () => {
+      await runPriceThresholdScan()
+      fireEvent.click(returnThresholdCheckbox())
+      expect(returnThresholdInputEl()).toBeDisabled()
+      fireEvent.click(returnThresholdCheckbox())
+      expect(returnThresholdInputEl()).toBeEnabled()
+
+      const checkedBefore = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+        .filter((cb) => cb !== returnThresholdCheckbox())
+        .map((cb) => cb.checked)
+      fireEvent.change(returnThresholdInputEl(), { target: { value: '5' } })
+      const checkedAfter = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+        .filter((cb) => cb !== returnThresholdCheckbox())
+        .map((cb) => cb.checked)
+      expect(checkedAfter).toEqual(checkedBefore)
+    })
+
+    it('accepts a negative threshold (-3)', async () => {
+      await runPriceThresholdScan()
+      fireEvent.change(returnThresholdInputEl(), { target: { value: '-3' } })
+      expect(returnThresholdCheckbox()).not.toBeDisabled()
+    })
+
+    it.each(['', '-100.1', '100.1', '1.234'])(
+      'disables the checkbox and shows the #F09A94 hint for an invalid threshold (%s)',
+      async (invalid) => {
+        await runPriceThresholdScan()
+        fireEvent.change(returnThresholdInputEl(), { target: { value: invalid } })
+        expect(returnThresholdCheckbox().disabled).toBe(true)
+        expect(screen.getByText('報酬率需介於 -100 ~ 100、最多兩位小數')).toBeInTheDocument()
+      },
+    )
+
+    it('stays enabled even when every visible lot already qualifies, and checking it only performs the sort', async () => {
+      // 隱藏資料不齊 保持預設勾選（3008／CCCC 隱藏），顯示中只剩 2330（兩筆）／1101／AAAA，
+      // 用一個極低的門檻讓它們全部達標。
+      scanResponder = () => priceThresholdScanResponse()
+      backtestResponder = () => ({ status: 200, body: priceThresholdBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      fireEvent.change(returnThresholdInputEl(), { target: { value: '-10' } })
+      expect(returnThresholdCheckbox()).not.toBeDisabled()
+
+      const checkedBefore = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+        .filter((cb) => cb !== returnThresholdCheckbox())
+        .map((cb) => cb.checked)
+      fireEvent.click(returnThresholdCheckbox())
+      const checkedAfter = (screen.getAllByRole('checkbox') as HTMLInputElement[])
+        .filter((cb) => cb !== returnThresholdCheckbox())
+        .map((cb) => cb.checked)
+      expect(checkedAfter).toEqual(checkedBefore) // 沒有筆被取消
+      expect(sortHeaderIcon('報酬率')).toBe('▼') // 但排序仍然發生
+    })
+
+    it('never issues a network request when toggling', async () => {
+      await runPriceThresholdScan()
+      const callsBefore = fetchMock.mock.calls.length
+      fireEvent.click(returnThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
+      expect(fetchMock.mock.calls.length).toBe(callsBefore)
     })
   })
 })

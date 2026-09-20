@@ -188,4 +188,27 @@
         WHERE trade_date BETWEEN #{startDate} AND #{endDate}
     </select>
 
+    <select id="findLatestPositiveCloseBefore" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, close_price
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date &lt; #{beforeDate} AND close_price > 0
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestPositiveCloseOnOrBeforeByStockIds" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, close_price
+        FROM (
+            SELECT stock_id, trade_date, close_price,
+                   ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY trade_date DESC) AS rn
+            FROM stock_daily_price
+            WHERE stock_id IN
+            <foreach collection="stockIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            AND trade_date &lt;= #{asOfDate} AND close_price > 0
+        ) ranked
+        WHERE rn = 1
+    </select>
+
 </mapper>

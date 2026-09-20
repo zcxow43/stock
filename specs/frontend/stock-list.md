@@ -1,7 +1,7 @@
 ---
 status: done
 title: "股票總覽清單頁"
-requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入該檔的日 K 圖；此頁改為分頁式，分頁一為總覽（可新增／修改／下市股票），分頁二為策略，分頁三為動態；頁籤列上方另有一個三個分頁共用的「只看上市普通股」設定，預設排除 ETF"
+requirement: "前端 K 線瀏覽 — 使用者要能看到系統中總共有哪些股票，並從清單點選進入該檔的日 K 圖；此頁改為分頁式，分頁一為總覽（可新增／修改／下市股票），分頁二為策略，分頁三為動態，分頁四為模擬交易；頁籤列上方另有一個前三個分頁共用的「只看上市普通股」設定，預設排除 ETF"
 depends_on: []
 ---
 
@@ -9,17 +9,18 @@ depends_on: []
 
 ## Overview
 
-系統的進入點，一個**分頁式頁面**，含三個分頁：
+系統的進入點，一個**分頁式頁面**，含四個分頁：
 
 | 頁籤 | 內容 | 規格 |
 |---|---|---|
 | 一、總覽 | 全市場股票表格，附最新收盤與漲跌；可搜尋、篩選、點選進入個股日 K 圖，並可新增／修改／下市股票 | 本檔 |
 | 二、策略 | 型態掃描 | `specs/frontend/strategy.md` |
 | 三、動態 | 產業別漲幅（漲幅平均／漲幅加總） | `specs/frontend/momentum.md` |
+| 四、模擬交易 | 輸入代號加入模擬持股，列出未實現損益 | `specs/frontend/simulated-trade.md` |
 
-本檔擁有分頁容器本身與分頁一的全部內容；分頁二、三的內容由各自的 spec 定義。
+本檔擁有分頁容器本身與分頁一的全部內容；分頁二、三、四的內容由各自的 spec 定義。
 
-**本檔另外擁有一個頁面層級的設定：「只看上市普通股」**，位置在頁籤列的**上方**，三個分頁共用同一份狀態。詳見下方「頁面層級設定」。
+**本檔另外擁有一個頁面層級的設定：「只看上市普通股」**，位置在頁籤列的**上方**，前三個分頁共用同一份狀態（模擬交易分頁不受它影響，見下）。詳見下方「頁面層級設定」。
 
 路由：`/stocks`（亦為應用程式根路徑 `/` 的導向目標）。分頁狀態反映在網址上（`/stocks?tab=overview`／`?tab=strategy`／`?tab=momentum`），使切換分頁後重新整理或分享網址能回到同一分頁；`tab` 缺漏或無法辨識時退回總覽。
 
@@ -27,15 +28,15 @@ depends_on: []
 
 **「只看上市普通股（排除 ETF、特別股、TDR）」勾選框，預設為勾選。**
 
-擺在**頁籤列的上方、靠右對齊**（與頁首列右側的「共 N 檔」同一條垂直線），不在任何一個分頁內部——它決定的是「這個系統現在看的是哪一批股票」，三個分頁共用同一個母體，不是各自的查詢條件。放進任一分頁會讓另外兩個分頁的行為變成一個看不見的副作用。
+擺在**頁籤列的上方、靠右對齊**（與頁首列右側的「共 N 檔」同一條垂直線），不在任何一個分頁內部——它決定的是「這個系統現在看的是哪一批股票」，前三個分頁共用同一個母體，不是各自的查詢條件。放進任一分頁會讓其他分頁的行為變成一個看不見的副作用。
 
 | 項目 | 行為 |
 |---|---|
 | 位置 | 頁籤列上方獨立一列，**靠右對齊** |
 | 預設 | 勾選（只看普通股） |
-| 狀態範圍 | 頁面層級單一狀態，三個分頁共用；切換分頁時保持不變 |
+| 狀態範圍 | 頁面層級單一狀態，前三個分頁共用；切換分頁時保持不變 |
 | 重新載入 | **回到預設（勾選）**，不寫入 `localStorage`、不進網址參數 |
-| 影響 | 三個分頁送出的請求一律帶 `commonStocksOnly`，值即此勾選框的狀態 |
+| 影響 | 前三個分頁送出的請求一律帶 `commonStocksOnly`，值即此勾選框的狀態；模擬交易分頁不帶 |
 
 切換這個勾選框時，**當前分頁立即以新的值重新查詢**；另外兩個分頁不預先重查，等使用者切過去時再以當下的值查詢。理由是三個分頁的查詢成本差異很大（策略掃描是全市場逐檔判定），預先重查兩個使用者當下看不到的分頁只是浪費。
 
@@ -46,6 +47,7 @@ depends_on: []
 | 一、總覽 | `GET /api/stocks` 的 `commonStocksOnly` | 清單與「共 N 檔」都只計普通股 |
 | 二、策略 | `POST /api/strategies/scan` 的 `commonStocksOnly`；同頁「同步日 K 至今日」的 `POST /api/stocks/sync/backfill` 的 `commonStocksOnly` | 掃描母體只含普通股，且該分頁的日 K 同步母體同樣只含普通股（見 `specs/frontend/strategy.md`） |
 | 三、動態 | `GET /api/momentum/gain` 的 `commonStocksOnly` | 漲幅計算母體只含普通股（見 `specs/frontend/momentum.md`） |
+| 四、模擬交易 | **不送** | 本頁沒有母體篩選——使用者指名哪一檔就是哪一檔（含 ETF 與已下市股票）。切換這個勾選框時本頁不重新查詢（見 `specs/frontend/simulated-trade.md`） |
 
 **這個設定不寫任何資料表**——它只改查詢帶的參數。`stock` 的內容、`is_active`、以及每日行情回補的標的範圍都不受影響：取消勾選就會立刻看回全部在市股票。
 
@@ -59,7 +61,7 @@ depends_on: []
 
 1. **頁首列** — 左側標題「股票總覽」，右側顯示「共 N 檔」（N 取自 API 的 `total`，隨篩選條件變動）。
 1a. **頁面層級設定列** — 位於頁首列與頁籤列之間，見下方「頁面層級設定」。
-2. **頁籤列** — 三個頁籤「總覽」「策略」「動態」，依此順序，位於頁首列下方、篩選列上方。目前分頁以底線與主要文字色標示，非目前分頁為次要文字色。切換分頁不重新載入整頁。
+2. **頁籤列** — 四個頁籤「總覽」「策略」「動態」「模擬交易」，依此順序，位於頁首列下方、篩選列上方。目前分頁以底線與主要文字色標示，非目前分頁為次要文字色。切換分頁不重新載入整頁。
 3. **篩選列** — 搜尋框、市場別下拉、「顯示已下市」核取方塊，右側「新增股票」主要按鈕。
 4. **資料表格 + 分頁列**。表格最右新增「操作」欄，每列含「編輯」與「下市」兩個次要按鈕；已下市的列該按鈕改為「重新上架」。
 
@@ -286,6 +288,11 @@ depends_on: []
 - [x] 表格其他欄位（代號、名稱、收盤價等）仍為主要文字色 `#E6EDF5`，未被修正連帶改色
 - [x] 以上顏色在 `prefers-color-scheme: dark` 與 `light` 下完全一致
 
+### 第四個頁籤「模擬交易」
+- [x] 頁籤列由左至右為「總覽」「策略」「動態」「模擬交易」，第四個頁籤的內容由 `specs/frontend/simulated-trade.md` 定義
+- [x] 點選「模擬交易」時網址為 `/stocks?tab=simulated`，重新整理仍停在該分頁；`tab` 為無法辨識的值時仍退回總覽
+- [x] 切換頁面層級的「只看上市普通股」時，模擬交易分頁不重新查詢、其請求不帶 `commonStocksOnly`；其餘三個分頁行為不變
+
 ## Execution Result
 - Status: DONE
 - Files changed:
@@ -383,3 +390,17 @@ Adds the page-level "只看上市普通股" setting per the spec's 10 previously
 **驗證**：新增 `StockListPage.cellColorCascade.test.ts`，在真實 Chromium 中載入實際的 `StockListPage.css`，以 `getComputedStyle` 讀取儲存格計算後的顏色，涵蓋漲／跌／平、未勾選列反灰、以及無漲跌類別的一般欄位維持 `#E6EDF5`，並於 `prefers-color-scheme: dark` 與 `light` 各跑一次。已實證「修正前失敗、修正後通過」：暫時還原樣式後 2/4 失敗（`expected 'rgb(230, 237, 245)' to be 'rgb(224, 75, 69)'`），恢復修正後 4/4 通過。為此將 `playwright@1.62.1` 加為前端 devDependency（與 `docs/frontend/_scripts` 已解析的版本相同，未重新下載瀏覽器）。`npm test` 239/239、`npm run build` 無錯誤。
 
 **變更檔案**：`src/pages/StockListPage.css`、`src/__tests__/StockListPage.cellColorCascade.test.ts`（新）、`package.json`、`package-lock.json`。
+
+### Increment 6 — 2026-09-20
+
+Adds the fourth tab「模擬交易」to the tab container per the spec's 3 previously-unchecked Acceptance Criteria under「第四個頁籤「模擬交易」」. This increment owns the tab shell only — the tab's actual content (代號輸入、加入、持股表格、刪除) belongs to `specs/frontend/simulated-trade.md`, executed as a dependent increment right after this one and already `done`.
+
+- Files changed:
+  - `develop/frontend/src/pages/StockListPage.tsx` — `TabKey` widened to `'overview' | 'strategy' | 'momentum' | 'simulated'`; `resolveTab` now accepts `simulated` too (anything else still falls back to `overview`); added the fourth `role="tab"` button labelled 「模擬交易」 after 「動態」. Unlike the three panels before it, the new panel is **not** kept permanently mounted with the other three's `display:none`-but-mounted pattern — its content (`SimulatedTradeTab`, from the dependent spec) is only rendered while `tab === 'simulated'`, so switching away unmounts it and switching back remounts it, giving simulated-trade.md's own "切到別的分頁再切回會重新取得" requirement for free without adding a bespoke re-fetch-on-visibility mechanism. The wrapping `data-testid="sl-tabpanel-simulated"` div still exists unconditionally so its `display` can be asserted the same way as the other three panels' in tests. The panel intentionally does not receive `commonStocksOnly` as a prop — this tab has no population filter, so the page-level checkbox cannot affect it merely by never being read.
+  - `develop/frontend/src/__tests__/StockListPage.tabs.test.tsx` — updated the pre-existing "shows three tabs in order 總覽／策略／動態" assertion to expect all four tabs in order (`總覽`/`策略`/`動態`/`模擬交易`), since a fourth tab now legitimately exists; no other assertion in this file changed.
+  - `develop/frontend/src/__tests__/StockListPage.simulatedTab.test.tsx` (new, 4 tests) — the fourth tab appears in order and its own direct-URL/reload navigation works; an unrecognised `tab` value still falls back to 總覽 with the new tab in the mix; `GET /api/simulated-trades` fires once on entering the tab and again on returning to it after switching away; toggling the page-level 「只看上市普通股」 checkbox while on this tab neither requeries it nor ever puts `commonStocksOnly` on its request.
+- Notes:
+  - The remaining 16 Acceptance Criteria under this tab's actual content live in and are verified by `specs/frontend/simulated-trade.md` (executed immediately after this increment, using the tab shell built here) — this increment's own scope is exactly the 3 items under 「第四個頁籤「模擬交易」」, all now checked.
+  - Live-verified together with `specs/frontend/simulated-trade.md`'s own verification pass (same session, same running dev/backend servers) — see that spec's `## Execution Result` for the full real-browser walkthrough, which also exercises this tab's shell (URL, reload-persistence, the page-level checkbox not affecting it).
+  - `npm test` → 514/514 passing (488 pre-existing + 26 new across this file and `SimulatedTradeTab.test.tsx`); `npm run build` (`tsc -b && vite build`) clean. The one known-flaky test named in this task's instructions (`StrategyTab.test.tsx`'s "disables the stock-search input and shows a hint once 200 stocks are selected") was not touched and was not observed failing in the final full-suite run, consistent with it being flaky rather than reliably broken.
+  - Reviewed against `code-quality` before reporting done: the only new logic here is a widened union type, one more button, and switching one panel from "always mounted, display-toggled" to "conditionally mounted" — no new API calls, subscriptions, timers, or loops at this layer (those live in `SimulatedTradeTab` itself, reviewed under `specs/frontend/simulated-trade.md`). No issues found.

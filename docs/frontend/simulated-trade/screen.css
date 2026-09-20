@@ -1,0 +1,76 @@
+/* 模擬交易分頁。Scoped by <body class="page-simtrade">.
+ *
+ * 色碼全部取自 specs/frontend/simulated-trade.md 的 ## Visual Style 表，
+ * 一律為固定十六進位值 —— 不得使用任何隨 prefers-color-scheme 改變的變數
+ * （.claude/rules/frontend.md 的顏色標準規則）。
+ */
+
+/* ---- 頁籤列（與其他分頁共用的形狀）---- */
+.tabs { display:flex; gap:24px; border-bottom:1px solid #26333F; margin-bottom:18px; }
+.tab { background:none; border:0; padding:10px 2px; font-family:inherit; font-size:14px;
+       color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
+
+.page-simtrade .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
+.page-simtrade .count { font-size:13px; color:#93A4B8; }
+.page-simtrade .count b { color:#E6EDF5; font-weight:600; }
+
+/* 只看上市普通股：頁面層級設定，位於頁籤列上方。本分頁不套用它（不重新查詢、
+   請求也不帶 commonStocksOnly），但勾選框本身照常顯示、不變灰。 */
+.pageopt { display:flex; align-items:center; justify-content:flex-end; gap:7px; font-size:13px; color:#E6EDF5;
+           background:#16202C; border:1px solid #26333F; border-radius:8px;
+           padding:4px 14px; margin-bottom:10px; }
+.pageopt .cb { width:15px; height:15px; border-radius:3px; background:#3E8FD8; border:1px solid #3E8FD8;
+               position:relative; flex:none; }
+.pageopt .cb::after { content:"\2713"; color:#FFFFFF; font-size:11px; position:absolute; left:2px; top:-2px; }
+
+/* ---- 加入列 ---- */
+.addbar { background:#16202C; border:1px solid #26333F; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+.addrow { display:flex; align-items:center; gap:10px; }
+.codein { width:280px; height:38px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+          color:#E6EDF5; font-size:14px; padding:0 12px; display:flex; align-items:center;
+          font-variant-numeric:tabular-nums; }
+.codein.ph { color:#6B7C90; }
+.codein.focus { border-color:#3E8FD8; }
+.codein .caret { display:inline-block; width:1px; height:18px; background:#3E8FD8; margin:0 1px; }
+.addbtn { height:38px; padding:0 24px; border:1px solid #3E8FD8; border-radius:6px;
+          background:#3E8FD8; color:#FFFFFF; font-size:14px; font-family:inherit;
+          display:flex; align-items:center; cursor:pointer; }
+.addbtn.dis { background:#16202C; border-color:#26333F; color:#4A5866; cursor:default; }
+.addhint { font-size:12px; color:#93A4B8; margin-top:9px; }
+
+/* ---- 摘要列 ---- */
+.sumbox { background:#16202C; border:1px solid #26333F; border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+.summary { display:flex; align-items:baseline; gap:30px; }
+.summary .cnt { font-size:13px; color:#93A4B8; }
+.summary .cnt b { color:#E6EDF5; font-size:15px; font-weight:700; }
+.summary .kv { display:flex; align-items:baseline; gap:8px; }
+.summary .k { font-size:13px; color:#93A4B8; }
+.summary .v { font-size:17px; font-weight:700; color:#E6EDF5; font-variant-numeric:tabular-nums; }
+.summary .v.none { font-size:15px; color:#6B7C90; }
+/* 漲跌色必須真的渲染出來：.summary .v 的宣告權重高於 .up/.down，不在這裡重述
+   就會被白字蓋掉（.claude/rules/frontend.md 的顏色規則、spec 的「以實際渲染出的顏色為準」）。 */
+.summary .v.up { color:#E04B45; }
+.summary .v.down { color:#16A75C; }
+.summary .v.flat { color:#93A4B8; }
+.feenote { font-size:12px; color:#93A4B8; margin-top:9px; }
+
+/* ---- 持股表格 ---- */
+.page-simtrade tbody tr.flash { background:#1D2A38; }
+.page-simtrade .sid { font-variant-numeric:tabular-nums; font-weight:600; color:#E6EDF5; }
+.page-simtrade .snm { color:#E6EDF5; margin-left:8px; }
+.del { background:none; border:0; padding:0; font-family:inherit; font-size:13px;
+       color:#93A4B8; cursor:pointer; }
+
+/* ---- 空狀態 ---- */
+.empty { background:#16202C; border:1px solid #26333F; border-radius:8px;
+         padding:56px; text-align:center; color:#6B7C90; font-size:14px; }
+
+/* ---- 買進日輸入（type="date"）---- */
+/* 與代號輸入同一組色碼（spec ## Visual Style：背景 #0F1620／邊框 #26333F／focus #3E8FD8）。 */
+.dlbl { font-size:13px; color:#93A4B8; margin-left:4px; }
+.datein { width:160px; height:38px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+          color:#E6EDF5; font-size:14px; padding:0 10px 0 12px; display:flex; align-items:center;
+          justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; }
+.datein.focus { border-color:#3E8FD8; }
+.datein .cal { flex:none; }

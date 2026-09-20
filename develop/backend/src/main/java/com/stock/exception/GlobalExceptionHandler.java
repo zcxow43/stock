@@ -222,6 +222,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyDate(e.getStockId()));
     }
 
+    @ExceptionHandler(InvalidStockIdException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStockId(InvalidStockIdException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_STOCK_ID"));
+    }
+
+    @ExceptionHandler(NoPriceBeforeTodayException.class)
+    public ResponseEntity<ErrorResponse> handleNoPriceBeforeToday(NoPriceBeforeTodayException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.noPriceBeforeToday(e.getStockId()));
+    }
+
+    @ExceptionHandler(DuplicateSimulatedTradeException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateSimulatedTrade(DuplicateSimulatedTradeException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.duplicateSimulatedTrade(e.getStockId(), e.getBuyDate()));
+    }
+
+    @ExceptionHandler(SimulatedTradeNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSimulatedTradeNotFound(SimulatedTradeNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.simulatedTradeNotFound(e.getId()));
+    }
+
     @ExceptionHandler(InvalidMetricException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));

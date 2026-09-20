@@ -126,4 +126,23 @@ public interface StockDailyPriceMapper {
      */
     int countDistinctTradeDatesInRange(@Param("startDate") LocalDate startDate,
                                         @Param("endDate") LocalDate endDate);
+
+    /**
+     * The single most recent (trade_date, close_price) row for one stock strictly before
+     * beforeDate, skipping any row whose close_price is 0 — a 0 records a no-trade day, not a real
+     * quote (specs/backend/strategy-backtest.md, "價格為 0 的日子不是行情"; reused verbatim by
+     * specs/backend/simulated-trade.md's 買進日 rule). Null when no such row exists.
+     */
+    StockDailyPrice findLatestPositiveCloseBefore(@Param("stockId") String stockId,
+                                                   @Param("beforeDate") LocalDate beforeDate);
+
+    /**
+     * The single most recent (trade_date, close_price) row on or before asOfDate, per stock id,
+     * skipping any 0-close row — one batched window-function query, not one query per stock (see
+     * specs/backend/simulated-trade.md, "以整份代號清單為條件批次查詢"). A stock absent from the result
+     * has no positive-close row on or before asOfDate at all. Callers must not pass an empty
+     * stockIds list — see StockMapper#findExistingStockIds for the same convention.
+     */
+    List<StockDailyPrice> findLatestPositiveCloseOnOrBeforeByStockIds(@Param("stockIds") List<String> stockIds,
+                                                                       @Param("asOfDate") LocalDate asOfDate);
 }

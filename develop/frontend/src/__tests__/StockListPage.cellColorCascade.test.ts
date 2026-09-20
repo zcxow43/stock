@@ -251,11 +251,34 @@ function pageHtml(): string {
         </div>
         <p class="st-inline-error st-price-threshold-hint" id="price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
       </div>
+      <!-- specs/frontend/strategy.md「批次勾選框列」/「僅選取報酬率 n% 以上」勾選框 — the
+           amount input's own literal colors and disabled-state text, reusing
+           .st-price-threshold-* verbatim (「與『取消買進價高於 N 元』同欄位同值」). -->
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="return-threshold-checked" checked />
+          <span class="st-total-label" id="return-threshold-label">僅選取報酬率</span>
+          <input type="number" min="-100" max="100" step="0.01" class="st-price-threshold-input" id="return-threshold-input" value="2" />
+          <span class="st-total-label">% 以上</span>
+        </div>
+      </div>
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="return-threshold-unchecked" />
+        </div>
+      </div>
+      <div class="st-total-item st-price-threshold-item">
+        <div class="st-price-threshold-row">
+          <input type="checkbox" class="st-row-checkbox" id="return-threshold-disabled" disabled />
+          <span class="st-total-label st-total-label-disabled" id="return-threshold-label-disabled">僅選取報酬率</span>
+        </div>
+        <p class="st-inline-error st-price-threshold-hint" id="return-threshold-hint">報酬率需介於 -100 ~ 100、最多兩位小數</p>
+      </div>
       <!-- specs/frontend/strategy.md「批次勾選框列」/「隱藏資料不齊（無賣出日）」勾選框 —
-           the real three-item .st-batch-controls row (取消全選／取消買進價高於／隱藏資料
-           不齊), markup lifted verbatim from StrategyTab.tsx's renderMergedTable, used both
-           for this row's own equal-height/vertical-center layout check and (separately
-           below) 隱藏資料不齊's own checked/unchecked/disabled painted colors. -->
+           the real four-item .st-batch-controls row (取消全選／取消買進價高於／僅選取報酬率
+           ／隱藏資料不齊), markup lifted verbatim from StrategyTab.tsx's renderMergedTable,
+           used both for this row's own equal-height/vertical-center layout check and
+           (separately below) 隱藏資料不齊's own checked/unchecked/disabled painted colors. -->
       <div class="st-batch-controls" id="batch-controls-row">
         <label class="st-total-item st-selectall-item" id="batch-cancel-all-item">
           <input type="checkbox" class="st-row-checkbox" id="batch-cancel-all-checkbox" checked />
@@ -267,6 +290,14 @@ function pageHtml(): string {
             <span class="st-total-label">取消買進價高於</span>
             <input type="number" min="0" step="0.01" class="st-price-threshold-input" value="500" />
             <span class="st-total-label">元</span>
+          </div>
+        </div>
+        <div class="st-total-item st-price-threshold-item" id="batch-return-threshold-item">
+          <div class="st-price-threshold-row">
+            <input type="checkbox" class="st-row-checkbox" id="batch-return-threshold-checkbox" />
+            <span class="st-total-label">僅選取報酬率</span>
+            <input type="number" min="-100" max="100" step="0.01" class="st-price-threshold-input" value="2" />
+            <span class="st-total-label">% 以上</span>
           </div>
         </div>
         <label class="st-selectall-item st-incomplete-item" id="batch-incomplete-item">
@@ -447,6 +478,10 @@ describe.each(['dark', 'light'] as const)(
           'price-threshold-label',
           'price-threshold-label-disabled',
           'price-threshold-hint',
+          // specs/frontend/strategy.md「僅選取報酬率 n% 以上」勾選框
+          'return-threshold-label',
+          'return-threshold-label-disabled',
+          'return-threshold-hint',
           // specs/frontend/strategy.md「總計浮動跟隨」
           'floating-total-cost',
           'floating-total-return',
@@ -756,6 +791,55 @@ describe.each(['dark', 'light'] as const)(
       expect(colors['price-threshold-hint']).toBe(ERROR_TEXT) // #F09A94
     })
 
+    // specs/frontend/strategy.md「僅選取報酬率 n% 以上」勾選框 — 「與『取消買進價高於 N 元』
+    // 同欄位同值」: checked/unchecked/disabled reuse the exact same literal colors (no new
+    // color introduced), plus its own amount input and #F09A94 validation hint.
+    it("renders the 「僅選取報酬率 n% 以上」checkbox's painted colors: checked/unchecked/disabled (identical to 「取消買進價高於 N 元」) and its amount input", async () => {
+      const context = await browser.newContext({ colorScheme })
+      const page = await context.newPage()
+      try {
+        await page.setContent(pageHtml())
+        const result = await page.evaluate(() => {
+          const checked = document.getElementById('return-threshold-checked') as HTMLInputElement
+          const unchecked = document.getElementById('return-threshold-unchecked') as HTMLInputElement
+          const disabled = document.getElementById('return-threshold-disabled') as HTMLInputElement
+          const input = document.getElementById('return-threshold-input') as HTMLInputElement
+          const before = {
+            checkedBg: getComputedStyle(checked).backgroundColor,
+            checkedMark: getComputedStyle(checked, '::after').borderRightColor,
+            uncheckedBg: getComputedStyle(unchecked).backgroundColor,
+            uncheckedBorder: getComputedStyle(unchecked).borderTopColor,
+            disabledBg: getComputedStyle(disabled).backgroundColor,
+            disabledBorder: getComputedStyle(disabled).borderTopColor,
+            inputBg: getComputedStyle(input).backgroundColor,
+            inputText: getComputedStyle(input).color,
+            inputBorder: getComputedStyle(input).borderTopColor,
+          }
+          input.focus()
+          return { ...before, inputFocusedBorder: getComputedStyle(input).borderTopColor }
+        })
+        expect(result.checkedBg).toBe(CHECKED_BG)
+        expect(result.checkedMark).toBe(CHECK_MARK_WHITE)
+        expect(result.uncheckedBg).toBe(UNCHECKED_BG)
+        expect(result.uncheckedBorder).toBe(UNCHECKED_BORDER)
+        expect(result.disabledBg).toBe(DISABLED_BTN_BG) // #16202C
+        expect(result.disabledBorder).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.inputBg).toBe(UNCHECKED_BG) // #0F1620
+        expect(result.inputText).toBe(INPUT_TEXT) // #E6EDF5
+        expect(result.inputBorder).toBe(UNCHECKED_BORDER) // #26333F
+        expect(result.inputFocusedBorder).toBe(CHECKED_BG) // #3E8FD8
+      } finally {
+        await context.close()
+      }
+    })
+
+    it('colors the 「僅選取報酬率 n% 以上」label text (enabled/disabled) and its invalid-threshold hint', async () => {
+      const colors = await computedColors()
+      expect(colors['return-threshold-label']).toBe(LABEL_TEXT) // #93A4B8
+      expect(colors['return-threshold-label-disabled']).toBe(DISABLED_BTN_TEXT) // #4A5866
+      expect(colors['return-threshold-hint']).toBe(ERROR_TEXT) // #F09A94
+    })
+
     // specs/frontend/strategy.md「總計浮動跟隨」— the floating copy's own background/border
     // (opaque, so a row scrolled underneath never shows through) and that it reuses the
     // exact same 總成本／總報酬率／總收益 rendering (`.st-total-value`) the in-flow totals
@@ -821,24 +905,28 @@ describe.each(['dark', 'light'] as const)(
       expect(colors['hidden-count-note']).toBe(FLAT) // #93A4B8
     })
 
-    // specs/frontend/strategy.md「批次勾選框列」— the three batch checkboxes (取消全選／取消
-    // 買進價高於／隱藏資料不齊) must render at equal box height and share the same vertical
-    // center line (≤ 1px), which only an actual layout engine can prove — jsdom has none.
-    it('renders the three batch checkboxes at equal height with the same vertical center (≤ 1px)', async () => {
+    // specs/frontend/strategy.md「批次勾選框列」— the four batch checkboxes (取消全選／取消
+    // 買進價高於／僅選取報酬率／隱藏資料不齊) must render at equal box height and share the
+    // same vertical center line (≤ 1px), which only an actual layout engine can prove — jsdom
+    // has none.
+    it('renders the four batch checkboxes at equal height with the same vertical center (≤ 1px)', async () => {
       const context = await browser.newContext({ colorScheme })
       const page = await context.newPage()
       try {
         await page.setContent(pageHtml())
-        const [cancelAll, priceThreshold, incomplete] = await Promise.all([
+        const [cancelAll, priceThreshold, returnThreshold, incomplete] = await Promise.all([
           page.locator('#batch-cancel-all-checkbox').boundingBox(),
           page.locator('#batch-price-threshold-checkbox').boundingBox(),
+          page.locator('#batch-return-threshold-checkbox').boundingBox(),
           page.locator('#batch-incomplete-checkbox').boundingBox(),
         ])
         expect(cancelAll).not.toBeNull()
         expect(priceThreshold).not.toBeNull()
+        expect(returnThreshold).not.toBeNull()
         expect(incomplete).not.toBeNull()
-        const heights = [cancelAll!.height, priceThreshold!.height, incomplete!.height]
-        const centers = [cancelAll!, priceThreshold!, incomplete!].map((box) => box.y + box.height / 2)
+        const boxes = [cancelAll!, priceThreshold!, returnThreshold!, incomplete!]
+        const heights = boxes.map((box) => box.height)
+        const centers = boxes.map((box) => box.y + box.height / 2)
         expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
         expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1)
       } finally {

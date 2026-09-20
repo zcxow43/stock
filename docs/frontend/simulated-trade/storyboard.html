@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>simulated-trade storyboard</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin:0; background:#f2f1ee; font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif; }
+  .board { position:relative; width:2360px; height:1866px; }
+  .frame { position:absolute; }
+  .frame img { display:block; position:relative; z-index:1; border:1px solid #cfcdc8; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.13); background:#fff; }
+
+  .caption { position:relative; z-index:6; margin-top:14px; font-size:19px; line-height:1.5; color:#33312d; }
+  .caption .num { display:inline-block; min-width:26px; height:26px; line-height:26px; text-align:center;
+                  background:#d6743a; color:#fff; border-radius:13px; font-size:15px; margin-right:9px; vertical-align:1px; }
+  .apis { position:relative; z-index:6; margin-top:9px; }
+  .api { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin-top:5px;
+         font-size:15px; line-height:1.45; }
+  .api .verb { flex:none; display:inline-block; min-width:44px; text-align:center; padding:1px 7px;
+               border-radius:4px; background:#5b6b7c; color:#fff; font-size:12px; letter-spacing:.4px; font-weight:600; }
+  .api .verb.v-get { background:#2f6f4f; }
+  .api .verb.v-post { background:#9a5a1e; }
+  /* path and its purpose note share one wrapping block, so the note always
+     stays right after the path it explains instead of drifting to the margin */
+  .api .sig { flex:1 1 0; min-width:0; }
+  .api code { font-family:"JetBrains Mono","Consolas","Courier New",monospace; color:#4a4842;
+              word-break:break-all; }
+  .api .note { color:#7a7770; font-size:14px; margin-left:8px; }
+  svg.links { position:absolute; inset:0; width:2360px; height:1866px; pointer-events:none; z-index:5; }
+</style>
+</head>
+<body>
+<div class="board">
+  <svg class="links" viewBox="0 0 2360 1866">
+    <defs>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
+      </filter>
+    </defs>
+    <rect x="85.6" y="178.3" width="138.3" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="865.6" y="178.3" width="138.3" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="998.5" y="178.3" width="45.8" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1638.1" y="281.4" width="643.9" height="29.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1645.6" y="178.3" width="138.3" height="27.4"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <rect x="1638.1" y="1219.4" width="643.9" height="29.7"
+          rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
+    <polygon points="231.0,194.6 838.6,194.6 838.6,201.1 858.6,192.1 838.6,183.1 838.6,189.6 231.0,189.6"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1051.0,197.9 1798.9,280.9 1798.2,287.3 1819.1,280.6 1800.2,269.4 1799.5,275.9 1051.5,192.9"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+    <polygon points="1717.2,213.2 1947.9,1193.7 1941.6,1195.1 1954.9,1212.6 1959.1,1191.0 1952.8,1192.5 1722.1,212.0"
+             fill="#D62828" stroke="none" filter="url(#soft)"/>
+  </svg>
+
+  <div class="frame" style="left:70px; top:70px; width:660px;">
+    <img src="step-1.png" width="660" height="413" alt="初始畫面：切到第四個頁籤「模擬交易」（網址 /stocks?tab=simulated）。進頁即取一次列表，目前沒有任何模擬持股，所以表格不顯示，改以弱化色說明「尚無模擬持股，輸入股票代號加入第一筆」，摘要列的三個總計顯示「—」而不是 0／0%。加入列只有一格代號輸入，畫面上沒有任何買進日、買進價或張數欄位——那三項都由後端決定（今日以前最後一個有收盤價的交易日、該日收盤、固定 1 張），這是本分頁刻意選擇的形狀。輸入為空，「加入」因此 disabled。頁籤列上方的「只看上市普通股」照常顯示，但本頁不受它影響：切換它時本頁不重新查詢、請求也不帶 commonStocksOnly。">
+    <div class="caption"><span class="num">1</span>初始畫面：切到第四個頁籤「模擬交易」（網址 /stocks?tab=simulated）。進頁即取一次列表，目前沒有任何模擬持股，所以表格不顯示，改以弱化色說明「尚無模擬持股，輸入股票代號加入第一筆」，摘要列的三個總計顯示「—」而不是 0／0%。加入列只有一格代號輸入，畫面上沒有任何買進日、買進價或張數欄位——那三項都由後端決定（今日以前最後一個有收盤價的交易日、該日收盤、固定 1 張），這是本分頁刻意選擇的形狀。輸入為空，「加入」因此 disabled。頁籤列上方的「只看上市普通股」照常顯示，但本頁不受它影響：切換它時本頁不重新查詢、請求也不帶 commonStocksOnly。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/simulated-trades</code><span class="note">進入分頁（含由其他分頁切回、重新整理）即取一次；此時 items 為空陣列、兩個總額為 0、totalReturnPercent 為 null，畫面因此顯示三個「—」，同一份回應的 feeRatePercent／taxRatePercent 組成下方費率說明那一行</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks?page=1&amp;size=1</code><span class="note">/stocks 頁面層級常駐的「共 N 檔」，由頁面本身發出，與本分頁的持股無關</span></span></div></div>
+  </div>
+  <div class="frame" style="left:850px; top:70px; width:660px;">
+    <img src="step-2.png" width="660" height="413" alt="在代號輸入框打入 2330：輸入框取得焦點（邊框轉為 #3E8FD8），「加入」隨即由 disabled 轉為可按。前後空白會自動去除，送出的代號就是 2330；按 Enter 與按「加入」等效。此步驟純前端，不發任何請求。">
+    <div class="caption"><span class="num">2</span>在代號輸入框打入 2330：輸入框取得焦點（邊框轉為 #3E8FD8），「加入」隨即由 disabled 轉為可按。前後空白會自動去除，送出的代號就是 2330；按 Enter 與按「加入」等效。此步驟純前端，不發任何請求。</div>
+  </div>
+  <div class="frame" style="left:1630px; top:70px; width:660px;">
+    <img src="step-3.png" width="660" height="413" alt="按「加入」：後端以今日（2026-09-18）以前最後一個有收盤價的交易日 2026-09-17、收盤 1,150.00 建立一筆 1 張的持股。成功後輸入框清空、游標留在輸入框（可以連續加入好幾檔），新的一筆以列閃爍一次（#1D2A38）提示。表格與摘要列同時出現：成本 1,151,638 已含買進手續費 1,638，未實現損益 +48,030 已扣以現價估的賣出手續費 1,717 與證交稅 3,615。三個總計直接取回應的值，前端不自行加總。">
+    <div class="caption"><span class="num">3</span>按「加入」：後端以今日（2026-09-18）以前最後一個有收盤價的交易日 2026-09-17、收盤 1,150.00 建立一筆 1 張的持股。成功後輸入框清空、游標留在輸入框（可以連續加入好幾檔），新的一筆以列閃爍一次（#1D2A38）提示。表格與摘要列同時出現：成本 1,151,638 已含買進手續費 1,638，未實現損益 +48,030 已扣以現價估的賣出手續費 1,717 與證交稅 3,615。三個總計直接取回應的值，前端不自行加總。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/simulated-trades</code><span class="note">body 只有一個 stockId「2330」；買進日、買進價與股數都不由呼叫端指定，多帶也會被忽略</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/simulated-trades</code><span class="note">加入成功後重新取得列表，讓三個總計與列的排序一律由後端決定</span></span></div></div>
+  </div>
+  <div class="frame" style="left:1630px; top:1008px; width:660px;">
+    <img src="step-4.png" width="660" height="413" alt="在輸入框再打入 2317 後按 Enter（等同按「加入」）：第二筆建立完成並重新取得列表。列依後端回的順序呈現（買進日由新到舊、同日代號升冪），2317 因此排在 2330 上面，前端不重排也不提供排序，列本體不可點。漲跌色以實際渲染色為準：台積電 +48,030／+4.17% 為 #E04B45，鴻海 -5,050／-1.88% 為 #16A75C，成本與兩個價格恆為 #E6EDF5。三個總計更新為 1,420,019／+42,980／+3.03%——總報酬率是成本加權，不是兩檔報酬率的算術平均。每列最右的「刪除」按下即送出 DELETE、不跳確認框。">
+    <div class="caption"><span class="num">4</span>在輸入框再打入 2317 後按 Enter（等同按「加入」）：第二筆建立完成並重新取得列表。列依後端回的順序呈現（買進日由新到舊、同日代號升冪），2317 因此排在 2330 上面，前端不重排也不提供排序，列本體不可點。漲跌色以實際渲染色為準：台積電 +48,030／+4.17% 為 #E04B45，鴻海 -5,050／-1.88% 為 #16A75C，成本與兩個價格恆為 #E6EDF5。三個總計更新為 1,420,019／+42,980／+3.03%——總報酬率是成本加權，不是兩檔報酬率的算術平均。每列最右的「刪除」按下即送出 DELETE、不跳確認框。</div><div class="apis"><div class="api"><span class="verb v-post">POST</span><span class="sig"><code>/api/simulated-trades</code><span class="note">body 只有一個 stockId「2317」；按 Enter 與按「加入」送出同一支端點</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/simulated-trades</code><span class="note">加入成功後重新取得列表，兩筆與三個總計都由這次回應決定</span></span></div></div>
+  </div>
+</div>
+</body>
+</html>

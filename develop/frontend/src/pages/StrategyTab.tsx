@@ -267,6 +267,18 @@ function isPriceThresholdInputInvalid(value: string): boolean {
   return Math.abs(rounded - num) > 1e-9
 }
 
+/** 「僅選取報酬率 n% 以上」的門檻輸入 — `-100` ~ `100`（可為負數，報酬率本來就可能是負的），
+ * 最多兩位小數，與 `isPriceThresholdInputInvalid` 同樣的形狀（四捨五入到允許的精度、比對回
+ * 原始輸入）。留空、超出範圍或超過兩位小數時只讓勾選框 disabled，數字本身從不被清空或改寫。 */
+function isReturnThresholdInputInvalid(value: string): boolean {
+  if (value.trim() === '') return true
+  const num = Number(value)
+  if (!Number.isFinite(num)) return true
+  if (num < -100 || num > 100) return true
+  const rounded = Math.round(num * 100) / 100
+  return Math.abs(rounded - num) > 1e-9
+}
+
 /** 總計浮動跟隨's on/off decision, isolated from DOM measurement so it's a plain,
  * unit-testable function — jsdom's `getBoundingClientRect` has no real layout engine behind
  * it, so the wiring around this (a scroll/resize listener reading two refs) can only be
@@ -840,6 +852,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // keystroke like "1." is never silently clobbered, matching `risePercentInputs`'s shape.
   const [priceThresholdInput, setPriceThresholdInput] = useState('500')
   const [priceThresholdChecked, setPriceThresholdChecked] = useState(false)
+
+  // ---------- 「僅選取報酬率 n% 以上」勾選框 ----------
+  // Same persistence rule as the price threshold's own amount ('門檻值在同一次進頁內保留…
+  // 重新整理頁面回到 2') — only this `useState` initializer (mount-only) ever resets it.
+  const [returnThresholdInput, setReturnThresholdInput] = useState('2')
+  const [returnThresholdChecked, setReturnThresholdChecked] = useState(false)
+
   const [hideIncomplete, setHideIncomplete] = useState(false)
 
   // ---------- 總計浮動跟隨 ----------
@@ -1246,6 +1265,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         if (backtestGenerationRef.current !== generation) return
         setBacktestResult(resp)
         setPriceThresholdChecked(false)
+        setReturnThresholdChecked(false)
         setHideIncomplete(resp.items.some((item) => item.sellDate === null))
         setBacktestStatus('success')
         setBacktestErrorMessage(null)
@@ -1273,6 +1293,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestStatus('idle')
     setBacktestResult(null)
     setPriceThresholdChecked(false)
+    setReturnThresholdChecked(false)
     setHideIncomplete(false)
     setBacktestErrorMessage(null)
     setIsRetryingBacktest(false)
@@ -1752,6 +1773,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const toggleCancelAll = (turnOn: boolean) => {
     setCheckedItemKeys(turnOn ? new Set() : new Set(allItemKeys))
     setPriceThresholdChecked(false)
+    setReturnThresholdChecked(false)
     setHideIncomplete(false)
   }
 
@@ -1793,6 +1815,57 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     ...(hideIncomplete ? incompleteGroupKeys : []),
   ])
   const visibleGroups = (row: UnionRow) => row.buyDateGroups.filter((group) => !hiddenItemKeys.has(itemKey(row.stockId, group.buyDate)))
+
+  // ---------- 「僅選取報酬率 n% 以上」勾選框 ----------
+  const returnThresholdInvalid = isReturnThresholdInputInvalid(returnThresholdInput)
+  const returnThresholdAmount = returnThresholdInvalid ? null : Number(returnThresholdInput)
+  // 目前顯示中（未被「取消買進價高於 N 元」或「隱藏資料不齊」隱藏）、報酬率 < n% 或為 null
+  // 的每一筆——逐筆判斷，不看父列合計；已被那兩個框隱藏的筆完全排除在外，本框永遠不會去動
+  // 它們（見「作用範圍」）。
+  const underReturnThresholdKeys =
+    returnThresholdAmount === null
+      ? []
+      : allItemKeys.filter((key) => {
+          if (hiddenItemKeys.has(key)) return false
+          const returnPercent = backtestItemsByKey.get(key)?.returnPercent
+          return returnPercent == null || returnPercent < returnThresholdAmount
+        })
+  // **不因「沒有筆會被取消」而 disabled**——即使顯示中的每一筆都達標，勾選它仍然會做排序這件
+  // 事，因此唯一的 disabled 條件是回測尚未完成或數字本身不合法（範圍不含此二者的空集合檢查）。
+  const returnThresholdDisabled = backtestResult === null || returnThresholdInvalid
+
+  /** 勾選「僅選取報酬率 n% 以上」→ 顯示中不達標（含 null）的每一筆取消勾選、達標的每一筆
+   * 維持／勾回勾選，接著表格改為依報酬率降冪排序（等同把排序切到「報酬率」欄的降冪那一
+   * 步）；取消勾選 → 只把它剛才取消掉的那些筆（`underReturnThresholdKeys` 門檻鎖定不能修
+   * 改，取消時重新算出來的範圍與勾選時完全相同）全部勾回，其餘筆與排序都不動。完全在前端完
+   * 成，不重新呼叫任何端點。 */
+  const toggleReturnThreshold = (turnOn: boolean) => {
+    setReturnThresholdChecked(turnOn)
+    setCheckedItemKeys((keys) => {
+      const next = new Set(keys)
+      for (const key of underReturnThresholdKeys) {
+        if (turnOn) next.delete(key)
+        else next.add(key)
+      }
+      return next
+    })
+    if (turnOn && backtestResult) {
+      const lotSize = backtestResult.lotSize
+      const updatedChecked = new Set(checkedItemKeys)
+      for (const key of underReturnThresholdKeys) updatedChecked.delete(key)
+      const order = [...unionRows]
+        .sort((a, b) =>
+          compareBySortDirection(
+            rowSortValue({ ...a, buyDateGroups: visibleGroups(a) }, 'returnPercent', backtestItemsByKey, updatedChecked, lotSize),
+            rowSortValue({ ...b, buyDateGroups: visibleGroups(b) }, 'returnPercent', backtestItemsByKey, updatedChecked, lotSize),
+            'desc',
+          ),
+        )
+        .map((row) => row.stockId)
+      setSortState({ column: 'returnPercent', direction: 'desc' })
+      setSortedRowOrder(order)
+    }
+  }
 
   /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
    * 名稱。這些標的不是命中，因此永遠不進入 `unionRows` 或回測請求。 */
@@ -1990,6 +2063,36 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               </div>
               {priceThresholdInvalid ? (
                 <p className="st-inline-error st-price-threshold-hint">金額需為 0 以上、最多兩位小數</p>
+              ) : null}
+            </div>
+            <div className="st-total-item st-price-threshold-item">
+              <div className="st-price-threshold-row">
+                <input
+                  type="checkbox"
+                  className="st-row-checkbox"
+                  checked={returnThresholdChecked}
+                  disabled={returnThresholdDisabled}
+                  onChange={(e) => toggleReturnThreshold(e.target.checked)}
+                  aria-label="僅選取報酬率百分比以上"
+                />
+                <span className={`st-total-label${returnThresholdDisabled ? ' st-total-label-disabled' : ''}`}>
+                  僅選取報酬率
+                </span>
+                <input
+                  type="number"
+                  min={-100}
+                  max={100}
+                  step="0.01"
+                  className="st-price-threshold-input"
+                  value={returnThresholdInput}
+                  disabled={returnThresholdChecked}
+                  onChange={(e) => setReturnThresholdInput(e.target.value)}
+                  aria-label="僅選取報酬率的百分比門檻"
+                />
+                <span className={`st-total-label${returnThresholdDisabled ? ' st-total-label-disabled' : ''}`}>% 以上</span>
+              </div>
+              {returnThresholdInvalid ? (
+                <p className="st-inline-error st-price-threshold-hint">報酬率需介於 -100 ~ 100、最多兩位小數</p>
               ) : null}
             </div>
             <label className="st-selectall-item st-incomplete-item">

@@ -3,13 +3,14 @@ import { useSearchParams } from 'react-router-dom'
 import StockOverviewTab from './StockOverviewTab'
 import StrategyTab from './StrategyTab'
 import MomentumTab from './MomentumTab'
+import SimulatedTradeTab from './SimulatedTradeTab'
 import './StockListPage.css'
 
-type TabKey = 'overview' | 'strategy' | 'momentum'
+type TabKey = 'overview' | 'strategy' | 'momentum' | 'simulated'
 
 /** Unrecognised or missing `tab` falls back to 總覽 — spec explicitly forbids a blank screen. */
 function resolveTab(raw: string | null): TabKey {
-  return raw === 'strategy' || raw === 'momentum' ? raw : 'overview'
+  return raw === 'strategy' || raw === 'momentum' || raw === 'simulated' ? raw : 'overview'
 }
 
 export default function StockListPage() {
@@ -75,6 +76,15 @@ export default function StockListPage() {
         >
           動態
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'simulated'}
+          className={`sl-tab${tab === 'simulated' ? ' sl-tab-active' : ''}`}
+          onClick={() => selectTab('simulated')}
+        >
+          模擬交易
+        </button>
       </div>
 
       {/* All three tabs stay mounted and are toggled with display:none so switching never
@@ -87,6 +97,15 @@ export default function StockListPage() {
       </div>
       <div data-testid="sl-tabpanel-momentum" style={{ display: tab === 'momentum' ? 'block' : 'none' }}>
         <MomentumTab commonStocksOnly={commonStocksOnly} />
+      </div>
+      {/* Unlike the three panels above, this one is *not* kept permanently mounted: this
+          tab's own spec (specs/frontend/simulated-trade.md) requires a fresh GET every time
+          the user re-enters it ("切到別的分頁再切回會重新取得"), and it has no filter/paging
+          state worth preserving across a switch. Mounting only while active gives that
+          re-fetch for free. It also intentionally does not receive `commonStocksOnly` — this
+          page has no population filter, so the page-level checkbox can't affect it. */}
+      <div data-testid="sl-tabpanel-simulated" style={{ display: tab === 'simulated' ? 'block' : 'none' }}>
+        {tab === 'simulated' ? <SimulatedTradeTab /> : null}
       </div>
     </div>
   )
