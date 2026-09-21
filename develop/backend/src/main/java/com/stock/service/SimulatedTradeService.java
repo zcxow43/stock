@@ -7,8 +7,10 @@ import com.stock.dto.CreateSimulatedTradeRequest;
 import com.stock.dto.SimulatedTradeItemDto;
 import com.stock.dto.SimulatedTradeResponseDto;
 import com.stock.exception.DuplicateSimulatedTradeException;
+import com.stock.exception.InvalidSimulatedTradeBuyDateException;
 import com.stock.exception.InvalidStockIdException;
 import com.stock.exception.NoPriceBeforeTodayException;
+import com.stock.exception.NoPriceOnBuyDateException;
 import com.stock.exception.SimulatedTradeNotFoundException;
 import com.stock.exception.UnknownStockIdException;
 import com.stock.mapper.SimulatedTradeMapper;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,8 +62,11 @@ public class SimulatedTradeService {
 
     public SimulatedTradeResponseDto list() {
         LocalDate asOfDate = LocalDate.now(TAIPEI);
+        // 全市場上一次收盤日（specs/backend/simulated-trade.md, "預設買進日（defaultBuyDate）"）— one
+        // query, not scoped to any stock; null when the database holds no price rows at all.
+        LocalDate defaultBuyDate = priceMapper.findMarketWideLatestPositiveCloseDate(asOfDate);
         List<SimulatedTrade> trades = simulatedTradeMapper.findAllOrderedByBuyDateDescStockIdAsc();
-        return buildResponse(asOfDate, trades);
+        return buildResponse(asOfDate, defaultBuyDate, trades);
     }
 
     @Transactional
@@ -76,19 +82,41 @@ public class SimulatedTradeService {
         }
 
         LocalDate today = LocalDate.now(TAIPEI);
-        // 買進日＝trade_date < 今日 且 close_price > 0 的最大 trade_date（specs/backend/
-        // simulated-trade.md, "一筆持股怎麼建立"）— never today's own close, which does not exist
-        // yet before market close and would make the same action yield different results depending
-        // on the time of day.
-        StockDailyPrice buyRow = priceMapper.findLatestPositiveCloseBefore(stockId, today);
-        if (buyRow == null) {
-            throw new NoPriceBeforeTodayException(stockId);
+        String rawBuyDate = request.getBuyDate();
+        LocalDate buyDate;
+        BigDecimal buyPrice;
+        if (rawBuyDate == null || rawBuyDate.trim().isEmpty()) {
+            // 省略時：trade_date <= 今日 且 close_price > 0 的最大 trade_date（specs/backend/
+            // simulated-trade.md, "一筆持股怎麼建立"）. Note this is "<=" at the call site below but
+            // findLatestPositiveCloseBefore takes an exclusive upper bound, so today is passed as
+            // the (exclusive) boundary — today's own close is never picked before market close.
+            StockDailyPrice buyRow = priceMapper.findLatestPositiveCloseBefore(stockId, today);
+            if (buyRow == null) {
+                throw new NoPriceBeforeTodayException(stockId);
+            }
+            buyDate = buyRow.getTradeDate();
+            buyPrice = buyRow.getClosePrice();
+        } else {
+            // 指定買進日（本次新增）: 必須為合法日期、不得晚於今日，否則 400 INVALID_BUY_DATE；那一天
+            // 必須正好有該檔的收盤價（存在且 > 0），否則 400 NO_PRICE_ON_BUY_DATE — 不得自動改用鄰近
+            // 交易日 (specs/backend/simulated-trade.md, "指定買進日（本次新增）").
+            LocalDate requestedDate = parseBuyDate(rawBuyDate.trim());
+            if (requestedDate.isAfter(today)) {
+                throw new InvalidSimulatedTradeBuyDateException(rawBuyDate);
+            }
+            StockDailyPrice buyRow = priceMapper.findOne(stockId, requestedDate);
+            if (buyRow == null || buyRow.getClosePrice() == null
+                    || buyRow.getClosePrice().signum() <= 0) {
+                throw new NoPriceOnBuyDateException(stockId, requestedDate);
+            }
+            buyDate = requestedDate;
+            buyPrice = buyRow.getClosePrice();
         }
 
         SimulatedTrade trade = new SimulatedTrade();
         trade.setStockId(stockId);
-        trade.setBuyDate(buyRow.getTradeDate());
-        trade.setBuyPrice(buyRow.getClosePrice());
+        trade.setBuyDate(buyDate);
+        trade.setBuyPrice(buyPrice);
         trade.setShares(TradingCostCalculator.LOT_SIZE);
 
         try {
@@ -97,7 +125,7 @@ public class SimulatedTradeService {
             // Closes the check-then-act race the same way StockCatalogService#createStock does:
             // (stock_id, buy_date) is unique in the schema (specs/dba/simulated-trade.md), so a
             // concurrent duplicate insert surfaces here rather than as a raw 500.
-            throw new DuplicateSimulatedTradeException(stockId, buyRow.getTradeDate());
+            throw new DuplicateSimulatedTradeException(stockId, buyDate);
         }
 
         // The buy day itself always has a positive close (that is how it was chosen), so the
@@ -116,9 +144,11 @@ public class SimulatedTradeService {
         }
     }
 
-    private SimulatedTradeResponseDto buildResponse(LocalDate asOfDate, List<SimulatedTrade> trades) {
+    private SimulatedTradeResponseDto buildResponse(LocalDate asOfDate, LocalDate defaultBuyDate,
+                                                      List<SimulatedTrade> trades) {
         SimulatedTradeResponseDto response = new SimulatedTradeResponseDto();
         response.setAsOfDate(asOfDate);
+        response.setDefaultBuyDate(defaultBuyDate);
         response.setLotSize(TradingCostCalculator.LOT_SIZE);
         response.setFeeRatePercent(TradingCostCalculator.FEE_RATE_PERCENT);
         response.setTaxRatePercent(TradingCostCalculator.TAX_RATE_PERCENT);
@@ -215,6 +245,20 @@ public class SimulatedTradeService {
             byStock.put(stock.getStockId(), stock.getStockName());
         }
         return byStock;
+    }
+
+    /**
+     * Parses a trimmed, non-blank {@code buyDate} string as an ISO-8601 local date (the same format
+     * the wire contract's examples use, e.g. {@code "2026-09-18"}). Any format failure surfaces as
+     * {@link InvalidSimulatedTradeBuyDateException} carrying the original raw string, per
+     * specs/backend/simulated-trade.md, "指定買進日（本次新增）" — never a generic 500.
+     */
+    private LocalDate parseBuyDate(String trimmedBuyDate) {
+        try {
+            return LocalDate.parse(trimmedBuyDate);
+        } catch (DateTimeParseException e) {
+            throw new InvalidSimulatedTradeBuyDateException(trimmedBuyDate);
+        }
     }
 
     /** Trims and treats a blank result as absent — {@code null}/empty/whitespace-only all count as missing. */

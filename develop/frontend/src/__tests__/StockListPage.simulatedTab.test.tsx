@@ -35,6 +35,7 @@ function overviewResponse(): StockListResponse {
 function simulatedResponse(): SimulatedTradeListResponse {
   return {
     asOfDate: '2026-09-18',
+    defaultBuyDate: '2026-09-17',
     lotSize: 1000,
     feeRatePercent: 0.1425,
     taxRatePercent: 0.3,

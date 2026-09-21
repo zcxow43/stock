@@ -36,10 +36,13 @@ public class ErrorResponse {
     // (UNKNOWN_STOCK_ID). The uniqueness key here is the (stockId, buyDate) combination, not
     // stockId alone (specs/backend/strategy-backtest.md, "一筆＝一個買進日").
     private final List<BacktestDuplicateItemDto> duplicatedItems;
-    // simulated-trade.md wire contract: DUPLICATE_SIMULATED_TRADE's "buyDate" key, paired with the
-    // existing "stockId" field above — distinct from DUPLICATE_BACKTEST_ITEM's "duplicatedItems"
-    // array, since this endpoint only ever names the one already-existing (stockId, buyDate) pair.
-    private final LocalDate buyDate;
+    // simulated-trade.md wire contract: DUPLICATE_SIMULATED_TRADE's and (this endpoint's own)
+    // INVALID_BUY_DATE's and NO_PRICE_ON_BUY_DATE's shared "buyDate" key. Typed as a raw String, not
+    // LocalDate: INVALID_BUY_DATE must be able to echo back a malformed, unparseable value exactly
+    // as submitted (see specs/backend/simulated-trade.md, "指定買進日（本次新增）"); the other two
+    // codes always hold a real date, formatted the same ISO-8601 way either type would serialize to,
+    // so this widening changes no byte on the wire for them.
+    private final String buyDate;
     // simulated-trade.md wire contract: SIMULATED_TRADE_NOT_FOUND's "id" key — the path {id} that
     // matched no row.
     private final Long id;
@@ -67,7 +70,7 @@ public class ErrorResponse {
                            @JsonProperty("strategy") String strategy,
                            @JsonProperty("param") String param,
                            @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems,
-                           @JsonProperty("buyDate") LocalDate buyDate,
+                           @JsonProperty("buyDate") String buyDate,
                            @JsonProperty("id") Long id) {
         this.code = code;
         this.unknownIds = unknownIds;
@@ -233,7 +236,24 @@ public class ErrorResponse {
     /** DUPLICATE_SIMULATED_TRADE (specs/backend/simulated-trade.md, "驗證與錯誤"): {stockId, buyDate}. */
     public static ErrorResponse duplicateSimulatedTrade(String stockId, LocalDate buyDate) {
         return new ErrorResponse("DUPLICATE_SIMULATED_TRADE", null, null, null, stockId, null, null, null, null,
-                null, null, buyDate, null);
+                null, null, buyDate == null ? null : buyDate.toString(), null);
+    }
+
+    /**
+     * INVALID_BUY_DATE for POST /api/simulated-trades (specs/backend/simulated-trade.md, "指定買進日
+     * （本次新增）"): {buyDate}, the raw as-submitted value — malformed or later than today. Distinct
+     * from {@link #invalidBuyDate(String)}, which is POST /api/strategies/backtest's own
+     * same-named-code error with a {@code stockId} key instead.
+     */
+    public static ErrorResponse invalidSimulatedTradeBuyDate(String buyDate) {
+        return new ErrorResponse("INVALID_BUY_DATE", null, null, null, null, null, null, null, null, null,
+                null, buyDate, null);
+    }
+
+    /** NO_PRICE_ON_BUY_DATE (specs/backend/simulated-trade.md, "指定買進日（本次新增）"): {stockId, buyDate}. */
+    public static ErrorResponse noPriceOnBuyDate(String stockId, LocalDate buyDate) {
+        return new ErrorResponse("NO_PRICE_ON_BUY_DATE", null, null, null, stockId, null, null, null, null,
+                null, null, buyDate == null ? null : buyDate.toString(), null);
     }
 
     /** SIMULATED_TRADE_NOT_FOUND (specs/backend/simulated-trade.md, "驗證與錯誤"): {id}. */
@@ -286,7 +306,7 @@ public class ErrorResponse {
         return duplicatedItems;
     }
 
-    public LocalDate getBuyDate() {
+    public String getBuyDate() {
         return buyDate;
     }
 

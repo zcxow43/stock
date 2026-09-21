@@ -22,6 +22,9 @@ export interface SimulatedTradeItem {
 
 export interface SimulatedTradeListResponse {
   asOfDate: string
+  /** Market-wide latest closed trading day; `null` only when the DB has no price data at
+   * all yet. Used by the UI as the 買進日 input's default value and `max`. */
+  defaultBuyDate: string | null
   lotSize: number
   feeRatePercent: number
   taxRatePercent: number
@@ -105,17 +108,23 @@ export async function fetchSimulatedTrades(signal?: AbortSignal): Promise<Simula
   return request<SimulatedTradeListResponse>('/api/simulated-trades', { method: 'GET' }, signal)
 }
 
-/** POST /api/simulated-trades — body is `{ stockId }` only; buyDate/buyPrice/shares are
- * never caller-supplied (specs/backend/simulated-trade.md). The response body is only used
- * to confirm what the backend chose (and to flash the new row) — the caller must still
- * re-fetch the list afterward, since sort order and the three totals are backend-owned. */
-export async function createSimulatedTrade(stockId: string, signal?: AbortSignal): Promise<SimulatedTradeItem> {
+/** POST /api/simulated-trades — body is `{ stockId, buyDate }`; `buyDate` is always sent
+ * (even when it is still whatever the caller defaulted the input to) — the backend resolves
+ * buyPrice/shares from it, they are never caller-supplied (specs/backend/simulated-trade.md).
+ * The response body is only used to confirm what the backend chose (and to flash the new
+ * row) — the caller must still re-fetch the list afterward, since sort order and the three
+ * totals are backend-owned. */
+export async function createSimulatedTrade(
+  stockId: string,
+  buyDate: string,
+  signal?: AbortSignal,
+): Promise<SimulatedTradeItem> {
   return request<SimulatedTradeItem>(
     '/api/simulated-trades',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stockId }),
+      body: JSON.stringify({ stockId, buyDate }),
     },
     signal,
   )

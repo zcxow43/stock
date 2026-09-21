@@ -30,6 +30,7 @@ function item(overrides: Partial<SimulatedTradeItem> = {}): SimulatedTradeItem {
 function listResponse(overrides: Partial<SimulatedTradeListResponse> = {}): SimulatedTradeListResponse {
   return {
     asOfDate: '2026-09-18',
+    defaultBuyDate: '2026-09-17',
     lotSize: 1000,
     feeRatePercent: 0.1425,
     taxRatePercent: 0.3,
@@ -41,9 +42,10 @@ function listResponse(overrides: Partial<SimulatedTradeListResponse> = {}): Simu
   }
 }
 
-function emptyResponse(): SimulatedTradeListResponse {
+function emptyResponse(overrides: Partial<SimulatedTradeListResponse> = {}): SimulatedTradeListResponse {
   return {
     asOfDate: '2026-09-18',
+    defaultBuyDate: '2026-09-17',
     lotSize: 1000,
     feeRatePercent: 0.1425,
     taxRatePercent: 0.3,
@@ -51,6 +53,7 @@ function emptyResponse(): SimulatedTradeListResponse {
     totalUnrealizedProfit: 0,
     totalReturnPercent: null,
     items: [],
+    ...overrides,
   }
 }
 
@@ -131,7 +134,7 @@ describe('SimulatedTradeTab', () => {
       const u = String(url)
       const method = init?.method ?? 'GET'
       if (u === '/api/simulated-trades' && method === 'POST') {
-        expect(JSON.parse(String(init?.body))).toEqual({ stockId: '2330' })
+        expect(JSON.parse(String(init?.body))).toEqual({ stockId: '2330', buyDate: '2026-09-17' })
         return Promise.resolve(jsonResponse(201, item()))
       }
       if (u === '/api/simulated-trades' && method === 'GET') {
@@ -368,6 +371,16 @@ describe('SimulatedTradeTab', () => {
       body: { code: 'DUPLICATE_SIMULATED_TRADE', stockId: '2330', buyDate: '2026-09-18' },
       expected: '2330 在 2026-09-18 已經加過了',
     },
+    {
+      code: 'INVALID_BUY_DATE',
+      body: { code: 'INVALID_BUY_DATE', buyDate: '2099-01-01' },
+      expected: '買進日不能晚於今日',
+    },
+    {
+      code: 'NO_PRICE_ON_BUY_DATE',
+      body: { code: 'NO_PRICE_ON_BUY_DATE', stockId: '2330', buyDate: '2026-09-13' },
+      expected: '2330 在 2026-09-13 沒有收盤價（可能是假日或停牌），請換一天',
+    },
   ]
 
   for (const { code, body, expected } of addErrorCases) {
@@ -424,5 +437,141 @@ describe('SimulatedTradeTab', () => {
     await screen.findByText('台積電')
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/建議|推薦|可進場/)
+  })
+
+  // ---------- 指定買進日（本次新增） ----------
+
+  it('買進日 defaults to defaultBuyDate with max = asOfDate', async () => {
+    getResponder = () => ({
+      status: 200,
+      body: listResponse({ defaultBuyDate: '2026-09-10', asOfDate: '2026-09-18' }),
+    })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('台積電')
+    const dateInput = screen.getByLabelText('買進日') as HTMLInputElement
+    expect(dateInput.value).toBe('2026-09-10')
+    expect(dateInput).toHaveAttribute('max', '2026-09-18')
+  })
+
+  it('defaultBuyDate null leaves 買進日 empty and keeps 加入 disabled even with a stockId entered', async () => {
+    getResponder = () => ({ status: 200, body: emptyResponse({ defaultBuyDate: null }) })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('尚無模擬持股，輸入股票代號加入第一筆')
+    const dateInput = screen.getByLabelText('買進日') as HTMLInputElement
+    expect(dateInput.value).toBe('')
+    fireEvent.change(screen.getByPlaceholderText('輸入股票代號，例如 2330'), { target: { value: '2330' } })
+    expect(screen.getByRole('button', { name: '加入' })).toBeDisabled()
+  })
+
+  it('POST body always sends buyDate (even when unchanged from the default), and Enter in the date input submits', async () => {
+    getResponder = () => ({ status: 200, body: emptyResponse({ defaultBuyDate: '2026-09-15' }) })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('尚無模擬持股，輸入股票代號加入第一筆')
+
+    fireEvent.change(screen.getByPlaceholderText('輸入股票代號，例如 2330'), { target: { value: '2330' } })
+    const dateInput = screen.getByLabelText('買進日')
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u === '/api/simulated-trades' && method === 'POST') {
+        expect(JSON.parse(String(init?.body))).toEqual({ stockId: '2330', buyDate: '2026-09-15' })
+        return Promise.resolve(jsonResponse(201, item()))
+      }
+      if (u === '/api/simulated-trades' && method === 'GET') {
+        return Promise.resolve(jsonResponse(200, listResponse({ defaultBuyDate: '2026-09-15' })))
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${u}`))
+    })
+    fireEvent.keyDown(dateInput, { key: 'Enter' })
+    await screen.findByText('台積電')
+  })
+
+  it('changing 買進日 to an earlier trading day adds a row whose buyDate/buyPrice reflect the mock response for that date', async () => {
+    getResponder = () => ({ status: 200, body: emptyResponse({ defaultBuyDate: '2026-09-17' }) })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('尚無模擬持股，輸入股票代號加入第一筆')
+
+    fireEvent.change(screen.getByPlaceholderText('輸入股票代號，例如 2330'), { target: { value: '2330' } })
+    const dateInput = screen.getByLabelText('買進日') as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: '2026-09-10' } })
+    expect(dateInput.value).toBe('2026-09-10')
+
+    const earlierItem = item({ buyDate: '2026-09-10', buyPrice: 1080.5 })
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u === '/api/simulated-trades' && method === 'POST') {
+        expect(JSON.parse(String(init?.body))).toEqual({ stockId: '2330', buyDate: '2026-09-10' })
+        return Promise.resolve(jsonResponse(201, earlierItem))
+      }
+      if (u === '/api/simulated-trades' && method === 'GET') {
+        return Promise.resolve(jsonResponse(200, listResponse({ items: [earlierItem] })))
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${u}`))
+    })
+    fireEvent.click(screen.getByRole('button', { name: '加入' }))
+    await screen.findByText('台積電')
+    const row = screen.getAllByRole('row')[1]
+    expect(within(row).getByText('2026-09-10')).toBeInTheDocument()
+    expect(within(row).getByText('1080.50')).toBeInTheDocument()
+  })
+
+  it('加入成功後買進日維持不變、只清空代號；加入失敗時兩格都不清空', async () => {
+    getResponder = () => ({ status: 200, body: emptyResponse({ defaultBuyDate: '2026-09-12' }) })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('尚無模擬持股，輸入股票代號加入第一筆')
+
+    const codeInput = screen.getByPlaceholderText('輸入股票代號，例如 2330') as HTMLInputElement
+    const dateInput = screen.getByLabelText('買進日') as HTMLInputElement
+    fireEvent.change(codeInput, { target: { value: '2330' } })
+    fireEvent.change(dateInput, { target: { value: '2026-09-05' } })
+
+    // Failure first: neither input clears.
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u === '/api/simulated-trades' && method === 'POST') {
+        return Promise.resolve(
+          jsonResponse(400, { code: 'NO_PRICE_ON_BUY_DATE', stockId: '2330', buyDate: '2026-09-05' }),
+        )
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${u}`))
+    })
+    fireEvent.click(screen.getByRole('button', { name: '加入' }))
+    await screen.findByText('2330 在 2026-09-05 沒有收盤價（可能是假日或停牌），請換一天')
+    expect(codeInput.value).toBe('2330')
+    expect(dateInput.value).toBe('2026-09-05')
+
+    // Now succeed: only the code input clears; the date stays at the user's chosen value
+    // (not reset back to defaultBuyDate) — continuing to add more stocks for the same day
+    // is the common case.
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (u === '/api/simulated-trades' && method === 'POST') {
+        return Promise.resolve(jsonResponse(201, item({ buyDate: '2026-09-05' })))
+      }
+      if (u === '/api/simulated-trades' && method === 'GET') {
+        return Promise.resolve(jsonResponse(200, listResponse({ items: [item({ buyDate: '2026-09-05' })] })))
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${method} ${u}`))
+    })
+    fireEvent.click(screen.getByRole('button', { name: '加入' }))
+    await waitFor(() => expect(codeInput.value).toBe(''))
+    expect(dateInput.value).toBe('2026-09-05')
+  })
+
+  it('買進日輸入框與代號輸入框共用同一個背景／邊框／focus 邊框 CSS class（同色碼，且不隨系統深淺色偏好改變）', async () => {
+    getResponder = () => ({ status: 200, body: emptyResponse() })
+    render(<SimulatedTradeTab />)
+    await screen.findByText('尚無模擬持股，輸入股票代號加入第一筆')
+    const codeInput = screen.getByPlaceholderText('輸入股票代號，例如 2330')
+    const dateInput = screen.getByLabelText('買進日')
+    // Both inputs carry the shared `sim-add-input` class — SimulatedTradeTab.css declares
+    // that rule's background/border/focus-border once, as literal hex, so the two inputs
+    // can never paint different colors regardless of prefers-color-scheme.
+    expect(codeInput.className.split(' ')).toContain('sim-add-input')
+    expect(dateInput.className.split(' ')).toContain('sim-add-input')
   })
 })

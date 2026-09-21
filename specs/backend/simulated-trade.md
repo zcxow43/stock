@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "模擬交易持股 API"
 requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆"
 depends_on: [stock-catalog, stock-price-ingestion]
@@ -197,12 +197,12 @@ Response `204`，無內容。
 - [x] 建立後修改 `stock_daily_price` 中該買進日的收盤價，再查 `GET`：該筆的 `buyPrice` 與 `cost` 不變
 
 ### 指定買進日（本次新增）
-- [ ] 帶 `{"stockId":"2330","buyDate":"<某個更早的交易日>"}` 回 `201`，`buyDate` 等於送出的日期、`buyPrice` 等於該檔該日的 `close_price`；未實現損益仍以最新收盤價計算
-- [ ] 同一檔以兩個不同的 `buyDate` 各加一筆皆成功，`GET` 依買進日由新到舊列出兩筆，兩筆各自計入彙總
-- [ ] 今日已有該檔收盤價時，帶今日為 `buyDate` 可成立（`buyPrice` 為今日收盤、未實現損益為負的費用）
-- [ ] `buyDate` 晚於今日（例如 `2099-01-01`）→ `400 INVALID_BUY_DATE`，且未寫入任何列；格式不合法的字串同樣回 `400 INVALID_BUY_DATE`
-- [ ] 指定的 `buyDate` 該檔無該列（例如週日）或 `close_price = 0` → `400 NO_PRICE_ON_BUY_DATE`（帶 `stockId` 與 `buyDate`），**不得**自動改用鄰近交易日建立，且未寫入任何列
-- [ ] `GET` 回的 `defaultBuyDate` 等於全市場 `trade_date <= 今日` 且 `close_price > 0` 的最大交易日；它與個別股票的最後交易日無關（構造一檔更早停止交易的股票驗證）
+- [x] 帶 `{"stockId":"2330","buyDate":"<某個更早的交易日>"}` 回 `201`，`buyDate` 等於送出的日期、`buyPrice` 等於該檔該日的 `close_price`；未實現損益仍以最新收盤價計算
+- [x] 同一檔以兩個不同的 `buyDate` 各加一筆皆成功，`GET` 依買進日由新到舊列出兩筆，兩筆各自計入彙總
+- [x] 今日已有該檔收盤價時，帶今日為 `buyDate` 可成立（`buyPrice` 為今日收盤、未實現損益為負的費用）
+- [x] `buyDate` 晚於今日（例如 `2099-01-01`）→ `400 INVALID_BUY_DATE`，且未寫入任何列；格式不合法的字串同樣回 `400 INVALID_BUY_DATE`
+- [x] 指定的 `buyDate` 該檔無該列（例如週日）或 `close_price = 0` → `400 NO_PRICE_ON_BUY_DATE`（帶 `stockId` 與 `buyDate`），**不得**自動改用鄰近交易日建立，且未寫入任何列
+- [x] `GET` 回的 `defaultBuyDate` 等於全市場 `trade_date <= 今日` 且 `close_price > 0` 的最大交易日；它與個別股票的最後交易日無關（構造一檔更早停止交易的股票驗證）
 - [x] 回應為與 `GET` 的 `items[]` 相同的形狀，含 `currentDate`／`currentPrice`／`unrealizedProfit`／`returnPercent`
 
 ### 未實現損益與成本
@@ -263,3 +263,45 @@ Response `204`，無內容。
   - Verified `simulated_trade` is empty (`SELECT COUNT(*) = 0`) and no `ST%`-prefixed rows remain in `stock`/`stock_daily_price`/`stock_sync_progress` after every test run — `@BeforeEach`/`@AfterEach` cleanup confirmed effective.
   - `code-quality` skill self-review pass: found one real Important-level issue (the `List#contains` O(n²) dedup noted above) and fixed it; no other Critical/Important findings applied — null-safety, error handling (`DuplicateKeyException` → 409 following `StockCatalogService`'s existing check-then-act pattern), transaction boundaries, and the bounded-query-count requirement all checked out against the diff.
 - Notes: none left unfixed. All 22 acceptance criteria verified and checked off above.
+
+---
+### Increment 1 — 2026-09-21
+
+This increment implements the 6 previously-unchecked criteria under "指定買進日（本次新增）": an optional `buyDate` on `POST /api/simulated-trades`, its `INVALID_BUY_DATE`/`NO_PRICE_ON_BUY_DATE` validation, and a market-wide `defaultBuyDate` on `GET /api/simulated-trades`. Ran against the live remote database (`env.md`'s `Use Env: true`), not the local `application.yml` connection — credentials sourced from the external env file one directory above the project root (`../env`, per `.claude/rules/external-env.md`) and passed as `SPRING_DATASOURCE_*` environment variables on the same command line as `mvn test`; never printed, echoed, or written to any file.
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/dto/CreateSimulatedTradeRequest.java` — added `buyDate`, deliberately typed as a raw `String` (not `LocalDate`) so a malformed value can reach the service and come back as `400 INVALID_BUY_DATE` with the offending string, instead of failing Jackson deserialization generically before the service ever runs.
+  - `develop/backend/src/main/java/com/stock/mapper/StockDailyPriceMapper.java` / `.xml` — added `findMarketWideLatestPositiveCloseDate(asOfDate)`: `SELECT MAX(trade_date) ... WHERE trade_date <= asOfDate AND close_price > 0`, not scoped to any stock id — the one query `defaultBuyDate` needs. `findOne` (pre-existing) is reused, unmodified, for the exact-date buy-price lookup on the explicit-`buyDate` path.
+  - `develop/backend/src/main/java/com/stock/exception/InvalidSimulatedTradeBuyDateException.java` (new) — carries the raw, as-submitted `buyDate` string. Kept separate from the pre-existing `InvalidBuyDateException` (POST /api/strategies/backtest's own same-JSON-code error, whose body shape carries `stockId` instead of `buyDate`) — same wire `code`, two different endpoints, two different body shapes, so two different exception/handler/factory triples rather than forcing one shape to serve both.
+  - `develop/backend/src/main/java/com/stock/exception/NoPriceOnBuyDateException.java` (new) — carries `stockId` + the parsed `buyDate`.
+  - `develop/backend/src/main/java/com/stock/dto/ErrorResponse.java` — `buyDate` field's Java type widened from `LocalDate` to `String` (wire format unchanged: Spring Boot's default Jackson config already serializes `LocalDate` as the same `yyyy-MM-dd` string a `String` field holds, so this is byte-for-byte identical on the wire for the pre-existing `DUPLICATE_SIMULATED_TRADE` caller). Needed because the new `INVALID_BUY_DATE` (this endpoint's own) error must be able to echo back a value that cannot always parse as a `LocalDate`. Added two factories: `invalidSimulatedTradeBuyDate(String)` and `noPriceOnBuyDate(String, LocalDate)`.
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` — two new `@ExceptionHandler`s, both `400`: `InvalidSimulatedTradeBuyDateException` and `NoPriceOnBuyDateException`.
+  - `develop/backend/src/main/java/com/stock/dto/SimulatedTradeResponseDto.java` — added `defaultBuyDate` (`LocalDate`, nullable).
+  - `develop/backend/src/main/java/com/stock/service/SimulatedTradeService.java` — `list()` now also runs the one market-wide max-date query and sets `defaultBuyDate` on the response. `create()`'s buy-date resolution is now a plain if/else on whether the request's raw `buyDate` string is blank: blank → unchanged pre-existing `findLatestPositiveCloseBefore` flow; non-blank → parse (catch `DateTimeParseException` → `INVALID_BUY_DATE`), reject `isAfter(today)` → `INVALID_BUY_DATE`, look up that exact date via `findOne` and require a positive `close_price` → otherwise `NO_PRICE_ON_BUY_DATE`, **never** falling back to a nearby trading day.
+  - `develop/backend/src/test/java/com/stock/SimulatedTradeIntegrationTest.java` — 6 new tests under a new `// ==================== 指定買進日（本次新增） ====================` block (`ST100`–`ST106`), plus two small helper overloads (`createBody`/`createAndReadJson`/`createRequest` with a `buyDate` parameter) and a `textOrNull(JsonNode)` helper. One line in the pre-existing (checked, untouched-behavior) `duplicateSameDay_returns409_dbStillHasOnlyOneRow` test changed from `assertEquals(buyDate, second.getBody().getBuyDate())` to `assertEquals(buyDate.toString(), ...)` — required purely by `ErrorResponse.getBuyDate()`'s Java return type changing from `LocalDate` to `String` above; the JSON on the wire, and therefore this test's actual behavior, is unchanged.
+
+- Design decisions:
+  - **Invoked the `design-patterns` skill before writing the buy-date resolution branch.** Conclusion: this is "exactly one call site, two mutually exclusive paths, no second variant in sight" — a plain if/else in `create()`, not a Strategy interface. Over-engineering a two-branch decision into an abstraction would violate this project's own KISS/YAGNI standard.
+  - **`ErrorResponse.buyDate` widened to `String` rather than adding a second field.** The wire contract fixes the JSON key as `"buyDate"` for three different error codes (`DUPLICATE_SIMULATED_TRADE`, and this increment's `INVALID_BUY_DATE` and `NO_PRICE_ON_BUY_DATE`); Jackson cannot serialize two distinct Java fields to the same external property name, so a second field was not an option. Widening the existing field's type to the common denominator (`String`) that both a real date and a malformed string can be represented as was the smallest change that keeps a single source of truth for that JSON key, at the cost of one pre-existing test line's assertion updated to match (see above) — the wire format itself did not change.
+  - **`create()`'s explicit-`buyDate` price lookup reuses the pre-existing `findOne(stockId, tradeDate)` mapper method** rather than adding a new one — it already returns exactly "the row for this stock on this date, or null", which is exactly what the `NO_PRICE_ON_BUY_DATE` check needs (row absent, or present with `close_price <= 0`).
+  - **`defaultBuyDate` is a single new aggregate query, never joined with the per-request holdings query** — it answers a market-wide question ("what is the newest closed trading day"), independent of which stocks the caller happens to hold, so coupling it to the batched current-price query (which is scoped to the caller's own holdings' stock ids) would be wrong, not just inefficient.
+
+- Verification (real command output tails):
+  - `mvn -f develop/backend/pom.xml compile` — `BUILD SUCCESS`.
+  - `mvn -f develop/backend/pom.xml test-compile` — `BUILD SUCCESS` (all 34 test source files, including `StrategyBacktestIntegrationTest`, still compile against the widened `ErrorResponse.buyDate` type — confirmed no other test file reads `ErrorResponse.getBuyDate()`; `StrategyBacktestIntegrationTest`'s own `getBuyDate()` calls are on the unrelated `BacktestDuplicateItemDto`).
+  - `SPRING_DATASOURCE_URL/USERNAME/PASSWORD mvn -f develop/backend/pom.xml test -Dtest=SimulatedTradeIntegrationTest` against the live remote database, run twice (once before, once after fixing one of this increment's own new tests — see below):
+    - First run: `Tests run: 29, Failures: 4` — the failure at `create_sameStockTwoDifferentBuyDates_bothSucceed_bothListedNewestFirst_bothCountTowardTotals:198` was this increment's own test bug (it compared the endpoint's *global* `totalCost`/`totalUnrealizedProfit` to the sum of just its own two new rows, which breaks if the shared live table already holds any other row); the other 3 failures (`totals_equalSumOfItems_costWeighted_notArithmeticMean`, `items_orderedByBuyDateDesc_thenStockIdAsc`, `get_noHoldings_returns200EmptyItems_totalsZero_totalReturnPercentNull`) are pre-existing, already-`[x]`-checked tests that likewise assert an exact global `items.size()`/total.
+    - Root-caused via a direct, read-only `SELECT stock_id, buy_date, created_at FROM simulated_trade ORDER BY created_at` against the live database: one real, non-`ST`-prefixed row already exists — `stock_id='2330', buy_date=2026-09-18, created_at=2026-09-21 05:45:23` — created hours before this session by real traffic against the already-running `/start` server, not by any test. This is genuine pre-existing data, not something this increment's code or tests wrote.
+    - Fixed only this increment's own test (rewrote its total assertions to compare *deltas* — `GET` totals captured immediately before creating the two new rows, plus each new row's own `cost`/`unrealizedProfit` — the same technique already used by the `defaultBuyDate`-independence test). Per the task's explicit instruction, did **not** touch the 3 pre-existing checked tests (their assertion style predates this increment and is unrelated to it) and did **not** delete the real `2330` row (a live, non-test row this increment must not disturb).
+    - Second run: `Tests run: 29, Failures: 3, Errors: 0, Skipped: 0`, `Time elapsed: 153.907 s`. All 6 of this increment's new tests passed; the same 3 pre-existing tests failed again, with the exact same off-by-one (`expected: <2> but was: <3>`, `expected: <3> but was: <4>`, `expected: <0> but was: <1>`) — consistent with the one stray real row, and not a regression this increment introduced.
+  - Did not run `mvn spring-boot:run` (a `/start`-launched backend was already bound to port 8080 for the whole session); did not run the full suite or any other broader run beyond this single test class, per the task's instructions on remote-DB round-trip cost.
+
+- Criteria verified and how (all 6 previously-unchecked, now `[x]`):
+  1. **Explicit earlier `buyDate` → 201 with that `buyDate`/`buyPrice`, unrealized profit off the latest close** — `create_withExplicitEarlierBuyDate_usesThatDateAndItsClose_unrealizedProfitUsesLatestClose` (`ST100`).
+  2. **Same stock, two different `buyDate`s, both succeed, both listed newest-first, both counted** — `create_sameStockTwoDifferentBuyDates_bothSucceed_bothListedNewestFirst_bothCountTowardTotals` (`ST101`), asserting the two rows' relative order among all `ST101` items and the totals' delta.
+  3. **`buyDate` = today succeeds when today's close already exists; unrealized profit negative (fees only)** — `create_buyDateIsToday_whenTodaysCloseAlreadyExists_succeeds_unrealizedProfitIsNegativeFeesOnly` (`ST102`).
+  4. **`buyDate` after today, and a malformed string, both → 400 `INVALID_BUY_DATE` with the offending `buyDate` echoed; no row written** — `create_buyDateAfterToday_returns400InvalidBuyDate_writesNoRow` (`ST103`, tests both `"2099-01-01"` and `"not-a-date"`).
+  5. **Explicit `buyDate` with no price row (a constructed Sunday) or `close_price = 0` → 400 `NO_PRICE_ON_BUY_DATE` with `stockId`+`buyDate`, never a nearby-day fallback, no row written** — `create_explicitBuyDateWithNoPriceRow_returns400NoPriceOnBuyDate_neverFallsBackToNearbyDate_writesNoRow` (`ST104`, tests both the missing-row and the zero-close sub-cases).
+  6. **`defaultBuyDate` is market-wide, independent of any one stock's own last trade date** — `get_defaultBuyDate_isMarketWideLatestClose_independentOfAnyOneStocksOwnLastTradeDate` (`ST105` delisted 400 days before the market baseline, `ST106` only inserted — and only asserted to move `defaultBuyDate` forward — when the live baseline isn't already `today`, since this runs against a live shared database whose real max trade date is unknown in advance).
+
+- Notes: the 3 pre-existing test failures are a live-database environmental fact (one real leftover `simulated_trade` row from prior real usage of the running server), not a regression from this increment — left un-fixed and unremediated deliberately, per the instruction not to modify checked-criteria behavior/tests and not to disturb existing rows. Nothing else left unfixed.

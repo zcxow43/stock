@@ -243,6 +243,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.simulatedTradeNotFound(e.getId()));
     }
 
+    @ExceptionHandler(InvalidSimulatedTradeBuyDateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSimulatedTradeBuyDate(InvalidSimulatedTradeBuyDateException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.invalidSimulatedTradeBuyDate(e.getBuyDate()));
+    }
+
+    @ExceptionHandler(NoPriceOnBuyDateException.class)
+    public ResponseEntity<ErrorResponse> handleNoPriceOnBuyDate(NoPriceOnBuyDateException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.noPriceOnBuyDate(e.getStockId(), e.getBuyDate()));
+    }
+
     @ExceptionHandler(InvalidMetricException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));

@@ -37,8 +37,9 @@ function gainClass(value: number): string {
 }
 
 /** Maps a failed 加入 to the exact copy specs/frontend/simulated-trade.md「錯誤處理」requires,
- * falling back to the request's own `stockId` when the error body doesn't echo one back. */
-function addErrorMessage(err: unknown, attemptedStockId: string): string {
+ * falling back to the request's own `stockId`/`buyDate` when the error body doesn't echo one
+ * back. */
+function addErrorMessage(err: unknown, attemptedStockId: string, attemptedBuyDate: string): string {
   if (err instanceof SimulatedTradeApiError) {
     switch (err.code) {
       case 'INVALID_STOCK_ID':
@@ -47,8 +48,12 @@ function addErrorMessage(err: unknown, attemptedStockId: string): string {
         return `找不到代號 ${err.unknownIds?.[0] ?? attemptedStockId}`
       case 'NO_PRICE_BEFORE_TODAY':
         return `${err.stockId ?? attemptedStockId} 在今日以前沒有可用的收盤價，無法加入`
+      case 'INVALID_BUY_DATE':
+        return '買進日不能晚於今日'
+      case 'NO_PRICE_ON_BUY_DATE':
+        return `${err.stockId ?? attemptedStockId} 在 ${err.buyDate ?? attemptedBuyDate} 沒有收盤價（可能是假日或停牌），請換一天`
       case 'DUPLICATE_SIMULATED_TRADE':
-        return `${err.stockId ?? attemptedStockId} 在 ${err.buyDate ?? ''} 已經加過了`
+        return `${err.stockId ?? attemptedStockId} 在 ${err.buyDate ?? attemptedBuyDate} 已經加過了`
       default:
         return '加入失敗，請稍後再試'
     }
@@ -68,6 +73,7 @@ export default function SimulatedTradeTab() {
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null)
 
   const [inputValue, setInputValue] = useState('')
+  const [buyDateValue, setBuyDateValue] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -83,6 +89,10 @@ export default function SimulatedTradeTab() {
   // React 19 StrictMode's dev-only mount→unmount→remount double-invoke otherwise leaves a
   // stale `false` on the real mount (see specs/frontend/stock-list.md Increment 2's note).
   const mountedRef = useRef(true)
+  // Set once, on the first successful GET — the 買進日 input then defaults to
+  // `defaultBuyDate` but is never overwritten by a later refetch (after 加入/刪除/重試),
+  // since 「加入成功後買進日維持不變」 and the user may already have changed it by hand.
+  const buyDateInitializedRef = useRef(false)
 
   /** Fetches the list and replaces `data`/`status` with the result. Used for the initial
    * load, 重試, and the required re-fetch after every successful 加入/刪除. */
@@ -97,6 +107,10 @@ export default function SimulatedTradeTab() {
         setData(resp)
         setStatus('success')
         setLoadErrorMessage(null)
+        if (!buyDateInitializedRef.current) {
+          buyDateInitializedRef.current = true
+          setBuyDateValue(resp.defaultBuyDate ?? '')
+        }
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return
@@ -129,11 +143,15 @@ export default function SimulatedTradeTab() {
 
   const handleAdd = async () => {
     const stockId = inputValue.trim()
-    if (!stockId || adding) return
+    const buyDate = buyDateValue
+    if (!stockId || !buyDate || adding) return
     setAdding(true)
     try {
-      const created = await createSimulatedTrade(stockId)
+      const created = await createSimulatedTrade(stockId, buyDate)
       if (!mountedRef.current) return
+      // 買進日 deliberately left as-is — only the code input is cleared (specs/frontend
+      // /simulated-trade.md「加入成功後買進日維持不變」: adding several stocks for the
+      // same day is the common case).
       setInputValue('')
       setAddError(null)
       setTableMessage(null)
@@ -141,7 +159,7 @@ export default function SimulatedTradeTab() {
       await runFetch()
     } catch (err) {
       if (!mountedRef.current) return
-      setAddError(addErrorMessage(err, stockId))
+      setAddError(addErrorMessage(err, stockId, buyDate))
     } finally {
       if (mountedRef.current) {
         setAdding(false)
@@ -178,7 +196,7 @@ export default function SimulatedTradeTab() {
     }
   }
 
-  const canAdd = inputValue.trim() !== '' && !adding
+  const canAdd = inputValue.trim() !== '' && buyDateValue !== '' && !adding
   const items = data?.items ?? []
   const noHoldings = data ? data.totalReturnPercent == null : true
   const isEmpty = status === 'success' && data != null && items.length === 0
@@ -194,6 +212,15 @@ export default function SimulatedTradeTab() {
             placeholder="輸入股票代號，例如 2330"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+          />
+          <input
+            type="date"
+            className="sim-add-input sim-date-input"
+            aria-label="買進日"
+            value={buyDateValue}
+            max={data?.asOfDate}
+            onChange={(e) => setBuyDateValue(e.target.value)}
             onKeyDown={handleInputKeyDown}
           />
           <button

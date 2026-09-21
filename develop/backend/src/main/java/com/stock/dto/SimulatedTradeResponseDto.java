@@ -14,6 +14,7 @@ import java.util.List;
 public class SimulatedTradeResponseDto {
 
     private LocalDate asOfDate;
+    private LocalDate defaultBuyDate;
     private int lotSize;
     private BigDecimal feeRatePercent;
     private BigDecimal taxRatePercent;
@@ -31,6 +32,19 @@ public class SimulatedTradeResponseDto {
 
     public void setAsOfDate(LocalDate asOfDate) {
         this.asOfDate = asOfDate;
+    }
+
+    public LocalDate getDefaultBuyDate() {
+        return defaultBuyDate;
+    }
+
+    /**
+     * Market-wide `trade_date &lt;= 今日` with `close_price &gt; 0`, MAX — deliberately not scoped to
+     * any one stock (specs/backend/simulated-trade.md, "預設買進日（defaultBuyDate）"). `null` only
+     * when the database holds no price rows at all.
+     */
+    public void setDefaultBuyDate(LocalDate defaultBuyDate) {
+        this.defaultBuyDate = defaultBuyDate;
     }
 
     public int getLotSize() {

@@ -142,6 +142,174 @@ class SimulatedTradeIntegrationTest {
         assertTrue(item.has("stockName"));
     }
 
+    // ==================== 指定買進日（本次新增） ====================
+
+    @Test
+    void create_withExplicitEarlierBuyDate_usesThatDateAndItsClose_unrealizedProfitUsesLatestClose() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate earlierBuyDate = today.minusDays(5);
+        seedStock("ST100", "指定買進日測試", true);
+        insertPriceRow("ST100", earlierBuyDate, "100.00");
+        insertPriceRow("ST100", today.minusDays(3), "150.00");
+        insertPriceRow("ST100", today, "120.00");
+
+        JsonNode item = createAndReadJson("ST100", earlierBuyDate.toString(), HttpStatus.CREATED);
+        assertEquals(earlierBuyDate.toString(), item.get("buyDate").asText());
+        assertEquals(0, new BigDecimal("100.00").compareTo(item.get("buyPrice").decimalValue()));
+        assertEquals(today.toString(), item.get("currentDate").asText());
+        assertEquals(0, new BigDecimal("120.00").compareTo(item.get("currentPrice").decimalValue()));
+    }
+
+    @Test
+    void create_sameStockTwoDifferentBuyDates_bothSucceed_bothListedNewestFirst_bothCountTowardTotals()
+            throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate olderBuyDate = today.minusDays(3);
+        LocalDate newerBuyDate = today.minusDays(1);
+        seedStock("ST101", "多筆買進日測試", true);
+        insertPriceRow("ST101", olderBuyDate, "100.00");
+        insertPriceRow("ST101", newerBuyDate, "110.00");
+        insertPriceRow("ST101", today, "120.00");
+
+        // Baseline totals may already include unrelated rows from the live shared database, so the
+        // effect of these two new rows is asserted as a delta, not as the response's absolute total.
+        BigDecimal totalCostBefore = getListJson().get("totalCost").decimalValue();
+        BigDecimal totalProfitBefore = getListJson().get("totalUnrealizedProfit").decimalValue();
+
+        JsonNode older = createAndReadJson("ST101", olderBuyDate.toString(), HttpStatus.CREATED);
+        JsonNode newer = createAndReadJson("ST101", newerBuyDate.toString(), HttpStatus.CREATED);
+        BigDecimal expectedTotalCost =
+                totalCostBefore.add(older.get("cost").decimalValue()).add(newer.get("cost").decimalValue());
+        BigDecimal expectedTotalProfit = totalProfitBefore
+                .add(older.get("unrealizedProfit").decimalValue())
+                .add(newer.get("unrealizedProfit").decimalValue());
+
+        JsonNode root = getListJson();
+        JsonNode items = root.get("items");
+        int newerIdx = -1;
+        int olderIdx = -1;
+        for (int i = 0; i < items.size(); i++) {
+            JsonNode it = items.get(i);
+            if (!"ST101".equals(it.get("stockId").asText())) {
+                continue;
+            }
+            if (newerBuyDate.toString().equals(it.get("buyDate").asText())) {
+                newerIdx = i;
+            } else if (olderBuyDate.toString().equals(it.get("buyDate").asText())) {
+                olderIdx = i;
+            }
+        }
+        assertTrue(newerIdx >= 0 && olderIdx >= 0, "both buyDates must be present in items");
+        assertTrue(newerIdx < olderIdx, "newer buyDate must be listed before the older one");
+
+        assertEquals(0, expectedTotalCost.compareTo(root.get("totalCost").decimalValue()));
+        assertEquals(0, expectedTotalProfit.compareTo(root.get("totalUnrealizedProfit").decimalValue()));
+
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM simulated_trade WHERE stock_id = 'ST101'", Long.class);
+        assertEquals(2L, count);
+    }
+
+    @Test
+    void create_buyDateIsToday_whenTodaysCloseAlreadyExists_succeeds_unrealizedProfitIsNegativeFeesOnly()
+            throws Exception {
+        LocalDate today = LocalDate.now();
+        seedStock("ST102", "今日買進測試", true);
+        insertPriceRow("ST102", today, "100.00");
+
+        JsonNode item = createAndReadJson("ST102", today.toString(), HttpStatus.CREATED);
+        assertEquals(today.toString(), item.get("buyDate").asText());
+        assertEquals(0, new BigDecimal("100.00").compareTo(item.get("buyPrice").decimalValue()));
+        assertEquals(today.toString(), item.get("currentDate").asText());
+        assertTrue(item.get("unrealizedProfit").asInt() < 0, "unrealizedProfit must be negative (fees only)");
+    }
+
+    @Test
+    void create_buyDateAfterToday_returns400InvalidBuyDate_writesNoRow() {
+        seedStock("ST103", "未來日期測試", true);
+
+        ResponseEntity<ErrorResponse> future = createRequest("ST103", "2099-01-01");
+        assertEquals(HttpStatus.BAD_REQUEST, future.getStatusCode());
+        assertEquals("INVALID_BUY_DATE", future.getBody().getCode());
+        assertEquals("2099-01-01", future.getBody().getBuyDate());
+
+        ResponseEntity<ErrorResponse> malformed = createRequest("ST103", "not-a-date");
+        assertEquals(HttpStatus.BAD_REQUEST, malformed.getStatusCode());
+        assertEquals("INVALID_BUY_DATE", malformed.getBody().getCode());
+        assertEquals("not-a-date", malformed.getBody().getBuyDate());
+
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM simulated_trade WHERE stock_id = 'ST103'", Long.class);
+        assertEquals(0L, count);
+    }
+
+    @Test
+    void create_explicitBuyDateWithNoPriceRow_returns400NoPriceOnBuyDate_neverFallsBackToNearbyDate_writesNoRow() {
+        LocalDate today = LocalDate.now();
+        // A Sunday strictly before today, guaranteed to have no stock_daily_price row at all.
+        LocalDate sunday = today.minusDays(1);
+        while (sunday.getDayOfWeek() != java.time.DayOfWeek.SUNDAY) {
+            sunday = sunday.minusDays(1);
+        }
+        LocalDate priorTradingDay = sunday.minusDays(2);
+        seedStock("ST104", "無收盤價測試", true);
+        insertPriceRow("ST104", priorTradingDay, "100.00");
+        // sunday itself: no row at all.
+
+        ResponseEntity<ErrorResponse> missingRow = createRequest("ST104", sunday.toString());
+        assertEquals(HttpStatus.BAD_REQUEST, missingRow.getStatusCode());
+        assertEquals("NO_PRICE_ON_BUY_DATE", missingRow.getBody().getCode());
+        assertEquals("ST104", missingRow.getBody().getStockId());
+        assertEquals(sunday.toString(), missingRow.getBody().getBuyDate());
+
+        // A day that does have a row, but close_price = 0 — "沒有成交", not a real quote either.
+        LocalDate zeroCloseDay = priorTradingDay.plusDays(1);
+        insertPriceRow("ST104", zeroCloseDay, "0.00");
+        ResponseEntity<ErrorResponse> zeroClose = createRequest("ST104", zeroCloseDay.toString());
+        assertEquals(HttpStatus.BAD_REQUEST, zeroClose.getStatusCode());
+        assertEquals("NO_PRICE_ON_BUY_DATE", zeroClose.getBody().getCode());
+        assertEquals("ST104", zeroClose.getBody().getStockId());
+        assertEquals(zeroCloseDay.toString(), zeroClose.getBody().getBuyDate());
+
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM simulated_trade WHERE stock_id = 'ST104'", Long.class);
+        assertEquals(0L, count);
+    }
+
+    @Test
+    void get_defaultBuyDate_isMarketWideLatestClose_independentOfAnyOneStocksOwnLastTradeDate() throws Exception {
+        // Runs against the live, shared database (real stocks like 2330 already have real price
+        // history), so this asserts the MARKET-WIDE property relatively rather than pinning
+        // defaultBuyDate to a hardcoded absolute date computed from `today` alone.
+        LocalDate today = LocalDate.now();
+        String baselineDefaultBuyDate = textOrNull(getListJson().get("defaultBuyDate"));
+
+        // A stock that stopped trading well before the current market-wide latest close date — its
+        // own (much earlier) last trade date must never leak into defaultBuyDate, which is
+        // market-wide, not per-stock (specs/backend/simulated-trade.md, "預設買進日（defaultBuyDate）").
+        LocalDate delistedLast = today.minusDays(400);
+        seedStock("ST105", "已停止交易測試", false);
+        insertPriceRow("ST105", delistedLast, "50.00");
+
+        JsonNode afterDelisted = getListJson();
+        String defaultBuyDateAfterDelisted = textOrNull(afterDelisted.get("defaultBuyDate"));
+        assertEquals(baselineDefaultBuyDate, defaultBuyDateAfterDelisted,
+                "an older, delisted stock's own last trade date must not move defaultBuyDate");
+        assertNotEquals(delistedLast.toString(), defaultBuyDateAfterDelisted,
+                "defaultBuyDate must never equal the delisted stock's own last trade date");
+
+        // Construct a still-active stock whose own last trade date is strictly later than every
+        // other stock's (including the live database's real, unrelated data) — proving
+        // defaultBuyDate is recomputed market-wide across ALL stocks, not scoped to any one.
+        boolean baselineIsToday = today.toString().equals(baselineDefaultBuyDate);
+        if (!baselineIsToday) {
+            seedStock("ST106", "仍在交易測試", true);
+            insertPriceRow("ST106", today, "60.00");
+
+            JsonNode afterActive = getListJson();
+            assertEquals(today.toString(), afterActive.get("defaultBuyDate").asText(),
+                    "a newer close from any stock must move the market-wide defaultBuyDate forward");
+            assertNotEquals(delistedLast.toString(), afterActive.get("defaultBuyDate").asText());
+        }
+    }
+
     // ==================== 未實現損益與成本 ====================
 
     @Test
@@ -428,7 +596,7 @@ class SimulatedTradeIntegrationTest {
         assertEquals(HttpStatus.CONFLICT, second.getStatusCode());
         assertEquals("DUPLICATE_SIMULATED_TRADE", second.getBody().getCode());
         assertEquals("ST070", second.getBody().getStockId());
-        assertEquals(buyDate, second.getBody().getBuyDate());
+        assertEquals(buyDate.toString(), second.getBody().getBuyDate());
 
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM simulated_trade WHERE stock_id = 'ST070'", Long.class);
         assertEquals(1L, count);
@@ -495,6 +663,24 @@ class SimulatedTradeIntegrationTest {
         return request;
     }
 
+    private CreateSimulatedTradeRequest createBody(String stockId, String buyDate) {
+        CreateSimulatedTradeRequest request = new CreateSimulatedTradeRequest();
+        request.setStockId(stockId);
+        request.setBuyDate(buyDate);
+        return request;
+    }
+
+    private JsonNode createAndReadJson(String stockId, String buyDate, HttpStatus expectedStatus) throws Exception {
+        ResponseEntity<String> response =
+                rest.postForEntity("/api/simulated-trades", createBody(stockId, buyDate), String.class);
+        assertEquals(expectedStatus, response.getStatusCode(), "body: " + response.getBody());
+        return objectMapper.readTree(response.getBody());
+    }
+
+    private ResponseEntity<ErrorResponse> createRequest(String stockId, String buyDate) {
+        return rest.postForEntity("/api/simulated-trades", createBody(stockId, buyDate), ErrorResponse.class);
+    }
+
     private JsonNode getListJson() throws Exception {
         ResponseEntity<String> response = rest.getForEntity("/api/simulated-trades", String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode(), "body: " + response.getBody());
@@ -527,6 +713,11 @@ class SimulatedTradeIntegrationTest {
     private void insertSimulatedTrade(String stockId, LocalDate buyDate, String buyPrice) {
         jdbc.update("INSERT INTO simulated_trade (stock_id, buy_date, buy_price, shares) VALUES (?, ?, ?, 1000)",
                 stockId, buyDate, new BigDecimal(buyPrice));
+    }
+
+    /** {@code null} for both a missing field and an explicit JSON {@code null} value. */
+    private String textOrNull(JsonNode node) {
+        return (node == null || node.isNull()) ? null : node.asText();
     }
 
     private long countAll(String table) {

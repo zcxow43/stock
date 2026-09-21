@@ -145,4 +145,13 @@ public interface StockDailyPriceMapper {
      */
     List<StockDailyPrice> findLatestPositiveCloseOnOrBeforeByStockIds(@Param("stockIds") List<String> stockIds,
                                                                        @Param("asOfDate") LocalDate asOfDate);
+
+    /**
+     * MAX(trade_date) across the whole {@code stock_daily_price} table (not scoped to any one
+     * stock) where trade_date &lt;= asOfDate and close_price &gt; 0 — the market-wide "last close
+     * date", used as GET /api/simulated-trades' {@code defaultBuyDate} (see specs/backend/
+     * simulated-trade.md, "預設買進日（defaultBuyDate）"). Deliberately not per-stock: an individual
+     * stock's own last trade date says nothing about the market's. Null when no such row exists.
+     */
+    LocalDate findMarketWideLatestPositiveCloseDate(@Param("asOfDate") LocalDate asOfDate);
 }

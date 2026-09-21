@@ -48,6 +48,13 @@
   border-color: #3e8fd8;
 }
 
+/* 買進日輸入 — shares the `.sim-add-input` class above for background/border/focus-border
+   (literal hex, same selector as the code input, so the two can never drift apart); this
+   rule only narrows its width to something sane for a date field. */
+.sim-date-input {
+  width: 170px;
+}
+
 .sim-add-error {
   margin-top: 9px;
   font-size: 12px;

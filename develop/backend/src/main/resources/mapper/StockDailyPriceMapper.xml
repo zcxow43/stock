@@ -211,4 +211,10 @@
         WHERE rn = 1
     </select>
 
+    <select id="findMarketWideLatestPositiveCloseDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date)
+        FROM stock_daily_price
+        WHERE trade_date &lt;= #{asOfDate} AND close_price > 0
+    </select>
+
 </mapper>
