@@ -13,7 +13,7 @@
 # Container
 
 ## Database
-- Use Env: true
+- Use Env: false
 - Engine: MySQL 8.x
 - Host: 127.0.0.1
 - Port: 3306

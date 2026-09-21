@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -57,23 +58,46 @@ public class PriceIngestionService {
     /**
      * Writes a whole-market daily snapshot: upserts the stock master (name/market/active)
      * and every stock's price row for that trade date, in one transaction.
+     *
+     * The stock-master write is skipped for a stock whose written columns (name/market/active)
+     * already match what's in the database (spec: 寫入語意 — 每日增量寫 stock 主檔時，內容沒變的股票不寫).
+     * Existing rows for this snapshot's stock ids are fetched in exactly one query up front and
+     * compared in memory; only a stock that doesn't exist yet, or whose name/market/active differs
+     * from that lookup, is UPSERTed. The lookup itself is skipped entirely (no call to the mapper
+     * at all, not just an empty-collection guard inside it) when the snapshot has no rows — the
+     * same "目標清單為空時不把空集合交給資料庫" rule already applied elsewhere in this module.
+     * {@code stockMasterUpserted} still counts every snapshot stock (the response contract is
+     * unchanged), and stock_daily_price / last_synced_date advancement below is unaffected — this
+     * only prunes redundant stock-master writes, one 205ms remote round trip apiece for ~1,370
+     * unchanged names at startup.
      */
     @Transactional
     public DailySyncResponse applyDailySnapshot(TwseSnapshotResult snapshot) {
         List<TwseSnapshotRow> rows = snapshot.getRows();
         Set<String> existingStockIds = new HashSet<>(priceMapper.findStockIdsByTradeDate(snapshot.getTradeDate()));
 
+        List<String> stockIds = new ArrayList<>(rows.size());
+        for (TwseSnapshotRow row : rows) {
+            stockIds.add(row.getStockId());
+        }
+        Map<String, Stock> existingMasterRows = new HashMap<>();
+        if (!stockIds.isEmpty()) {
+            for (Stock existing : stockMapper.findByIds(stockIds)) {
+                existingMasterRows.put(existing.getStockId(), existing);
+            }
+        }
+
         int inserted = 0;
         int updated = 0;
         int stockMasterUpserted = 0;
-        List<String> stockIds = new ArrayList<>(rows.size());
 
         for (TwseSnapshotRow row : rows) {
-            stockMapper.upsert(new Stock(row.getStockId(), row.getStockName(), MARKET_TSE, Boolean.TRUE));
+            if (isStockMasterWriteNeeded(existingMasterRows.get(row.getStockId()), row.getStockName())) {
+                stockMapper.upsert(new Stock(row.getStockId(), row.getStockName(), MARKET_TSE, Boolean.TRUE));
+            }
             stockMasterUpserted++;
 
             priceMapper.upsert(toDomain(row.getPrice(), SOURCE_TWSE));
-            stockIds.add(row.getStockId());
             if (existingStockIds.contains(row.getStockId())) {
                 updated++;
             } else {
@@ -230,6 +254,20 @@ public class PriceIngestionService {
             links.add(new StockIndustry(candidate.getStockId(), industryIdByName.get(candidate.getIndustryName())));
         }
         stockIndustryMapper.insertBatch(links);
+    }
+
+    /**
+     * True when this snapshot row's stock-master write would actually change something: the stock
+     * doesn't exist yet, or any column this path writes (name/market/active — always
+     * {@link #MARKET_TSE}/{@code true} on this path) differs from the existing row.
+     */
+    private boolean isStockMasterWriteNeeded(Stock existing, String newStockName) {
+        if (existing == null) {
+            return true;
+        }
+        return !Objects.equals(existing.getStockName(), newStockName)
+                || !MARKET_TSE.equals(existing.getMarket())
+                || !Boolean.TRUE.equals(existing.getActive());
     }
 
     private StockDailyPrice toDomain(NormalizedPriceRow row, String source) {

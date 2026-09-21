@@ -109,13 +109,13 @@ describe('SimulatedTradeTab', () => {
   it('hint text uses lotSize from the response, not a hardcoded value', async () => {
     getResponder = () => ({ status: 200, body: emptyResponse() })
     const first = render(<SimulatedTradeTab />)
-    await screen.findByText('以今日以前最後一個交易日的收盤價買進 1 張（每筆 1,000 股）')
+    await screen.findByText('以所選日期的收盤價買進 1 張（每筆 1,000 股）')
     first.unmount()
 
     fetchMock.mockClear()
     getResponder = () => ({ status: 200, body: { ...emptyResponse(), lotSize: 100 } })
     render(<SimulatedTradeTab />)
-    await screen.findByText('以今日以前最後一個交易日的收盤價買進 1 張（每筆 100 股）')
+    await screen.findByText('以所選日期的收盤價買進 1 張（每筆 100 股）')
   })
 
   it('disables 加入 when input is empty, enables it once text is entered, and Enter submits POST with trimmed body', async () => {

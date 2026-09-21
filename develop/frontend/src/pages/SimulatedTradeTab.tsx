@@ -234,7 +234,7 @@ export default function SimulatedTradeTab() {
         </div>
         {addError ? <div className="sim-add-error">{addError}</div> : null}
         <div className="sim-add-hint">
-          以今日以前最後一個交易日的收盤價買進 1 張
+          以所選日期的收盤價買進 1 張
           {data ? `（每筆 ${data.lotSize.toLocaleString('en-US')} 股）` : null}
         </div>
       </div>
