@@ -8,6 +8,22 @@ function revealIncompletePositions() {
   if (checkbox?.checked) fireEvent.click(checkbox)
 }
 
+/** Undoes the two 回測成功時預設勾選 thresholds (specs/frontend/strategy.md「兩個門檻框改為
+ * 預設勾選」) so a test written against the pre-increment "everything visible, everything
+ * checked" table can keep asserting exactly that, without itself caring about the threshold
+ * feature. Mirrors what a user would do — uncheck each box — so it exercises the same code
+ * path the dedicated threshold tests exercise, never a shortcut around it. Does NOT touch
+ * 「隱藏資料不齊」(see `revealIncompletePositions` above) or the sort order: unchecking
+ * 「僅選取報酬率」never reverts a sort that its own checking already applied
+ * (「取消勾選不還原排序」) — callers that also care about the default sort order must reset it
+ * themselves (e.g. by clicking a sortable header three times). */
+function clearThresholdDefaults() {
+  const priceCheckbox = screen.queryByLabelText('取消買進價高於金額元') as HTMLInputElement | null
+  if (priceCheckbox?.checked) fireEvent.click(priceCheckbox)
+  const returnCheckbox = screen.queryByLabelText('僅選取報酬率百分比以上') as HTMLInputElement | null
+  if (returnCheckbox?.checked) fireEvent.click(returnCheckbox)
+}
+
 function jsonResponse(status: number, body: unknown) {
   return { ok: status >= 200 && status < 300, status, json: async () => body }
 }
@@ -1478,6 +1494,113 @@ function priceThresholdBacktestResponse() {
   }
 }
 
+// ---------- 兩個門檻框改為預設勾選 (specs/frontend/strategy.md「兩個門檻框改為預設勾選」) ----------
+// Four stocks, one buy date each, exercising all four 「納入計算的勾選框」steps at once:
+// HIGH (buyPrice 600 > 500 → hidden by 「取消買進價高於」, return 10% would otherwise qualify),
+// LOWR (buyPrice 100, return 0.5% < 2% → visible but unchecked by 「僅選取報酬率」),
+// OKOK (buyPrice 100, return 5% ≥ 2% → stays checked, the only one counted in totals),
+// NOSL (buyPrice 50, no sellDate → hidden by 「隱藏資料不齊」, never counted).
+function defaultThresholdsScanResponse() {
+  return {
+    startDate: '2026-06-01',
+    endDate: '2026-08-30',
+    scannedStocks: 4,
+    results: [
+      {
+        strategy: 'BOX_BREAKOUT',
+        preset: 'STANDARD',
+        matchedCount: 4,
+        items: [
+          { stockId: 'HIGH', stockName: '高價股', signalDate: '2026-08-27', buyDate: '2026-08-27', detail: {} },
+          { stockId: 'LOWR', stockName: '低報酬股', signalDate: '2026-08-26', buyDate: '2026-08-26', detail: {} },
+          { stockId: 'OKOK', stockName: '達標股', signalDate: '2026-08-25', buyDate: '2026-08-25', detail: {} },
+          { stockId: 'NOSL', stockName: '無賣出股', signalDate: '2026-08-24', buyDate: '2026-08-24', detail: {} },
+        ],
+        insufficientData: [],
+        pendingConfirm: [],
+      },
+    ],
+  }
+}
+
+// All-checked totals: cost 600,000+100,000+100,000 = 800,000; profit 60,000+500+5,000 =
+// 65,500; return 65,500÷800,000×100 = 8.19% (NOSL excluded — no sellDate, no cost).
+function defaultThresholdsBacktestResponse() {
+  return {
+    asOfDate: '2026-09-10',
+    lotSize: 1000,
+    totalCost: 800000,
+    totalProfit: 65500,
+    totalReturnPercent: 8.19,
+    backtestedCount: 3,
+    feeRatePercent: 0.1425,
+    taxRatePercent: 0.3,
+    items: [
+      {
+        stockId: 'HIGH',
+        buyDate: '2026-08-27',
+        buyPrice: 600,
+        sellDate: '2026-08-28',
+        sellPrice: 660,
+        returnPercent: 10,
+        profit: 60000,
+        buyFee: 855,
+        sellFee: 940,
+        sellTax: 1980,
+        cost: 600000,
+      },
+      {
+        stockId: 'LOWR',
+        buyDate: '2026-08-26',
+        buyPrice: 100,
+        sellDate: '2026-08-27',
+        sellPrice: 100.5,
+        returnPercent: 0.5,
+        profit: 500,
+        buyFee: 142,
+        sellFee: 143,
+        sellTax: 301,
+        cost: 100000,
+      },
+      {
+        stockId: 'OKOK',
+        buyDate: '2026-08-25',
+        buyPrice: 100,
+        sellDate: '2026-08-26',
+        sellPrice: 105,
+        returnPercent: 5,
+        profit: 5000,
+        buyFee: 142,
+        sellFee: 149,
+        sellTax: 315,
+        cost: 100000,
+      },
+      {
+        stockId: 'NOSL',
+        buyDate: '2026-08-24',
+        buyPrice: 50,
+        sellDate: null,
+        sellPrice: null,
+        returnPercent: null,
+        profit: null,
+        buyFee: null,
+        sellFee: null,
+        sellTax: null,
+        cost: null,
+      },
+    ],
+  }
+}
+
+// Same shape, but HIGH's buyPrice is dropped to 400 (≤ 500) so the 高價組 is empty across
+// the whole hit list — exercises the price box's own "empty group" exception.
+function emptyHighPriceGroupBacktestResponse() {
+  const body = defaultThresholdsBacktestResponse()
+  body.items[0].buyPrice = 400
+  body.items[0].cost = 400000
+  return body
+}
+
 function renderTab(commonStocksOnly = true) {
   return render(
     <MemoryRouter initialEntries={['/stocks?tab=strategy']}>
@@ -1687,7 +1810,9 @@ describe('StrategyTab', () => {
 
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    // 2330 的 buyPrice（2420）高於「取消買進價高於 500 元」的預設門檻，回測成功後預設隱藏
+    // ——這裡只驗證掃描本身送出的參數，改等一定會出現的命中彙總標題即可。
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.startDate).toBe('2026-09-07')
@@ -1707,7 +1832,7 @@ describe('StrategyTab', () => {
 
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.startDate).toBe('2026-12-28')
@@ -1780,7 +1905,7 @@ describe('StrategyTab', () => {
 
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.startDate).toBe('2026-08-24')
@@ -1803,7 +1928,7 @@ describe('StrategyTab', () => {
 
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.startDate).toBe('2026-08-24')
@@ -1855,9 +1980,7 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    // 代號 and 名稱 render as sibling text nodes inside one <td> ("2330 台積電"), so
-    // match the combined text rather than a bare "2330" substring (exact match by default).
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.stockIds).toBeUndefined()
@@ -1942,6 +2065,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
+    // 2330 的 buyPrice（2420）高於「取消買進價高於 500 元」的預設門檻，回測成功後預設隱藏。
+    clearThresholdDefaults()
     expect(screen.getByText('2330 台積電')).toBeInTheDocument()
     // No per-strategy block titled with the old "策略（靈敏度）— 命中 N 檔" heading exists anymore.
     expect(screen.queryByText(/命中 1 檔/)).not.toBeInTheDocument()
@@ -2585,7 +2710,7 @@ describe('StrategyTab', () => {
 
     fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     expect(screen.getByText(/股票清單已更新/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
@@ -3305,7 +3430,9 @@ describe('StrategyTab', () => {
     scanResponder = () => bothStrategiesResponse()
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
-    await waitFor(() => expect(screen.getAllByText('2330 台積電').length).toBeGreaterThan(0))
+    // 2330 的 buyPrice（2420）落在「取消買進價高於 500 元」的預設門檻之上，回測成功時會被
+    // 預設隱藏——這裡只需要等掃描本身送出並完成，不需要那一列可見，因此改等命中彙總標題。
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 2 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.strategies).toEqual([
@@ -3341,7 +3468,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
 
     let scanCall = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).at(-1)!
     let body = JSON.parse((scanCall[1] as RequestInit).body as string)
@@ -3373,7 +3500,10 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByText('2330 台積電')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
+    // 2330 的 buyPrice（2420）高於「取消買進價高於 500 元」的預設門檻，回測成功後預設隱藏；
+    // 這裡要驗證的是「結果不因 prop 改變而重置」，因此先取消門檻框讓該列可見再繼續。
+    clearThresholdDefaults()
 
     const scanCallsBefore = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).length
 
@@ -3406,6 +3536,7 @@ describe('StrategyTab', () => {
 
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     expect(screen.queryByRole('button', { name: '回測' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '開始掃描' }).className).toContain('sl-btn-primary')
   })
@@ -3448,6 +3579,10 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的兩筆 buyPrice（2400／2350）都高於「取消買進價高於 500 元」的預設門檻，回測成功
+    // 後預設隱藏且取消勾選——這裡要驗證的是自動回測本身（全部納入計算），不是門檻框，所以先
+    // 取消兩個門檻框，恢復成「全部可見、全部勾選」。
+    clearThresholdDefaults()
 
     const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))!
     const body = JSON.parse((backtestCall[1] as RequestInit).body as string)
@@ -3465,9 +3600,16 @@ describe('StrategyTab', () => {
     const unionTableEl = screen.getByText('命中彙總 — 共 3 檔').closest('.st-union-block')!.querySelector('table')!
     ;(within(unionTableEl).getAllByRole('checkbox') as HTMLInputElement[]).forEach((cb) => expect(cb.checked).toBe(true))
 
+    // 「僅選取報酬率」的預設勾選一併把排序切到報酬率降冪（specs/frontend/strategy.md「兩個
+    // 門檻框改為預設勾選」），取消勾選也不會還原（「取消勾選不還原排序」）——這裡要驗證的是
+    // 自動回測本身與預設排序無關，因此手動點兩次報酬率表頭，把排序切回預設（最新 signalDate
+    // 由新到舊）再檢查表頭與列順序。
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    // 買進價／報酬率／收益 are the three sortable headers — freshly post-backtest, before
-    // any header click, all three show the idle 「↕」 indicator (specs/frontend/strategy.md
+    // 買進價／報酬率／收益 are the three sortable headers — after resetting the sort back to
+    // default above, all three show the idle 「↕」 indicator (specs/frontend/strategy.md
     // 「買進價、報酬率與收益欄排序」表頭呈現).
     expect(headers).toEqual([
       '',
@@ -3527,6 +3669,7 @@ describe('StrategyTab', () => {
     resolveBacktest(undefined)
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     expect(screen.queryByText('回測中…')).not.toBeInTheDocument()
   })
 
@@ -3539,6 +3682,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
@@ -3575,6 +3719,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const callsBefore = fetchMock.mock.calls.length
     const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
@@ -3606,6 +3751,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
     fireEvent.click(checkbox)
@@ -3631,6 +3777,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
     const row = checkbox.closest('tr') as HTMLElement
@@ -3656,6 +3803,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
@@ -3686,6 +3834,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     fireEvent.click(screen.getByLabelText('納入 2330 2026-08-25 計算')) // -> parent indeterminate
@@ -3711,6 +3860,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     const childA = screen.getByLabelText('納入 2330 2026-08-28 計算') as HTMLInputElement
@@ -3734,6 +3884,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
     expect(checkbox.checked).toBe(true)
@@ -3756,6 +3907,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
     expect(parentCheckbox.checked).toBe(true)
@@ -3780,6 +3932,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const callsBefore = fetchMock.mock.calls.length
     // 2317 alone: cost 100*1000=100,000, profit 10,000 -> excluding it from the combined
@@ -3816,6 +3969,10 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
 
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    // 2330 的兩筆 buyPrice 皆高於 500、2454 無賣出日，三者預設都不計入總計——這裡要驗證的是
+    // 「全部勾選時」與回應總計相等，因此先取消兩個門檻框與隱藏資料不齊，恢復成全部計入。
+    revealIncompletePositions()
+    clearThresholdDefaults()
 
     // unionBacktestResponse's own totalCost/totalProfit/totalReturnPercent are
     // 4,850,000 / -40,000 / -0.82 — the displayed values must match verbatim
@@ -3867,6 +4024,11 @@ describe('StrategyTab', () => {
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
+    // 這一筆 buyPrice 2420 高於 500，回測成功後預設被「取消買進價高於 500 元」隱藏——先取消
+    // 門檻框，才看得到這裡要驗證的收益／報酬率數字。
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    clearThresholdDefaults()
+
     // (Both the row's own cell and the total label read 0.62% here, hence getAllByText.)
     await waitFor(() => expect(screen.getAllByText('0.62%').length).toBeGreaterThan(0))
     const totalValues = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
@@ -3885,6 +4047,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    revealIncompletePositions()
+    clearThresholdDefaults()
     expect(Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)).toEqual([
       '4,850,000',
       '-0.82%',
@@ -3946,6 +4110,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     fireEvent.click(screen.getByLabelText('納入 2330 計算'))
     await waitFor(() => expect(screen.getByText('未勾選任何標的')).toBeInTheDocument())
@@ -3963,9 +4128,11 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
 
     revealIncompletePositions()
+    clearThresholdDefaults()
+    expect(screen.getByText('-0.82%')).toBeInTheDocument()
     // 2454 is already uncounted for lacking a sellable day — unchecking it too must not
     // add a second "未勾選" line or change the totals.
     fireEvent.click(screen.getByLabelText('納入 2454 計算'))
@@ -4010,6 +4177,10 @@ describe('StrategyTab', () => {
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
+    // buyPrice 2420 高於 500，回測成功後預設被「取消買進價高於 500 元」隱藏——先取消門檻框。
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    clearThresholdDefaults()
+
     await waitFor(() => expect(screen.getAllByText('0.00%').length).toBeGreaterThan(0))
     screen.getAllByText('0.00%').forEach((el) => expect(el.className).toContain('sl-neutral'))
     const totalValues = Array.from(document.querySelectorAll('.st-total-value'))
@@ -4031,6 +4202,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     // Cleared synchronously — before the new scan response even arrives.
@@ -4070,7 +4242,11 @@ describe('StrategyTab', () => {
     expect(screen.getByText('回測中…')).toBeInTheDocument()
 
     resolveBacktest(undefined)
-    await waitFor(() => expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    // buyPrice 2420 高於 500，回測成功後預設被「取消買進價高於 500 元」隱藏——先取消門檻框
+    // 才看得到這裡要驗證的勾選框。
+    clearThresholdDefaults()
+    expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument()
     expect(screen.queryByText('回測中…')).not.toBeInTheDocument()
   })
 
@@ -4094,7 +4270,11 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
-    await waitFor(() => expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    // buyPrice 2420 高於 500，回測成功後預設被「取消買進價高於 500 元」隱藏——先取消門檻框
+    // 才看得到這裡要驗證的勾選框。
+    clearThresholdDefaults()
+    expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('納入 2330 計算'))
     expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(false)
@@ -4105,7 +4285,12 @@ describe('StrategyTab', () => {
     expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
     expect(screen.queryByText('總報酬率')).not.toBeInTheDocument()
 
-    await waitFor(() => expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(true))
+    // 下一次自動回測成功時同樣預設隱藏＋取消勾選買進價高於 500 元的這一筆——先取消門檻框，
+    // 才能驗證「never carrying over the old selection」（此處指的是先前手動取消的勾選，不是
+    // 門檻框的預設狀態）。
+    await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    clearThresholdDefaults()
+    expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(true)
   })
 
   it('sends every hit stock to the auto-triggered 回測 regardless of checkbox state (there is none yet at the moment it fires)', async () => {
@@ -4118,6 +4303,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const backtestCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/backtest'))!
     const body = JSON.parse((backtestCall[1] as RequestInit).body as string)
@@ -4133,6 +4319,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     expect(screen.queryByRole('button', { name: '回測' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重試回測' })).not.toBeInTheDocument()
@@ -4158,6 +4345,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const backtestCalls = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/backtest'))
     expect(backtestCalls).toHaveLength(2)
@@ -4182,6 +4370,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     expect(screen.getByText('買進日')).toBeInTheDocument()
     expect(screen.getByText('買進價')).toBeInTheDocument()
@@ -4213,6 +4402,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const row = screen.getByLabelText('納入 2330 計算').closest('tr') as HTMLElement
     const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
@@ -4330,6 +4520,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const parentRow = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     // Arithmetic mean of the children's own return% (+10%, -10%) would be 0.00% — the
@@ -4358,6 +4549,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
     const callsBefore = fetchMock.mock.calls.length
@@ -4389,6 +4581,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     // Uncheck the whole stock via its (fully-checked) parent checkbox.
     fireEvent.click(screen.getByLabelText('納入 2330 全部計算'))
@@ -4424,6 +4617,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
     expect(parentCheckbox.checked).toBe(true)
@@ -4449,6 +4643,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     fireEvent.click(screen.getByLabelText('納入 2330 2026-08-25 計算')) // -> indeterminate
@@ -4473,6 +4668,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     fireEvent.click(screen.getByLabelText('納入 2330 全部計算')) // fully checked -> unchecks all
@@ -4496,6 +4692,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const checkbox = screen.getByLabelText('納入 2330 計算') as HTMLInputElement
     expect(checkbox.indeterminate).toBe(false)
@@ -4513,6 +4710,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    revealIncompletePositions()
+    clearThresholdDefaults()
 
     const collapsedTotals = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
@@ -4541,6 +4740,7 @@ describe('StrategyTab', () => {
 
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
     const container = screen.getByText('總報酬率').closest('.st-backtest-totals') as HTMLElement
     const labels = within(container).getAllByText(/^取消全選$|^總成本（每筆 1 張）$|^總報酬率$|^總收益（每筆 1 張）$/)
     expect(labels.map((el) => el.textContent)).toEqual(['總成本（每筆 1 張）', '總報酬率', '總收益（每筆 1 張）'])
@@ -4577,7 +4777,10 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    revealIncompletePositions()
+    clearThresholdDefaults()
+    expect(screen.getByText('-0.82%')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
@@ -4604,10 +4807,10 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
 
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
-    fireEvent.click(cancelAll) // all off
+    fireEvent.click(cancelAll) // all off (also clears both threshold defaults, revealing every row)
     await waitFor(() => expect(screen.getByText('未勾選任何標的')).toBeInTheDocument())
     fireEvent.click(cancelAll) // all back on
     expect(cancelAll.checked).toBe(false)
@@ -4629,8 +4832,9 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     fireEvent.click(screen.getByLabelText('納入 2317 計算'))
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
@@ -4652,8 +4856,9 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
     expect(cancelAll.checked).toBe(false)
@@ -4690,7 +4895,7 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('-0.82%')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
 
     const cancelAll = screen.getByLabelText('取消全選') as HTMLInputElement
     const callsBefore = fetchMock.mock.calls.length
@@ -4715,6 +4920,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     expect((screen.getByLabelText('納入 2330 計算') as HTMLInputElement).checked).toBe(true)
     expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(false)
@@ -4739,6 +4945,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     const scanCallsAfter = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan')).length
     expect(scanCallsAfter).toBe(scanCallsBefore)
@@ -4781,6 +4988,7 @@ describe('StrategyTab', () => {
     expect(screen.getByText('賣出日')).toBeInTheDocument()
     expect(screen.getByText('總報酬率')).toBeInTheDocument()
     expect(screen.getByLabelText('取消全選')).toBeInTheDocument()
+    clearThresholdDefaults()
     expect(screen.getByLabelText('納入 2330 計算')).toBeInTheDocument()
   })
 
@@ -4895,6 +5103,9 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2026-08-20 這筆 buyPrice 10000 高於 500，預設會被「取消買進價高於 500 元」隱藏——先取消
+    // 門檻框，才看得到這裡要驗證的兩筆買進日/賣出日。
+    clearThresholdDefaults()
 
     // Cell order: 展開, 勾選框, 代號/名稱, 命中策略, 買進日, 買進價, 賣出日, 賣出價, 報酬率, 收益.
     // Scoped to the parent row by its own (multi-child) checkbox label — a bare
@@ -4946,6 +5157,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2026-08-20 這筆 buyPrice 10000 高於 500，預設也會被「取消買進價高於 500 元」隱藏。
+    clearThresholdDefaults()
 
     const cells = within(screen.getByText('2330 台積電').closest('tr') as HTMLElement).getAllByRole('cell')
     const buyLines = Array.from(cells[4].querySelectorAll('div'))
@@ -5034,6 +5247,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // buyPrice 1248 高於 500，預設會被「取消買進價高於 500 元」隱藏。
+    clearThresholdDefaults()
 
     const row = screen.getByText('2454 聯發科').closest('tr') as HTMLElement
     const hitsCell = row.querySelector('.st-union-hits') as HTMLElement
@@ -5091,6 +5306,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    clearThresholdDefaults()
 
     // One buyDate -> one position -> no expand caret.
     expect(screen.queryByRole('button', { name: /展開 2454/ })).not.toBeInTheDocument()
@@ -5186,6 +5402,9 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 兩筆 buyPrice（1248／1200）皆高於 500，預設都被「取消買進價高於 500 元」隱藏——先取消
+    // 門檻框，否則整檔（兩筆全被隱藏）不會出現在表上。
+    clearThresholdDefaults()
 
     const expandBtn = screen.getByRole('button', { name: '展開 2454 的訊號日明細' })
     fireEvent.click(expandBtn)
@@ -5214,6 +5433,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // buyPrice 1248 高於 500，預設會被「取消買進價高於 500 元」隱藏。
+    clearThresholdDefaults()
 
     expect(backtestBody.items.every((item) => !('signalDate' in item))).toBe(true)
     const row = screen.getByText('2454 聯發科').closest('tr') as HTMLElement
@@ -5233,6 +5454,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('總報酬率')).toBeInTheDocument())
+    revealIncompletePositions()
+    clearThresholdDefaults()
 
     const readTotals = () => {
       const [cost, returnPct] = Array.from(document.querySelectorAll('.st-total-value')).map((el) => el.textContent)
@@ -5304,11 +5527,13 @@ describe('StrategyTab', () => {
     resolveBacktest(undefined)
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 「僅選取報酬率 n% 以上」預設勾選，一併把排序切到報酬率降冪（本次新增）——因此報酬率表頭
+    // 一開始就是 ▼，不是 ↕；買進價／收益兩欄不受影響，仍是閒置的 ↕。
     const sortableHeaders = Array.from(document.querySelectorAll('.st-sortable')).map((el) => el.textContent)
-    expect(sortableHeaders).toEqual(['買進價↕', '報酬率↕', '收益（每筆 1 張）↕'])
+    expect(sortableHeaders).toEqual(['買進價↕', '報酬率▼', '收益（每筆 1 張）↕'])
   })
 
-  it('shows the default order (latest signalDate desc, tie stockId asc) immediately after 回測, before any header click', async () => {
+  it('shows the default order (報酬率 降冪, 「—」 last) immediately after 回測, before any header click — the effect of 「僅選取報酬率」預設勾選', async () => {
     scanResponder = () => sortableScanResponse()
     backtestResponder = () => ({ status: 200, body: sortableBacktestResponse() })
     renderTab()
@@ -5317,7 +5542,10 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
-    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+    // AAAA 5% > BBBB -3% > CCCC「—」(無法回測，視為最小值) — 依報酬率降冪，不是最新
+    // signalDate 由新到舊（那是回測前、或取消「僅選取報酬率」後點表頭還原的排序）。
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
   })
 
   it('cycles 降冪 → 升冪 → 還原預設排序 → 降冪… on repeated clicks of the same header, reordering rows and updating the icon each time, treating 「—」 as the minimum', async () => {
@@ -5329,6 +5557,11 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 「僅選取報酬率 n% 以上」預設勾選，一併把排序切到報酬率降冪（本次新增）——先點兩次報酬率
+    // 表頭讓它回到「未排序」，才能驗證從頭開始（降冪→升冪→還原→降冪）的完整循環。
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
 
     clickSortHeader('報酬率') // 1st: 降冪 — AAAA 5% > BBBB -3% > CCCC 「—」(min)
     expect(sortHeaderIcon('報酬率')).toBe('▼')
@@ -5357,7 +5590,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
 
-    clickSortHeader('報酬率')
+    // 「僅選取報酬率 n% 以上」預設勾選，回測剛完成就已經是報酬率降冪（本次新增），不必再手動點。
     expect(sortHeaderIcon('報酬率')).toBe('▼')
 
     clickSortHeader('買進價') // switching column -> restarts at 降冪, not continuing 報酬率's cycle
@@ -5394,6 +5627,14 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被「取消買進價高於 500 元」隱藏——先
+    // 取消門檻框，才看得到這裡要驗證的成本加權合計（含兩筆）。取消門檻框只改變顯示的值，
+    // 不會重新排序（既有的排序快照仍是套用預設隱藏那一刻算出來的），因此先點兩次報酬率表頭
+    // 回到「未排序」，再點一次，讓後面驗證的降冪是用目前完全揭露後的顯示值重新算出來的。
+    clearThresholdDefaults()
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
 
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     // Cost-weighted aggregate of children +10%/-10% is -9.80% — neither child's own value.
@@ -5414,6 +5655,12 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框，並把排序點回
+    // 「未排序」（見前一個測試的說明），才能驗證「全部子筆都取消勾選」這個情境本身。
+    clearThresholdDefaults()
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
 
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     fireEvent.click(row2330) // fully checked -> click unchecks every child
@@ -5436,6 +5683,12 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框並把排序點回
+    // 「未排序」，才能操作、看到這裡要驗證的那個子列。
+    clearThresholdDefaults()
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     clickSortHeader('報酬率') // 降冪: 9999 20% > 8888 0% > 2330 -9.80%
@@ -5464,7 +5717,14 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2026-08-20 這筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框才看得到兩筆子列，
+    // 並把排序點回「未排序」，才能驗證真正的預設順序（買進日由新到舊），而不是「僅選取報酬
+    // 率」預設勾選帶出的報酬率降冪（此例剛好同序，容易誤判）。
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    clickSortHeader('報酬率')
+    clickSortHeader('報酬率')
+    expect(sortHeaderIcon('報酬率')).toBe('↕')
 
     const table = screen.getByRole('table')
     const childBuyDates = () =>
@@ -5495,6 +5755,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2026-08-20 這筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框才看得到兩筆。
+    clearThresholdDefaults()
     // Deliberately NOT expanded — this is the collapsed-row listing.
 
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
@@ -5547,19 +5809,26 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
 
-    clickSortHeader('報酬率')
+    // 「僅選取報酬率 n% 以上」預設勾選，一併把排序切到報酬率降冪（本次新增）——不必再手動點
+    // 表頭，回測剛完成時就已經是這個狀態。
     expect(sortHeaderIcon('報酬率')).toBe('▼')
 
     scanResponder = () => boxScanResponse()
     backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+    // 重新掃描的當下（回測columns 一併消失）排序立刻回到預設，指示一併消失——這裡驗證的是
+    // 「重新掃描時排序回到預設」這件事本身，不等新的自動回測完成（那之後「僅選取報酬率」的
+    // 預設勾選會再把排序切回報酬率降冪，見下方新增的斷言）。
+    expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
+
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
-    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    // 新一輪回測成功時，「僅選取報酬率」預設勾選再次把排序切到報酬率降冪（本次新增）。
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
     expect(sortHeaderIcon('買進價')).toBe('↕')
   })
 
-  it('shows default sort order (idle 「↕」 icons) after a failed auto-回測 is retried successfully — no sortable header existed to have been sorted before the retry', async () => {
+  it('shows default sort order (報酬率 降冪) after a failed auto-回測 is retried successfully — same as the first auto-backtest success', async () => {
     scanResponder = () => sortableScanResponse()
     backtestResponder = () => ({ status: 500, body: {} })
     renderTab()
@@ -5573,9 +5842,11 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
-    expect(sortHeaderIcon('報酬率')).toBe('↕')
+    // 「重試回測」成功時與首次自動回測成功相同：「僅選取報酬率」預設勾選一併把排序切到報酬
+    // 率降冪（本次新增），不是閒置的 ↕。
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
     expect(sortHeaderIcon('買進價')).toBe('↕')
-    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
   })
 
   // ---------------- 收益欄排序 ----------------
@@ -5675,6 +5946,9 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框，否則 2330 只剩
+    // 一筆可見，不會渲染成多筆父列。
+    clearThresholdDefaults()
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     fireEvent.click(row2330) // fully checked -> click unchecks every child
     await waitFor(() => expect(within(row2330).getAllByText('—').length).toBeGreaterThan(0))
@@ -5692,6 +5966,9 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框，才看得到這裡要
+    // 驗證的兩筆合計收益。
+    clearThresholdDefaults()
 
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     // 2330's displayed 收益 is the sum of its two checked children: 10,000 + (-1,000,000).
@@ -5713,6 +5990,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // 重新掃描後的這次回測同樣預設隱藏 2026-08-20 那筆（buyPrice 10000 高於 500）。
+    clearThresholdDefaults()
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
 
     const table = screen.getByRole('table')
@@ -5768,7 +6047,9 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
     expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
-    expect(topLevelRowStockIds()).toEqual(['BBBB B股', 'AAAA A股', 'CCCC C股'])
+    // 「僅選取報酬率」預設勾選把排序切到報酬率降冪（本次新增），不是最新 signalDate 由新到舊。
+    expect(sortHeaderIcon('報酬率')).toBe('▼')
+    expect(topLevelRowStockIds()).toEqual(['AAAA A股', 'BBBB B股', 'CCCC C股'])
   })
 
   // ---------------- 收益扣手續費與證交稅 ----------------
@@ -5810,6 +6091,8 @@ describe('StrategyTab', () => {
     selectStrategy('箱型突破')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    // buyPrice 2420 高於 500，預設會被「取消買進價高於 500 元」隱藏。
+    clearThresholdDefaults()
 
     // The gross figures a naive (賣出價 − 買進價) calc would produce must never appear.
     expect(screen.queryByText('1.24%')).not.toBeInTheDocument()
@@ -5868,6 +6151,8 @@ describe('StrategyTab', () => {
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    // 2026-08-20 這筆 buyPrice 10000 高於 500，預設會被隱藏。
+    clearThresholdDefaults()
 
     const row2330 = screen.getByLabelText('納入 2330 全部計算').closest('tr') as HTMLElement
     // (9,000 + -1,000,000) ÷ (101,000 + 10,010,000) × 100 = -9.80% — using `cost`, not
@@ -6013,7 +6298,9 @@ describe('StrategyTab', () => {
 
   it('hides only prices strictly above 500 and renders the remaining 480 position as a single row', async () => {
     await runPriceThresholdScan()
-    fireEvent.click(priceThresholdCheckbox())
+    // 「取消買進價高於 500 元」回測成功後預設已勾選（本次新增）——高價組一開始就已隱藏＋取消
+    // 勾選，不必再手動點一次。
+    expect(priceThresholdCheckbox().checked).toBe(true)
     expect(screen.queryByLabelText('納入 2330 2026-08-20 計算')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('納入 3008 計算')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '展開 2330 的訊號日明細' })).not.toBeInTheDocument()
@@ -6023,12 +6310,22 @@ describe('StrategyTab', () => {
     expect(screen.getByLabelText('納入 CCCC 計算')).toBeChecked()
     expect(screen.getByText('另 2 筆已隱藏')).toBeInTheDocument()
     expect(priceThresholdAmountInput()).toBeDisabled()
-    fireEvent.click(priceThresholdCheckbox())
+
+    fireEvent.click(priceThresholdCheckbox()) // 取消勾選 -> 高價組全部重新顯示並勾回
     expect(priceThresholdAmountInput()).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
+    expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked()
+    expect(screen.getByLabelText('納入 3008 計算')).toBeChecked()
+
+    fireEvent.click(priceThresholdCheckbox()) // 再勾選 -> 高價組再次隱藏＋取消勾選
+    expect(screen.queryByLabelText('納入 2330 2026-08-20 計算')).not.toBeInTheDocument()
+    expect(priceThresholdAmountInput()).toBeDisabled()
   })
 
   it('unchecking it checks the 高價組 back, without touching a row the user had already unchecked by hand', async () => {
     await runPriceThresholdScan()
+    // 先取消勾選（預設已勾選），讓高價組重新顯示＋勾回，才能操作接下來要測試的情境。
+    fireEvent.click(priceThresholdCheckbox())
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
     // 先手動取消一筆低價列（不在高價組）。
     fireEvent.click(screen.getByLabelText('納入 AAAA 計算'))
@@ -6045,6 +6342,7 @@ describe('StrategyTab', () => {
 
   it('is disabled and unchecked when nothing is above the amount', async () => {
     await runPriceThresholdScan()
+    fireEvent.click(priceThresholdCheckbox()) // 取消勾選（預設已勾選），啟用金額輸入框
     fireEvent.change(priceThresholdAmountInput(), { target: { value: '10000' } })
 
     const checkbox = priceThresholdCheckbox()
@@ -6062,6 +6360,8 @@ describe('StrategyTab', () => {
 
   it('remembers its own hidden state: manual high-price deselection and cancel-all never check the price switch', async () => {
     await runPriceThresholdScan()
+    // 先取消勾選（預設已勾選），讓高價組重新顯示＋勾回，才能手動逐筆取消。
+    fireEvent.click(priceThresholdCheckbox())
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
     fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算'))
     fireEvent.click(screen.getByLabelText('納入 3008 計算'))
@@ -6072,6 +6372,9 @@ describe('StrategyTab', () => {
 
   it('never toggles any position when the amount itself is edited — only the checkbox derivation changes', async () => {
     await runPriceThresholdScan()
+    // 勾著期間金額輸入框 disabled——先取消勾選（預設已勾選），才能改金額，同真實操作流程一致
+    // （「要換門檻，先取消勾選、改金額、再勾選」）。
+    fireEvent.click(priceThresholdCheckbox())
     const callsBefore = fetchMock.mock.calls.length
     const checkedBefore = (screen.getAllByRole('checkbox') as HTMLInputElement[])
       .filter((cb) => cb !== priceThresholdCheckbox())
@@ -6084,22 +6387,24 @@ describe('StrategyTab', () => {
       .map((cb) => cb.checked)
     expect(checkedAfter).toEqual(checkedBefore)
     expect(fetchMock.mock.calls.length).toBe(callsBefore)
-    // The checkbox's own derived state does change (450 now covers 480/500/520/600).
+    // 未勾選時修改金額不切換、也不隱藏任何一筆——勾選框本身仍是未勾選（金額變動只改變推導
+    // 範圍，從不自行把框打勾）。
     expect(priceThresholdCheckbox().checked).toBe(false)
   })
 
   it('hides a collapsed high-price child without affecting the remaining visible position', async () => {
     await runPriceThresholdScan()
-    fireEvent.click(priceThresholdCheckbox())
+    // 預設已勾選——2330 只剩一筆可見（480 那筆），還不是父列。
     expect(screen.queryByRole('button', { name: '展開 2330 的訊號日明細' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('納入 2330 計算')).toBeChecked()
-    fireEvent.click(priceThresholdCheckbox())
+    fireEvent.click(priceThresholdCheckbox()) // 取消勾選 -> 重新顯示，2330 變回兩筆的父列
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
     expect(screen.getByLabelText('納入 2330 2026-08-20 計算')).toBeChecked()
   })
 
   it('drops a multi-buy-date stock from the table entirely once every one of its positions is hidden, while 共 N 檔 and 另 K 筆已隱藏 both still count it', async () => {
     await runPriceThresholdScan()
+    fireEvent.click(priceThresholdCheckbox()) // 取消勾選（預設已勾選），才能改金額
     // 400 puts BOTH of 2330's buy dates (480, 520) in the 高價組, along with 1101 (500) and
     // 3008 (600) — AAAA (100) and CCCC (null) stay untouched. 4 positions hidden total.
     fireEvent.change(priceThresholdAmountInput(), { target: { value: '400' } })
@@ -6120,6 +6425,9 @@ describe('StrategyTab', () => {
 
   it('recomputes the three totals, the parent aggregate, and 取消全選 the instant it is toggled — with no network request', async () => {
     await runPriceThresholdScan()
+    // 預設已勾選——先取消勾選以便展開 2330，才能驗證的是「切換（重新勾選）」本身的即時重算，
+    // 不是初始預設值。
+    fireEvent.click(priceThresholdCheckbox())
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
     const callsBefore = fetchMock.mock.calls.length
 
@@ -6171,6 +6479,8 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
     revealIncompletePositions()
+    // buyPrice 2420 高於 500，預設已勾選（本次新增）——先取消勾選才能改金額。
+    fireEvent.click(priceThresholdCheckbox())
     fireEvent.change(priceThresholdAmountInput(), { target: { value: '5000' } })
     expect(priceThresholdCheckbox().disabled).toBe(true)
     expect(priceThresholdCheckbox().checked).toBe(false)
@@ -6192,6 +6502,9 @@ describe('StrategyTab', () => {
 
   it('defaults to hiding null sell dates including null buy prices, preserves their selection and totals on toggles without requests', async () => {
     await runHiddenScan()
+    // 「取消買進價高於 500 元」預設也勾選（本次新增，也會隱藏 3008）——先取消它，才能單獨驗證
+    // 「隱藏資料不齊」自己的預設隱藏效果與「另 2 筆已隱藏」這個數字。
+    fireEvent.click(priceThresholdCheckbox())
     expect(incompleteCheckbox()).toBeChecked()
     expect(screen.queryByLabelText('納入 3008 計算')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('納入 CCCC 計算')).not.toBeInTheDocument()
@@ -6211,7 +6524,8 @@ describe('StrategyTab', () => {
 
   it('takes the union of hidden groups and only reveals overlapping positions after both switches turn off', async () => {
     await runHiddenScan()
-    fireEvent.click(priceThresholdCheckbox())
+    // 「取消買進價高於 500 元」與「隱藏資料不齊」皆預設勾選（本次新增）——一開始就已是兩者
+    // 的聯集，不必再手動勾選價格框。
     expect(screen.getByText('另 3 筆已隱藏')).toBeInTheDocument()
     fireEvent.click(incompleteCheckbox())
     expect(screen.getByText('另 2 筆已隱藏')).toBeInTheDocument()
@@ -6246,6 +6560,9 @@ describe('StrategyTab', () => {
   it('preserves a sorted snapshot across hide/show, and sorts a filtered parent by its visible single-position price', async () => {
     await runHiddenScan()
     revealIncompletePositions()
+    // 「取消買進價高於 500 元」預設也勾選（本次新增）——先取消它，回到「全部可見」的起點，
+    // 才能照原本的順序驗證「切換後排序快照不變」。
+    fireEvent.click(priceThresholdCheckbox())
     clickSortHeader('買進價')
     const original = topLevelRowStockIds()
     fireEvent.click(priceThresholdCheckbox())
@@ -6294,6 +6611,9 @@ describe('StrategyTab', () => {
     selectStrategy('底底高')
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(incompleteCheckbox()).toBeChecked())
+    // 08-20 那筆 buyPrice 520 高於 500，預設也被「取消買進價高於 500 元」隱藏（本次新增）——
+    // 先取消它，2330 才會顯示成「只有兩筆可見」的父列（08-29 那筆仍被「隱藏資料不齊」藏著）。
+    fireEvent.click(priceThresholdCheckbox())
     const parent = screen.getByLabelText('納入 2330 全部計算').closest('tr')!
     expect(within(parent).getAllByRole('cell')[4].textContent).toBe('2026-08-272026-08-20')
     fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
@@ -7289,6 +7609,9 @@ describe('StrategyTab', () => {
       fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
       revealIncompletePositions()
+      // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框，才看得到這裡
+      // 要驗證的兩筆成本加權均價。
+      clearThresholdDefaults()
 
       const parentCheckbox = screen.getByLabelText('納入 2330 全部計算') as HTMLInputElement
       const parentRow = parentCheckbox.closest('tr') as HTMLElement
@@ -7365,6 +7688,9 @@ describe('StrategyTab', () => {
       fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
       revealIncompletePositions()
+      // 2330 的 -10% 那筆 buyPrice 10000 高於 500，預設會被隱藏——先取消門檻框，2330 才會是
+      // 兩筆的父列。
+      clearThresholdDefaults()
 
       // Build up state at the wide width: uncheck a row, expand the parent, sort by 買進價.
       fireEvent.click(screen.getByLabelText('納入 9999 計算'))
@@ -7427,7 +7753,7 @@ describe('StrategyTab', () => {
       return screen.getByLabelText('僅選取報酬率的百分比門檻') as HTMLInputElement
     }
 
-    it('places 僅選取報酬率 between 取消買進價高於 and 隱藏資料不齊, defaults to unchecked with n=2, and exists only after a successful 回測', async () => {
+    it('places 僅選取報酬率 between 取消買進價高於 and 隱藏資料不齊, defaults to checked with n=2, and exists only after a successful 回測', async () => {
       scanResponder = () => boxScanResponse()
       backtestResponder = () => ({ status: 200, body: singleBacktestResponse() })
       renderTab()
@@ -7439,8 +7765,10 @@ describe('StrategyTab', () => {
       expect(screen.queryByLabelText('僅選取報酬率百分比以上')).not.toBeInTheDocument() // 掃描成功、回測進行中
 
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
-      expect(returnThresholdCheckbox()).not.toBeChecked()
+      // 「僅選取報酬率 n% 以上」回測成功後預設已勾選（本次新增），數字輸入因此一開始即 disabled。
+      expect(returnThresholdCheckbox()).toBeChecked()
       expect(returnThresholdInputEl().value).toBe('2')
+      expect(returnThresholdInputEl()).toBeDisabled()
 
       expect(
         Array.from(document.querySelectorAll('.st-batch-controls input[type=checkbox]')).map((el) => el.getAttribute('aria-label')),
@@ -7453,6 +7781,10 @@ describe('StrategyTab', () => {
 
     it('checking it unchecks visible sub-threshold and null-return lots (still shown, grayed), keeps qualifying lots checked (含等於), sorts by 報酬率 descending, and only qualifying lots count toward totals', async () => {
       await runPriceThresholdScan()
+      // 兩個門檻框回測成功後預設都已勾選（本次新增）——先都取消勾選，回到「全部可見、全部
+      // 勾選」的起點，才能照這裡描述的方式驗證「勾選僅選取報酬率」單獨的效果。
+      fireEvent.click(priceThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
       fireEvent.click(returnThresholdCheckbox())
 
       // 達標（≥2%，含恰為 2.00% 的 1101）維持／勾回勾選。
@@ -7496,6 +7828,9 @@ describe('StrategyTab', () => {
 
     it('unchecking rechecks exactly the lots it unchecked, leaves the sort unchanged, and never touches a manually-unchecked qualifying lot', async () => {
       await runPriceThresholdScan()
+      // 兩個門檻框預設都已勾選（本次新增）——先都取消勾選，回到「全部可見、全部勾選」的起點。
+      fireEvent.click(priceThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
       // 先手動取消一筆達標的筆（不在本框的取消範圍內）。
       fireEvent.click(screen.getByLabelText('納入 AAAA 計算'))
       expect(screen.getByLabelText('納入 AAAA 計算')).not.toBeChecked()
@@ -7516,6 +7851,9 @@ describe('StrategyTab', () => {
 
     it('leaves lots hidden by 隱藏資料不齊（無賣出日） completely untouched', async () => {
       await runPriceThresholdScan()
+      // 「取消買進價高於 500 元」預設也勾選（本次新增，同時也會取消勾選 3008）——先取消它，
+      // 才能單獨驗證「隱藏資料不齊」不會被本框動到。
+      fireEvent.click(priceThresholdCheckbox())
       fireEvent.click(screen.getByLabelText('隱藏資料不齊（無賣出日）')) // 重新藏起 3008／CCCC
       expect(screen.queryByLabelText('納入 3008 計算')).not.toBeInTheDocument()
 
@@ -7529,7 +7867,8 @@ describe('StrategyTab', () => {
 
     it('leaves lots hidden by 取消買進價高於 N 元 completely untouched', async () => {
       await runPriceThresholdScan()
-      fireEvent.click(priceThresholdCheckbox()) // 隱藏 2330@0820(520) 與 3008(600)，兩者連帶取消勾選
+      // 「取消買進價高於 500 元」預設已勾選（本次新增）——2330@0820(520) 與 3008(600) 已經
+      // 隱藏且取消勾選，不必再手動點一次。
 
       fireEvent.click(returnThresholdCheckbox())
       fireEvent.click(returnThresholdCheckbox())
@@ -7542,6 +7881,10 @@ describe('StrategyTab', () => {
 
     it('remains checked when a below-threshold row is manually rechecked, and 取消全選 clears it without touching the sort', async () => {
       await runPriceThresholdScan()
+      // 兩個門檻框預設都已勾選（本次新增）——先取消「取消買進價高於」讓 2330@0820 重新顯示＋
+      // 勾回，再重新勾選「僅選取報酬率」，這次才會真的作用在這筆可見的資料上。
+      fireEvent.click(priceThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox())
       fireEvent.click(returnThresholdCheckbox())
       fireEvent.click(screen.getByRole('button', { name: '展開 2330 的訊號日明細' }))
       fireEvent.click(screen.getByLabelText('納入 2330 2026-08-20 計算')) // 手動勾回一筆低於門檻的列
@@ -7556,10 +7899,13 @@ describe('StrategyTab', () => {
 
     it('disables the number input while checked, and edits while unchecked toggle nothing', async () => {
       await runPriceThresholdScan()
-      fireEvent.click(returnThresholdCheckbox())
+      // 「僅選取報酬率」回測成功後預設已勾選（本次新增），數字輸入一開始即 disabled。
       expect(returnThresholdInputEl()).toBeDisabled()
-      fireEvent.click(returnThresholdCheckbox())
+      fireEvent.click(returnThresholdCheckbox()) // 取消勾選
       expect(returnThresholdInputEl()).toBeEnabled()
+      fireEvent.click(returnThresholdCheckbox()) // 再勾選
+      expect(returnThresholdInputEl()).toBeDisabled()
+      fireEvent.click(returnThresholdCheckbox()) // 再取消勾選，才能繼續驗證「未勾選時改數字不切換」
 
       const checkedBefore = (screen.getAllByRole('checkbox') as HTMLInputElement[])
         .filter((cb) => cb !== returnThresholdCheckbox())
@@ -7619,6 +7965,182 @@ describe('StrategyTab', () => {
       fireEvent.click(returnThresholdCheckbox())
       fireEvent.click(returnThresholdCheckbox())
       expect(fetchMock.mock.calls.length).toBe(callsBefore)
+    })
+  })
+
+  // ---------------- 兩個門檻框改為預設勾選 ----------------
+  describe('兩個門檻框改為預設勾選', () => {
+    async function runDefaultThresholdsScan(): Promise<void> {
+      scanResponder = () => defaultThresholdsScanResponse()
+      backtestResponder = () => ({ status: 200, body: defaultThresholdsBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+    }
+
+    it('checks both threshold boxes the instant 回測 succeeds — amount still 500, threshold still 2, both number inputs disabled; 隱藏資料不齊 stays default-checked too', async () => {
+      await runDefaultThresholdsScan()
+
+      const priceCheckbox = screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement
+      const priceAmount = screen.getByLabelText('取消買進價高於的金額') as HTMLInputElement
+      const returnCheckbox = screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement
+      const returnAmount = screen.getByLabelText('僅選取報酬率的百分比門檻') as HTMLInputElement
+
+      expect(priceCheckbox.checked).toBe(true)
+      expect(priceAmount.value).toBe('500')
+      expect(priceAmount).toBeDisabled()
+      expect(returnCheckbox.checked).toBe(true)
+      expect(returnAmount.value).toBe('2')
+      expect(returnAmount).toBeDisabled()
+      expect((screen.getByLabelText('隱藏資料不齊（無賣出日）') as HTMLInputElement).checked).toBe(true)
+    })
+
+    it('produces the initial checked state from the mandatory four-step order (全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上)', async () => {
+      await runDefaultThresholdsScan()
+
+      // HIGH（buyPrice 600 > 500）與 NOSL（無賣出日）皆被隱藏，不出現在表上。
+      expect(screen.queryByLabelText('納入 HIGH 計算')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('納入 NOSL 計算')).not.toBeInTheDocument()
+      // LOWR（0.5% < 2%）仍顯示，但未勾選、整列反灰。
+      const lowrCheckbox = screen.getByLabelText('納入 LOWR 計算') as HTMLInputElement
+      expect(lowrCheckbox.checked).toBe(false)
+      expect((lowrCheckbox.closest('tr') as HTMLElement).className).toContain('st-row-unchecked')
+      // OKOK（5% ≥ 2%）顯示且勾選。
+      expect((screen.getByLabelText('納入 OKOK 計算') as HTMLInputElement).checked).toBe(true)
+    })
+
+    it('keeps the step order fixed: unchecking 「取消買進價高於 N 元」 reveals and rechecks HIGH, untouched by the return-threshold step', async () => {
+      await runDefaultThresholdsScan()
+
+      fireEvent.click(screen.getByLabelText('取消買進價高於金額元'))
+
+      const highCheckbox = screen.getByLabelText('納入 HIGH 計算') as HTMLInputElement
+      expect(highCheckbox).toBeInTheDocument()
+      expect(highCheckbox.checked).toBe(true)
+    })
+
+    it('shows the table sorted by 報酬率 降冪 the instant 回測 completes, before any header click', async () => {
+      await runDefaultThresholdsScan()
+
+      expect(sortHeaderIcon('報酬率')).toBe('▼')
+      const returnHeader = screen.getByText('報酬率').closest('th') as HTMLElement
+      expect(returnHeader.className).toContain('st-sort-header-active')
+      expect(sortHeaderIcon('買進價')).toBe('↕')
+      expect(sortHeaderIcon('收益（每筆 1 張）')).toBe('↕')
+      // OKOK(5%) > LOWR(0.5%) — 唯二未被隱藏的兩檔。
+      expect(topLevelRowStockIds()).toEqual(['OKOK 達標股', 'LOWR 低報酬股'])
+    })
+
+    it('leaves the price box disabled and unchecked (amount still editable) when nothing exceeds it, while the return box still defaults to checked and sorts', async () => {
+      scanResponder = () => defaultThresholdsScanResponse()
+      backtestResponder = () => ({ status: 200, body: emptyHighPriceGroupBacktestResponse() })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      const priceCheckbox = screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement
+      const priceAmount = screen.getByLabelText('取消買進價高於的金額') as HTMLInputElement
+      expect(priceCheckbox.disabled).toBe(true)
+      expect(priceCheckbox.checked).toBe(false)
+      expect(priceAmount).toBeEnabled()
+
+      expect((screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement).checked).toBe(true)
+      expect(sortHeaderIcon('報酬率')).toBe('▼')
+    })
+
+    it('applies the same four-step defaults on a successful 重試回測 as on the first auto-backtest', async () => {
+      scanResponder = () => defaultThresholdsScanResponse()
+      backtestResponder = () => ({ status: 500, body: {} })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByRole('button', { name: '重試回測' })).toBeInTheDocument())
+
+      backtestResponder = () => ({ status: 200, body: defaultThresholdsBacktestResponse() })
+      fireEvent.click(screen.getByRole('button', { name: '重試回測' }))
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+
+      expect((screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement).checked).toBe(true)
+      expect((screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement).checked).toBe(true)
+      expect(screen.queryByLabelText('納入 HIGH 計算')).not.toBeInTheDocument()
+      expect((screen.getByLabelText('納入 LOWR 計算') as HTMLInputElement).checked).toBe(false)
+      expect((screen.getByLabelText('納入 OKOK 計算') as HTMLInputElement).checked).toBe(true)
+      expect(sortHeaderIcon('報酬率')).toBe('▼')
+    })
+
+    it('removes the batch checkboxes on 重新掃描 and re-applies the defaults using the thresholds the user changed within this visit', async () => {
+      await runDefaultThresholdsScan()
+
+      fireEvent.click(screen.getByLabelText('取消買進價高於金額元')) // 取消勾選才能改金額
+      fireEvent.change(screen.getByLabelText('取消買進價高於的金額'), { target: { value: '300' } })
+      fireEvent.click(screen.getByLabelText('僅選取報酬率百分比以上')) // 取消勾選才能改數字
+      fireEvent.change(screen.getByLabelText('僅選取報酬率的百分比門檻'), { target: { value: '5' } })
+
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      expect(screen.queryByLabelText('取消買進價高於金額元')).not.toBeInTheDocument()
+      expect(screen.queryByText('賣出日')).not.toBeInTheDocument()
+
+      await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
+      // 300 元門檻下 OKOK(100)／LOWR(100) 都不是高價，HIGH(600) 仍是；5% 門檻下 OKOK(5%) 恰好
+      // 達標維持勾選，LOWR(0.5%) 依然不足。
+      expect((screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement).checked).toBe(true)
+      expect((screen.getByLabelText('取消買進價高於的金額') as HTMLInputElement).value).toBe('300')
+      expect((screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement).checked).toBe(true)
+      expect((screen.getByLabelText('僅選取報酬率的百分比門檻') as HTMLInputElement).value).toBe('5')
+      expect(screen.queryByLabelText('納入 HIGH 計算')).not.toBeInTheDocument()
+      expect((screen.getByLabelText('納入 OKOK 計算') as HTMLInputElement).checked).toBe(true)
+    })
+
+    it('unchecking either threshold box still follows its existing rule unchanged: price reveals+rechecks, return only rechecks without touching the sort', async () => {
+      await runDefaultThresholdsScan()
+
+      fireEvent.click(screen.getByLabelText('取消買進價高於金額元'))
+      expect((screen.getByLabelText('納入 HIGH 計算') as HTMLInputElement).checked).toBe(true)
+
+      fireEvent.click(screen.getByLabelText('僅選取報酬率百分比以上'))
+      expect((screen.getByLabelText('納入 LOWR 計算') as HTMLInputElement).checked).toBe(true)
+      expect(sortHeaderIcon('報酬率')).toBe('▼') // 排序維持降冪不變
+    })
+
+    it('shows 「取消全選」unchecked right after 回測 (some 筆 still checked), and clicking it clears both threshold boxes and reveals every hidden row', async () => {
+      await runDefaultThresholdsScan()
+
+      expect((screen.getByLabelText('取消全選') as HTMLInputElement).checked).toBe(false)
+
+      fireEvent.click(screen.getByLabelText('取消全選'))
+      expect((screen.getByLabelText('取消買進價高於金額元') as HTMLInputElement).checked).toBe(false)
+      expect((screen.getByLabelText('僅選取報酬率百分比以上') as HTMLInputElement).checked).toBe(false)
+      expect(screen.getByLabelText('納入 HIGH 計算')).toBeInTheDocument()
+      expect(screen.getByLabelText('納入 NOSL 計算')).toBeInTheDocument()
+    })
+
+    it('reflects the post-default totals and 未計入／已隱藏 counts the instant 回測 completes', async () => {
+      await runDefaultThresholdsScan()
+
+      // 只有 OKOK 仍勾選且可回測：cost 100,000／profit 5,000／return 5.00%。
+      expect(Array.from(document.querySelectorAll('.st-totals-anchor .st-total-value')).map((el) => el.textContent)).toEqual([
+        '100,000',
+        '5.00%',
+        '5,000',
+      ])
+      expect(screen.getByText('另 1 筆尚無可賣出交易日，未計入')).toBeInTheDocument()
+      // 未勾選的兩筆是 HIGH（被價格框取消勾選並隱藏）與 LOWR（被報酬率框取消勾選，仍顯示）。
+      expect(screen.getByText('另 2 筆未勾選，未計入')).toBeInTheDocument()
+      expect(screen.getByText('另 2 筆已隱藏')).toBeInTheDocument()
+    })
+
+    it('applies the two default thresholds without any extra network request beyond the single automatic 回測', async () => {
+      await runDefaultThresholdsScan()
+
+      expect(fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/backtest'))).toHaveLength(1)
+      const callsAfterSettled = fetchMock.mock.calls.length
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(fetchMock.mock.calls.length).toBe(callsAfterSettled)
     })
   })
 })

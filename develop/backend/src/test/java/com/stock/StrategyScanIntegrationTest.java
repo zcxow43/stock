@@ -15,7 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -1817,11 +1820,17 @@ class StrategyScanIntegrationTest {
         JsonNode root = objectMapper.readTree(response.getBody());
         JsonNode strategies = root.get("strategies");
 
-        for (String code : new String[]{"BOX_BREAKOUT", "HIGHER_LOWS", "RISING_SUPPORT"}) {
+        // BOX_BREAKOUT gained its own paramGroups (the "volume" on/off switch) in a later increment —
+        // see catalog_boxBreakout_hasVolumeParamGroupWithNoParams below — so it is excluded from this
+        // "must not carry paramGroups" loop; HIGHER_LOWS/RISING_SUPPORT remain untouched.
+        for (String code : new String[]{"HIGHER_LOWS", "RISING_SUPPORT"}) {
             JsonNode strategy = findByCode(strategies, code);
             assertEquals(3, strategy.get("presets").size(), code + " must keep its three presets");
-            assertFalse(strategy.has("paramGroups"), code + " must not carry paramGroups (only REBOUND does)");
+            assertFalse(strategy.has("paramGroups"), code + " must not carry paramGroups (only REBOUND does, at "
+                    + "the time this test was written)");
         }
+        JsonNode box = findByCode(strategies, "BOX_BREAKOUT");
+        assertEquals(3, box.get("presets").size(), "BOX_BREAKOUT must keep its three presets");
         JsonNode cumulativeRise = findByCode(strategies, "CUMULATIVE_RISE");
         assertEquals(0, cumulativeRise.get("presets").size());
         assertEquals("回看指定天數，自窗口內最低收盤累積漲幅達門檻的最高點", cumulativeRise.get("description").asText());
@@ -4921,6 +4930,282 @@ class StrategyScanIntegrationTest {
         assertFalse(root.toString().contains("進場"));
     }
 
+    // ==================== Increment 10: BOX_BREAKOUT's requireVolume switch ====================
+
+    @Test
+    void catalog_boxBreakout_hasVolumeParamGroupWithNoParams_othersUnaffected() throws Exception {
+        JsonNode root = objectMapper.readTree(rest.getForEntity("/api/strategies", String.class).getBody());
+        JsonNode strategies = root.get("strategies");
+        assertEquals(10, strategies.size());
+
+        JsonNode box = findByCode(strategies, "BOX_BREAKOUT");
+        assertEquals(3, box.get("presets").size());
+        assertEquals("回看 60 根，箱高 < 5%，突破 2% 且量增 2 倍，需連 2 根確認",
+                findPresetByCode(box.get("presets"), "STRICT").get("description").asText());
+        assertEquals("回看 20 根，箱高 < 8%，突破 1.5% 且量增 1.5 倍",
+                findPresetByCode(box.get("presets"), "STANDARD").get("description").asText());
+        assertEquals("回看 20 根，不驗證盤整，收盤突破上緣即計",
+                findPresetByCode(box.get("presets"), "LOOSE").get("description").asText());
+        // BOX_BREAKOUT's params shape is unchanged by this increment — still empty, exactly like
+        // every other preset-driven strategy (specs/backend/strategy-scan.md, "presets 與 params 的關係":
+        // "params 為空陣列或不出現"); the volume group governs no params of its own.
+        assertEquals(0, box.get("params").size());
+
+        JsonNode paramGroups = box.get("paramGroups");
+        assertEquals(1, paramGroups.size());
+        JsonNode volumeGroup = paramGroups.get(0);
+        assertEquals("volume", volumeGroup.get("code").asText());
+        assertEquals("要求量增", volumeGroup.get("name").asText());
+        assertTrue(volumeGroup.get("default").asBoolean());
+
+        for (String code : new String[]{"HIGHER_LOWS", "RISING_SUPPORT", "CUMULATIVE_RISE",
+                "INSTITUTIONAL_NET_RATIO", "INSTITUTIONAL_CONSECUTIVE_BUY", "INSTITUTIONAL_STRENGTH_RANK",
+                "MACD_GOLDEN_CROSS", "KDJ_GOLDEN_CROSS"}) {
+            assertFalse(findByCode(strategies, code).has("paramGroups"),
+                    code + " must not carry paramGroups (only REBOUND and now BOX_BREAKOUT do)");
+        }
+    }
+
+    @Test
+    void boxBreakout_requireVolumeOmitted_behavesSameAsExplicitTrue() throws Exception {
+        String stockId = "SS9010";
+        seedStock(stockId, "requireVolume省略測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.06", 1800);
+
+        JsonNode omittedResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD")),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        JsonNode explicitTrueResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, true)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+
+        assertEquals(omittedResult.get("matchedCount").asInt(), explicitTrueResult.get("matchedCount").asInt());
+        assertEquals(omittedResult.get("items").toString(), explicitTrueResult.get("items").toString());
+        assertEquals(omittedResult.get("insufficientData").toString(),
+                explicitTrueResult.get("insufficientData").toString());
+        assertEquals(omittedResult.get("pendingConfirm").toString(),
+                explicitTrueResult.get("pendingConfirm").toString());
+    }
+
+    @Test
+    void boxBreakout_requireVolumeFalse_skipsVolumeCheck_trueOrOmittedMisses_falseHits() throws Exception {
+        String stockId = "SS9011";
+        seedStock(stockId, "量能關閉測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        // 20 lookback bars: boxHigh=103, boxLow=97 -> range 6% (< STANDARD's 8% cap, OK)
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        // close = 105.00 > 103 * 1.015 = 104.545 (STANDARD breakout OK); volume = 1200 <= 1000*1.5=1500
+        // (STANDARD volume FAILS)
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.00", 1200);
+
+        JsonNode omittedResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD")),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(0, omittedResult.get("matchedCount").asInt(), "requireVolume omitted (=true) must still fail volume");
+
+        JsonNode trueResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, true)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(0, trueResult.get("matchedCount").asInt(), "requireVolume=true must fail volume");
+
+        JsonNode falseResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, false)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(1, falseResult.get("matchedCount").asInt(), "requireVolume=false must skip the volume check");
+        JsonNode detail = falseResult.get("items").get(0).get("detail");
+        // boxHigh/boxLow/breakoutPercent are computed the same way regardless of requireVolume — hand
+        // calculated exactly as they would be under requireVolume=true for this same day.
+        assertBigDecimalEquals("103.00", detail.get("boxHigh"));
+        assertBigDecimalEquals("97.00", detail.get("boxLow"));
+        assertBigDecimalEquals("1.94", detail.get("breakoutPercent")); // (105-103)/103*100 = 1.9417... -> 1.94
+    }
+
+    @Test
+    void boxBreakout_requireVolumeFalse_doesNotAffectConsolidationOrConfirmBars() throws Exception {
+        // Part 1: the consolidation precondition (盤整前提) must still reject under STANDARD even with
+        // requireVolume=false — reuses the 15%-box-range fixture from
+        // boxBreakout_consolidationPrecondition_standardRejectsButLooseAccepts15PercentRange.
+        String consolidationStockId = "SS9012";
+        seedStock(consolidationStockId, "量能關閉不影響盤整測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        LocalDate d = start;
+        for (int i = 0; i < 20; i++) {
+            if (i == 0) {
+                insertPriceRow(consolidationStockId, d, "93.00", "93.50", "92.50", "93.00", 1000);
+            } else if (i == 19) {
+                insertPriceRow(consolidationStockId, d, "107.00", "107.50", "106.50", "107.00", 1000);
+            } else {
+                insertPriceRow(consolidationStockId, d, "100.00", "100.00", "95.00", "100.00", 1000);
+            }
+            d = d.plusDays(1);
+        }
+        LocalDate breakoutDate = d;
+        insertPriceRow(consolidationStockId, breakoutDate, "109.00", "111.00", "109.00", "110.00", 5000);
+
+        JsonNode consolidationResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, false)),
+                Collections.singletonList(consolidationStockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(0, consolidationResult.get("matchedCount").asInt(),
+                "requireVolume=false must not bypass the 15% box range failing STANDARD's 8% cap");
+
+        // Part 2: STRICT's confirmBars=2 must still apply, and a last-day breakout with no next-day
+        // data must still land in pendingConfirm — reuses the fixture from
+        // boxBreakout_strict_lastDayBreakoutWithNoNextDayData_isPendingConfirmNotItem.
+        String confirmStockId = "SS9013";
+        seedStock(confirmStockId, "量能關閉不影響確認根數測試", true);
+        List<LocalDate> lookbackDates =
+                seedTightBox(confirmStockId, LocalDate.of(2026, 6, 1), 60, "100.00", "103.00", "99.00", 1000);
+        LocalDate strictBreakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(confirmStockId, strictBreakoutDate, "104.00", "108.00", "104.00", "106.09", 2500);
+        // deliberately no next-day row
+
+        JsonNode confirmResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STRICT", null, false)),
+                Collections.singletonList(confirmStockId), strictBreakoutDate, strictBreakoutDate))
+                .get("results").get(0);
+        assertEquals(0, confirmResult.get("matchedCount").asInt());
+        assertTrue(confirmResult.get("items").isEmpty());
+        assertTrue(toStringList(confirmResult.get("pendingConfirm")).contains(confirmStockId),
+                "requireVolume=false must not bypass STRICT's confirmBars=2 pendingConfirm rule");
+    }
+
+    @Test
+    void boxBreakout_requireVolumeFalse_volumeRatioStillReportedMatchingHandCalc() throws Exception {
+        String stockId = "SS9014";
+        seedStock(stockId, "量能關閉仍回報量比測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        // avg of last 5 lookback volumes = 1000; breakout volume = 1200 -> ratio = 1.20 (fails STANDARD's 1.5x)
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.00", 1200);
+
+        JsonNode falseResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, false)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(1, falseResult.get("matchedCount").asInt());
+        JsonNode detail = falseResult.get("items").get(0).get("detail");
+        assertTrue(detail.has("volumeRatio"), "detail.volumeRatio must be reported even when requireVolume=false");
+        assertBigDecimalEquals("1.20", detail.get("volumeRatio")); // 1200 / 1000 = 1.20, hand-calculated
+    }
+
+    @Test
+    void boxBreakout_loose_requireVolumeHasNoEffect_sameMatchedSetBothReturn200() throws Exception {
+        String stockId = "SS9015";
+        seedStock(stockId, "寬鬆量能無效測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        // LOOSE doesn't validate consolidation or volume multiple at all -> a tiny volume still hits.
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "104.50", 10);
+
+        ResponseEntity<String> trueResponse = rest.postForEntity("/api/strategies/scan",
+                scanRequestFromSelections(Collections.singletonList(boxBreakoutSelection("LOOSE", null, true)),
+                        Collections.singletonList(stockId), breakoutDate, breakoutDate),
+                String.class);
+        ResponseEntity<String> falseResponse = rest.postForEntity("/api/strategies/scan",
+                scanRequestFromSelections(Collections.singletonList(boxBreakoutSelection("LOOSE", null, false)),
+                        Collections.singletonList(stockId), breakoutDate, breakoutDate),
+                String.class);
+        assertEquals(HttpStatus.OK, trueResponse.getStatusCode());
+        assertEquals(HttpStatus.OK, falseResponse.getStatusCode());
+
+        JsonNode trueResult = objectMapper.readTree(trueResponse.getBody()).get("results").get(0);
+        JsonNode falseResult = objectMapper.readTree(falseResponse.getBody()).get("results").get(0);
+        assertEquals(1, trueResult.get("matchedCount").asInt());
+        assertEquals(trueResult.get("matchedCount").asInt(), falseResult.get("matchedCount").asInt());
+        assertEquals(toStringList(trueResult.get("items"), "stockId"), toStringList(falseResult.get("items"), "stockId"));
+    }
+
+    @Test
+    void boxBreakout_scanResponse_echoesPresetAndRequireVolumeTogether_othersUnaffected() throws Exception {
+        String stockId = "SS9016";
+        seedStock(stockId, "回應欄位測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        insertPriceRow(stockId, breakoutDate, "104.00", "106.00", "104.00", "105.06", 1800);
+
+        // requireVolume omitted -> echoed value must default to true.
+        JsonNode omittedResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(selection("BOX_BREAKOUT", "STANDARD")),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals("STANDARD", omittedResult.get("preset").asText());
+        assertTrue(omittedResult.get("requireVolume").asBoolean(), "requireVolume must default to true when omitted");
+
+        // requireVolume=false -> echoed alongside preset.
+        JsonNode falseResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", null, false)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals("STANDARD", falseResult.get("preset").asText());
+        assertFalse(falseResult.get("requireVolume").asBoolean());
+
+        // Every other strategy's response must not carry requireVolume at all.
+        JsonNode higherLowsResult = postScan(scanRequestFromSelections(
+                Collections.singletonList(selection("HIGHER_LOWS", "STANDARD")),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertFalse(higherLowsResult.has("requireVolume"), "HIGHER_LOWS must not echo requireVolume");
+    }
+
+    @Test
+    void boxBreakout_requireVolumeAndRisePercentCombinedOverride() throws Exception {
+        String stockId = "SS9017";
+        seedStock(stockId, "量能與漲幅同時指定測試", true);
+        LocalDate start = LocalDate.of(2026, 5, 1);
+        List<LocalDate> lookbackDates = seedTightBox(stockId, start, 20, "100.00", "103.00", "97.00", 1000);
+        LocalDate breakoutDate = lookbackDates.get(lookbackDates.size() - 1).plusDays(1);
+        // 103 * 1.025 = 105.575 -> close must exceed this for the 2.5% override; volume kept low to
+        // fail STANDARD's own 1.5x multiple, which requireVolume=false must ignore.
+        insertPriceRow(stockId, breakoutDate, "104.00", "108.00", "104.00", "106.00", 1200);
+
+        JsonNode result = postScan(scanRequestFromSelections(
+                Collections.singletonList(boxBreakoutSelection("STANDARD", new BigDecimal("2.5"), false)),
+                Collections.singletonList(stockId), breakoutDate, breakoutDate)).get("results").get(0);
+        assertEquals(1, result.get("matchedCount").asInt(),
+                "close=106.00 clears the 2.5% override (105.575) and requireVolume=false skips the volume check");
+        // BOX_BREAKOUT's response header echoes only preset/requireVolume — risePercent overrides are
+        // not separately echoed (specs/backend/strategy-scan.md, "results 依 strategies 送入的順序回傳").
+        assertEquals("STANDARD", result.get("preset").asText());
+        assertFalse(result.has("risePercent"), "BOX_BREAKOUT must not echo risePercent in the response header");
+        assertFalse(result.get("requireVolume").asBoolean());
+    }
+
+    @Test
+    void requireVolume_sentToNonBoxBreakoutStrategy_rejectedWithParamNotApplicable() {
+        StrategySelectionDto higherLows = selection("HIGHER_LOWS", "STANDARD");
+        higherLows.setRequireVolume(true);
+        ErrorResponse err1 = postScanExpectingError(higherLows);
+        assertEquals("PARAM_NOT_APPLICABLE", err1.getCode());
+        assertEquals("HIGHER_LOWS", err1.getStrategy());
+        assertEquals("requireVolume", err1.getParam());
+
+        StrategySelectionDto rebound = new StrategySelectionDto();
+        rebound.setCode("REBOUND");
+        rebound.setRequireVolume(false);
+        ErrorResponse err2 = postScanExpectingError(rebound);
+        assertEquals("PARAM_NOT_APPLICABLE", err2.getCode());
+        assertEquals("REBOUND", err2.getStrategy());
+        assertEquals("requireVolume", err2.getParam());
+    }
+
+    @Test
+    void boxBreakout_requireVolumeNonBooleanValue_rejectedWith400NotCoerced() {
+        String stringJson =
+                "{\"strategies\":[{\"code\":\"BOX_BREAKOUT\",\"preset\":\"STANDARD\",\"requireVolume\":\"false\"}]}";
+        ResponseEntity<String> stringResponse = postRawJson(stringJson);
+        assertEquals(HttpStatus.BAD_REQUEST, stringResponse.getStatusCode(),
+                "a JSON string \"false\" must not be leniently coerced to boolean false: " + stringResponse.getBody());
+
+        String numberJson =
+                "{\"strategies\":[{\"code\":\"BOX_BREAKOUT\",\"preset\":\"STANDARD\",\"requireVolume\":0}]}";
+        ResponseEntity<String> numberResponse = postRawJson(numberJson);
+        assertEquals(HttpStatus.BAD_REQUEST, numberResponse.getStatusCode(),
+                "a JSON number 0 must not be leniently coerced to boolean false: " + numberResponse.getBody());
+    }
+
     // ==================== helpers ====================
 
     private JsonNode findByCode(JsonNode array, String code) {
@@ -4949,6 +5234,24 @@ class StrategyScanIntegrationTest {
         return result;
     }
 
+    /** Extracts one text field from each object in a JSON array (e.g. each hit's `stockId`). */
+    private List<String> toStringList(JsonNode array, String field) {
+        List<String> result = new ArrayList<>();
+        for (JsonNode node : array) {
+            result.add(node.get(field).asText());
+        }
+        return result;
+    }
+
+    /** Posts a raw JSON string body directly (bypassing DTO serialization) — needed to exercise
+     *  malformed/wrongly-typed field values that a real DTO field could never hold in the first
+     *  place, e.g. a JSON string or number sent for a boolean field. */
+    private ResponseEntity<String> postRawJson(String json) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return rest.postForEntity("/api/strategies/scan", new HttpEntity<>(json, headers), String.class);
+    }
+
     private boolean containsStockId(JsonNode items, String stockId) {
         for (JsonNode item : items) {
             if (stockId.equals(item.get("stockId").asText())) {
@@ -4968,6 +5271,14 @@ class StrategyScanIntegrationTest {
     private StrategySelectionDto selection(String code, String preset, BigDecimal risePercent) {
         StrategySelectionDto dto = selection(code, preset);
         dto.setRisePercent(risePercent);
+        return dto;
+    }
+
+    /** Increment 10 helper: builds a BOX_BREAKOUT-shaped selection with an explicit `requireVolume`
+     *  (null means "omitted", i.e. defaults to true). `risePercent` may also be null to mean omitted. */
+    private StrategySelectionDto boxBreakoutSelection(String preset, BigDecimal risePercent, Boolean requireVolume) {
+        StrategySelectionDto dto = selection("BOX_BREAKOUT", preset, risePercent);
+        dto.setRequireVolume(requireVolume);
         return dto;
     }
 

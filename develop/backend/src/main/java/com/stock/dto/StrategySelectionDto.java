@@ -1,6 +1,7 @@
 package com.stock.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -30,6 +31,12 @@ import java.util.List;
  * <p>`fastPeriod`/`slowPeriod` are accepted only by MACD_GOLDEN_CROSS; `jThreshold` only by
  * KDJ_GOLDEN_CROSS — see specs/backend/strategy-scan.md, "技術指標型態". All three are declared as
  * BigDecimal for the same reason as the fields above.
+ *
+ * <p>`requireVolume` is accepted only by BOX_BREAKOUT — see specs/backend/strategy-scan.md,
+ * "量能條件可整個關掉". Deserialized with {@link StrictBooleanDeserializer} rather than Jackson's default
+ * lenient boolean coercion, which would otherwise silently accept the JSON string {@code "false"}
+ * or the number {@code 0} as {@code false} — the spec requires those to be rejected as a 400, not
+ * coerced.
  */
 public class StrategySelectionDto {
 
@@ -38,6 +45,7 @@ public class StrategySelectionDto {
     private BigDecimal risePercent;
     private BigDecimal days;
     private Boolean requireRise;
+    private Boolean requireVolume;
     private BigDecimal dropDays;
     private BigDecimal dropPercent;
     private BigDecimal riseDays;
@@ -91,6 +99,15 @@ public class StrategySelectionDto {
 
     public void setRequireRise(Boolean requireRise) {
         this.requireRise = requireRise;
+    }
+
+    public Boolean getRequireVolume() {
+        return requireVolume;
+    }
+
+    @JsonDeserialize(using = StrictBooleanDeserializer.class)
+    public void setRequireVolume(Boolean requireVolume) {
+        this.requireVolume = requireVolume;
     }
 
     public BigDecimal getDropDays() {

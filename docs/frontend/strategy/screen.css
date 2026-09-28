@@ -237,3 +237,6 @@
 .page-strategy .wrap { padding-top:12px; padding-bottom:6px; }
 .page-strategy.nodesc .tab { padding-top:7px; padding-bottom:7px; }
 .page-strategy.nodesc .cards .card:nth-child(n+7) { padding-top:1px; padding-bottom:1px; }
+/* 箱型突破's「要求量增」group checkbox rides its title line on the compact screens like 反彈's does; that card is
+   only as wide as its 漲幅門檻 row, so reserve enough width for the title and the checkbox to sit side by side */
+.page-strategy.nodesc .cards .card:has(> .grp) { min-width:180px; }

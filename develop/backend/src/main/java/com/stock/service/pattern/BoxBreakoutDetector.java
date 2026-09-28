@@ -2,7 +2,9 @@ package com.stock.service.pattern;
 
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.BoxBreakoutDetailDto;
+import com.stock.dto.ParamGroupDto;
 import com.stock.dto.PresetDto;
+import com.stock.dto.StrategyResultDto;
 import com.stock.dto.StrategySelectionDto;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -19,8 +21,9 @@ import java.util.Map;
  * BOX_BREAKOUT — specs/backend/strategy-scan.md, "箱型突破". For each trading day D within the
  * scanned range: build the box from the `lookback` trading days strictly before D, require it was
  * consolidating (unless the preset skips that check), require D's close to break above the box top
- * by `breakoutPercent`, require volume confirmation, and require `confirmBars` closes above the box
- * top (1 = D alone, 2 = D and its immediate next trading day).
+ * by `breakoutPercent`, require volume confirmation (unless the request's `requireVolume` is
+ * {@code false} — an on/off switch orthogonal to the preset, see "量能條件可整個關掉"), and require
+ * `confirmBars` closes above the box top (1 = D alone, 2 = D and its immediate next trading day).
  */
 @Component
 @Order(1)
@@ -30,6 +33,9 @@ public class BoxBreakoutDetector implements PatternDetector {
     private static final int VOLUME_AVG_DAYS = 5;
     private static final int PRICE_SCALE = 2;
     private static final int CALC_SCALE = 10;
+    // specs/backend/strategy-scan.md, "量能條件可整個關掉" — omitting `requireVolume` behaves exactly like
+    // sending `true`.
+    private static final boolean REQUIRE_VOLUME_DEFAULT = true;
 
     /**
      * One preset's full identity: thresholds plus the name/description shown in the catalogue.
@@ -102,6 +108,19 @@ public class BoxBreakoutDetector implements PatternDetector {
     }
 
     @Override
+    public boolean acceptsRequireVolume() {
+        return true;
+    }
+
+    @Override
+    public List<ParamGroupDto> getParamGroups() {
+        // Reuses REBOUND's "whole-group-togglable" mechanism (specs/backend/strategy-scan.md, "選用參數
+        // 群組") even though this group governs no `params` — it is a bare on/off switch, not a set of
+        // number inputs to toggle together.
+        return List.of(new ParamGroupDto("volume", "要求量增", Boolean.TRUE));
+    }
+
+    @Override
     public int requiredLookbackTradingDays(StrategySelectionDto selection) {
         return presetParams.get(selection.getPreset()).lookback;
     }
@@ -113,6 +132,9 @@ public class BoxBreakoutDetector implements PatternDetector {
         // risePercent overrides breakoutPercent (specs/backend/strategy-scan.md, 箱型突破's override
         // mapping); lookback/rangeMaxPercent/volumeMultiple/confirmBars stay preset-driven.
         BigDecimal breakoutPercent = resolveRatio(selection.getRisePercent(), params.breakoutPercent);
+        // requireVolume is orthogonal to the preset (specs/backend/strategy-scan.md, "量能條件可整個關掉") —
+        // it never changes volumeMultiple itself, only whether step 4 is evaluated at all.
+        boolean requireVolume = resolveRequireVolume(selection);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {
@@ -161,9 +183,10 @@ public class BoxBreakoutDetector implements PatternDetector {
                 continue;
             }
 
-            // 4. volume confirmation
+            // 4. volume confirmation (skipped entirely when requireVolume is false — detail.volumeRatio
+            // is still computed and reported below regardless, see specs/backend/strategy-scan.md)
             BigDecimal avgVolume = averageVolume(bars, i);
-            if (params.volumeMultiple != null) {
+            if (requireVolume && params.volumeMultiple != null) {
                 BigDecimal volumeThreshold = avgVolume.multiply(params.volumeMultiple);
                 if (BigDecimal.valueOf(d.getVolume()).compareTo(volumeThreshold) <= 0) {
                     continue;
@@ -204,6 +227,20 @@ public class BoxBreakoutDetector implements PatternDetector {
             return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
         }
         return PatternDetectionOutcome.noMatch(pendingConfirm);
+    }
+
+    @Override
+    public void populateResultParams(StrategySelectionDto selection, StrategyResultDto result) {
+        // requireVolume is the one exception to "preset and a parameter field never coexist" (specs/
+        // backend/strategy-scan.md, "results 依 strategies 送入的順序回傳") — it is orthogonal to the preset,
+        // so both must be echoed together for the caller to know which sensitivity and which volume
+        // setting actually ran.
+        result.setPreset(selection.getPreset());
+        result.setRequireVolume(resolveRequireVolume(selection));
+    }
+
+    private static boolean resolveRequireVolume(StrategySelectionDto selection) {
+        return selection.getRequireVolume() == null ? REQUIRE_VOLUME_DEFAULT : selection.getRequireVolume();
     }
 
     private BigDecimal averageVolume(List<StockDailyPrice> bars, int dIndex) {

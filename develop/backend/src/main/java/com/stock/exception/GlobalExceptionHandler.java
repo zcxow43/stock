@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -301,6 +302,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("VALIDATION_ERROR"));
+    }
+
+    // A request body Jackson cannot parse into the target DTO — e.g. a non-boolean value sent for
+    // requireVolume, which is deserialized with StrictBooleanDeserializer specifically so this case
+    // is a 400 rather than being lenently coerced (specs/backend/strategy-scan.md, "requireVolume
+    // 帶非布林值...不得被寬鬆解讀為 false"). Without this handler the exception falls through to the generic
+    // Exception handler below and surfaces as a misleading 500.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_REQUEST_BODY"));
     }
 
     @ExceptionHandler(Exception.class)

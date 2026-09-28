@@ -196,6 +196,16 @@ public interface PatternDetector {
         return false;
     }
 
+    /**
+     * Whether this detector accepts the request's `requireVolume` field — true only for
+     * BOX_BREAKOUT. Orthogonal to its preset: every one of the three sensitivities can be combined
+     * with volume on or off, so this is not a fourth preset and never changes `volumeMultiple`
+     * itself — see specs/backend/strategy-scan.md, "量能條件可整個關掉".
+     */
+    default boolean acceptsRequireVolume() {
+        return false;
+    }
+
     /** Inclusive bounds/default for `fastPeriod` — meaningful only when {@link #acceptsFastPeriod()}
      *  is true; see specs/backend/strategy-scan.md, "MACD 黃金交叉". */
     default int getFastPeriodMin() {

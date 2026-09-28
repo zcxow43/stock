@@ -23,12 +23,17 @@ import java.util.List;
  * <p>MACD_GOLDEN_CROSS echoes `fastPeriod`/`slowPeriod`/`signalPeriod` (the latter always `9`);
  * KDJ_GOLDEN_CROSS echoes `jThreshold` — neither echoes `preset` — see specs/backend/
  * strategy-scan.md, "技術指標型態".
+ *
+ * <p>BOX_BREAKOUT is the one exception to "`preset` and a parameter field never coexist": it echoes
+ * `requireVolume` (the value actually used, defaulted when omitted) alongside `preset`, since the
+ * two are orthogonal — see "量能條件可整個關掉".
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StrategyResultDto {
 
     private String strategy;
     private String preset;
+    private Boolean requireVolume;
     private Integer days;
     private Boolean requireRise;
     private Integer dropDays;
@@ -67,6 +72,14 @@ public class StrategyResultDto {
 
     public void setPreset(String preset) {
         this.preset = preset;
+    }
+
+    public Boolean getRequireVolume() {
+        return requireVolume;
+    }
+
+    public void setRequireVolume(Boolean requireVolume) {
+        this.requireVolume = requireVolume;
     }
 
     public Integer getDays() {

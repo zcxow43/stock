@@ -693,6 +693,69 @@ function rowSortValue(
   return item?.profit ?? null
 }
 
+/** 高價組：`buyPrice` 嚴格大於門檻金額的每一筆——逐筆判斷，`buyPrice` 為 `null` 的筆一律不
+ * 屬於高價組。Pure and parameterised (never reads component state directly) so the batch
+ * checkbox's own click handler AND the 回測成功時的四步預設初始化 both call this ONE
+ * implementation — see `applyBacktestDefaults` below (specs/frontend/strategy.md「兩個門檻
+ * 框改為預設勾選」：兩處不得各自維護一份判斷邏輯，否則會drift）。 */
+function computeHighPriceGroupKeys(
+  allItemKeys: string[],
+  backtestItemsByKey: Map<string, BacktestResultItem>,
+  priceThresholdAmount: number | null,
+): string[] {
+  if (priceThresholdAmount === null) return []
+  return allItemKeys.filter((key) => {
+    const buyPrice = backtestItemsByKey.get(key)?.buyPrice
+    return buyPrice != null && buyPrice > priceThresholdAmount
+  })
+}
+
+/** 資料不齊組：`sellDate` 為 `null` 的每一筆。Same reuse rationale as
+ * `computeHighPriceGroupKeys` above. */
+function computeIncompleteGroupKeys(allItemKeys: string[], backtestItemsByKey: Map<string, BacktestResultItem>): string[] {
+  return allItemKeys.filter((key) => backtestItemsByKey.get(key)?.sellDate === null)
+}
+
+/** 目前顯示中（不在 `hiddenItemKeys` 內）、報酬率 < 門檻或為 `null` 的每一筆——已被其他框隱
+ * 藏的筆一律不動，見「作用範圍」。Same reuse rationale as `computeHighPriceGroupKeys` above. */
+function computeUnderReturnThresholdKeys(
+  allItemKeys: string[],
+  backtestItemsByKey: Map<string, BacktestResultItem>,
+  hiddenItemKeys: Set<string>,
+  returnThresholdAmount: number | null,
+): string[] {
+  if (returnThresholdAmount === null) return []
+  return allItemKeys.filter((key) => {
+    if (hiddenItemKeys.has(key)) return false
+    const returnPercent = backtestItemsByKey.get(key)?.returnPercent
+    return returnPercent == null || returnPercent < returnThresholdAmount
+  })
+}
+
+/** 「僅選取報酬率 n% 以上」勾選時一併做的「依報酬率降冪」排序——抽成獨立函式，讓使用者手動
+ * 勾選這個框與回測剛完成時第 4 步的預設勾選用的是同一份排序邏輯（specs/frontend/strategy.md
+ * 「兩個門檻框改為預設勾選」：不得在回測成功處另外寫一份）。`hiddenItemKeys` 用來過濾父列聚
+ * 合時「顯示中」的子列，定義與 `visibleGroups` 一致。 */
+function computeReturnDescSortOrder(
+  rows: UnionRow[],
+  backtestItemsByKey: Map<string, BacktestResultItem>,
+  checkedItemKeys: Set<string>,
+  lotSize: number,
+  hiddenItemKeys: Set<string>,
+): string[] {
+  const visibleGroupsOf = (row: UnionRow) =>
+    row.buyDateGroups.filter((group) => !hiddenItemKeys.has(itemKey(row.stockId, group.buyDate)))
+  return [...rows]
+    .sort((a, b) =>
+      compareBySortDirection(
+        rowSortValue({ ...a, buyDateGroups: visibleGroupsOf(a) }, 'returnPercent', backtestItemsByKey, checkedItemKeys, lotSize),
+        rowSortValue({ ...b, buyDateGroups: visibleGroupsOf(b) }, 'returnPercent', backtestItemsByKey, checkedItemKeys, lotSize),
+        'desc',
+      ),
+    )
+    .map((row) => row.stockId)
+}
+
 /** A checkbox that can additionally render the browser's native indeterminate (半選) glyph
  * — React has no JSX prop for `indeterminate` (it isn't a real DOM attribute), so it has to
  * be poked onto the element imperatively. Used for every merged-table row checkbox (both
@@ -1243,12 +1306,62 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_J_THRESHOLD: 'jThreshold',
   }
 
+  /** 回測成功當下的四步初始化（「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報
+   * 酬率 n% 以上」，順序是契約的一部分——見 specs/frontend/strategy.md「納入計算的勾選框」
+   * 「兩個門檻框改為預設勾選」）。首次自動回測與「重試回測」成功時都跑這裡、用同一組純函式
+   * （`computeIncompleteGroupKeys`／`computeHighPriceGroupKeys`／
+   * `computeUnderReturnThresholdKeys`／`computeReturnDescSortOrder`）算出結果，那組函式正是
+   * 三個批次框自己被點擊時各自呼叫的同一份實作，藉此保證「使用者手動點出來的結果」與「回測
+   * 剛完成時的預設結果」永遠算不出兩種答案。
+   *
+   * 刻意以 `resp`／`rows` 為唯一輸入，完全不讀 `backtestResult`／`unionRows`／
+   * `checkedItemKeys` 等元件狀態：這個函式在 `backtestStrategies(...).then(...)` 內執行時，
+   * 那些狀態可能仍是「這次回測開始前」的舊值（例如重新掃描後才觸發的自動回測，`unionRows`
+   * 閉包還停在上一批命中清單），讀舊狀態算出來的預設值就會套用在錯的一批筆上。 */
+  const applyBacktestDefaults = (resp: BacktestResponse, rows: UnionRow[]) => {
+    const allKeys = rows.flatMap((row) => row.buyDateGroups.map((group) => itemKey(row.stockId, group.buyDate)))
+    const itemsByKey = new Map<string, BacktestResultItem>()
+    for (const item of resp.items) itemsByKey.set(itemKey(item.stockId, item.buyDate), item)
+
+    // 第 2 步：隱藏資料不齊（無賣出日）— 只隱藏，不改勾選狀態。
+    const incompleteKeys = computeIncompleteGroupKeys(allKeys, itemsByKey)
+    const hideIncompleteNext = incompleteKeys.length > 0
+
+    // 第 3 步：取消買進價高於 N 元 — 取消勾選並隱藏；高價組為空時維持 disabled 且未勾選。
+    const priceAmount = isPriceThresholdInputInvalid(priceThresholdInput) ? null : Number(priceThresholdInput)
+    const highPriceKeys = computeHighPriceGroupKeys(allKeys, itemsByKey, priceAmount)
+    const priceThresholdCheckedNext = highPriceKeys.length > 0
+
+    const hiddenAfterStep3 = new Set<string>([
+      ...(hideIncompleteNext ? incompleteKeys : []),
+      ...(priceThresholdCheckedNext ? highPriceKeys : []),
+    ])
+
+    // 第 4 步：僅選取報酬率 n% 以上 — 作用範圍是此時「仍顯示中」的筆，因此用 hiddenAfterStep3
+    // 排除前兩步已藏起來的筆；只取消勾選，不隱藏，並把排序切到報酬率降冪。
+    const returnAmount = isReturnThresholdInputInvalid(returnThresholdInput) ? null : Number(returnThresholdInput)
+    const underReturnKeys = computeUnderReturnThresholdKeys(allKeys, itemsByKey, hiddenAfterStep3, returnAmount)
+
+    const nextChecked = new Set(allKeys)
+    for (const key of highPriceKeys) nextChecked.delete(key)
+    for (const key of underReturnKeys) nextChecked.delete(key)
+
+    setCheckedItemKeys(nextChecked)
+    setHideIncomplete(hideIncompleteNext)
+    setPriceThresholdChecked(priceThresholdCheckedNext)
+    setReturnThresholdChecked(true)
+    setSortState({ column: 'returnPercent', direction: 'desc' })
+    setSortedRowOrder(computeReturnDescSortOrder(rows, itemsByKey, nextChecked, resp.lotSize, hiddenAfterStep3))
+  }
+
   /** Sends `POST /api/strategies/backtest` — called automatically once right after a scan
-   * succeeds with ≥1 hit, and again (with the SAME `items`, re-derived from the same
-   * `unionRows`) whenever「重試回測」is pressed. `isRetry` only changes what's displayed
-   * while it's running (重試 keeps the failure message on screen and swaps its own button
-   * label; the auto-backtest has neither) — the request itself is identical either way. */
-  const runBacktest = (items: BacktestRequestItem[], isRetry: boolean) => {
+   * succeeds with ≥1 hit, and again (with the SAME `items`, re-derived from the same `rows`)
+   * whenever「重試回測」is pressed. `isRetry` only changes what's displayed while it's running
+   * (重試 keeps the failure message on screen and swaps its own button label; the
+   * auto-backtest has neither) — the request itself is identical either way. `rows` is passed
+   * in explicitly by both call sites (never read from the component's own `unionRows`) for
+   * the same staleness reason documented on `applyBacktestDefaults` above. */
+  const runBacktest = (rows: UnionRow[], isRetry: boolean) => {
     backtestGenerationRef.current += 1
     const generation = backtestGenerationRef.current
     backtestAbortControllerRef.current?.abort()
@@ -1257,16 +1370,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestStatus('running')
     setIsRetryingBacktest(isRetry)
     if (!isRetry) setBacktestErrorMessage(null)
-    backtestStrategies({ items }, controller.signal)
+    backtestStrategies({ items: buildBacktestItems(rows) }, controller.signal)
       .then((resp) => {
         // 回測進行中「開始掃描」仍可按，其回應若在新掃描之後才到，一律丟棄 — a newer scan
         // (or a newer retry) bumps the generation before this one's response can arrive, so
         // an outdated response can never overwrite a result it no longer corresponds to.
         if (backtestGenerationRef.current !== generation) return
         setBacktestResult(resp)
-        setPriceThresholdChecked(false)
-        setReturnThresholdChecked(false)
-        setHideIncomplete(resp.items.some((item) => item.sellDate === null))
+        applyBacktestDefaults(resp, rows)
         setBacktestStatus('success')
         setBacktestErrorMessage(null)
         setIsRetryingBacktest(false)
@@ -1326,7 +1437,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         setExpandedStockIds(new Set())
         // 掃描成功且命中至少一檔時，不需任何使用者動作即自動送出一次回測；掃描失敗或命中
         // 0 檔時不送——沒有命中清單就沒有東西可以回測。
-        if (rows.length > 0) runBacktest(buildBacktestItems(rows), false)
+        if (rows.length > 0) runBacktest(rows, false)
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'UNKNOWN_STOCK_ID') {
@@ -1507,7 +1618,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * this same `unionRows` (the scan itself is never re-run). */
   const handleRetryBacktest = () => {
     if (backtestStatus !== 'error') return
-    runBacktest(buildBacktestItems(unionRows), true)
+    runBacktest(unionRows, true)
   }
 
   const handleSyncClick = () => {
@@ -1782,15 +1893,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const priceThresholdAmount = priceThresholdInvalid ? null : Number(priceThresholdInput)
   // 高價組：`buyPrice` 嚴格大於金額的每一筆——單筆列與每一個子列各自判斷，包含摺疊中的子列
   // 與無法回測（`sellDate` 為 null）但 `buyPrice` 有值的筆；`buyPrice` 為 null 的筆一律不
-  // 屬於高價組。逐筆讀 `backtestItemsByKey` 的 `buyPrice`（唯一帶著它的地方是回測回應），
-  // 不看父列的成本加權均價——「逐筆判斷，不看父列均價」。
-  const highPriceGroupKeys =
-    priceThresholdAmount === null
-      ? []
-      : allItemKeys.filter((key) => {
-          const buyPrice = backtestItemsByKey.get(key)?.buyPrice
-          return buyPrice != null && buyPrice > priceThresholdAmount
-        })
+  // 屬於高價組。與回測剛完成時的預設初始化共用 `computeHighPriceGroupKeys`（見
+  // `applyBacktestDefaults`），不看父列的成本加權均價——「逐筆判斷，不看父列均價」。
+  const highPriceGroupKeys = computeHighPriceGroupKeys(allItemKeys, backtestItemsByKey, priceThresholdAmount)
   // 高價組為空、或金額本身不合法時 disabled（未勾選）——沒有東西可以作用，或連範圍都算不出來。
   const priceThresholdDisabled = backtestResult === null || priceThresholdInvalid || highPriceGroupKeys.length === 0
 
@@ -1809,7 +1914,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     })
   }
 
-  const incompleteGroupKeys = allItemKeys.filter((key) => backtestItemsByKey.get(key)?.sellDate === null)
+  const incompleteGroupKeys = computeIncompleteGroupKeys(allItemKeys, backtestItemsByKey)
   const hiddenItemKeys = new Set([
     ...(priceThresholdChecked ? highPriceGroupKeys : []),
     ...(hideIncomplete ? incompleteGroupKeys : []),
@@ -1821,15 +1926,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const returnThresholdAmount = returnThresholdInvalid ? null : Number(returnThresholdInput)
   // 目前顯示中（未被「取消買進價高於 N 元」或「隱藏資料不齊」隱藏）、報酬率 < n% 或為 null
   // 的每一筆——逐筆判斷，不看父列合計；已被那兩個框隱藏的筆完全排除在外，本框永遠不會去動
-  // 它們（見「作用範圍」）。
-  const underReturnThresholdKeys =
-    returnThresholdAmount === null
-      ? []
-      : allItemKeys.filter((key) => {
-          if (hiddenItemKeys.has(key)) return false
-          const returnPercent = backtestItemsByKey.get(key)?.returnPercent
-          return returnPercent == null || returnPercent < returnThresholdAmount
-        })
+  // 它們（見「作用範圍」）。與回測剛完成時的預設初始化共用 `computeUnderReturnThresholdKeys`
+  // （見 `applyBacktestDefaults`）。
+  const underReturnThresholdKeys = computeUnderReturnThresholdKeys(allItemKeys, backtestItemsByKey, hiddenItemKeys, returnThresholdAmount)
   // **不因「沒有筆會被取消」而 disabled**——即使顯示中的每一筆都達標，勾選它仍然會做排序這件
   // 事，因此唯一的 disabled 條件是回測尚未完成或數字本身不合法（範圍不含此二者的空集合檢查）。
   const returnThresholdDisabled = backtestResult === null || returnThresholdInvalid
@@ -1853,17 +1952,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       const lotSize = backtestResult.lotSize
       const updatedChecked = new Set(checkedItemKeys)
       for (const key of underReturnThresholdKeys) updatedChecked.delete(key)
-      const order = [...unionRows]
-        .sort((a, b) =>
-          compareBySortDirection(
-            rowSortValue({ ...a, buyDateGroups: visibleGroups(a) }, 'returnPercent', backtestItemsByKey, updatedChecked, lotSize),
-            rowSortValue({ ...b, buyDateGroups: visibleGroups(b) }, 'returnPercent', backtestItemsByKey, updatedChecked, lotSize),
-            'desc',
-          ),
-        )
-        .map((row) => row.stockId)
       setSortState({ column: 'returnPercent', direction: 'desc' })
-      setSortedRowOrder(order)
+      setSortedRowOrder(computeReturnDescSortOrder(unionRows, backtestItemsByKey, updatedChecked, lotSize, hiddenItemKeys))
     }
   }
 

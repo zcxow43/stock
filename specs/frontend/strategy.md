@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日（上漲支撐為確認完成日 D+2，其餘型態等於訊號日），落在同一買進日的命中視為同一筆；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日（上漲支撐為確認完成日 D+2，其餘型態等於訊號日），落在同一買進日的命中視為同一筆；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」"
 depends_on: [stock-list]
 ---
 
@@ -33,14 +33,25 @@ depends_on: [stock-list]
 
 | 回應形狀 | 目前適用 | 卡片內容 |
 |---|---|---|
-| `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、目前選定靈敏度的說明文字一行 |
+| `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、目前選定靈敏度的說明文字一行、**該條目 `paramGroups` 的每一個群組勾選框**（目前只有箱型突破有一個） |
 | `presets` 為空陣列、帶 `params` | 累積上漲、反彈、法人買賣超佔比、法人連續買超、法人買超強度排名、MACD 黃金交叉、KDJ 黃金交叉 | 勾選框、策略名稱、**依 `params` 逐一畫出的輸入**（數字輸入或複選勾選框，見下）、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
 
 卡片共十張，依 API 回應的順序排列，**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
 
 以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。反彈就是這條規則的第一個實證：它從有靈敏度改成無靈敏度時，卡片的形狀應該自動跟著 API 變，前端不必為此改任何判斷。
 
-**選用參數群組**：策略條目可帶 `paramGroups`，每一筆對應卡片上的**一個勾選框**（文字取自該筆的 `name`，初始狀態取自 `default`）。`params` 中帶 `group` 的參數歸該群組管：群組勾選框取消時，該組所有輸入 disabled，且**請求中完全不帶這些欄位**；不帶 `group` 的參數一律顯示且一律送出。目前只有反彈用到（`rise` 群組：「另外要求反彈漲幅」，預設勾選，管 `riseDays` 與 `risePercent`）。**同樣不得以策略 `code` 寫死**——依 `paramGroups` 畫即可。
+**選用參數群組**：策略條目可帶 `paramGroups`，每一筆對應卡片上的**一個勾選框**（文字取自該筆的 `name`，初始狀態取自 `default`），送出時一律帶 `require<Group>` 布林欄位，欄位名由群組自身的 `code` 推導（`rise` → `requireRise`、`volume` → `requireVolume`），不得寫死。`params` 中帶 `group` 的參數歸該群組管：群組勾選框取消時，該組所有輸入 disabled，且**請求中完全不帶這些欄位**；不帶 `group` 的參數一律顯示且一律送出。**同樣不得以策略 `code` 寫死**——依 `paramGroups` 畫即可。
+
+這個機制**與卡片形狀無關**：有靈敏度的卡片與依 `params` 畫的卡片都照畫自己的 `paramGroups`。目前有兩個：
+
+| 群組 | 所屬卡片 | 文字 | 預設 | 管轄的 `params` |
+|---|---|---|---|---|
+| `rise` | 反彈（`presets` 為空） | 另外要求反彈漲幅 | 勾選 | `riseDays`、`risePercent` |
+| `volume` | 箱型突破（`presets` 非空） | 要求量增 | 勾選 | 無 |
+
+**一個群組可以不轄任何 `params`，那它就只是一個開關**：箱型突破的量增倍數由靈敏度決定、使用者不能改，所以 `volume` 群組沒有輸入可管，取消它就只是送出 `requireVolume: false`（見 `specs/backend/strategy-scan.md` 的「箱型突破」）。畫法完全相同，前端不需要為「有沒有輸入」分兩條路。
+
+**群組取消時，該卡片的說明文字下方多一行次要文字色 `#93A4B8` 的「已取消「{群組名稱}」，本次不套用該條件」**。靈敏度的說明文字取自 API、描述的是那一段靈敏度的完整定義（例如「回看 20 根，箱高 < 8%，突破 1.5% 且量增 1.5 倍」），取消量增後它就有一句不再成立；這一行用群組自己的 `name` 說明差異，不去改寫或解析 API 給的那串文字——解析它等於把後端的文案格式變成前端的相依。
 
 反彈卡片因此有四格輸入：「下跌天數」「跌幅門檻」永遠可填；「反彈天數」「反彈幅度」在群組勾選框取消時 disabled。取消後掃描只以跌幅判定，這正是「先跌了就想看，還沒反彈也算」的用法。
 
@@ -171,7 +182,9 @@ depends_on: [stock-list]
 
 | 型態 | 內容 | 範例 |
 |---|---|---|
-| 箱型突破／底底高／上漲支撐 | `{策略名稱}（{preset} 的中文名）` | 上漲支撐（標準） |
+| 底底高／上漲支撐 | `{策略名稱}（{preset} 的中文名）` | 上漲支撐（標準） |
+| 箱型突破（`requireVolume` 為 `true`） | `{策略名稱}（{preset} 的中文名）` | 箱型突破（標準） |
+| 箱型突破（`requireVolume` 為 `false`） | `{策略名稱}（{preset} 的中文名・不看量增）` | 箱型突破（標準・不看量增） |
 | 累積上漲 | `{策略名稱}（{days} 日）` | 累積上漲（30 日） |
 | 反彈（`requireRise` 為 `true`） | `{策略名稱}（{dropDays} 日跌 {dropPercent}% → {riseDays} 日反彈 {risePercent}%）` | 反彈（3 日跌 10% → 1 日反彈 5%） |
 | 反彈（`requireRise` 為 `false`） | `{策略名稱}（{dropDays} 日跌 {dropPercent}%）` | 反彈（3 日跌 10%） |
@@ -189,7 +202,9 @@ depends_on: [stock-list]
 
 **一律取自回應而非畫面上的輸入值**：使用者掃描後又改了輸入卻沒重掃時，這一行必須繼續說明眼前這份結果是用什麼參數算出來的。百分比沿用「數值格式」一節的規則（`10.0` 寫成 `10`），日數為整數。`jThreshold` 同樣去掉多餘的 `.0`，負值前置 `-`（`-10.0` 寫成 `-10`）。MACD 的訊號線天數同樣取自回應的 `signalPeriod`，不在前端寫死 `9`。
 
-**預設排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則。**回測完成本身不改變排序**——回測是替既有清單補上六欄，不是重新排名；自動依報酬率重排會讓使用者找不到剛剛還在看的那一列。要依買進價或報酬率排序，由使用者自己點表頭（見「買進價與報酬率欄排序」），而且隨時可以點回預設排序。
+**預設排序**：依該檔在各策略中**最新的**一個 `signalDate` 由新到舊；同日則依 `stockId` 升冪。這是延用 `specs/backend/strategy-scan.md` 對各策略 `items` 已定的排序規則。掃描完成、尚未回測時表格即為這個順序。
+
+**回測完成時表格改為依報酬率降冪**，因為「僅選取報酬率 n% 以上」預設勾選，而勾選該框本來就一併把排序切到報酬率降冪（見該框一節）。這是那個框的效果，不是回測自己的行為：取消該框不還原排序，使用者隨時可以點表頭改排序或點回預設排序（見「買進價、報酬率與收益欄排序」）。
 
 **命中彙總表的列不導向任何頁面；回測完成後，點選一列等同點選該列的勾選框。** 網址永遠不變。
 
@@ -244,7 +259,7 @@ depends_on: [stock-list]
 - **子列在父列內部依同一欄、同一方向排序**（「—」同樣視為最小值，值相同依買進日由新到舊）；還原預設排序時，子列回到依買進日由新到舊。父列摺疊時逐行列出的買進日／賣出日**不隨排序改變順序**，恆為依買進日由新到舊——那是日期清單，不是這三欄的值。
 - **排序不影響其他任何狀態**：勾選狀態、展開狀態、「共 N 檔」、三個總計與兩行「未計入」說明都不因排序改變。
 - **排序完全在前端完成，不重新呼叫任何端點。**
-- **重新掃描時排序回到預設**，指示一併消失；「重試回測」成功時同樣以預設排序呈現。舊的排序是對舊清單點的，沿用到新清單上會讓人以為新結果本來就是這個順序。
+- **重新掃描時排序回到預設**，指示一併消失。舊的排序是對舊清單點的，沿用到新清單上會讓人以為新結果本來就是這個順序。下一次回測成功時，排序依「僅選取報酬率 n% 以上」預設勾選的結果落在**報酬率降冪**（`▼`）；「重試回測」成功時相同。
 - **表頭呈現**：可排序的表頭為手指游標，文字後方顯示提示圖示——未排序時為弱化色「↕」，降冪時為「▼」、升冪時為「▲」，排序中的表頭文字改為主要文字色。色碼見 `## Visual Style`。
 
 #### 一檔多筆的展開列
@@ -296,7 +311,16 @@ depends_on: [stock-list]
 
 #### 納入計算的勾選框
 
-表格最左為每列一個勾選框（父列與子列各有其一，連動規則見上方「父子勾選框的連動」），**回測完成時才出現**——與買進日／買進價／賣出日／賣出價／報酬率／收益六欄同時出現、同時消失，出現時預設全部勾選（父列與子列皆是）。尚未回測時表格沒有這一欄。
+表格最左為每列一個勾選框（父列與子列各有其一，連動規則見上方「父子勾選框的連動」），**回測完成時才出現**——與買進日／買進價／賣出日／賣出價／報酬率／收益六欄同時出現、同時消失。尚未回測時表格沒有這一欄。
+
+**回測成功當下的初始勾選狀態，是「全部勾選」再套用三個預設勾選的批次框的結果**（見「批次勾選框列」），依序為：
+
+1. 每一筆先勾選（父列與子列皆是）。
+2. 「隱藏資料不齊（無賣出日）」預設勾選 → `sellDate` 為 `null` 的筆隱藏（不改勾選狀態）。
+3. 「取消買進價高於 N 元」預設勾選 → `buyPrice` 大於門檻的筆取消勾選並隱藏。
+4. 「僅選取報酬率 n% 以上」預設勾選 → **此時仍顯示中**、報酬率低於門檻或為 `null` 的筆取消勾選（不隱藏），並把排序切到報酬率降冪。
+
+**順序是契約的一部分**，因為第 4 步的作用範圍是「顯示中的筆」：先藏後選，被前兩步藏起來的筆就不受第 4 步影響，這正是各框「不去動別的框藏起來的筆」那條既有規則。反過來先跑第 4 步，它會改到隨後才被藏起來的筆的勾選狀態，使用者取消任一隱藏框時拿回的就不是原本的狀態。
 
 **為什麼要等到回測後才出現**：勾選框唯一的作用是決定哪些列計入總報酬率與總收益，而這兩個數字只在回測後才存在。回測前就擺出一排勾選框，使用者勾掉幾檔卻看不到任何東西改變，只會納悶自己剛剛做了什麼；等到有總計可以受影響時才讓它出現，勾選框一出現就有明確的用途。
 
@@ -305,7 +329,7 @@ depends_on: [stock-list]
 - **勾選狀態的切換完全在前端完成，不重新呼叫任何端點。** 回測回應已含每筆的 `buyPrice`、`cost`、`profit` 與全批共用的 `lotSize`，總計由這些值就地重算即可；為了一個勾選動作重打一次回測，換來的是同樣的數字加上一次等待。
 - **回測失敗時勾選框不出現**，與「回測失敗時表格維持未回測的樣子」同一條原則。
 - **本頁沒有「對同一份掃描結果再回測一次」的操作**：回測在每次掃描成功後自動執行一次；失敗時的「重試回測」發生在勾選框出現之前，因此不存在需要跨回測保留的勾選狀態。
-- **重新掃描時勾選框與回測結果一起移除**，下一次回測完成時再以全部勾選重新出現——新的命中清單是另一批標的，沿用舊的勾選只會讓人以為某幾檔被系統排除了。
+- **重新掃描時勾選框與回測結果一起移除**，下一次回測完成時再依上面那四步重新出現——新的命中清單是另一批標的，沿用舊的勾選只會讓人以為某幾檔被系統排除了。
 - **標題的「共 N 檔」不受勾選影響**：它是命中檔數，取消勾選不會讓一檔股票變成沒命中。
 
 #### 回測結果的呈現
@@ -332,8 +356,8 @@ depends_on: [stock-list]
 - **標示文字不隨狀態改變**，恆為「取消全選」。
 - **不論勾選或取消勾選，都會把所有被隱藏的筆重新顯示**，「取消買進價高於 N 元」與「隱藏資料不齊（無賣出日）」兩個框因此都變為未勾選。「取消全選」回答的是「全部」：勾回全部卻還有看不到的列、或取消全部卻留著藏起來的列，都會讓使用者以為自己的操作沒涵蓋那些筆。
 - 「全部的筆」包含無法回測的筆、摺疊中的子列與被隱藏的筆：它作用在勾選框上，而不是作用在畫面上看得見的列上。摺疊狀態不影響它的作用範圍，與「摺疊狀態不影響總計」同一條原則。
-- **與列勾選框同生同滅**：回測完成時與勾選框欄同時出現，回測前、回測中、回測失敗時都不存在，重新掃描時一併移除。回測剛完成時全部的筆預設勾選，所以它此時呈未勾選。
-- 「重試回測」成功時與首次自動回測成功相同：全部的筆預設勾選，它呈未勾選。
+- **與列勾選框同生同滅**：回測完成時與勾選框欄同時出現，回測前、回測中、回測失敗時都不存在，重新掃描時一併移除。它的狀態一如既往由各筆推導：回測剛完成時，除非那四步初始化剛好把每一筆都取消掉（例如全部標的皆無法回測），否則它呈未勾選。
+- 「重試回測」成功時與首次自動回測成功相同。
 - 切換它完全在前端完成，**不重新呼叫任何端點**，三個總計與父列合計就地重算。全部取消後三個總計依既有規則顯示「—」與「未勾選任何標的」（全部標的皆無法回測時則為「沒有可回測的標的」）。
 
 ##### 「取消買進價高於 N 元」勾選框
@@ -356,7 +380,8 @@ depends_on: [stock-list]
 - **金額輸入**：接受 `0` 以上的數字，最多兩位小數（與價格的精度一致）。留空、負數或超過兩位小數時，勾選框 disabled，並在輸入框下方提示「金額需為 0 以上、最多兩位小數」。未勾選時修改金額不切換、也不隱藏任何一筆。
 - **「取消全選」被點時**（不論勾選或取消勾選），被它隱藏的筆全部重新顯示，它變為未勾選；那些筆的勾選狀態依「取消全選」的結果決定，不另外處理。
 - **金額在同一次進頁內保留**：重新掃描不重設金額（它是使用者選的篩選門檻，與掃描條件同性質）；重新整理頁面回到 `500`。
-- **與列勾選框同生同滅**，規則與「取消全選」相同：回測完成時出現且為未勾選，回測前、回測中、回測失敗時不存在，重新掃描時一併移除；「重試回測」成功時與首次回測成功相同。
+- **每次回測成功時預設勾選**（含「重試回測」成功）：買進價高於門檻的筆一開始就已取消勾選並隱藏，金額輸入框因此一開始即 disabled。**唯一的例外是高價組為空**——沒有任何一筆高於門檻時它沒有東西可作用，依上一條維持 disabled 且未勾選，金額輸入框仍可編輯。
+- **與列勾選框同生同滅**，規則與「取消全選」相同：回測完成時出現，回測前、回測中、回測失敗時不存在，重新掃描時一併移除；「重試回測」成功時與首次回測成功相同。
 - 切換它完全在前端完成，**不重新呼叫任何端點**，三個總計、父列合計與「取消全選」的推導狀態就地重算。
 
 ##### 「僅選取報酬率 n% 以上」勾選框
@@ -383,12 +408,13 @@ depends_on: [stock-list]
 - **不因「沒有筆會被取消」而 disabled**：即使顯示中的每一筆都達標，勾選它仍然會做排序這件事。
 - **「取消全選」被點時**（不論勾選或取消勾選）它變為未勾選，各筆的勾選狀態依「取消全選」的結果決定，不另外處理；排序不因此改變。
 - **門檻值在同一次進頁內保留**：重新掃描不重設（與價格門檻同性質）；重新整理頁面回到 `2`。
-- **與列勾選框同生同滅**，規則與「取消全選」相同：回測完成時出現且為未勾選，回測前、回測中、回測失敗時不存在，重新掃描時一併移除；「重試回測」成功時與首次回測成功相同。
+- **每次回測成功時預設勾選**（含「重試回測」成功）：報酬率低於門檻的筆一開始就已取消勾選，數字輸入因此一開始即 disabled，**且表格的初始排序即為報酬率降冪**（報酬率表頭顯示 `▼`）——這是本框勾選時一併做的排序，與使用者自己勾選它得到的結果完全相同。作用範圍仍是那一刻**顯示中**的筆，因此被「隱藏資料不齊」與「取消買進價高於 N 元」藏起來的筆不受影響（見「納入計算的勾選框」的四步順序）。
+- **與列勾選框同生同滅**，規則與「取消全選」相同：回測完成時出現，回測前、回測中、回測失敗時不存在，重新掃描時一併移除；「重試回測」成功時與首次回測成功相同。
 - 切換它完全在前端完成，**不重新呼叫任何端點**，三個總計、父列合計與「取消全選」的推導狀態就地重算。
 
 ##### 「隱藏資料不齊（無賣出日）」勾選框
 
-批次勾選框列的第三個。**打勾代表「沒有賣出日的筆目前被隱藏」**。
+批次勾選框列的第四個（最右）。**打勾代表「沒有賣出日的筆目前被隱藏」**。
 
 **作用範圍（以下稱「資料不齊組」）**：回測回應中 `sellDate` 為 `null` 的每一**筆**——逐筆判斷，包含子列、摺疊中的子列，以及 `buyPrice` 也為 `null` 的筆。
 
@@ -521,7 +547,7 @@ depends_on: [stock-list]
 | 初次進入（未掃描） | 結果區顯示「選擇策略與區間後開始掃描」，條件區可操作 |
 | 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60% |
 | 有結果、回測中 | 掃描成功、自動回測進行中：合併表格只有代號／名稱與命中策略與訊號日兩欄，**沒有勾選框欄**，也沒有回測六欄；展開鈕照常顯示且可展開，子列此時只顯示該買進日，以及落在這個買進日的策略與各自的訊號日；「開始掃描」右側顯示「回測中…」，「開始掃描」仍可按 |
-| 已回測 | 表格最左的勾選框欄（預設全部勾選）、右側六欄、標題右側三個總計標籤與標題列下方靠右的三個批次勾選框同時出現（「隱藏資料不齊（無賣出日）」預設勾選，無賣出日的筆一開始即隱藏），往下捲動時三個總計浮在畫面頂端，「買進價」「報酬率」表頭可點選排序，初始為預設排序；展開狀態維持使用者當下的收合狀態，不強制展開也不強制收合 |
+| 已回測 | 表格最左的勾選框欄、右側六欄、標題右側三個總計標籤與標題列下方靠右的四個批次勾選框同時出現；四個批次框中「隱藏資料不齊（無賣出日）」「取消買進價高於 [金額] 元」「僅選取報酬率 [n] % 以上」三者預設勾選（兩格數字輸入因此 disabled，高價組為空時價格框改為 disabled 未勾選），初始勾選狀態為「納入計算的勾選框」那四步的結果，「取消全選」依推導呈未勾選；往下捲動時三個總計浮在畫面頂端，「買進價」「報酬率」「收益」表頭可點選排序，**初始排序為報酬率降冪**；展開狀態維持使用者當下的收合狀態，不強制展開也不強制收合 |
 | 回測失敗 | 「開始掃描」右側顯示「回測失敗，請稍後再試」與「重試回測」按鈕；表格維持未回測的樣子，不出現勾選框欄、六欄、三個總計標籤與「取消全選」 |
 | 重試回測中 | 「重試回測」disabled 並顯示「回測中…」，錯誤訊息保留至重試有結果為止；表格內容不變 |
 | 有結果 | 正常表格 |
@@ -541,7 +567,7 @@ depends_on: [stock-list]
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
-| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
+| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
 | 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
@@ -1113,6 +1139,32 @@ depends_on: [stock-list]
 - [x] 數字可為負（`-3` 合法）；留空、`-100.1`、`100.1`、`1.234` 時勾選框 disabled 並顯示「報酬率需介於 -100 ~ 100、最多兩位小數」
 - [x] 顯示中的每一筆都達標時勾選框仍可勾選，勾選後只發生排序
 - [x] 切換本框不發出任何網路請求（以請求計數斷言）；本框未新增任何顏色，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+
+### 兩個門檻框改為預設勾選
+
+- [x] 回測成功當下，「取消買進價高於 [金額] 元」與「僅選取報酬率 [n] % 以上」兩框皆為**已勾選**，金額仍為 `500`、報酬率門檻仍為 `2`，兩格數字輸入皆 disabled；「隱藏資料不齊（無賣出日）」照舊預設勾選
+- [x] 初始勾選狀態等於「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上」四步的結果：以一份含「`buyPrice` 600／報酬率 10%」「`buyPrice` 100／報酬率 0.5%」「`buyPrice` 100／報酬率 5%」「`sellDate` 為 `null`」四筆的回測結果驗證——第一筆與第四筆不在表上（各被價格框、資料不齊框隱藏），第二筆顯示但未勾選反灰，第三筆顯示且勾選
+- [x] 順序不可對調：上述第一筆（買進價高於門檻、報酬率達標）被隱藏且未勾選，取消「取消買進價高於 N 元」後它**勾回並顯示**，其勾選狀態未被報酬率框動過
+- [x] 回測完成、尚未點任何表頭時，表格即為**依報酬率降冪**，報酬率表頭顯示 `▼` 且為主要文字色，「買進價」「收益」表頭為弱化色 `↕`
+- [x] 高價組為空（每一筆 `buyPrice` 皆未高於 `500`，含 `buyPrice` 為 `null`）時，價格框為 **disabled 且未勾選**，金額輸入可編輯；報酬率框仍預設勾選並照常排序
+- [x] 「重試回測」成功時與首次自動回測成功完全相同（兩框預設勾選、四步初始狀態、報酬率降冪）
+- [x] 重新掃描時四個批次框與勾選框欄一併移除；下一次回測成功時再以上述預設重新出現，且沿用使用者在同一次進頁內改過的門檻值（改成 `300`／`5` 後重新掃描，新一輪預設勾選套用的是 `300`／`5`）
+- [x] 取消其中任一框的行為與既有規則完全相同：取消價格框即勾回並重新顯示被它藏起來的筆；取消報酬率框即勾回它取消掉的筆、排序維持降冪不變
+- [x] 「取消全選」在回測剛完成時呈**未勾選**（只要還有任一筆勾選），點它（勾選或取消勾選）時兩個門檻框一如既往變為未勾選、被隱藏的筆全部重新顯示
+- [x] 三個總計與「另 M 筆未勾選，未計入」「另 K 筆已隱藏」在回測完成當下即反映預設勾選後的結果（不是全勾的數字）
+- [x] 這些預設不發出任何額外網路請求（回測完成到畫面穩定期間的請求數與改動前相同）
+
+### 箱型突破的「要求量增」勾選框
+
+- [ ] 箱型突破卡片在靈敏度下拉與漲幅門檻之外多一個勾選框，文字取自該條目 `paramGroups[0].name`（「要求量增」），初始狀態取自其 `default`（勾選）；底底高與上漲支撐兩張有靈敏度的卡片沒有任何群組勾選框
+- [ ] 勾選狀態下送出的該筆帶 `requireVolume: true`，並照常帶 `preset` 與 `risePercent`；取消勾選時帶 `requireVolume: false`，其餘欄位不變（靈敏度下拉與漲幅門檻皆不 disabled，兩者與本開關互不影響）
+- [ ] 送出的欄位名由群組 `code` 推導（`volume` → `requireVolume`），程式中不存在以 `BOX_BREAKOUT`、`volume` 或 `requireVolume` 字面寫死的分支；把 mock 目錄中該群組的 `code` 改成別的值，送出的欄位名隨之改變
+- [ ] 群組勾選框不轄任何輸入時畫法與反彈的群組相同：卡片上只多一個勾選框，不出現任何新的數字輸入格
+- [ ] 取消勾選時，該卡片的靈敏度說明文字下方出現一行次要文字色 `#93A4B8` 的「已取消「要求量增」，本次不套用該條件」；勾回即消失。該行的群組名稱取自 `paramGroups[0].name`，且 API 給的說明文字本身完全未被改寫
+- [ ] 切換三段靈敏度不改變本勾選框的狀態（取消後改選「嚴格」仍為取消），漲幅門檻照既有規則重填
+- [ ] 取消本勾選框不影響其他任何卡片送出的內容（同一次請求中反彈仍依 `rise` 群組決定，其餘策略不帶 `requireVolume`）
+- [ ] 本次採用參數那一行：`requireVolume` 為 `true` 時顯示「箱型突破（標準）」，為 `false` 時顯示「箱型突破（標準・不看量增）」，兩者皆取自掃描回應該筆的實際採用值，不看畫面上的勾選框當下狀態（掃描後改動勾選框，該行不變）
+- [ ] 本次未新增任何顏色：新增的說明行使用既有的次要文字色 `#93A4B8`，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2121,5 +2173,30 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Real-browser verification** (Playwright against the running `/stocks?tab=strategy`, backend `:8080` + Vite `:5173`, both left running): ran a real full-universe scan (all five strategies, loosest presets, 近六個月) that produced 327 real hits and a real auto-backtest. Confirmed: default batch-row order and unchecked/`2` default state; checking the box updated the three totals from `104,630,460 / 0.03% / 35,740` to `14,814,267 / 4.41% / 652,745` with zero network requests, added a real 「另 246 筆未勾選，未計入」 line, left 「另 155 筆已隱藏」/「共 327 檔」unchanged, grayed 173 rows while keeping them in the table, and switched the 報酬率 header to `▼`/`st-sort-header-active`; unchecking issued zero requests, re-enabled the amount input, and left the sort untouched; an invalid amount (`1.234`) disabled the checkbox and showed the exact hint text; at 1024px/900px/700px viewports the four batch checkboxes never overlapped (700px cleanly wrapped onto two lines: 取消全選／取消買進價高於／僅選取報酬率 then 隱藏資料不齊); a structural scan of every `<td>`/`<th>` inside `.st-union-table` confirmed none carries a `flex`/`grid`/`inline-flex`/`inline-grid` computed `display` (the pre-existing `.sl-actions` flex-`<td>` flagged by a whole-document scan belongs to the separate 股票清單 tab's action column, untouched by and out of scope for this increment); and `document.body`'s computed background was byte-identical under emulated `dark` and `light` `colorScheme`. Screenshots and the throwaway Playwright scripts were reviewed then deleted per instructions.
 
 **Test / build output**: `npx vitest run src/__tests__/StrategyTab.test.tsx` → 300/300. `npx vitest run src/__tests__/StockListPage.cellColorCascade.test.ts` → 52/52. Full `npx vitest run` → 487/488 (the one failure, `disables the stock-search input and shows a hint once 200 stocks are selected`, is a pre-existing fake-timer test that also times out at ~19.8s when run standalone on unmodified `main` — confirmed via `git stash` — and is unrelated to this change). `npm run build` → clean. `npm run lint` → the same 2 pre-existing warnings as prior increments (`no-unreachable` in the test file at an unrelated line, `set-state-in-effect` in `StrategyTab.tsx` at an unrelated line), 0 new.
+
+### Increment 27 — 2026-09-28
+
+**Scope**: the 11 previously-`- [ ]` criteria under「兩個門檻框改為預設勾選」— on every successful 回測 (first automatic one and a successful 「重試回測」 alike), 「取消買進價高於 N 元」 and 「僅選取報酬率 n% 以上」 now start checked, applied via the mandatory 4-step order (全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上) documented under「納入計算的勾選框」.
+
+**Files changed**:
+- `develop/frontend/src/pages/StrategyTab.tsx`
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+
+**Implementation**: extracted the three batch checkboxes' own filter logic into four pure, parameterised module-level functions — `computeHighPriceGroupKeys`, `computeIncompleteGroupKeys`, `computeUnderReturnThresholdKeys` (all three previously inline `const` expressions in the render body, now called from there unchanged) and a new `computeReturnDescSortOrder` (extracted from `toggleReturnThreshold`'s own inline sort). A new `applyBacktestDefaults(resp, rows)` runs the same four functions in the mandated order — all-checked, then hide-incomplete (hide only), then price-threshold (uncheck + hide, skipped/left disabled+unchecked when its group is empty), then return-threshold (uncheck only the still-visible sub-threshold/null lots, then always set `sortState`/`sortedRowOrder` to 報酬率 降冪) — and is called from `runBacktest`'s success handler for both the first automatic backtest and every「重試回測」success, so a single implementation produces both the user-driven and the default-driven outcome; nothing in the filter/sort math is duplicated. `runBacktest`'s own signature changed from taking a pre-built `items[]` to taking the `rows: UnionRow[]` the request was built from (both call sites — the auto-triggered one inside `runScan` and 「重試回測」's `handleRetryBacktest` — now pass `rows` directly), and `applyBacktestDefaults` takes `resp`/`rows` as explicit parameters rather than reading `backtestResult`/`unionRows`/`checkedItemKeys` off component state — closures captured inside a `.then()` can be stale relative to a scan that started after the closure was created, and reading fresh values keeps this immune to that regardless of how the outer functions are later refactored.
+
+**Key judgment call**: the return-threshold step's "作用範圍是此時仍顯示中的筆" was implemented by passing the price-threshold/hide-incomplete step's own hidden-key union into `computeUnderReturnThresholdKeys` as `hiddenAfterStep3`, mirroring exactly what the render body already does for the user-click path (`hiddenItemKeys`) — so the ordering guarantee ("先藏後選") is structural (the return step's inputs are literally the outputs of the two steps before it) rather than a comment-only convention that could drift.
+
+**Tests**: added a new `describe('兩個門檻框改為預設勾選', …)` (11 tests, one per acceptance criterion) with two new fixtures (`defaultThresholdsScanResponse`/`defaultThresholdsBacktestResponse`, four single-buy-date stocks — HIGH `buyPrice 600` high-price/return-qualifying, LOWR `buyPrice 100`/`return 0.5%` sub-threshold, OKOK `buyPrice 100`/`return 5%` qualifying, NOSL no `sellDate` — and `emptyHighPriceGroupBacktestResponse`, the same four with HIGH's price dropped to 400 so the 高價組 is empty). Also updated ~70 pre-existing tests elsewhere in the same file whose fixtures/assertions assumed the old "everything checked, latest-signalDate-desc default sort" post-回測 state, now broken by the new default — added a `clearThresholdDefaults()` helper (mirrors the existing `revealIncompletePositions()`) and, in the dedicated `「取消買進價高於 N 元」`/`「僅選取報酬率 n% 以上」` sections, restructured the click sequences so a test first reaches the state it actually wants to exercise (e.g. unchecking the now-default-checked box before manually toggling an individual lot) rather than assuming a click always turns a box *on*. Exact list of changed tests and why, by file region:
+  - Generic scan/backtest/row/sort tests (pre-「取消全選」section, ~30 tests) — added `clearThresholdDefaults()` after their existing `revealIncompletePositions()` call (or after a new wait on `命中彙總 — 共 N 檔`/`賣出日` where the test only needed the scan to have fired, not a specific row visible), since their fixtures' default `singleBacktestResponse`/`unionBacktestResponse`/`sortableBacktestResponse` positions have `buyPrice`/`returnPercent` values that now trip the new defaults and hide or gray out the very rows/totals each test asserts on.
+  - Sort-cycle tests (「買進價／報酬率欄排序」, 「收益欄排序」) — tests that click 報酬率 as their *first* interaction expecting an idle→降冪 transition now start already at 降冪 (the new default), so a bare click moves to 升冪 instead; fixed by asserting the pre-existing 降冪 directly instead of clicking, or by clicking twice to reset to idle before running the described cycle. Two tests whose titles/bodies asserted the *old* default order (latest-signalDate-desc) or idle icons were rewritten to assert the *new* default (報酬率 降冪) instead of being weakened — `shows the default order (latest signalDate desc, tie stockId asc) immediately after 回測…` → `shows the default order (報酬率 降冪, 「—」 last) immediately after 回測…`, `shows default sort order (idle 「↕」 icons) after a failed auto-回測 is retried successfully…` → `shows default sort order (報酬率 降冪) after a failed auto-回測 is retried successfully — same as the first auto-backtest success`.
+  - 「取消買進價高於 N 元」 section (~16 tests) — every test that used to open with `fireEvent.click(priceThresholdCheckbox())` to turn the box *on* now has that click removed (the box is already on) or replaced with an initial "uncheck to get back to the old baseline" click, since a real user can only edit the disabled amount input after first unchecking the box (`fireEvent.change` on a disabled input is a jsdom-only artifact no real click path can reach, so every amount-edit test now unchecks first to match real usage).
+  - 「僅選取報酬率 n% 以上」 section (~10 tests, including its own `places 僅選取報酬率…defaults to unchecked with n=2…` renamed to `…defaults to checked with n=2…`) — same pattern: tests reset both threshold boxes to a known "everything visible and checked" baseline before exercising the specific behaviour the test is actually about, and the number-input-disabled test's assertion order was flipped to match "checked → disabled" instead of "unchecked → enabled" being the starting point.
+  - 1280px stacked-layout tests (2) — added `clearThresholdDefaults()` before expanding/inspecting a multi-buy-date parent whose second lot now defaults to hidden.
+
+**Test / build / lint output**: `npx vitest run src/__tests__/StrategyTab.test.tsx` → 311/311. Full `npx vitest run` (all 12 frontend test files) → 532/533 (the one failure, `disables the stock-search input and shows a hint once 200 stocks are selected`, is the same pre-existing 20s fake-timer timeout confirmed via `git stash` against unmodified `main` — unrelated to this change, not touched). `npm run build` → clean (`tsc -b && vite build`, no errors). `npm run lint` → the same 2 pre-existing warnings as Increment 26 (`no-unreachable` in the test file at an unrelated `void init` line, `set-state-in-effect` in `StrategyTab.tsx` at an unrelated stock-search-suggestions effect), confirmed pre-existing via `git stash` comparison, 0 new warnings.
+
+**code-quality self-review**: reviewed the diff against absence safety (no new unguarded access — `resp.items` iteration matches the existing `computeBacktestTotals` pattern), error handling (no floating promises introduced; `applyBacktestDefaults`'s call site keeps the exact same try/then/catch shape the two-line version it replaced had), resource lifecycle (no new subscriptions/timers/effects), DRY (the four extracted pure functions are the single reason this increment doesn't duplicate filter/sort logic between the click handlers and the defaults-application path), and performance (no new network calls; all new work is one-time O(n) computation per backtest completion, not per render or per item). One pre-existing pattern noted but not changed: if `applyBacktestDefaults` itself threw, `setBacktestResult(resp)` (called just before it) would already be committed while `backtestStatus` falls through to `'error'`, an inconsistent pairing — this is the same shape the two-line version being replaced already had (a throw inside `resp.items.some(...)` would have done the same), not a new gap, and is now covered by 11 additional passing tests exercising the exact code path.
+
+**Deferred / not independently verified here**: real-browser verification (Playwright against a live backend) was not performed for this increment — all verification is `npx vitest run`/`npm run build`/`npm run lint` against the jsdom test suite, per the scope of this dev pass.
 
 **Left unchecked**: none — all 12 criteria in this section are checked. `git status` shows only the 4 intended source/test files (`StrategyTab.tsx`, `StockListPage.css`, `StrategyTab.test.tsx`, `StockListPage.cellColorCascade.test.ts`) plus this spec file changed; the throwaway verification scripts were deleted before finishing.

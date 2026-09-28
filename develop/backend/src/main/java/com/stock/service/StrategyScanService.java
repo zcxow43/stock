@@ -196,6 +196,11 @@ public class StrategyScanService {
             }
             validateInstitutionalParams(selection, detector);
             validateIndicatorParams(selection, detector);
+            if (selection.getRequireVolume() != null && !detector.acceptsRequireVolume()) {
+                // Only BOX_BREAKOUT accepts requireVolume — see specs/backend/strategy-scan.md, "對
+                // BOX_BREAKOUT 以外的型態帶了 requireVolume".
+                throw new ParamNotApplicableException(selection.getCode(), "requireVolume");
+            }
             if (selection.getRisePercent() != null && !detector.acceptsRisePercent()) {
                 // The three institutional patterns judge shares/volume, never a price rise — a
                 // risePercent sent to them must be rejected, not silently ignored (specs/backend/

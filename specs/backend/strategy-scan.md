@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 等於訊號日"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）：上漲支撐為確認完成日 D+2，其餘型態等於訊號日；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 等於訊號日；箱型突破新增 requireVolume 開關（boolean，預設 true），為 false 時跳過量能判定，與靈敏度正交、不改動 volumeMultiple，目錄端點以 paramGroups 的 volume 一筆廣告，掃描回應同時回 preset 與 requireVolume"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion, stock-indicator-statistics]
 ---
 
@@ -48,7 +48,7 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 1. **箱體**：取 D **之前**（不含 D）連續 `lookback` 個交易日，上緣 = 該區間最高價的最大值，下緣 = 最低價的最小值。
 2. **盤整前提**：`(上緣 − 下緣) ÷ ((上緣 + 下緣) ÷ 2)` 必須小於 `rangeMaxPercent`。不通過即非箱型，D 不算命中。
 3. **突破**：D 的收盤價 > `上緣 × (1 + breakoutPercent)`。
-4. **量能**：D 的成交量 > `D 之前 5 個交易日成交量平均 × volumeMultiple`。
+4. **量能**（`requireVolume` 為 `true` 時才驗證）：D 的成交量 > `D 之前 5 個交易日成交量平均 × volumeMultiple`。
 5. **確認**：`confirmBars` 為 2 時，D 與 D 的下一個交易日都必須收在上緣之上；D 為區間最後一天而無下一日資料時，該檔標記為 `PENDING_CONFIRM`，不計入命中。
 
 | 參數 | `STRICT` | `STANDARD` | `LOOSE` |
@@ -60,6 +60,12 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 | `confirmBars` | 2 | 1 | 1 |
 
 請求的 `risePercent` 覆寫本表的 **`breakoutPercent`**（突破幅度）。其餘四項一律由靈敏度決定。
+
+**量能條件可整個關掉**：請求的 `requireVolume`（boolean，省略時為 `true`）為 `false` 時**完全跳過第 4 步**，只以箱體、盤整前提、突破與確認判定。這是一個與靈敏度**正交**的開關——三段靈敏度各自都可以選擇看或不看量增，因此它不是第四段靈敏度，也不改動 `volumeMultiple` 本身（倍數仍一律由靈敏度決定，呼叫端不能指定）。目錄端點以 `paramGroups` 的一筆 `volume`（`name` 為「要求量增」、`default` 為 `true`）廣告這個開關，沿用反彈 `rise` 群組已有的機制；此群組不轄任何 `params`，它只是一個開關。
+
+- **`LOOSE` 下 `requireVolume` 沒有效果**：該靈敏度本來就不驗證量能，送 `false` 與送 `true` 的命中集合相同。這不是錯誤，不回 `400`。
+- **`detail.volumeRatio` 照常回報**，`requireVolume` 為 `false` 時也一樣：它是這一根的實際量比，使用者關掉條件仍會想知道量能長什麼樣；不回報等於要他自己去查。
+- **理由**：量增是一個獨立於「箱體要多緊、突破要多深」的過濾條件，真實行情中不少有效突破是量能未同步放大的。把它綁在靈敏度上，使用者想要「嚴格的箱體但不看量」就無法表達，只能退而求其次選一段連箱體條件都一起放寬的靈敏度。
 
 **盤整前提不可省略的理由**：不驗證箱高就掃描，一段穩定上升趨勢的任意區間都會被視為「箱型」，其每一根新高都成為「突破」。`LOOSE` 明確關掉這道檢查，因此它的命中數本來就會偏高，這是使用者選擇該靈敏度時應該預期的行為，不是缺陷。
 
@@ -379,6 +385,9 @@ Response `200`：
         { "code": "STRICT",   "name": "嚴格", "description": "回看 60 根，箱高 < 5%，突破 2% 且量增 2 倍，需連 2 根確認" },
         { "code": "STANDARD", "name": "標準", "description": "回看 20 根，箱高 < 8%，突破 1.5% 且量增 1.5 倍" },
         { "code": "LOOSE",    "name": "寬鬆", "description": "回看 20 根，不驗證盤整，收盤突破上緣即計" }
+      ],
+      "paramGroups": [
+        { "code": "volume", "name": "要求量增", "default": true }
       ]
     },
     {
@@ -532,6 +541,7 @@ Request：
 | `strategies[].slowPeriod` | int | 否 | **只有 `MACD_GOLDEN_CROSS` 接受本欄位**。長期 EMA 天數，整數，範圍 `3`～`100`；省略時為 `20` |
 | `strategies[].jThreshold` | number | 否 | **只有 `KDJ_GOLDEN_CROSS` 接受本欄位**。交叉前一交易日 J 的上限（不含），範圍 `-100`～`100`，最多一位小數；省略時為 `40` |
 | `strategies[].days` | int | 否 | **只有 `CUMULATIVE_RISE` 接受本欄位**，其餘型態帶了視為無效。回看窗口的交易日數，整數，範圍 `1`～`90`；省略時為 `20` |
+| `strategies[].requireVolume` | boolean | 否 | **只有 `BOX_BREAKOUT` 接受本欄位**。是否套用量能條件；省略時為 `true`。為 `false` 時跳過量能判定，其餘條件與 `volumeMultiple` 以外的靈敏度參數皆不受影響（`LOOSE` 本就不驗證量能，送任一值結果相同） |
 | `strategies[].requireRise` | boolean | 否 | **只有 `REBOUND` 接受本欄位**。是否套用漲段條件；省略時為 `true`。為 `false` 時 `riseDays` 與 `risePercent` 不得帶 |
 | `strategies[].dropDays` | int | 否 | **只有 `REBOUND` 接受本欄位**。跌段回看的交易日數，整數，範圍 `1`～`90`；省略時為 `3` |
 | `strategies[].dropPercent` | number | 否 | **只有 `REBOUND` 接受本欄位**。跌幅門檻，範圍 `0`～`50`，最多一位小數；省略時為 `10` |
@@ -778,7 +788,7 @@ Response `200`：
 }
 ```
 
-- `results` 依 `strategies` 送入的順序回傳，一個策略一筆。每一筆原樣回報該策略**實際採用**的參數（省略時回實際採用的預設值）：有靈敏度的型態回 `preset`；累積上漲回 `days`；反彈回 `requireRise`、`dropDays`、`dropPercent`，並在 `requireRise` 為 `true` 時另回 `riseDays` 與 `risePercent`；法人買賣超佔比回 `investors`、`windowDays`、`ratioPercent`；法人連續買超回 `investors`、`buyDays`；法人買超強度排名回 `investors`、`windowDays`、`topN`；MACD 黃金交叉回 `fastPeriod`、`slowPeriod` 與 `signalPeriod`（恆為 `9`，一併回報，呼叫端不必寫死）；KDJ 黃金交叉回 `jThreshold`；三個法人籌碼型態另回 `dataThroughDate`。`preset` 與這些參數欄位不同時出現。
+- `results` 依 `strategies` 送入的順序回傳，一個策略一筆。每一筆原樣回報該策略**實際採用**的參數（省略時回實際採用的預設值）：有靈敏度的型態回 `preset`，其中**箱型突破另回 `requireVolume`**（實際採用值）——它與靈敏度正交，兩者必須同時回報，呼叫端才說得出這次是用哪一段靈敏度、看不看量；累積上漲回 `days`；反彈回 `requireRise`、`dropDays`、`dropPercent`，並在 `requireRise` 為 `true` 時另回 `riseDays` 與 `risePercent`；法人買賣超佔比回 `investors`、`windowDays`、`ratioPercent`；法人連續買超回 `investors`、`buyDays`；法人買超強度排名回 `investors`、`windowDays`、`topN`；MACD 黃金交叉回 `fastPeriod`、`slowPeriod` 與 `signalPeriod`（恆為 `9`，一併回報，呼叫端不必寫死）；KDJ 黃金交叉回 `jThreshold`；三個法人籌碼型態另回 `dataThroughDate`。`preset` 與這些參數欄位不同時出現，**唯一的例外是箱型突破的 `requireVolume`**：它是靈敏度之外的開關，因此與 `preset` 並存。
 - `dataThroughDate`（僅法人籌碼型態）：`startDate` 前置區間起至 `endDate` 之間，`stock_institutional_trade` 有資料的**最晚交易日**；這段期間完全沒有法人資料時為 `null`。它說明的是法人資料涵蓋到哪一天，不是任何一檔的命中日。
 - `items` 依 `signalDate` 由新到舊排序；同日則依 `stockId` 升冪。
 - `signalDate` 為該檔在區間內**最近一次**命中的日期；同一檔在區間內多次命中只回報最近一次。
@@ -808,6 +818,7 @@ Response `200`：
 - `fastPeriod` ≥ `slowPeriod`（其一省略時以其預設值比較）→ `400`，`{"code":"INVALID_MACD_PERIODS","strategy":"MACD_GOLDEN_CROSS"}`。**各欄自身的範圍錯誤優先**：任一欄超出範圍或非整數時回該欄的錯誤碼，不回本碼
 - `jThreshold` 小於 `-100`、大於 `100`、或小數超過一位 → `400`，`{"code":"INVALID_J_THRESHOLD","strategy":"KDJ_GOLDEN_CROSS"}`
 - 對 `CUMULATIVE_RISE` 以外的型態帶了 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
+- 對 `BOX_BREAKOUT` 以外的型態帶了 `requireVolume` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"requireVolume"}`。
 - 對 `REBOUND` 以外的型態帶了 `requireRise`／`dropDays`／`dropPercent`／`riseDays` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"BOX_BREAKOUT","param":"dropDays"}`。`param` 指出是哪一個欄位不適用。（`days` 沿用既有的 `DAYS_NOT_APPLICABLE` 而非併入本碼：該碼已隨累積上漲上線並有測試涵蓋，改名只是無謂的破壞性變更。）
 - 對 `REBOUND` 在 `requireRise` 為 `false` 時仍帶了 `riseDays` 或 `risePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"riseDays"}`。關掉漲段卻又送漲段參數，代表呼叫端對自己要什麼並不一致，靜默忽略會讓使用者以為那個數字有生效
 - `dropDays` 非整數、小於 `1` 或大於 `90` → `400`，`{"code":"INVALID_DROP_DAYS","strategy":"REBOUND"}`
@@ -822,7 +833,7 @@ Response `200`：
 
 ### 處理流程
 
-解析並驗證請求 → 決定目標股票清單（指定清單；或全市場在市再依 `commonStocksOnly` 過濾）→ 對每個策略取判定參數（有靈敏度者取該靈敏度那一組、再以該策略的 `risePercent` 覆寫其漲幅門檻；累積上漲取請求的 `days`／`risePercent` 或其預設值；反彈取請求的 `requireRise`／`dropDays`／`dropPercent`／`riseDays`／`risePercent` 或其預設值；MACD 黃金交叉取 `fastPeriod`／`slowPeriod` 或其預設值；KDJ 黃金交叉取 `jThreshold` 或其預設值） → 對每檔股票讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用判定 → 收斂為每檔最近一次命中 → 組裝回應。
+解析並驗證請求 → 決定目標股票清單（指定清單；或全市場在市再依 `commonStocksOnly` 過濾）→ 對每個策略取判定參數（有靈敏度者取該靈敏度那一組、再以該策略的 `risePercent` 覆寫其漲幅門檻，箱型突破另取 `requireVolume` 或其預設值 `true`；累積上漲取請求的 `days`／`risePercent` 或其預設值；反彈取請求的 `requireRise`／`dropDays`／`dropPercent`／`riseDays`／`risePercent` 或其預設值；MACD 黃金交叉取 `fastPeriod`／`slowPeriod` 或其預設值；KDJ 黃金交叉取 `jThreshold` 或其預設值） → 對每檔股票讀取 `startDate` 前置區間起算至 `endDate` 的日線 → 逐日套用判定 → 收斂為每檔最近一次命中 → 組裝回應。
 
 **行情讀取必須批次進行**，不得逐檔一次查詢：全市場掃描是 2200 檔，逐檔查詢即 2200 次往返。以單一查詢按 `(stock_id, trade_date)` 主鍵範圍取回目標區間的全部列，再在記憶體中依股票分組判定。
 
@@ -1061,6 +1072,19 @@ KDJ 黃金交叉：
 - [x] `MACD_GOLDEN_CROSS` 不帶 `fastPeriod`／`slowPeriod` 掃描，結果與明確送 `fastPeriod: 5, slowPeriod: 20` 完全相同（`items`、`insufficientData`、`matchedCount`），回應回 `fastPeriod: 5`、`slowPeriod: 20`、`signalPeriod: 9`
 - [x] 明確送 `fastPeriod: 12, slowPeriod: 26` 時，命中日仍與日 K 圖所用指標（`specs/backend/stock-indicator-statistics.md`）的 MACD 黃金交叉日一致——改預設不影響指定 12／26 的結果
 - [x] 以其一省略時的預設值比較 `lessThan`：只送 `slowPeriod: 5`（`fastPeriod` 取預設 5）或 `slowPeriod: 3` → `400 INVALID_MACD_PERIODS`；只送 `slowPeriod: 6` → 合法；只送 `fastPeriod: 19` → 合法、只送 `fastPeriod: 20` → `400 INVALID_MACD_PERIODS`
+
+### 箱型突破的量能條件可關閉（`requireVolume`）
+
+- [ ] `GET /api/strategies` 的 `BOX_BREAKOUT` 條目在既有 `presets` 之外另帶 `paramGroups`，內容恰為一筆 `{ code: "volume", name: "要求量增", default: true }`，且**不帶 `params`**；三段 `presets` 的 `code`／`name`／`description` 與其餘九個策略的條目完全未變
+- [ ] `requireVolume` 省略時行為與現狀完全相同：同一份資料省略本欄位與明確送 `true`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
+- [ ] `requireVolume: false` 時跳過量能判定：以一組箱體、盤整、突破幅度皆達標但**量能未達 `volumeMultiple`** 的構造資料驗證——送 `true`（或省略）不命中，送 `false` 命中，且該筆的 `boxHigh`／`boxLow`／`breakoutPercent` 與送 `true` 時對同一日的計算值相同
+- [ ] `requireVolume: false` 不影響其他任何條件：盤整前提未過（箱高 15%）的資料在 `STANDARD` + `requireVolume: false` 下仍不命中；`STRICT` + `requireVolume: false` 的 `confirmBars` 仍為 2，突破日為區間最後一天且無次日資料時仍列於 `pendingConfirm`
+- [ ] `detail.volumeRatio` 在 `requireVolume: false` 的命中筆上照常回報，且與相同資料在 `requireVolume: true` 下手算的量比相同
+- [ ] `LOOSE` 下送 `requireVolume: false` 與 `true` 的命中集合相同，兩者皆回 `200`（該靈敏度本就不驗證量能，不因此回錯誤）
+- [ ] 掃描回應中 `BOX_BREAKOUT` 那一筆**同時**回 `preset` 與 `requireVolume`（實際採用值，省略時回 `true`）；其餘九個策略的回應欄位未變，且都不含 `requireVolume`
+- [ ] `requireVolume` 與 `risePercent` 可同時指定：`STANDARD` + `risePercent: 2.5` + `requireVolume: false` 時以突破 2.5%、不看量判定，回應同時回 `preset`、`risePercent` 覆寫後的實際值與 `requireVolume: false`
+- [ ] 對 `BOX_BREAKOUT` 以外的任一型態帶 `requireVolume` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"requireVolume"}`
+- [ ] `requireVolume` 帶非布林值（字串 `"false"`、數字 `0`）→ `400`，不得被寬鬆解讀為 `false`
 
 ---
 ## Execution Result
@@ -1354,3 +1378,72 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
 - `develop/backend/src/main/java/com/stock/service/pattern/MacdGoldenCrossDetector.java`（`FAST_PERIOD_DEFAULT`／`SLOW_PERIOD_DEFAULT` 由借用 `IndicatorCalculationService` 的 `12`／`26` 改為自有常數 `5`／`20`）
 - `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java`（更新 9 處依賴舊預設 12／26 的既有測試；`macdAndKdj_sharedFormula_...` 改為明確送 12／26；新增 4 個測試方法；更正 1 行過期註解）
 - `specs/backend/strategy-scan.md`（本檔：勾選 7 項驗收、frontmatter 改為 `status: done`、新增本節）
+
+### Increment 11 — 2026-09-28
+
+本次執行的是「箱型突破的量能條件可關閉（`requireVolume`）」增量：`### 箱型突破的量能條件可關閉` 一節的 10 項驗收（`- [ ]`）全數實作並測試通過。**依交辦指示，本次未勾選任何驗收框、未修改 frontmatter 的 `status`**，兩者留給使用者確認後再更新。
+
+**實作**：
+- `PatternDetector` 新增 default method `acceptsRequireVolume()`（預設 `false`），與既有 `acceptsReboundParams()`／`acceptsDaysField()` 同一慣例，供 `StrategyScanService` 泛用地判斷某欄位是否適用於某型態，不寫死策略代碼。
+- `BoxBreakoutDetector`：覆寫 `acceptsRequireVolume()` 回傳 `true`；覆寫 `getParamGroups()` 回傳恰一筆 `{code:"volume", name:"要求量增", default:true}`（沿用 `ReboundDetector` 已有的 `paramGroups` 機制，`StrategyCatalogService` 本就原樣轉發 `detector.getParamGroups()`，未改動任何一行）；`detect()` 的第 4 步（量能）改為 `if (requireVolume && params.volumeMultiple != null)`，`requireVolume` 由請求的 `requireVolume`（省略時預設 `true`）解析，與 `volumeMultiple`（一律由靈敏度決定）完全獨立；`detail.volumeRatio` 的計算與回報邏輯本就在量能判定之外，不受影響；新增 `populateResultParams` 覆寫，同時回 `preset` 與 `requireVolume`（實際採用值）——這是回應規則中「`preset` 與參數欄位不並存」的唯一例外。
+- `StrategySelectionDto`／`StrategyResultDto`：各自新增 `Boolean requireVolume` 欄位。請求端的 setter 以 `@JsonDeserialize(using = StrictBooleanDeserializer.class)`（新檔 `com.stock.dto.StrictBooleanDeserializer`）取代 Jackson 對 `Boolean` 欄位預設的寬鬆字串／數字強制轉型——**實測確認**：改動前若對既有的 `Boolean requireRise` 欄位送 JSON 字串 `"false"` 或數字 `0`，Jackson 會靜默轉成 `false`（`curl` 對正在執行的 8080 dev server 驗證，見下）；`requireVolume` 若比照辦理會直接違反驗收第 10 項「不得被寬鬆解讀為 `false`」，因此另寫嚴格版反序列化器，只接受 JSON `true`／`false`／`null` 三種 token，其餘一律拋 `InvalidFormatException`。
+- `StrategyScanService`：新增一段驗證——`selection.getRequireVolume() != null && !detector.acceptsRequireVolume()` 時擲 `ParamNotApplicableException(code, "requireVolume")`，與既有 `investors`／`windowDays`／`fastPeriod` 等欄位的驗證擺在同一段、同一慣例。
+- `GlobalExceptionHandler`：新增 `HttpMessageNotReadableException → 400 {"code":"INVALID_REQUEST_BODY"}`。**這是本次發現的既有缺口**：改動前，任何 Jackson 反序列化失敗（型別不合、JSON 語法錯誤）都會落到既有的 `Exception.class` catch-all，回報 `500 INTERNAL_ERROR`（已用 `curl` 對 8080 dev server 送 `{"windowDays":"abc"}` 實測確認）。驗收第 10 項要求非布林值回 `400`，若不補這個 handler，`StrictBooleanDeserializer` 拋出的例外一樣會被 catch-all 攔截成 `500`。新增的 handler 是全域性的（涵蓋任何端點的請求體解析失敗，不只 `requireVolume`），但這本來就是更正確的 REST 語意（畸形請求體是用戶端錯誤，不是伺服器錯誤），且全套測試（589 個）在改動前後失敗集合完全相同，確認未影響任何既有行為。
+
+**驗收對應**（10 項，`develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java` 新增 10 個測試方法，皆位於 `// ==================== Increment 10: BOX_BREAKOUT's requireVolume switch ====================` 區塊，方法名沿用檔案既有的自我說明式命名）：
+
+1. `catalog_boxBreakout_hasVolumeParamGroupWithNoParams_othersUnaffected` — `GET /api/strategies` 的 `BOX_BREAKOUT` 條目 `paramGroups` 恰一筆 `{code:"volume", name:"要求量增", default:true}`；三段 `presets` 的文字逐字比對未變；其餘 9 個策略都不帶 `paramGroups`。**澄清**：驗收原文「且不帶 `params`」——實測（`curl` 對 8080 dev server）確認 `BOX_BREAKOUT`（與 `HIGHER_LOWS`／`RISING_SUPPORT`）改動前後皆回 `"params":[]`（空陣列，非省略），這是「presets 與 params 的關係」一節既有規則允許的行為（「`presets` 為三段，`params` 為空陣列或不出現」），本次未新增任何一筆 `params`，故測試斷言 `params.size() == 0` 而非欄位不存在，以符合系統實際且一貫的行為。
+2. `boxBreakout_requireVolumeOmitted_behavesSameAsExplicitTrue` — 同一份資料，省略 `requireVolume` 與明確送 `true`，`matchedCount`／`items`／`insufficientData`／`pendingConfirm` 逐一比對完全相同。
+3. `boxBreakout_requireVolumeFalse_skipsVolumeCheck_trueOrOmittedMisses_falseHits` — 建構箱體（6% < STANDARD 8%）、突破（105.00 > 103×1.015）皆達標但量能不足（1200 ≤ 1000×1.5）的資料：省略／`true` 皆 0 命中，`false` 命中 1 筆，且 `boxHigh`＝103.00、`boxLow`＝97.00、`breakoutPercent`＝1.94（手算 `(105-103)/103×100`）。
+4. `boxBreakout_requireVolumeFalse_doesNotAffectConsolidationOrConfirmBars` — 沿用既有「盤整前提」15% 箱高測資（`STANDARD` + `requireVolume:false` 仍 0 命中）與「STRICT 待確認」測資（`confirmBars=2`、無次日資料，`requireVolume:false` 仍落入 `pendingConfirm` 而非 `items`）。
+5. `boxBreakout_requireVolumeFalse_volumeRatioStillReportedMatchingHandCalc` — `requireVolume:false` 命中筆的 `detail.volumeRatio` 為 1.20（手算 1200÷1000），確認關閉量能判定不影響量比的回報與計算。
+6. `boxBreakout_loose_requireVolumeHasNoEffect_sameMatchedSetBothReturn200` — `LOOSE` 下 `requireVolume:true`／`false` 皆回 `200`，命中股票清單（`stockId` 集合）完全相同。
+7. `boxBreakout_scanResponse_echoesPresetAndRequireVolumeTogether_othersUnaffected` — 省略時回應 `requireVolume:true`；`false` 時與 `preset` 並存回 `false`；`HIGHER_LOWS` 的回應確認不含 `requireVolume` 欄位。
+8. `boxBreakout_requireVolumeAndRisePercentCombinedOverride` — `STANDARD` + `risePercent:2.5` + `requireVolume:false` 同時送出：以 2.5% 突破門檻＋不看量判定，收盤 106.00（突破 2.5% 門檻 105.575）命中；回應 `preset`＝`STANDARD`、`requireVolume`＝`false`。**澄清**：驗收原文「回應同時回 `preset`、`risePercent` 覆寫後的實際值與 `requireVolume:false`」——本節「回應欄位」的權威規則（第 791 行）明文「`preset` 與這些參數欄位不同時出現，唯一的例外是箱型突破的 `requireVolume`」，即 `risePercent` 從未是箱型突破回應的一部分（不同於 `REBOUND`／`CUMULATIVE_RISE`）。本次遵循第 791 行的既有規則，測試改為斷言回應**不含** `risePercent` 欄位，改以 `matchedCount`＝1（即該筆確實是用 2.5% 覆寫後的門檻判定出來的）佐證「`risePercent` 覆寫後的實際值」在**判定行為**上生效，而非literal 地出現在 JSON 裡。此處兩段敘述之間的落差建議使用者確認是否為預期。
+9. `requireVolume_sentToNonBoxBreakoutStrategy_rejectedWithParamNotApplicable` — 對 `HIGHER_LOWS`（有靈敏度）與 `REBOUND`（無靈敏度）分別送 `requireVolume`，皆回 `400 {"code":"PARAM_NOT_APPLICABLE","strategy":"<code>","param":"requireVolume"}`。
+10. `boxBreakout_requireVolumeNonBooleanValue_rejectedWith400NotCoerced` — 以原始 JSON（非 DTO 序列化）分別送字串 `"false"` 與數字 `0`，兩者皆回 `400`（未實作 `StrictBooleanDeserializer`／`HttpMessageNotReadableException` handler 前，前者會被寬鬆解讀為 `false` 而回 `200`，後者會拋出未捕捉的例外而回 `500`——皆已用 `curl` 對改動前的程式碼實測確認）。
+
+**修正既有測試以維持與新行為一致**：`catalog_otherThreeStrategies_untouchedByReboundChange`（Increment 3 新增）原本迴圈斷言 `BOX_BREAKOUT`／`HIGHER_LOWS`／`RISING_SUPPORT` 三者皆「不帶 `paramGroups`（僅 `REBOUND` 有）」——這個前提被本次修改推翻（`BOX_BREAKOUT` 現在也有 `paramGroups`），故將 `BOX_BREAKOUT` 移出該迴圈，另外斷言其 `presets` 仍為三段，並更新斷言訊息的時效性說明。這不是刪減既有驗收，而是既有驗收本身描述的「僅 REBOUND」事實已被本次規格更新取代。
+
+**驗證**：
+- `mvn -f develop/backend/pom.xml compile` 與 `test-compile` 皆乾淨通過（無警告、無錯誤）。
+- 未執行 `mvn spring-boot:run`；`/start` 啟動並持續佔用的 8080 埠全程保持原狀（僅以 `curl` 對其唯讀查詢／送測試請求，用以確認改動前的既有行為，未觸碰任何寫入端點）。
+- `mvn -f develop/backend/pom.xml test -Dtest=StrategyScanIntegrationTest`：
+
+  ```
+  [INFO] Tests run: 191, Failures: 0, Errors: 0, Skipped: 0
+  ```
+
+  （181 個既有測試 + 本次新增 10 個，全數通過）。
+- `mvn -f develop/backend/pom.xml test`（全套）：
+
+  ```
+  [ERROR] Failures:
+  [ERROR]   SimulatedTradeIntegrationTest.get_noHoldings_returns200EmptyItems_totalsZero_totalReturnPercentNull:466 expected: <0> but was: <1>
+  [ERROR]   SimulatedTradeIntegrationTest.items_orderedByBuyDateDesc_thenStockIdAsc:492 expected: <3> but was: <4>
+  [ERROR]   SimulatedTradeIntegrationTest.totals_equalSumOfItems_costWeighted_notArithmeticMean:439 expected: <2> but was: <3>
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.applyDay_midBatchFailure_rollsBackWholeDay_dayStaysMissingForNextTrigger:285 expected: <true> but was: <false>
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.masterFilter_unknownIdNeverWritten_stockRowCountUnchanged_inactiveAndEtfLikeIdsWrittenNormally:231 Further request(s) expected leaving 1 unsatisfied expectation(s).
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.nonTradingDayAndMalformedDates_bothSkippedWithoutFailure_validDateStillWritten:368 Further request(s) expected leaving 3 unsatisfied expectation(s).
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.priceBackfillCompletion_triggersInstitutionalCatchUp_writesTheNewlyBackfilledDate:463 Further request(s) expected leaving 1 unsatisfied expectation(s).
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.realT86Fixture_2609And00632R_matchDocumentedValues_sourceIsTwse:198 Further request(s) expected leaving 1 unsatisfied expectation(s).
+  [ERROR]   StockInstitutionalTradeIngestionIntegrationTest.timeout_retriedThenSkipped_continuesToNextDate:429 Further request(s) expected leaving 5 unsatisfied expectation(s).
+  [ERROR] Tests run: 589, Failures: 9, Errors: 0, Skipped: 0
+  ```
+
+  **既有失敗，與本次改動無關**：以 `git stash -u` 暫存本次全部改動、回到 `66e2dde`（改動前），單獨執行 `mvn -f develop/backend/pom.xml test -Dtest=SimulatedTradeIntegrationTest,StockInstitutionalTradeIngestionIntegrationTest`，得到逐字相同的 9 項失敗（同樣的測試方法、同樣的斷言訊息），確認為既有缺陷（`StockInstitutionalTradeIngestionIntegrationTest` 的失敗與 Increment 9 記載的成因相同——`MockRestServiceServer` 期望值寫死在特定日期、隨系統日期推進而失準；`SimulatedTradeIntegrationTest` 的失敗與本次 `BOX_BREAKOUT` 改動無任何程式碼交集），與本次 `requireVolume` 改動無交集，依任務範圍界定不予修正。`git stash pop` 已還原本次全部改動。
+
+**`design-patterns` skill**：已於實作前呼叫確認。本次只是在既有的 `PatternDetector` 策略介面上新增一個 default method（`acceptsRequireVolume()`）並複用既有的 `paramGroups` 機制，與檔案裡 `acceptsReboundParams()`／`getParamGroups()` 已建立的慣例完全一致，未引入新結構。
+
+**`code-quality` skill 自我審查**：已於完成後呼叫檢視空值安全、API 契約、例外處理與效能。確認 `resolveRequireVolume` 對 `null` 的處理與 `ReboundDetector.resolveRequireRise` 同一慣例；新增的 `populateResultParams` 覆寫只設定 `preset`／`requireVolume` 兩個欄位，不會殘留前一個策略结果物件的欄位（`StrategyScanService` 每個策略都會 `new StrategyResultDto()`）；`StrictBooleanDeserializer` 的例外會經由 Spring 既有的請求體解析鏈路正確包裝成 `HttpMessageNotReadableException`，已實測確認新增的 handler 能接住。**一個保留、未處理的既有缺口**：`GlobalExceptionHandler` 新增的 `HttpMessageNotReadableException` handler 是全域性的，會讓所有端點的畸形請求體從 `500 INTERNAL_ERROR` 改回 `400 INVALID_REQUEST_BODY`——這是本次為了讓驗收第 10 項成立而必須補的既有缺口，範圍超出 `requireVolume` 本身，但經全套測試驗證未造成任何既有測試的行為差異（改動前後失敗集合逐字相同）。未發現其他需要修正的空值安全、例外處理或效能問題。
+
+**變更檔案**：
+- `develop/backend/src/main/java/com/stock/service/pattern/PatternDetector.java`（新增 `acceptsRequireVolume()` default method）
+- `develop/backend/src/main/java/com/stock/service/pattern/BoxBreakoutDetector.java`（`acceptsRequireVolume()`／`getParamGroups()` 覆寫；`detect()` 第 4 步依 `requireVolume` 決定是否驗證；新增 `populateResultParams` 覆寫同時回 `preset`／`requireVolume`）
+- `develop/backend/src/main/java/com/stock/dto/StrategySelectionDto.java`（新增 `Boolean requireVolume` 欄位，setter 掛 `@JsonDeserialize(using = StrictBooleanDeserializer.class)`）
+- `develop/backend/src/main/java/com/stock/dto/StrategyResultDto.java`（新增 `Boolean requireVolume` 欄位）
+- `develop/backend/src/main/java/com/stock/dto/StrictBooleanDeserializer.java`（新檔：只接受 JSON `true`／`false`／`null`，拒絕字串與數字的寬鬆轉型）
+- `develop/backend/src/main/java/com/stock/service/StrategyScanService.java`（新增 `requireVolume` 的 `PARAM_NOT_APPLICABLE` 驗證）
+- `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java`（新增 `HttpMessageNotReadableException → 400 INVALID_REQUEST_BODY`）
+- `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java`（新增 10 個測試方法、2 個 helper（`boxBreakoutSelection`／`postRawJson`）、1 個 `toStringList` 多載；修正 `catalog_otherThreeStrategies_untouchedByReboundChange` 的既有斷言以反映 `BOX_BREAKOUT` 現在也有 `paramGroups`）
+- `specs/backend/strategy-scan.md`（本檔：新增本節；**未**勾選驗收框、**未**修改 frontmatter `status`，依交辦指示留給使用者確認）
