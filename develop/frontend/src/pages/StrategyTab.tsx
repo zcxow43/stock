@@ -320,6 +320,21 @@ function isGroupOn(
   return stored ?? group?.default ?? true
 }
 
+/** Every `paramGroups` entry currently switched off, for either card shape (presets-driven
+ * or params-driven) — drives the「已取消「{群組名稱}」，本次不套用該條件」note shown under a
+ * card's own description text. Purely data-driven off `paramGroups`/`groupEnabled`, never a
+ * branch on a strategy or group `code` (specs/frontend/strategy.md「選用參數群組」). */
+function offParamGroups(
+  strategy: StrategyCatalogItem | undefined,
+  groupEnabled: Partial<Record<StrategyCode, Record<string, boolean>>>,
+): ParamGroup[] {
+  if (!strategy) return []
+  return (strategy.paramGroups ?? []).filter((group) => {
+    const stored = groupEnabled[strategy.code]?.[group.code]
+    return (stored ?? group.default) === false
+  })
+}
+
 /** A params-driven numeric input's validity, entirely from its own `params` entry —
  * `step === 1` means "整數" (day-count params); any other step (currently always `0.1`)
  * means "at most that many decimal places" (percent/amount params). Nothing here is keyed
@@ -1274,13 +1289,22 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         }
         return selection
       }
-      return {
+      // 有靈敏度的卡片同樣可能帶 paramGroups（目前只有箱型突破的 volume）— 送出時一律帶
+      // `require<Group>`，欄位名由群組自身的 `code` 推導，與 params 驅動的卡片走同一份
+      // `requireFieldName`，不得為此新增任何以策略或群組 `code` 寫死的分支。
+      const groupState = groupEnabled[code] ?? {}
+      const selection: ScanStrategySelection = {
         code,
         preset: selectedPresets[code] ?? 'STANDARD',
         // 值與該靈敏度預設值相同時仍照送 — every selected card's current number goes out,
         // never omitted just because it happens to match the preset's own default.
         risePercent: Number(risePercentInputs[code] ?? '0'),
       }
+      const bag = selection as unknown as Record<string, number | boolean | string[] | PresetCode>
+      for (const group of strategy?.paramGroups ?? []) {
+        bag[requireFieldName(group.code)] = groupState[group.code] ?? group.default
+      }
+      return selection
     }),
     stockIds: scope === 'SELECTED' ? selectedStocks.map((s) => s.stockId) : undefined,
     // 起始週週一／結束週週日（本週時為今日）— never the week selectors' own values directly.
@@ -1692,7 +1716,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const formatStrategyParams = (result: StrategyResult): string => {
     const name = strategyName(result.strategy)
     if (result.preset !== undefined) {
-      return `${name}（${presetName(result.strategy, result.preset as PresetCode)}）`
+      // 箱型突破是唯一會與 preset 並存回報 requireVolume 的型態；其餘型態此欄位一律未回，
+      // suffix 因此天然只在箱型突破的回應上出現，不需要另外檢查 result.strategy。
+      const suffix = result.requireVolume === false ? '・不看量增' : ''
+      return `${name}（${presetName(result.strategy, result.preset as PresetCode)}${suffix}）`
     }
     if (result.days !== undefined) {
       return `${name}（${result.days} 日）`
@@ -2732,6 +2759,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                       <div className="st-inline-error">{paramServerError.message}</div>
                     ) : null}
                     <p className="st-strategy-desc">{strategy.description}</p>
+                    {offParamGroups(strategy, groupEnabled).map((group) => (
+                      <p key={group.code} className="st-group-off-note">
+                        已取消「{group.name}」，本次不套用該條件
+                      </p>
+                    ))}
                   </div>
                 )
               }
@@ -2783,10 +2815,36 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                       漲幅門檻需介於 {SENSITIVITY_RISE_PERCENT_RANGE.min} ~ {SENSITIVITY_RISE_PERCENT_RANGE.max}
                     </div>
                   ) : null}
+                  {/* 目前只有箱型突破的 volume 群組會落在這裡（presets 非空的卡片）——畫法
+                      完全不分策略，依 paramGroups 逐筆畫出即可（specs/frontend/strategy.md
+                      「選用參數群組...與卡片形狀無關」）。這一節的群組目前恆不轄任何
+                      `params`（見「一個群組可以不轄任何 params」），因此只畫勾選框本身，
+                      不需要另外畫一條「有輸入」的路徑。 */}
+                  {(strategy.paramGroups ?? []).map((group) => {
+                    const groupOn = groupEnabled[strategy.code]?.[group.code] ?? group.default
+                    return (
+                      <div key={group.code} className="st-param-group">
+                        <label className="st-group-checkbox">
+                          <input
+                            type="checkbox"
+                            disabled={!selected}
+                            checked={groupOn}
+                            onChange={() => toggleGroup(strategy, group.code)}
+                          />
+                          <span className="st-group-label">{group.name}</span>
+                        </label>
+                      </div>
+                    )
+                  })}
                   {paramServerError?.code === strategy.code ? (
                     <div className="st-inline-error">{paramServerError.message}</div>
                   ) : null}
                   <p className="st-strategy-desc">{presetMeta?.description}</p>
+                  {offParamGroups(strategy, groupEnabled).map((group) => (
+                    <p key={group.code} className="st-group-off-note">
+                      已取消「{group.name}」，本次不套用該條件
+                    </p>
+                  ))}
                 </div>
               )
             })}

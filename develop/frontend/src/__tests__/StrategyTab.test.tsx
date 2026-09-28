@@ -38,6 +38,8 @@ const CATALOG = {
         { code: 'STANDARD', name: '標準', description: '回看 20 根，箱高 < 8%，突破 1.5% 且量增 1.5 倍' },
         { code: 'LOOSE', name: '寬鬆', description: '回看 20 根，不驗證盤整，收盤突破上緣即計' },
       ],
+      paramGroups: [{ code: 'volume', name: '要求量增', default: true }],
+      params: [],
     },
     {
       code: 'HIGHER_LOWS',
@@ -1774,7 +1776,7 @@ describe('StrategyTab', () => {
     const select = within(card).getByRole('combobox') as HTMLSelectElement
     expect(select.disabled).toBe(true)
 
-    fireEvent.click(within(card).getByRole('checkbox'))
+    selectStrategy('箱型突破')
     expect(select.disabled).toBe(false)
     expect(select.value).toBe('STANDARD')
   })
@@ -1903,7 +1905,7 @@ describe('StrategyTab', () => {
     expect(screen.getByText('2026 第 35 週（08/24–08/30）')).toBeInTheDocument()
     expect(screen.getByText('實際區間 2026-08-24 ~ 2026-09-02')).toBeInTheDocument()
 
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
@@ -1926,7 +1928,7 @@ describe('StrategyTab', () => {
     fireEvent.click(prevEndWeekButton)
     expect(screen.getByText('實際區間 2026-08-24 ~ 2026-08-30')).toBeInTheDocument()
 
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
@@ -1959,7 +1961,7 @@ describe('StrategyTab', () => {
   it('blocks the scan and shows an inline message when 起始週 is after 結束週', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
 
     // Step 結束週 back by 10 weeks (70 days) — comfortably more than the ~4-5 week gap
     // any 近一個月-sized default range can have, regardless of what "today" actually is
@@ -1977,7 +1979,7 @@ describe('StrategyTab', () => {
   it('sends no stockIds for the default 全市場 scope', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -2061,7 +2063,7 @@ describe('StrategyTab', () => {
   it('shows a single merged hit table titled 命中彙總 — 共 N 檔 even when only one strategy is checked, not a per-strategy block', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -2076,7 +2078,7 @@ describe('StrategyTab', () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
@@ -2123,7 +2125,7 @@ describe('StrategyTab', () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
@@ -2213,7 +2215,7 @@ describe('StrategyTab', () => {
     })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
@@ -2237,7 +2239,7 @@ describe('StrategyTab', () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('最後同步：2026-08-30 09:15')).toBeInTheDocument())
 
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() => expect(screen.getByText('此區間內沒有命中的股票')).toBeInTheDocument())
@@ -2270,7 +2272,7 @@ describe('StrategyTab', () => {
     expect(screen.getByRole('button', { name: '同步中…' })).toBeDisabled()
 
     // sync running must not disable the scan button
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     expect(screen.getByRole('button', { name: '開始掃描' })).not.toBeDisabled()
 
     await vi.waitFor(() => expect(screen.getByText('已完成 13 / 34 檔')).toBeInTheDocument())
@@ -2588,7 +2590,7 @@ describe('StrategyTab', () => {
     })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
     await waitFor(() => expect(screen.getByText('掃描失敗，請稍後再試')).toBeInTheDocument())
@@ -2600,7 +2602,7 @@ describe('StrategyTab', () => {
     scanResponder = () => bothStrategiesResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 2 檔')).toBeInTheDocument())
@@ -2708,7 +2710,7 @@ describe('StrategyTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '更新股票清單' }))
     await waitFor(() => expect(screen.getByText(/股票清單已更新/)).toBeInTheDocument())
 
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
     expect(screen.getByText(/股票清單已更新/)).toBeInTheDocument()
@@ -2907,7 +2909,7 @@ describe('StrategyTab', () => {
     })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('上漲支撐').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
 
@@ -3022,7 +3024,7 @@ describe('StrategyTab', () => {
     )
     const body = JSON.parse((scanCall![1] as RequestInit).body as string)
     expect(body.strategies).toEqual([
-      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5 },
+      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireVolume: true },
       { code: 'REBOUND', dropDays: 3, dropPercent: 10, requireRise: true, riseDays: 1, risePercent: 5 },
     ])
   })
@@ -3203,7 +3205,7 @@ describe('StrategyTab', () => {
     )
     const body = JSON.parse((scanCall![1] as RequestInit).body as string)
     expect(body.strategies).toEqual([
-      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5 },
+      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireVolume: true },
       { code: 'CUMULATIVE_RISE', days: 20, risePercent: 15 },
     ])
   })
@@ -3379,7 +3381,7 @@ describe('StrategyTab', () => {
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     const card = cardFor('箱型突破')
-    fireEvent.click(within(card).getByRole('checkbox'))
+    selectStrategy('箱型突破')
     const input = within(card).getByLabelText('漲幅門檻') as HTMLInputElement
     expect(input.value).toBe('1.5')
 
@@ -3396,7 +3398,7 @@ describe('StrategyTab', () => {
     const card = cardFor('箱型突破')
     const input = within(card).getByLabelText('漲幅門檻') as HTMLInputElement
     expect(input.disabled).toBe(true)
-    fireEvent.click(within(card).getByRole('checkbox'))
+    selectStrategy('箱型突破')
     expect(input.disabled).toBe(false)
   })
 
@@ -3406,7 +3408,7 @@ describe('StrategyTab', () => {
       renderTab()
       await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
       const card = cardFor('箱型突破')
-      fireEvent.click(within(card).getByRole('checkbox'))
+      selectStrategy('箱型突破')
       const input = within(card).getByLabelText('漲幅門檻') as HTMLInputElement
       fireEvent.change(input, { target: { value: bad } })
 
@@ -3423,7 +3425,7 @@ describe('StrategyTab', () => {
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
     const boxCard = cardFor('箱型突破')
     const higherLowsCard = cardFor('底底高')
-    fireEvent.click(within(boxCard).getByRole('checkbox'))
+    selectStrategy('箱型突破')
     fireEvent.click(within(higherLowsCard).getByRole('checkbox'))
     fireEvent.change(within(boxCard).getByLabelText('漲幅門檻'), { target: { value: '2.5' } })
 
@@ -3436,7 +3438,7 @@ describe('StrategyTab', () => {
     const scanCall = fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan'))!
     const body = JSON.parse((scanCall[1] as RequestInit).body as string)
     expect(body.strategies).toEqual([
-      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 2.5 },
+      { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 2.5, requireVolume: true },
       { code: 'HIGHER_LOWS', preset: 'STANDARD', risePercent: 1 },
     ])
   })
@@ -3547,7 +3549,7 @@ describe('StrategyTab', () => {
     scanResponder = () => zeroHitBothResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
 
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
@@ -3572,7 +3574,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
 
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
@@ -3797,7 +3799,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -3828,7 +3830,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -3854,7 +3856,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -3901,7 +3903,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -3926,7 +3928,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -3963,7 +3965,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4042,7 +4044,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4124,7 +4126,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4298,7 +4300,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -4337,7 +4339,7 @@ describe('StrategyTab', () => {
     }
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('回測失敗，請稍後再試')).toBeInTheDocument())
@@ -4419,7 +4421,7 @@ describe('StrategyTab', () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4439,7 +4441,7 @@ describe('StrategyTab', () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4496,7 +4498,7 @@ describe('StrategyTab', () => {
     scanResponder = () => unionScanResponse()
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4514,7 +4516,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -4543,7 +4545,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -4575,7 +4577,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 1 檔')).toBeInTheDocument())
@@ -4611,7 +4613,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4637,7 +4639,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4662,7 +4664,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4705,7 +4707,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4773,7 +4775,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4803,7 +4805,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4828,7 +4830,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4852,7 +4854,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -4891,7 +4893,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -5098,7 +5100,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5152,7 +5154,7 @@ describe('StrategyTab', () => {
     })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5449,7 +5451,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -5622,7 +5624,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5650,7 +5652,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5678,7 +5680,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5712,7 +5714,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5750,7 +5752,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: twoDateSingleStockBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5941,7 +5943,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -5961,7 +5963,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -6147,7 +6149,7 @@ describe('StrategyTab', () => {
     })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -6204,7 +6206,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -6232,7 +6234,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: priceThresholdBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 5 檔')).toBeInTheDocument())
@@ -6720,7 +6722,7 @@ describe('StrategyTab', () => {
     backtestResponder = () => ({ status: 200, body: unionBacktestResponse() })
     renderTab()
     await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+    fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
     fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
     await waitFor(() => expect(screen.getByText('命中彙總 — 共 3 檔')).toBeInTheDocument())
@@ -7604,7 +7606,7 @@ describe('StrategyTab', () => {
       backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
       renderTab()
       await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
       fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
       fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -7683,7 +7685,7 @@ describe('StrategyTab', () => {
       backtestResponder = () => ({ status: 200, body: parentSortBacktestResponse() })
       renderTab()
       await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
       fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
       fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -7940,7 +7942,7 @@ describe('StrategyTab', () => {
       backtestResponder = () => ({ status: 200, body: priceThresholdBacktestResponse() })
       renderTab()
       await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
-      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card')!).getByRole('checkbox'))
+      fireEvent.click(within(screen.getByText('箱型突破').closest('.st-strategy-card-head')!).getByRole('checkbox'))
       fireEvent.click(within(screen.getByText('底底高').closest('.st-strategy-card')!).getByRole('checkbox'))
       fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
       await waitFor(() => expect(screen.getByText('賣出日')).toBeInTheDocument())
@@ -8141,6 +8143,173 @@ describe('StrategyTab', () => {
       const callsAfterSettled = fetchMock.mock.calls.length
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(fetchMock.mock.calls.length).toBe(callsAfterSettled)
+    })
+  })
+
+  describe('箱型突破的「要求量增」勾選框', () => {
+    it("shows a checkbox on 箱型突破's card labeled from paramGroups[0].name, checked by default; 底底高/上漲支撐 have no such checkbox", async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+
+      const groupCheckbox = within(cardFor('箱型突破')).getByLabelText('要求量增') as HTMLInputElement
+      expect(groupCheckbox.checked).toBe(true)
+
+      expect(cardFor('底底高').querySelector('.st-group-checkbox')).toBeNull()
+      expect(cardFor('上漲支撐').querySelector('.st-group-checkbox')).toBeNull()
+      expect(within(cardFor('底底高')).queryByText('要求量增')).not.toBeInTheDocument()
+      expect(within(cardFor('上漲支撐')).queryByText('要求量增')).not.toBeInTheDocument()
+    })
+
+    it('sends requireVolume: true (with preset/risePercent unchanged) when checked, and requireVolume: false when unchecked — the sensitivity dropdown and 漲幅門檻 input stay enabled either way', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const card = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      const firstScanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      expect(JSON.parse((firstScanCall![1] as RequestInit).body as string).strategies).toEqual([
+        { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireVolume: true },
+      ])
+      // Let the scan (and its response) settle — the button reads「掃描中…」and is disabled
+      // until then — before interacting with the card again.
+      await waitFor(() => expect(screen.getByText('箱型突破（標準）')).toBeInTheDocument())
+
+      fireEvent.click(within(card).getByLabelText('要求量增'))
+      expect((within(card).getByRole('combobox') as HTMLSelectElement).disabled).toBe(false)
+      expect((within(card).getByLabelText('漲幅門檻') as HTMLInputElement).disabled).toBe(false)
+
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      const secondScanCall = await vi.waitFor(() => {
+        const calls = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('/api/strategies/scan'))
+        if (calls.length < 2) throw new Error('waiting for second scan call')
+        return calls[1]
+      })
+      expect(JSON.parse((secondScanCall[1] as RequestInit).body as string).strategies).toEqual([
+        { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireVolume: false },
+      ])
+    })
+
+    it('derives the outgoing field name from paramGroups[0].code — renaming it in the catalogue changes the request field, with no BOX_BREAKOUT/volume/requireVolume literal branch', async () => {
+      const RENAMED_CATALOG = {
+        strategies: CATALOG.strategies.map((s) =>
+          s.code === 'BOX_BREAKOUT' ? { ...s, paramGroups: [{ code: 'xyz', name: '要求量增', default: true }] } : s,
+        ),
+      }
+      fetchMock.mockImplementation((url: string) => {
+        const u = String(url)
+        if (u.startsWith('/api/strategies/scan')) return Promise.resolve(jsonResponse(200, boxScanResponse()))
+        if (u.startsWith('/api/strategies')) return Promise.resolve(jsonResponse(200, RENAMED_CATALOG))
+        if (u.startsWith('/api/stocks/sync/progress')) return Promise.resolve(jsonResponse(200, progressResponse()))
+        return Promise.resolve(jsonResponse(200, {}))
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([{ code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireXyz: true }])
+      expect(body.strategies[0]).not.toHaveProperty('requireVolume')
+    })
+
+    it('renders the group as a bare checkbox with no new number input when it governs no params — same shape as 反彈’s group', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const card = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+
+      // Only 漲幅門檻 is a number input on this card — the group adds no `.st-param-block`
+      // and no extra spinbutton.
+      expect(card.querySelectorAll('input[type="number"]')).toHaveLength(1)
+      expect(card.querySelectorAll('.st-param-block')).toHaveLength(0)
+      expect(within(card).getByLabelText('要求量增')).toBeInTheDocument()
+    })
+
+    it('shows 「已取消「要求量增」，本次不套用該條件」in secondary text color under the card description when unchecked, using the group\'s own name, and leaves the API description text untouched', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const card = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+      const originalDescription = '回看 20 根，箱高 < 8%，突破 1.5% 且量增 1.5 倍'
+      expect(within(card).getByText(originalDescription)).toBeInTheDocument()
+      expect(within(card).queryByText('已取消「要求量增」，本次不套用該條件')).not.toBeInTheDocument()
+
+      fireEvent.click(within(card).getByLabelText('要求量增'))
+      const note = within(card).getByText('已取消「要求量增」，本次不套用該條件')
+      expect(note.className).toBe('st-group-off-note')
+      // The description text itself is untouched — not rewritten or parsed.
+      expect(within(card).getByText(originalDescription)).toBeInTheDocument()
+
+      fireEvent.click(within(card).getByLabelText('要求量增'))
+      expect(within(card).queryByText('已取消「要求量增」，本次不套用該條件')).not.toBeInTheDocument()
+    })
+
+    it('keeps the group checkbox unchanged when switching sensitivity (unchecked stays unchecked after picking 嚴格), while 漲幅門檻 still refills', async () => {
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const card = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+      fireEvent.click(within(card).getByLabelText('要求量增'))
+      expect((within(card).getByLabelText('要求量增') as HTMLInputElement).checked).toBe(false)
+
+      fireEvent.change(within(card).getByRole('combobox'), { target: { value: 'STRICT' } })
+      expect((within(card).getByLabelText('要求量增') as HTMLInputElement).checked).toBe(false)
+      // 漲幅門檻 still refills to the new preset's own value (既有規則未變).
+      expect((within(card).getByLabelText('漲幅門檻') as HTMLInputElement).value).toBe('2')
+    })
+
+    it('unchecking the group only affects BOX_BREAKOUT — 反彈 still sends its own rise group fields, and no other strategy carries requireVolume', async () => {
+      scanResponder = () => allFiveStrategiesResponse()
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const boxCard = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+      selectStrategy('反彈')
+      fireEvent.click(within(boxCard).getByLabelText('要求量增'))
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+
+      const scanCall = await vi.waitFor(() =>
+        fetchMock.mock.calls.find((c) => String(c[0]).startsWith('/api/strategies/scan')),
+      )
+      const body = JSON.parse((scanCall![1] as RequestInit).body as string)
+      expect(body.strategies).toEqual([
+        { code: 'BOX_BREAKOUT', preset: 'STANDARD', risePercent: 1.5, requireVolume: false },
+        { code: 'REBOUND', dropDays: 3, dropPercent: 10, requireRise: true, riseDays: 1, risePercent: 5 },
+      ])
+    })
+
+    it('shows 箱型突破（標準） when the scan response says requireVolume: true, and 箱型突破（標準・不看量增） when false — sourced from the response, not the live checkbox', async () => {
+      scanResponder = () => ({
+        ...boxScanResponse(),
+        results: [{ ...boxScanResponse().results[0], requireVolume: true }],
+      })
+      renderTab()
+      await waitFor(() => expect(screen.getByText('箱型突破')).toBeInTheDocument())
+      const card = cardFor('箱型突破')
+      selectStrategy('箱型突破')
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('箱型突破（標準）')).toBeInTheDocument())
+
+      // Toggling the checkbox after scanning must not retroactively change this line — it
+      // stays sourced from the response, not the live checkbox.
+      fireEvent.click(within(card).getByLabelText('要求量增'))
+      expect(screen.getByText('箱型突破（標準）')).toBeInTheDocument()
+
+      // Re-scanning with a response that now says requireVolume: false flips the line to
+      // the 「・不看量增」 variant.
+      scanResponder = () => ({
+        ...boxScanResponse(),
+        results: [{ ...boxScanResponse().results[0], requireVolume: false }],
+      })
+      fireEvent.click(screen.getByRole('button', { name: '開始掃描' }))
+      await waitFor(() => expect(screen.getByText('箱型突破（標準・不看量增）')).toBeInTheDocument())
+      expect(screen.queryByText('箱型突破（標準）')).not.toBeInTheDocument()
     })
   })
 })

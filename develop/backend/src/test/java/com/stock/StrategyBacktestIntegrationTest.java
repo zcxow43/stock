@@ -15,7 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -1144,6 +1147,25 @@ class StrategyBacktestIntegrationTest {
         assertEquals(0, new BigDecimal("2333319").compareTo(root.get("totalCost").decimalValue()));
         assertEquals(0, new BigDecimal("70995").compareTo(root.get("totalProfit").decimalValue()));
         assertEquals(0, new BigDecimal("3.04").compareTo(root.get("totalReturnPercent").decimalValue()));
+    }
+
+    /**
+     * specs/backend/strategy-scan.md, "請求本體無法解析...這是所有端點共用的規則，不限本端點" — verified here on a
+     * *different* endpoint than the one the rule was originally discovered on (POST /api/strategies/scan's
+     * `{"windowDays":"abc"}`, see StrategyScanIntegrationTest). `buyDate` is typed {@code LocalDate}
+     * (see {@link BacktestItemRequestDto}), so a non-date string fails Jackson deserialization before
+     * this endpoint's own validation ever runs; the shared {@code GlobalExceptionHandler} must turn
+     * that into 400 INVALID_REQUEST_BODY, not a 500.
+     */
+    @Test
+    void malformedBuyDateField_returns400InvalidRequestBody_notInternalError() {
+        String json = "{\"items\":[{\"stockId\":\"BT900\",\"buyDate\":\"not-a-date\"}]}";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/backtest",
+                new HttpEntity<>(json, headers), ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_REQUEST_BODY", response.getBody().getCode());
     }
 
     // ==================== helpers ====================

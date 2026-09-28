@@ -773,6 +773,17 @@
   color: #93a4b8;
 }
 
+/* specs/frontend/strategy.md「群組取消時...多一行次要文字色」— shown under a card's own
+   description text when one of its optional paramGroups is unchecked. Reuses the page's
+   existing secondary text color (same value as `.st-group-label`/`.st-multiselect-option`)
+   — no new color introduced. */
+.st-group-off-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #93a4b8;
+}
+
 .st-minute-cell {
   white-space: nowrap;
 }

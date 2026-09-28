@@ -255,6 +255,11 @@ export interface StrategyResult {
   dropPercent?: number
   riseDays?: number
   risePercent?: number
+  /** `BOX_BREAKOUT` only — echoes whether the volume condition was actually applied
+   * (`false` when its `volume` paramGroup was turned off). Present alongside `preset`,
+   * the one exception to `preset` being mutually exclusive with the other fields — see
+   * specs/backend/strategy-scan.md「箱型突破」. */
+  requireVolume?: boolean
   /** Institutional strategies only — the法人 actually applied, `FOREIGN`/`TRUST` order. */
   investors?: InvestorCode[]
   windowDays?: number
@@ -299,6 +304,10 @@ export interface ScanStrategySelection {
   dropPercent?: number
   requireRise?: boolean
   riseDays?: number
+  /** `BOX_BREAKOUT` only — derived from its `volume` paramGroup, never hard-coded (see
+   * `requireFieldName` in `StrategyTab.tsx`). Sent alongside `preset`, the one exception to
+   * `preset`/params-driven fields being mutually exclusive. */
+  requireVolume?: boolean
   /** Only sent by the three institutional strategies. */
   investors?: InvestorCode[]
   windowDays?: number

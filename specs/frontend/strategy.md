@@ -1,7 +1,7 @@
 ---
 status: pending
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：訊號日收盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日（上漲支撐為確認完成日 D+2，其餘型態等於訊號日），落在同一買進日的命中視為同一筆；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」"
 depends_on: [stock-list]
 ---
 
@@ -33,7 +33,7 @@ depends_on: [stock-list]
 
 | 回應形狀 | 目前適用 | 卡片內容 |
 |---|---|---|
-| `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、目前選定靈敏度的說明文字一行、**該條目 `paramGroups` 的每一個群組勾選框**（目前只有箱型突破有一個） |
+| `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、**該條目 `params` 逐一畫出的輸入**（目前只有上漲支撐有一個：確認天數）、目前選定靈敏度的說明文字一行、**該條目 `paramGroups` 的每一個群組勾選框**（目前只有箱型突破有一個） |
 | `presets` 為空陣列、帶 `params` | 累積上漲、反彈、法人買賣超佔比、法人連續買超、法人買超強度排名、MACD 黃金交叉、KDJ 黃金交叉 | 勾選框、策略名稱、**依 `params` 逐一畫出的輸入**（數字輸入或複選勾選框，見下）、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
 
 卡片共十張，依 API 回應的順序排列，**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
@@ -41,6 +41,8 @@ depends_on: [stock-list]
 以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。反彈就是這條規則的第一個實證：它從有靈敏度改成無靈敏度時，卡片的形狀應該自動跟著 API 變，前端不必為此改任何判斷。
 
 **選用參數群組**：策略條目可帶 `paramGroups`，每一筆對應卡片上的**一個勾選框**（文字取自該筆的 `name`，初始狀態取自 `default`），送出時一律帶 `require<Group>` 布林欄位，欄位名由群組自身的 `code` 推導（`rise` → `requireRise`、`volume` → `requireVolume`），不得寫死。`params` 中帶 `group` 的參數歸該群組管：群組勾選框取消時，該組所有輸入 disabled，且**請求中完全不帶這些欄位**；不帶 `group` 的參數一律顯示且一律送出。**同樣不得以策略 `code` 寫死**——依 `paramGroups` 畫即可。
+
+**`params` 同樣與卡片形狀無關。** 一張卡片有沒有靈敏度下拉，與它有沒有 `params` 是兩件獨立的事：`presets` 決定要不要畫靈敏度下拉，`params` 決定要畫哪些輸入，兩者各畫各的。上漲支撐是第一個兩者都有的條目——三段靈敏度加一個「確認天數」輸入（`confirmBars`，`min` 1、`max` 2、`step` 1，預設 2，見 `specs/backend/strategy-scan.md`）。**不得以「有 `presets` 就不看 `params`」實作**：那等於把「目前三張有靈敏度的卡片剛好都沒有參數」這個當下的巧合寫死成規則。
 
 這個機制**與卡片形狀無關**：有靈敏度的卡片與依 `params` 畫的卡片都照畫自己的 `paramGroups`。目前有兩個：
 
@@ -148,8 +150,8 @@ depends_on: [stock-list]
 | 勾選框 | 前端狀態，非回應欄位 | 回測後 |
 | 代號 / 名稱 | 各策略 `items` 的 `stockId` / `stockName` | 一律 |
 | 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 | 一律 |
-| 買進日 | 該筆的 `buyDate`——掃描回應各筆回報的進場日，回測回應原樣帶回（上漲支撐為確認完成日 D+2，三個法人籌碼型態為訊號日的下一個交易日，其餘型態等於訊號日；見 `specs/backend/strategy-scan.md`） | 回測後 |
-| 買進價 | 回測回應該筆的 `buyPrice`，兩位小數 | 回測後 |
+| 買進日 | 該筆的 `buyDate`——掃描回應各筆回報的進場日，回測回應原樣帶回。十個型態一律為**確認完成日之後的下一個交易日**（上漲支撐為 D+`confirmBars`+1，其餘九個型態為訊號日的下一個交易日；見 `specs/backend/strategy-scan.md`） | 回測後 |
+| 買進價 | 回測回應該筆的 `buyPrice`，即**買進日的開盤價**，兩位小數 | 回測後 |
 | 賣出日 | 回測回應該筆的 `sellDate` | 回測後 |
 | 賣出價 | 回測回應該筆的 `sellPrice`，兩位小數 | 回測後 |
 | 報酬率 | 回測回應該筆的 `returnPercent`，兩位小數加 `%` | 回測後 |
@@ -159,7 +161,7 @@ depends_on: [stock-list]
 
 **買進日不得省略成「就是訊號日，看左邊那欄就好」。** 左邊的「命中策略與訊號日」在一檔多訊號時會列出多個日期，而這一列的買進價與報酬率只對應其中一個；沒有一個獨立的買進日欄位，讀者無從知道是哪一個。
 
-**上漲支撐的買進日本來就與訊號日不同。**「命中策略與訊號日」顯示起漲日 D，買進日欄顯示型態確認成立的 D+2——同一列上兩個日期不一致是正確的，不得把買進日改回顯示訊號日。在 D 收盤買進，等於先偷看了之後兩天的收盤才決定買這檔。
+**買進日與訊號日本來就不同，十個型態皆然。**「命中策略與訊號日」顯示型態成立的那一天，買進日欄顯示確認完成之後第一個真正買得到的交易日——同一列上兩個日期不一致是正確的，不得把買進日改回顯示訊號日。上漲支撐差距最大：訊號日是起漲日 D，買進日是 D+`confirmBars`+1。
 
 **「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。策略的排列順序與勾選順序一致。
 
@@ -172,7 +174,7 @@ depends_on: [stock-list]
 
 凡畫面上列出策略名稱與訊號日之處（含展開後的子列）一律用這個格式。只寫策略名稱時，讀者看不出是外資還是投信、是買超還是賣超，而這幾件事代表的籌碼意義完全不同。名次、佔比與強度屬於判定明細，依本表既有取捨不在表上呈現。
 
-**法人籌碼型態的買進日同樣與訊號日不同**：買進日是訊號日的下一個交易日。三大法人日報在收盤後才發布，訊號日收盤當下還看不到法人的進出。
+**訊號落在該檔最新一筆日線、其後還沒有交易日時，該檔不會進命中彙總表**——它沒有買進日可報，掃描回應把它列在待確認（見 `specs/backend/strategy-scan.md`）。這對十個型態一致。
 
 **各型態的判定明細（箱型區間、量能倍數、低點序列、支撐價、高點日／低點收盤…）不在本表呈現。** 這五個型態的明細欄位彼此完全不同，無法疊在同一列上：橫向全攤開會是二十幾欄且大量空白，逐策略分表則違背本表存在的理由。這是**刻意接受的取捨**——本表回答「這次掃描要看哪幾檔、進場點在哪天、回測結果如何」；本表**不提供**導向日 K 頁的點擊，判定依據不在本頁查看。
 
@@ -182,7 +184,8 @@ depends_on: [stock-list]
 
 | 型態 | 內容 | 範例 |
 |---|---|---|
-| 底底高／上漲支撐 | `{策略名稱}（{preset} 的中文名）` | 上漲支撐（標準） |
+| 底底高 | `{策略名稱}（{preset} 的中文名）` | 底底高（標準） |
+| 上漲支撐 | `{策略名稱}（{preset} 的中文名・確認 {confirmBars} 日）` | 上漲支撐（標準・確認 2 日） |
 | 箱型突破（`requireVolume` 為 `true`） | `{策略名稱}（{preset} 的中文名）` | 箱型突破（標準） |
 | 箱型突破（`requireVolume` 為 `false`） | `{策略名稱}（{preset} 的中文名・不看量增）` | 箱型突破（標準・不看量增） |
 | 累積上漲 | `{策略名稱}（{days} 日）` | 累積上漲（30 日） |
@@ -264,9 +267,9 @@ depends_on: [stock-list]
 
 #### 一檔多筆的展開列
 
-一檔股票在掃描區間內可能有**多個買進日**——命中不同策略、或同一策略在不同日子各成立一次。每一筆命中的買進日是掃描回報的 `buyDate`（上漲支撐為確認完成日 D+2，其餘型態等於訊號日）。**每一個相異買進日都是一次獨立的買進賣出**（買進日收盤買進、其後最高開盤賣出，各佔 1 張），因此每一個買進日在畫面上都要有自己的一列與自己的勾選框。
+一檔股票在掃描區間內可能有**多個買進日**——命中不同策略、或同一策略在不同日子各成立一次。每一筆命中的買進日是掃描回報的 `buyDate`（確認完成日之後的下一個交易日）。**每一個相異買進日都是一次獨立的買進賣出**（買進日開盤買進、其後最高開盤賣出，各佔 1 張），因此每一個買進日在畫面上都要有自己的一列與自己的勾選框。
 
-**以買進日去重，不以策略、也不以訊號日去重。** 兩筆命中落在同一個買進日時，那仍然只是**一筆**——同一天只買得到一次，買進價與賣出窗口完全相同，算兩筆等於把同一個部位重複計入總計，讓該檔在成本加權的總報酬率中平白取得雙倍權重。這包含訊號日不同、買進日相同的情形（例如上漲支撐起漲日 08-26、買進日 08-28，與反彈訊號日 08-28 是同一筆）；反過來，訊號日相同、買進日不同的兩筆（例如上漲支撐與底底高都在 08-26 成立，買進日分別為 08-28 與 08-26）是**兩筆**。該筆的「命中策略與訊號日」欄位並列出落在這個買進日的所有策略與各自的訊號日。這與 `specs/backend/strategy-backtest.md` 的「一筆＝一個買進日」是同一條規則，前端負責在送出前完成去重。
+**以買進日去重，不以策略、也不以訊號日去重。** 兩筆命中落在同一個買進日時，那仍然只是**一筆**——同一天只買得到一次，買進價與賣出窗口完全相同，算兩筆等於把同一個部位重複計入總計，讓該檔在成本加權的總報酬率中平白取得雙倍權重。這包含訊號日不同、買進日相同的情形（例如上漲支撐起漲日 08-26、`confirmBars` 為 2、買進日 08-31，與反彈訊號日 08-28、買進日 08-31 是同一筆）；反過來，訊號日相同、買進日不同的兩筆（例如上漲支撐與底底高都在 08-26 成立，買進日分別為 08-31 與 08-27）是**兩筆**。該筆的「命中策略與訊號日」欄位並列出落在這個買進日的所有策略與各自的訊號日。這與 `specs/backend/strategy-backtest.md` 的「一筆＝一個買進日」是同一條規則，前端負責在送出前完成去重。
 
 | 該檔的相異買進日數 | 呈現 |
 |---|---|
@@ -501,9 +504,9 @@ depends_on: [stock-list]
 各策略區塊移除後，`insufficientData` 與 `pendingConfirm` 改在**合併表格下方**呈現，**逐策略各一行**，行首標明策略名稱：
 
 - 資料不足：「{策略名稱}：另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。三個法人籌碼型態的原因可能是行情、也可能是法人資料不足，其文字為「{策略名稱}：另有 N 檔因行情或法人資料不足而未納入判定」。
-- 待確認：箱型突破為「{策略名稱}：另有 N 檔已突破，但確認日尚未到」，上漲支撐為「{策略名稱}：另有 N 檔已上漲，但後兩日的確認尚未完成」，三個法人籌碼型態為「{策略名稱}：另有 N 檔已達標，但次一交易日尚未到」。
+- 待確認：文案逐型態，一律說明「已經發生了什麼」與「還在等什麼」——箱型突破為「{策略名稱}：另有 N 檔已突破，但確認日或次一交易日尚未到」，上漲支撐為「{策略名稱}：另有 N 檔已上漲，但確認日或次一交易日尚未到」，底底高為「{策略名稱}：另有 N 檔已成立，但次一交易日尚未到」，反彈為「…另有 N 檔已反彈，但次一交易日尚未到」，累積上漲為「…另有 N 檔已達標，但次一交易日尚未到」，三個法人籌碼型態為「…另有 N 檔已達標，但次一交易日尚未到」，MACD／KDJ 兩個技術指標型態為「…另有 N 檔已交叉，但次一交易日尚未到」。**十個型態都可能出現待確認行**：買進日是確認完成日的下一個交易日，訊號落在最新一根日線上時就還沒有買進日可報。
 
-兩者皆使用提示色 `#D9A441`。反彈、累積上漲與兩個技術指標型態的 `pendingConfirm` 恆為空陣列，不會出現待確認行。
+兩者皆使用提示色 `#D9A441`。**十個型態都可能出現待確認行**（見 `specs/backend/strategy-scan.md` 的「進場日（`buyDate`）」）：每一個型態的買進日都是確認完成日之後的下一個交易日，訊號落在該檔最新一筆日線上時就還沒有買進日可報。
 
 **這兩類標的不納入合併表格，也不納入回測**——它們不是命中。把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
 
@@ -982,11 +985,11 @@ depends_on: [stock-list]
 - [x] 父列中無法回測的那一筆，其賣出日那一行顯示弱化色「—」，賣出日欄行數仍與買進日欄一致
 - [x] 「重試回測」按鈕與「回測中…」提示、父列逐行日期在瀏覽器中實際渲染的顏色取自 `## Visual Style`（以 computed style 驗證）
 
-**以進場日買進（上漲支撐 D+2）**
-- [x] 上漲支撐命中的列：「命中策略與訊號日」顯示起漲日 D，「買進日」顯示掃描回應該筆的 `buyDate`（D+2），兩者不同；買進價為回測回應在該 `buyDate` 的 `buyPrice`
+**以進場日買進**
+- [x] 上漲支撐命中的列：「命中策略與訊號日」顯示起漲日 D，「買進日」顯示掃描回應該筆的 `buyDate`，兩者不同；買進價為回測回應在該 `buyDate` 的 `buyPrice`
 - [x] 回測請求 `items[]` 的日期欄位為 `buyDate`，值原樣取自掃描回應各筆的 `buyDate`，前端不自行推算進場日（以一筆 `buyDate` 與 `signalDate` 刻意不同的掃描回應驗證請求 body）
-- [x] 同一檔的上漲支撐（訊號日 D、買進日 D+2）與另一策略（訊號日 D+2、買進日 D+2）落在同一買進日：只有一筆、只有一列，命中策略欄並列兩者與各自的訊號日
-- [x] 同一檔的上漲支撐與底底高皆在 D 成立：買進日分別為 D+2 與 D，產生兩筆，該列可展開
+- [x] 同一檔的上漲支撐與另一策略落在同一買進日：只有一筆、只有一列，命中策略欄並列兩者與各自的訊號日
+- [x] 同一檔的上漲支撐與底底高皆在 D 成立但買進日不同：產生兩筆，該列可展開
 - [x] 回測回應依 `(stockId, buyDate)` 對回各列；回應不含 `signalDate` 時畫面照常呈現
 
 **以週選擇區間**
@@ -1094,7 +1097,7 @@ depends_on: [stock-list]
 - [x] 送出的該筆：MACD 為 `{ code, fastPeriod, slowPeriod }`、KDJ 為 `{ code, jThreshold }`；皆不帶 `preset`、`risePercent`、`days`；未勾選時兩張卡片的輸入皆 disabled 且請求中不含該策略
 - [x] 後端回 `INVALID_FAST_PERIOD`／`INVALID_SLOW_PERIOD`／`INVALID_MACD_PERIODS`／`INVALID_J_THRESHOLD` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
 - [x] 本次採用參數那一行顯示「MACD 黃金交叉（5／20／9）」「KDJ 黃金交叉（前一日 J < 40）」，數字取自掃描回應而非畫面輸入（`signalPeriod` 亦取自回應）；回應 `jThreshold: -10.0` 顯示為「前一日 J < -10」
-- [x] 命中策略與訊號日欄顯示「MACD 黃金交叉 {signalDate}」「KDJ 黃金交叉 {signalDate}」；回測後買進日等於訊號日，且送出回測的 `buyDate` 取自掃描回應
+- [x] 命中策略與訊號日欄顯示「MACD 黃金交叉 {signalDate}」「KDJ 黃金交叉 {signalDate}」；送出回測的 `buyDate` 取自掃描回應，前端不自行推算
 - [x] `insufficientData` 非空時顯示「{策略名稱}：另有 N 檔因區間前的歷史資料不足而未納入判定」；兩型態不出現待確認行
 - [x] 兩張卡片與上述文字不含「建議」「推薦」「可進場」等措辭；本次改動未新增任何顏色，所有新文字沿用 `## Visual Style` 既有色碼，`prefers-color-scheme: dark` 與 `light` 下一致
 
@@ -1156,15 +1159,42 @@ depends_on: [stock-list]
 
 ### 箱型突破的「要求量增」勾選框
 
-- [ ] 箱型突破卡片在靈敏度下拉與漲幅門檻之外多一個勾選框，文字取自該條目 `paramGroups[0].name`（「要求量增」），初始狀態取自其 `default`（勾選）；底底高與上漲支撐兩張有靈敏度的卡片沒有任何群組勾選框
-- [ ] 勾選狀態下送出的該筆帶 `requireVolume: true`，並照常帶 `preset` 與 `risePercent`；取消勾選時帶 `requireVolume: false`，其餘欄位不變（靈敏度下拉與漲幅門檻皆不 disabled，兩者與本開關互不影響）
-- [ ] 送出的欄位名由群組 `code` 推導（`volume` → `requireVolume`），程式中不存在以 `BOX_BREAKOUT`、`volume` 或 `requireVolume` 字面寫死的分支；把 mock 目錄中該群組的 `code` 改成別的值，送出的欄位名隨之改變
-- [ ] 群組勾選框不轄任何輸入時畫法與反彈的群組相同：卡片上只多一個勾選框，不出現任何新的數字輸入格
-- [ ] 取消勾選時，該卡片的靈敏度說明文字下方出現一行次要文字色 `#93A4B8` 的「已取消「要求量增」，本次不套用該條件」；勾回即消失。該行的群組名稱取自 `paramGroups[0].name`，且 API 給的說明文字本身完全未被改寫
-- [ ] 切換三段靈敏度不改變本勾選框的狀態（取消後改選「嚴格」仍為取消），漲幅門檻照既有規則重填
-- [ ] 取消本勾選框不影響其他任何卡片送出的內容（同一次請求中反彈仍依 `rise` 群組決定，其餘策略不帶 `requireVolume`）
-- [ ] 本次採用參數那一行：`requireVolume` 為 `true` 時顯示「箱型突破（標準）」，為 `false` 時顯示「箱型突破（標準・不看量增）」，兩者皆取自掃描回應該筆的實際採用值，不看畫面上的勾選框當下狀態（掃描後改動勾選框，該行不變）
-- [ ] 本次未新增任何顏色：新增的說明行使用既有的次要文字色 `#93A4B8`，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+- [x] 箱型突破卡片在靈敏度下拉與漲幅門檻之外多一個勾選框，文字取自該條目 `paramGroups[0].name`（「要求量增」），初始狀態取自其 `default`（勾選）；底底高與上漲支撐兩張有靈敏度的卡片沒有任何群組勾選框
+- [x] 勾選狀態下送出的該筆帶 `requireVolume: true`，並照常帶 `preset` 與 `risePercent`；取消勾選時帶 `requireVolume: false`，其餘欄位不變（靈敏度下拉與漲幅門檻皆不 disabled，兩者與本開關互不影響）
+- [x] 送出的欄位名由群組 `code` 推導（`volume` → `requireVolume`），程式中不存在以 `BOX_BREAKOUT`、`volume` 或 `requireVolume` 字面寫死的分支；把 mock 目錄中該群組的 `code` 改成別的值，送出的欄位名隨之改變
+- [x] 群組勾選框不轄任何輸入時畫法與反彈的群組相同：卡片上只多一個勾選框，不出現任何新的數字輸入格
+- [x] 取消勾選時，該卡片的靈敏度說明文字下方出現一行次要文字色 `#93A4B8` 的「已取消「要求量增」，本次不套用該條件」；勾回即消失。該行的群組名稱取自 `paramGroups[0].name`，且 API 給的說明文字本身完全未被改寫
+- [x] 切換三段靈敏度不改變本勾選框的狀態（取消後改選「嚴格」仍為取消），漲幅門檻照既有規則重填
+- [x] 取消本勾選框不影響其他任何卡片送出的內容（同一次請求中反彈仍依 `rise` 群組決定，其餘策略不帶 `requireVolume`）
+- [x] 本次採用參數那一行：`requireVolume` 為 `true` 時顯示「箱型突破（標準）」，為 `false` 時顯示「箱型突破（標準・不看量增）」，兩者皆取自掃描回應該筆的實際採用值，不看畫面上的勾選框當下狀態（掃描後改動勾選框，該行不變）
+- [x] 本次未新增任何顏色：新增的說明行使用既有的次要文字色 `#93A4B8`，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+
+### MACD／KDJ 的待確認行
+
+- [ ] 掃描回應中 `MACD_GOLDEN_CROSS`／`KDJ_GOLDEN_CROSS` 的 `pendingConfirm` 非空時，表格下方出現「{策略名稱}：另有 N 檔已交叉，但次一交易日尚未到」，提示色 `#D9A441`，與其他型態的待確認行同一種呈現
+- [ ] 這兩個型態的待確認標的與其他型態一樣**不進命中彙總表、不送回測**，也不計入「共 N 檔」
+- [x] 其餘型態的待確認文案在本增量中未變（其後由下方「進場日改為確認完成日的下一個交易日」增量一併改寫）
+
+### 進場日改為確認完成日的下一個交易日、買進價改為開盤價（本次新增）
+
+- [ ] 「買進日」欄顯示掃描回應該筆的 `buyDate`，**前端不自行由訊號日推算**任何天數：以 `signalDate` 與 `buyDate` 相差 1 日、3 日兩組回應驗證兩欄各自照回應顯示
+- [ ] 十個型態的列都可能出現「買進日 ≠ 訊號日」，畫面不因某個型態而特別處理
+- [ ] 待確認行對**十個型態**都可能出現，文案依型態取用該型態的措辭（已突破／已上漲／已成立／已反彈／已達標／已交叉），且皆以「次一交易日尚未到」收尾；箱型突破與上漲支撐為「確認日或次一交易日尚未到」
+- [ ] 回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重，去重的鍵是買進日而非訊號日：兩個不同訊號日落在同一買進日時只送一筆、表上只有一列
+- [ ] 「買進價」欄顯示的是回測回應的 `buyPrice`（買進日開盤價），前端不做任何換算，也不在任何文案中把它描述為收盤價
+
+### 上漲支撐卡片的「確認天數」（本次新增）
+
+- [ ] 上漲支撐卡片在靈敏度下拉與漲幅門檻之外，另依該條目的 `params` 畫出一格「確認天數」數字輸入，預設值／範圍／step 全部取自 API（`default` 2、`min` 1、`max` 2、`step` 1），前端不寫死
+- [ ] 卡片同時有靈敏度下拉與 `params` 輸入：程式中不存在「有 `presets` 就不畫 `params`」的分支，也不存在以策略 `code` 判斷要不要畫這格的分支
+- [ ] 底底高／箱型突破兩張卡片的 `params` 為空陣列，因此不多出任何輸入——版面與本次改動前相同
+- [ ] 未勾選上漲支撐時，「確認天數」與該卡片其餘控制項同樣 disabled
+- [ ] 送出的上漲支撐那一筆同時帶 `preset` 與 `confirmBars`（使用者實際選的值）
+- [ ] 超出 `min`／`max` 的輸入被前端擋下，不送出即提示，與其餘數字參數的處理一致
+- [ ] 「本次採用參數」一行對上漲支撐寫成「上漲支撐（標準・確認 2 日）」，天數取自掃描回應的 `confirmBars`（非前端送出的值）
+- [ ] 後端回 `INVALID_CONFIRM_BARS` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
+- [ ] 上漲支撐新增的控制項與文字所用顏色取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致
+
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2200,3 +2230,37 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Deferred / not independently verified here**: real-browser verification (Playwright against a live backend) was not performed for this increment — all verification is `npx vitest run`/`npm run build`/`npm run lint` against the jsdom test suite, per the scope of this dev pass.
 
 **Left unchecked**: none — all 12 criteria in this section are checked. `git status` shows only the 4 intended source/test files (`StrategyTab.tsx`, `StockListPage.css`, `StrategyTab.test.tsx`, `StockListPage.cellColorCascade.test.ts`) plus this spec file changed; the throwaway verification scripts were deleted before finishing.
+
+### Increment 28 — 2026-09-28
+
+**Scope**: the 9 previously-`- [ ]` criteria under「箱型突破的「要求量增」勾選框」— a `paramGroups` checkbox on the presets-driven 箱型突破 card, generalized from the existing 反彈 (`rise`) group mechanism.
+
+**Files changed**:
+- `develop/frontend/src/api/strategies.ts`
+- `develop/frontend/src/pages/StrategyTab.tsx`
+- `develop/frontend/src/pages/StockListPage.css`
+- `develop/frontend/src/__tests__/StrategyTab.test.tsx`
+- `develop/frontend/src/__tests__/StockListPage.cellColorCascade.test.ts`
+
+**Implementation**: `strategies.ts` gained `requireVolume?: boolean` on both `ScanStrategySelection` (request) and `StrategyResult` (response) — plain optional fields, no new discriminant. `StrategyTab.tsx`'s presets-driven card branch (the one used by 底底高／箱型突破／上漲支撐, previously the only branch that never rendered `paramGroups`) now maps `strategy.paramGroups ?? []` into the exact same `.st-param-group`/`.st-group-checkbox`/`.st-group-label` markup and `toggleGroup`/`groupEnabled` state the params-driven branch already used for 反彈's `rise` group; since this card shape never has `params` at all, the group renders as a bare checkbox with no inner param loop — no separate "params vs no-params" code path was needed. `buildScanPayload`'s presets-driven branch (previously returning a literal `{code, preset, risePercent}`) now also loops `strategy?.paramGroups ?? []` and sets `bag[requireFieldName(group.code)]`, the identical helper the params-driven branch already used to turn `rise`→`requireRise` — so `volume`→`requireVolume` needed no new mapping, satisfying the "no literal `BOX_BREAKOUT`/`volume`/`requireVolume` branch" requirement directly (verified by the catalogue-rename test below). A new shared, pure `offParamGroups(strategy, groupEnabled)` (module-level, mirrors `getParamGroup`/`isGroupOn`'s existing style) returns every currently-off group for a strategy; both card branches call it right after their own `<p className="st-strategy-desc">`, rendering one `<p className="st-group-off-note">已取消「{group.name}」，本次不套用該條件</p>` per off group — generalizing the note to both card shapes at once (previously the note didn't exist for either shape, including 反彈, since this line was new in this increment's spec text, not just for 箱型突破). `formatStrategyParams`'s `preset !== undefined` branch appends `・不看量增` when `result.requireVolume === false` — read directly off the response field (mirroring the existing `result.requireRise` read for 反彈), never off `result.strategy`, since the field is only ever present on `BOX_BREAKOUT`'s own response. `StockListPage.css` gained `.st-group-off-note` at the existing `#93A4B8` secondary text color (same value as `.st-group-label`/`.st-multiselect-option`) — no new color.
+
+**Mock-catalogue and pre-existing-test fallout**: the shared `CATALOG` fixture's `BOX_BREAKOUT` entry gained `paramGroups: [{code:'volume', name:'要求量增', default:true}]` and `params: []` (matching the backend contract). This put a second checkbox on the 箱型突破 card, which broke every pre-existing test that queried that card's selection checkbox via a bare singular `getByRole('checkbox')` scoped to the whole `.st-strategy-card` (now ambiguous): 58 occurrences of the literal `screen.getByText('箱型突破').closest('.st-strategy-card')!` were mechanically rescoped to `.st-strategy-card-head` (the `<label>` wrapping only the selection checkbox — unaffected by the new group checkbox living outside it), plus 5 more occurrences using a `card`/`boxCard` variable were rewritten to call the existing `selectStrategy('箱型突破')` helper instead of a manual `within(card).getByRole('checkbox')` click. Three tests asserting an exact `body.strategies` shape for a selected, untouched 箱型突破 card were updated to include the new default `requireVolume: true`.
+
+**Tests**: new `describe('箱型突破的「要求量增」勾選框', …)` (8 tests in `StrategyTab.test.tsx`, one per functional criterion) plus 2 new tests (dark/light) in `StockListPage.cellColorCascade.test.ts` for the 9th (colour) criterion, following that file's existing Playwright-in-vitest pattern (real Chromium, real `StockListPage.css`, `getComputedStyle`). Criterion-by-criterion:
+1. Checkbox exists on 箱型突破 labeled `要求量增` (from `paramGroups[0].name`), checked by default; 底底高/上漲支撐 have no `.st-group-checkbox` and no such text.
+2. Checked scan sends `requireVolume: true` alongside unchanged `preset`/`risePercent`; unchecking flips to `requireVolume: false` while the sensitivity `<select>` and 漲幅門檻 input stay enabled throughout.
+3. Renamed the mock catalogue's group `code` from `volume` to `xyz` (via a per-test `fetchMock.mockImplementation` override) and asserted the outgoing field became `requireXyz`, with `requireVolume` absent — the same `requireFieldName` derivation the `rise` group already exercises.
+4. Asserted the card has exactly one `input[type="number"]` (漲幅門檻) and zero `.st-param-block` elements — the group contributes no new input.
+5. Off-note text/class/name (`已取消「要求量增」，本次不套用該條件`, class `st-group-off-note`, name from `paramGroups[0].name`) appears on uncheck and disappears on recheck, with the original description paragraph text asserted unchanged throughout (never rewritten/parsed).
+6. Unchecking, then switching sensitivity to `嚴格`, leaves the checkbox unchecked while 漲幅門檻 still refills to the new preset's value (existing refill rule unaffected).
+7. Selecting both 箱型突破 (group unchecked) and 反彈 in one scan: only `BOX_BREAKOUT`'s entry carries `requireVolume: false`; `REBOUND`'s own `rise`-group fields are untouched.
+8. Scanning with a response echoing `requireVolume: true` then `false` (two sequential scans) shows `箱型突破（標準）` then `箱型突破（標準・不看量增）` respectively; toggling the live (now-stale) checkbox in between does not change the currently-displayed line — sourced from the response only.
+9. (`cellColorCascade.test.ts`) `.st-group-off-note` computed `color` equals `rgb(147, 164, 184)` (`#93A4B8`) under both emulated `dark` and `light` `colorScheme` — identical, proving no `prefers-color-scheme` dependency.
+
+**Test / build / lint output**: `npx vitest run src/__tests__/StrategyTab.test.tsx` → 319/319 (311 pre-existing + 8 new). `npx vitest run src/__tests__/StockListPage.cellColorCascade.test.ts` → 54/54 (52 pre-existing + 2 new). Full `npx vitest run` (all 12 files) → 543/543 in this run — the one known-flaky test (`disables the stock-search input and shows a hint once 200 stocks are selected`, a fake-timer test that takes ~19.8–20s) happened to finish in time this run; run standalone it still took 19.83s here, and re-confirmed via `git stash`/`git stash pop` against unmodified `main` it takes 19.78s there too — same pre-existing near-timeout margin, not introduced or worsened by this change, left untouched. `npm run build` → clean (`tsc -b && vite build`, no errors). `npm run lint` → the same 2 pre-existing warnings as prior increments (`no-unreachable` in the test file at an unrelated `void init` line, `set-state-in-effect` in `StrategyTab.tsx` at an unrelated stock-search-suggestions effect), 0 new.
+
+**code-quality self-review**: reviewed the diff against DRY (the group-checkbox/off-note/field-derivation logic is written once — `offParamGroups`, `requireFieldName`, `toggleGroup`, `getParamGroup` — and both card branches and both request-building branches call the same functions; no duplicated "is this group off" or "what's the require-field-name" logic), absence safety (`strategy.paramGroups ?? []`, `offParamGroups`'s own `!strategy` guard, `result.requireVolume === false` strict-equality read needing no optional chaining), error handling and resource lifecycle (no new promises, timers, or subscriptions introduced), and performance (all new per-render work is a fixed-size `paramGroups` array iteration, not a loop that grows with data or a per-item request). No issues found; nothing deliberately left unfixed.
+
+**Unrelated pre-existing changes noted, not touched**: `git status` at the start of this session already showed `specs/backend/strategy-scan.md` modified, and during verification `docs/backend/strategy-backtest.md`, `docs/backend/strategy-scan.md`, and `specs/backend/strategy-backtest.md` also appeared modified — none of these were read or written by this increment (backend/docs are out of this spec's scope); they were left exactly as found.
+
+**Left unchecked**: none of the 9 criteria in this section were ticked, and `status` was not changed, per instructions — both are left for the user to update after review.

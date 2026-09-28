@@ -316,6 +316,10 @@ function pageHtml(): string {
       <!-- specs/frontend/strategy.md「隱藏的列」— 「另 K 筆已隱藏」, same .st-uncounted-note
            class as the other 未計入 notes. -->
       <p class="st-uncounted-note" id="hidden-count-note">另 3 筆已隱藏</p>
+      <!-- specs/frontend/strategy.md「箱型突破的「要求量增」勾選框」— 群組取消時卡片說明文字
+           下方的次要文字色提示行 (.st-group-off-note)，本次未新增任何顏色，沿用既有的次要
+           文字色 #93A4B8 (同 .st-group-label/.st-multiselect-option)。 -->
+      <p class="st-group-off-note" id="group-off-note">已取消「要求量增」，本次不套用該條件</p>
       <!-- specs/frontend/strategy.md「總計浮動跟隨」— the fixed-position floating copy of
            the totals triplet; reuses .st-total-item/.st-total-value verbatim (same
            computation, same color rules, per spec), this block only adds its own
@@ -491,6 +495,8 @@ describe.each(['dark', 'light'] as const)(
           'incomplete-label-unchecked',
           'incomplete-label-disabled',
           'hidden-count-note',
+          // specs/frontend/strategy.md「箱型突破的「要求量增」勾選框」
+          'group-off-note',
         ] as const
         return await page.evaluate((cellIds) => {
           const out: Record<string, string> = {}
@@ -903,6 +909,14 @@ describe.each(['dark', 'light'] as const)(
       expect(colors['incomplete-label-unchecked']).toBe(LABEL_TEXT) // #93A4B8
       expect(colors['incomplete-label-disabled']).toBe(DISABLED_BTN_TEXT) // #4A5866
       expect(colors['hidden-count-note']).toBe(FLAT) // #93A4B8
+    })
+
+    // specs/frontend/strategy.md「箱型突破的「要求量增」勾選框」— 「本次未新增任何顏色」：
+    // the group-off note (.st-group-off-note) must paint at the exact same secondary text
+    // color as every other use of #93A4B8 on this page, identically under dark and light.
+    it('colors the 「已取消「要求量增」，本次不套用該條件」group-off note at the existing secondary text color, unchanged across color schemes', async () => {
+      const colors = await computedColors()
+      expect(colors['group-off-note']).toBe(FLAT) // #93A4B8
     })
 
     // specs/frontend/strategy.md「批次勾選框列」— the four batch checkboxes (取消全選／取消

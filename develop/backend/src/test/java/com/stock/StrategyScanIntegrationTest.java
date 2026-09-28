@@ -5206,6 +5206,22 @@ class StrategyScanIntegrationTest {
                 "a JSON number 0 must not be leniently coerced to boolean false: " + numberResponse.getBody());
     }
 
+    /**
+     * specs/backend/strategy-scan.md, "請求本體無法解析（欄位型別不符、JSON 格式錯誤）→ 400 INVALID_REQUEST_BODY".
+     * This is the exact fixture the spec cites as the pre-existing defect (a string sent for the
+     * integer `windowDays` used to fall through to the catch-all and come back 500 INTERNAL_ERROR).
+     */
+    @Test
+    void malformedWindowDaysField_returns400InvalidRequestBody_notInternalError() {
+        String json = "{\"strategies\":[{\"code\":\"INSTITUTIONAL_NET_RATIO\",\"windowDays\":\"abc\"}]}";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<ErrorResponse> response = rest.postForEntity("/api/strategies/scan",
+                new HttpEntity<>(json, headers), ErrorResponse.class);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("INVALID_REQUEST_BODY", response.getBody().getCode());
+    }
+
     // ==================== helpers ====================
 
     private JsonNode findByCode(JsonNode array, String code) {
