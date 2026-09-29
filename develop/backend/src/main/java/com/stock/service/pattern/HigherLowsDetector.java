@@ -23,7 +23,15 @@ import java.util.Map;
  * MA5 (fewer than 5 bars behind it) never participates. Among the swing lows found within the
  * scanned range, a hit is any run of `requiredRises` consecutive rises each meeting `risePercent`
  * — compared on MA5 values, never on raw lows; when several such runs exist, the latest-dated one
- * is reported. Raw lows are reported in the detail purely for reference.
+ * whose `buyDate` (the trading day after it) is already resolvable is reported — see
+ * specs/backend/strategy-scan.md, "進場日（buyDate）". Raw lows are reported in the detail purely for
+ * reference.
+ *
+ * <p>In practice `buyDate` is resolvable for every swing low this detector ever reports: being
+ * recognized as a swing low at all already requires {@code swingBars} (minimum 2) trading days of
+ * data on its right side, which is always at least the 1 trading day `buyDate` itself needs — see
+ * the "已知限制" table in specs/backend/strategy-scan.md for why this is treated as an accepted,
+ * documented residual look-ahead rather than a reason to withhold the hit.
  */
 @Component
 @Order(2)
@@ -61,11 +69,13 @@ public class HigherLowsDetector implements PatternDetector {
         final LocalDate tradeDate;
         final BigDecimal ma5;
         final BigDecimal low;
+        final int barIndex;
 
-        SwingLow(LocalDate tradeDate, BigDecimal ma5, BigDecimal low) {
+        SwingLow(LocalDate tradeDate, BigDecimal ma5, BigDecimal low, int barIndex) {
             this.tradeDate = tradeDate;
             this.ma5 = ma5;
             this.low = low;
+            this.barIndex = barIndex;
         }
     }
 
@@ -119,6 +129,13 @@ public class HigherLowsDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after the reported swing low (confirmation-completion day =
+        // signalDate for HIGHER_LOWS) — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         Params params = presetParams.get(selection.getPreset());
@@ -157,12 +174,15 @@ public class HigherLowsDetector implements PatternDetector {
                 }
             }
             if (isSwingLow) {
-                swingLows.add(new SwingLow(date, ma5D, bars.get(i).getLowPrice()));
+                swingLows.add(new SwingLow(date, ma5D, bars.get(i).getLowPrice(), i));
             }
         }
 
+        // Every k whose run of qualifying rises reaches requiredRises is itself an independent
+        // candidate hit (specs/backend/strategy-scan.md, "存在連續 requiredRises 段遞增") — collected in
+        // chronological order so the loop below can prefer the latest one that also has a buyDate.
+        List<Integer> qualifyingEnds = new ArrayList<>();
         int currentRun = 0;
-        int lastQualifyingEnd = -1;
         for (int k = 1; k < swingLows.size(); k++) {
             BigDecimal prev = swingLows.get(k - 1).ma5;
             BigDecimal curr = swingLows.get(k).ma5;
@@ -174,24 +194,42 @@ public class HigherLowsDetector implements PatternDetector {
                 currentRun = 0;
             }
             if (currentRun >= params.requiredRises) {
-                lastQualifyingEnd = k;
+                qualifyingEnds.add(k);
             }
         }
 
-        if (lastQualifyingEnd < 0) {
+        if (qualifyingEnds.isEmpty()) {
             return PatternDetectionOutcome.noMatch(false);
         }
 
-        int windowStart = lastQualifyingEnd - params.requiredRises;
-        List<LowPointDto> lows = new ArrayList<>();
-        for (int k = windowStart; k <= lastQualifyingEnd; k++) {
-            SwingLow s = swingLows.get(k);
-            lows.add(new LowPointDto(s.tradeDate, s.ma5.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
-                    s.low.setScale(PRICE_SCALE, RoundingMode.HALF_UP)));
+        LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
+        HigherLowsDetailDto lastDetail = null;
+        boolean anyUnresolvedMatch = false;
+
+        for (int end : qualifyingEnds) {
+            SwingLow endLow = swingLows.get(end);
+            LocalDate buyDate = nextTradingDate(bars, endLow.barIndex);
+            if (buyDate == null) {
+                anyUnresolvedMatch = true;
+                continue;
+            }
+            int windowStart = end - params.requiredRises;
+            List<LowPointDto> lows = new ArrayList<>();
+            for (int k = windowStart; k <= end; k++) {
+                SwingLow s = swingLows.get(k);
+                lows.add(new LowPointDto(s.tradeDate, s.ma5.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
+                        s.low.setScale(PRICE_SCALE, RoundingMode.HALF_UP)));
+            }
+            lastSignalDate = endLow.tradeDate;
+            lastBuyDate = buyDate;
+            lastDetail = new HigherLowsDetailDto(lows);
         }
 
-        LocalDate signalDate = swingLows.get(lastQualifyingEnd).tradeDate;
-        return PatternDetectionOutcome.hit(signalDate, new HigherLowsDetailDto(lows));
+        if (lastSignalDate != null) {
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        }
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     /** MA5 at bars index {@code index} — the arithmetic mean of the 5 closes ending at (and

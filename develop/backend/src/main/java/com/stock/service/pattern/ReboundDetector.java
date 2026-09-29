@@ -28,8 +28,9 @@ import java.util.List;
  * trading days after T (exclusive of T), S is the FIRST day whose rise from T's close meets
  * `risePercent`. `signalDate` is S; when `requireRise` is false there is no stage 2 and
  * `signalDate` is T itself. The rebound window need not have fully elapsed — already met is a hit,
- * not-yet-met is simply a miss, never pendingConfirm ({@link #requiredConfirmTradingDaysAfterEndDate}
- * is never overridden, so pendingConfirm is always empty).
+ * not-yet-met is simply a miss, never pendingConfirm on that account. `buyDate` is the trading day
+ * after S, though, so a met rebound whose S lands on the stock's latest available bar still produces
+ * pendingConfirm rather than a hit — see specs/backend/strategy-scan.md, "進場日（buyDate）".
  */
 @Component
 @Order(4)
@@ -132,6 +133,13 @@ public class ReboundDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after S (confirmation-completion day = signalDate for REBOUND)
+        // — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         boolean requireRise = resolveRequireRise(selection);
@@ -163,7 +171,9 @@ public class ReboundDetector implements PatternDetector {
         int tRangeStart = requireRise ? Math.max(0, startIdx - riseDays) : startIdx;
 
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         ReboundDetailDto lastDetail = null;
+        boolean anyUnresolvedMatch = false;
 
         for (int t = tRangeStart; t <= endIdx; t++) {
             int windowStart = t - (dropDays - 1);
@@ -222,12 +232,14 @@ public class ReboundDetector implements PatternDetector {
                     .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
             LocalDate signalDate;
+            int signalIndex;
             BigDecimal risePercentActual = null;
             if (requireRise) {
                 // 5./6./7. first day within (T, T + riseDays] whose rise from T's close meets
                 // risePercent; the window need not have fully elapsed (spec: "漲段窗口尚未跑滿仍照判定").
                 LocalDate foundDate = null;
                 BigDecimal foundRiseRatio = null;
+                int foundIndex = -1;
                 int riseWindowEnd = Math.min(t + riseDays, bars.size() - 1);
                 if (tClose.compareTo(BigDecimal.ZERO) != 0) {
                     for (int k = t + 1; k <= riseWindowEnd; k++) {
@@ -236,6 +248,7 @@ public class ReboundDetector implements PatternDetector {
                         if (riseRatio.compareTo(risePercent) >= 0) {
                             foundDate = bars.get(k).getTradeDate();
                             foundRiseRatio = riseRatio;
+                            foundIndex = k;
                             break;
                         }
                     }
@@ -244,17 +257,28 @@ public class ReboundDetector implements PatternDetector {
                     continue; // no rebound found within the window -> this trough does not qualify.
                 }
                 signalDate = foundDate;
+                signalIndex = foundIndex;
                 risePercentActual = foundRiseRatio.multiply(BigDecimal.valueOf(100))
                         .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
             } else {
                 signalDate = bars.get(t).getTradeDate();
+                signalIndex = t;
             }
             if (signalDate.isBefore(startDate) || signalDate.isAfter(endDate)) {
                 continue; // the signal itself must land within the scanned range.
             }
 
+            // buyDate: the trading day after S; missing means this trough's rebound is unresolved
+            // (pendingConfirm), not a non-match — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+            LocalDate buyDate = nextTradingDate(bars, signalIndex);
+            if (buyDate == null) {
+                anyUnresolvedMatch = true;
+                continue;
+            }
+
             if (lastSignalDate == null || !signalDate.isBefore(lastSignalDate)) {
                 lastSignalDate = signalDate;
+                lastBuyDate = buyDate;
                 lastDetail = new ReboundDetailDto(peakDate, peak.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                         bars.get(t).getTradeDate(), tClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                         dropPercentActual, risePercentActual);
@@ -262,10 +286,11 @@ public class ReboundDetector implements PatternDetector {
         }
 
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        // Never produces pendingConfirm — "已達標就命中、不等窗口跑滿" means an unmet window is simply a miss.
-        return PatternDetectionOutcome.noMatch(false);
+        // "已達標就命中、不等窗口跑滿" means an unmet rebound window is simply a miss; anyUnresolvedMatch
+        // (a rebound that WAS met but has no next trading day yet) is the only source of pendingConfirm.
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     @Override

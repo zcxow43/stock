@@ -22,8 +22,9 @@ import java.util.List;
  * For each trading day D within the scanned range, within the `days` trading days up to and
  * including D, find the lowest close L (date Ld); D must be the highest close from Ld (exclusive)
  * through D (inclusive); and the rise from L to D's close must meet `risePercent`. Requires no
- * single-day rise and no confirmation. Never overrides
- * {@link PatternDetector#requiredConfirmTradingDaysAfterEndDate}, so pendingConfirm is always empty.
+ * single-day rise and no additional confirmation window of its own — but, like every other pattern,
+ * `buyDate` is the trading day after D, so a D landing on the stock's latest available bar still
+ * produces pendingConfirm rather than a hit — see specs/backend/strategy-scan.md, "進場日（buyDate）".
  */
 @Component
 @Order(5)
@@ -110,6 +111,13 @@ public class CumulativeRiseDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after D (confirmation-completion day = signalDate for
+        // CUMULATIVE_RISE) — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         int days = resolveDays(daysOverride(selection));
@@ -124,7 +132,9 @@ public class CumulativeRiseDetector implements PatternDetector {
         }
 
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         CumulativeRiseDetailDto lastDetail = null;
+        boolean anyUnresolvedMatch = false;
 
         for (int i = preCount; i < bars.size(); i++) {
             StockDailyPrice d = bars.get(i);
@@ -184,10 +194,19 @@ public class CumulativeRiseDetector implements PatternDetector {
                 continue;
             }
 
+            // buyDate: the trading day after D; missing means this D is unresolved (pendingConfirm),
+            // not a non-match — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+            LocalDate buyDate = nextTradingDate(bars, i);
+            if (buyDate == null) {
+                anyUnresolvedMatch = true;
+                continue;
+            }
+
             BigDecimal risePercentActual = riseRatio.multiply(BigDecimal.valueOf(100))
                     .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
             lastSignalDate = d.getTradeDate();
+            lastBuyDate = buyDate;
             lastDetail = new CumulativeRiseDetailDto(
                     troughDate,
                     trough.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
@@ -196,10 +215,9 @@ public class CumulativeRiseDetector implements PatternDetector {
         }
 
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        // Never produces pendingConfirm — this pattern does not confirm the rise continued.
-        return PatternDetectionOutcome.noMatch(false);
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     private static int resolveDays(Integer daysOverride) {

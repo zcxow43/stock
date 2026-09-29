@@ -222,6 +222,11 @@ public class ErrorResponse {
                 null, null, null);
     }
 
+    public static ErrorResponse invalidConfirmBars(String strategy) {
+        return new ErrorResponse("INVALID_CONFIRM_BARS", null, null, null, null, null, null, null, strategy, null,
+                null, null, null);
+    }
+
     public static ErrorResponse duplicateBacktestItem(List<BacktestDuplicateItemDto> duplicatedItems) {
         return new ErrorResponse("DUPLICATE_BACKTEST_ITEM", null, null, null, null, null, null, null, null, null,
                 duplicatedItems, null, null);

@@ -207,6 +207,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidJThreshold(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidConfirmBarsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidConfirmBars(InvalidConfirmBarsException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidConfirmBars(e.getStrategy()));
+    }
+
     @ExceptionHandler(NoBacktestItemsException.class)
     public ResponseEntity<ErrorResponse> handleNoBacktestItems(NoBacktestItemsException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("NO_BACKTEST_ITEMS"));

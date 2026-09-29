@@ -11,6 +11,7 @@ import com.stock.dto.StrategySelectionDto;
 import com.stock.exception.DaysNotApplicableException;
 import com.stock.exception.DuplicateStrategyException;
 import com.stock.exception.InvalidBuyDaysException;
+import com.stock.exception.InvalidConfirmBarsException;
 import com.stock.exception.InvalidDateRangeException;
 import com.stock.exception.InvalidDropDaysException;
 import com.stock.exception.InvalidDropPercentException;
@@ -200,6 +201,15 @@ public class StrategyScanService {
                 // Only BOX_BREAKOUT accepts requireVolume — see specs/backend/strategy-scan.md, "對
                 // BOX_BREAKOUT 以外的型態帶了 requireVolume".
                 throw new ParamNotApplicableException(selection.getCode(), "requireVolume");
+            }
+            if (selection.getConfirmBars() != null && !detector.acceptsConfirmBars()) {
+                // Only RISING_SUPPORT accepts confirmBars — see specs/backend/strategy-scan.md, "對
+                // RISING_SUPPORT 以外的型態帶了 confirmBars".
+                throw new ParamNotApplicableException(selection.getCode(), "confirmBars");
+            }
+            if (detector.acceptsConfirmBars()) {
+                validateIntInRange(selection.getConfirmBars(), detector.getConfirmBarsMin(),
+                        detector.getConfirmBarsMax(), () -> new InvalidConfirmBarsException(selection.getCode()));
             }
             if (selection.getRisePercent() != null && !detector.acceptsRisePercent()) {
                 // The three institutional patterns judge shares/volume, never a price rise — a
@@ -531,7 +541,7 @@ public class StrategyScanService {
             PatternDetector detector = detectorsByCode.get(selection.getCode());
             maxLookback = Math.max(maxLookback, detector.requiredLookbackTradingDays(selection));
             maxConfirmAfter = Math.max(maxConfirmAfter,
-                    detector.requiredConfirmTradingDaysAfterEndDate(selection.getPreset()));
+                    detector.requiredConfirmTradingDaysAfterEndDate(selection));
         }
 
         if (maxLookback > 0) {

@@ -2,8 +2,10 @@ package com.stock.service.pattern;
 
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.ConfirmCloseDto;
+import com.stock.dto.ParamDto;
 import com.stock.dto.PresetDto;
 import com.stock.dto.RisingSupportDetailDto;
+import com.stock.dto.StrategyResultDto;
 import com.stock.dto.StrategySelectionDto;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -19,16 +21,19 @@ import java.util.Map;
 /**
  * RISING_SUPPORT — specs/backend/strategy-scan.md, "上漲支撐". For each trading day D within the
  * scanned range: D's close must break above the highest close of the `lookback` trading days
- * strictly before D, D's rise over D-1's close must meet `risePercent`, and then D+1 and D+2 (fixed
- * at 2 trading days regardless of preset) must both close strictly above D-1's close — the support
- * line is the launch point of the rise itself, not the lookback high. No volume check.
+ * strictly before D, D's rise over D-1's close must meet `risePercent`, and then `confirmBars`
+ * trading days (a request-level field, 1 or 2, default 2 — orthogonal to preset) starting at D+1
+ * must all close strictly above D-1's close — the support line is the launch point of the rise
+ * itself, not the lookback high. No volume check.
  */
 @Component
 @Order(3)
 public class RisingSupportDetector implements PatternDetector {
 
     public static final String CODE = "RISING_SUPPORT";
-    private static final int CONFIRM_BARS = 2;
+    public static final int CONFIRM_BARS_MIN = 1;
+    public static final int CONFIRM_BARS_MAX = 2;
+    public static final int CONFIRM_BARS_DEFAULT = 2;
     private static final int PRICE_SCALE = 2;
     private static final int CALC_SCALE = 10;
 
@@ -38,22 +43,21 @@ public class RisingSupportDetector implements PatternDetector {
      * update when a threshold or its wording changes. The description text is itself the wire
      * contract (specs/backend/strategy-scan.md API contract example) and is literal, hand-written
      * text — not generated from the numeric fields — so it must be edited in lockstep with them.
-     * confirmBars is carried here too even though it is fixed at 2 for every preset, so the whole
-     * parameter table — including "this does not vary" — lives in one place.
+     * confirmBars is a request-level field (see {@link #CONFIRM_BARS_DEFAULT} and the class javadoc),
+     * not part of this per-preset table — every preset's confirmation length is the same, caller-
+     * chosen value.
      */
     private static final class Params {
         final String name;
         final String description;
         final int lookback;
         final BigDecimal risePercent;
-        final int confirmBars;
 
-        Params(String name, String description, int lookback, BigDecimal risePercent, int confirmBars) {
+        Params(String name, String description, int lookback, BigDecimal risePercent) {
             this.name = name;
             this.description = description;
             this.lookback = lookback;
             this.risePercent = risePercent;
-            this.confirmBars = confirmBars;
         }
     }
 
@@ -61,14 +65,14 @@ public class RisingSupportDetector implements PatternDetector {
 
     public RisingSupportDetector() {
         presetParams.put("STRICT", new Params("嚴格",
-                "收盤突破前 20 日收盤高點且單日漲幅 ≥ 5%，其後 2 日不跌破起漲收盤",
-                20, new BigDecimal("0.05"), CONFIRM_BARS));
+                "收盤突破前 20 日收盤高點且單日漲幅 ≥ 5%，其後不跌破起漲收盤",
+                20, new BigDecimal("0.05")));
         presetParams.put("STANDARD", new Params("標準",
-                "收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤",
-                10, new BigDecimal("0.03"), CONFIRM_BARS));
+                "收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後不跌破起漲收盤",
+                10, new BigDecimal("0.03")));
         presetParams.put("LOOSE", new Params("寬鬆",
-                "收盤突破前 5 日收盤高點且單日漲幅 ≥ 2%，其後 2 日不跌破起漲收盤",
-                5, new BigDecimal("0.02"), CONFIRM_BARS));
+                "收盤突破前 5 日收盤高點且單日漲幅 ≥ 2%，其後不跌破起漲收盤",
+                5, new BigDecimal("0.02")));
     }
 
     @Override
@@ -104,13 +108,48 @@ public class RisingSupportDetector implements PatternDetector {
     }
 
     @Override
+    public boolean acceptsConfirmBars() {
+        return true;
+    }
+
+    @Override
+    public int getConfirmBarsMin() {
+        return CONFIRM_BARS_MIN;
+    }
+
+    @Override
+    public int getConfirmBarsMax() {
+        return CONFIRM_BARS_MAX;
+    }
+
+    @Override
+    public int getConfirmBarsDefault() {
+        return CONFIRM_BARS_DEFAULT;
+    }
+
+    @Override
+    public List<ParamDto> getParams() {
+        // Orthogonal to the preset — see the class javadoc and specs/backend/strategy-scan.md, "上漲
+        // 支撐的確認長度可選（confirmBars）"; this is the one strategy that carries both presets and params.
+        return List.of(new ParamDto("confirmBars", "確認天數", "日", BigDecimal.valueOf(CONFIRM_BARS_DEFAULT),
+                BigDecimal.valueOf(CONFIRM_BARS_MIN), BigDecimal.valueOf(CONFIRM_BARS_MAX), BigDecimal.ONE));
+    }
+
+    private static int resolveConfirmBars(StrategySelectionDto selection) {
+        return selection.getConfirmBars() != null ? selection.getConfirmBars().intValue() : CONFIRM_BARS_DEFAULT;
+    }
+
+    @Override
     public int requiredLookbackTradingDays(StrategySelectionDto selection) {
         return presetParams.get(selection.getPreset()).lookback;
     }
 
     @Override
-    public int requiredConfirmTradingDaysAfterEndDate(String presetCode) {
-        return presetParams.get(presetCode).confirmBars;
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // confirmBars trading days to confirm the support held, plus 1 more so buyDate (the trading
+        // day after the confirmation-completion day D+confirmBars) is resolvable — see
+        // specs/backend/strategy-scan.md, "上漲支撐的確認資料取自 endDate 之後".
+        return resolveConfirmBars(selection) + 1;
     }
 
     @Override
@@ -118,8 +157,10 @@ public class RisingSupportDetector implements PatternDetector {
                                            StrategySelectionDto selection) {
         Params params = presetParams.get(selection.getPreset());
         // risePercent overrides the single-day rise threshold (specs/backend/strategy-scan.md, 上漲
-        // 支撐's override mapping); lookback and the fixed 2-day confirmBars stay preset-driven.
+        // 支撐's override mapping); lookback stays preset-driven. confirmBars is the request's own
+        // field (1 or 2, default 2), orthogonal to preset.
         BigDecimal risePercent = resolveRatio(selection.getRisePercent(), params.risePercent);
+        int confirmBars = resolveConfirmBars(selection);
 
         int preCount = 0;
         while (preCount < bars.size() && bars.get(preCount).getTradeDate().isBefore(startDate)) {
@@ -132,7 +173,7 @@ public class RisingSupportDetector implements PatternDetector {
         LocalDate lastSignalDate = null;
         LocalDate lastBuyDate = null;
         RisingSupportDetailDto lastDetail = null;
-        boolean pendingConfirm = false;
+        boolean anyUnresolvedMatch = false;
 
         for (int i = preCount; i < bars.size(); i++) {
             StockDailyPrice d = bars.get(i);
@@ -169,15 +210,15 @@ public class RisingSupportDetector implements PatternDetector {
                 continue;
             }
 
-            // 3./4./5. confirmation: D+1 and D+2 (fixed at 2, never varies by preset) must both close
-            // strictly above supportClose; missing confirm data -> pendingConfirm, not a non-match.
-            if (i + params.confirmBars >= bars.size()) {
-                pendingConfirm = true;
+            // 3./4./5. confirmation: D+1..D+confirmBars must all close strictly above supportClose;
+            // missing confirm data -> unresolved, not a non-match.
+            if (i + confirmBars >= bars.size()) {
+                anyUnresolvedMatch = true;
                 continue;
             }
-            List<ConfirmCloseDto> confirmCloses = new ArrayList<>(params.confirmBars);
+            List<ConfirmCloseDto> confirmCloses = new ArrayList<>(confirmBars);
             boolean allHeldAboveSupport = true;
-            for (int k = 1; k <= params.confirmBars; k++) {
+            for (int k = 1; k <= confirmBars; k++) {
                 StockDailyPrice confirmBar = bars.get(i + k);
                 confirmCloses.add(new ConfirmCloseDto(confirmBar.getTradeDate(),
                         confirmBar.getClosePrice().setScale(PRICE_SCALE, RoundingMode.HALF_UP)));
@@ -189,16 +230,20 @@ public class RisingSupportDetector implements PatternDetector {
                 continue;
             }
 
+            // buyDate: the trading day after the confirmation-completion day D+confirmBars — see
+            // specs/backend/strategy-scan.md, "上漲支撐的訊號日與進場日刻意不同". Missing means this hit is
+            // unresolved (pendingConfirm), not a non-match.
+            LocalDate buyDate = nextTradingDate(bars, i + confirmBars);
+            if (buyDate == null) {
+                anyUnresolvedMatch = true;
+                continue;
+            }
+
             BigDecimal risePercentActual = riseRatio.multiply(BigDecimal.valueOf(100))
                     .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
             lastSignalDate = d.getTradeDate();
-            // buyDate is D+2 — the entry day this hit can actually be bought on without using future
-            // data (specs/backend/strategy-scan.md, "上漲支撐的訊號日與進場日刻意不同"). It equals the last
-            // confirmCloses entry's tradeDate, i.e. bars.get(i + confirmBars): trading-day adjacency,
-            // never calendar-day arithmetic, so a suspension gap between D and D+2 is naturally
-            // skipped the same way the confirmation check itself skips it.
-            lastBuyDate = confirmCloses.get(confirmCloses.size() - 1).getTradeDate();
+            lastBuyDate = buyDate;
             lastDetail = new RisingSupportDetailDto(
                     supportClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     dClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
@@ -210,6 +255,15 @@ public class RisingSupportDetector implements PatternDetector {
         if (lastSignalDate != null) {
             return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        return PatternDetectionOutcome.noMatch(pendingConfirm);
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
+    }
+
+    @Override
+    public void populateResultParams(StrategySelectionDto selection, StrategyResultDto result) {
+        // confirmBars is the one exception (alongside BOX_BREAKOUT's requireVolume) to "preset and a
+        // parameter field never coexist" — orthogonal to preset, so both must be echoed together —
+        // see specs/backend/strategy-scan.md, "results 依 strategies 送入的順序回傳".
+        result.setPreset(selection.getPreset());
+        result.setConfirmBars(resolveConfirmBars(selection));
     }
 }

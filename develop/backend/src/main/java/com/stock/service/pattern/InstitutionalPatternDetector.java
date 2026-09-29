@@ -67,7 +67,7 @@ public interface InstitutionalPatternDetector extends PatternDetector {
      * "為什麼 buyDate 是下一個交易日，不是 D 本身".
      */
     @Override
-    default int requiredConfirmTradingDaysAfterEndDate(String presetCode) {
+    default int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
         return 1;
     }
 

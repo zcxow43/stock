@@ -522,6 +522,7 @@ Response `200`：
 - [x] 並行不改變冪等性：同一批全跑連續執行兩次，`stock_daily_price` 列數不變
 - [x] 並行不改變單檔語意：`catchUp` 的跳過條件、`last_synced_date` 的認定、`attempt_count` 的累加規則與序列執行時完全相同
 - [ ] 千檔規模的全跑實測總耗時較序列每檔 1 秒的版本明顯縮短，且全程未發生 `403`／`429` 封鎖
+      （Increment 10：本次仍未實測，deferred。千檔規模的逐檔 SELECTED／降級管線需要對 Yahoo／FinMind 發出約 1,000 次真實請求，這正是「全程不得 403／429」這條要驗證的風險本身——在本 session 對production 級的真實外部服務蓄意衝量沒有安全的重跑保證。本次改在 `ALL` 模式主路徑對 MI_INDEX 做了同等量級（272 次、跨 9 個月）的真實活測，詳見下方 Execution Result Increment 10，但那是逐日路徑非逐檔並行路徑，不能替代這條針對 `SELECTED`/降級並行管線的驗證。）
 
 ### 來源選擇與封鎖切換
 - [x] 逐檔歷史預設走 Yahoo：一次全新回補後，`stock_daily_price` 中該批次寫入的列其 `source` 為 `YAHOO`
@@ -556,10 +557,10 @@ Response `200`：
 - [x] 連續重啟兩次，第二次的 `stock` 列數與名稱與第一次相同（UPSERT 冪等，不產生重複股票）
 - [x] 主檔同步只寫入 `market = 'TSE'` 的列，不因本步驟產生任何 `OTC` 列
 - [x] 既有 34 檔種子股票在同步後仍存在，其 `stock_id` 未變動、名稱為資料源的最新值
-- [ ] 每日增量（含啟動主檔同步）對 `stock` 只發出一次比對查詢，並只對「不存在」或「名稱等寫入欄位有變」的股票發出寫入；以既有主檔與快照完全相同的情境執行，對 `stock` 的寫入語句數為 0
-- [ ] 快照中某檔名稱與 `stock` 既有值不同時，該檔名稱被更新；快照中新出現的代號被新增；兩者以外的列 `updated_at` 不變
-- [ ] 略過主檔寫入不影響行情：同一次執行後，快照中每一檔的當日 `stock_daily_price` 列皆存在，既有 `PRICE_BACKFILL` 進度列的 `last_synced_date` 照常推進
-- [ ] `POST /api/stocks/sync/daily` 回應欄位與值的語意不變：`stockMasterUpserted` 仍等於本次快照涵蓋的主檔檔數
+- [x] 每日增量（含啟動主檔同步）對 `stock` 只發出一次比對查詢，並只對「不存在」或「名稱等寫入欄位有變」的股票發出寫入；以既有主檔與快照完全相同的情境執行，對 `stock` 的寫入語句數為 0
+- [ ] 快照中某檔名稱與 `stock` 既有值不同時，該檔名稱被更新；快照中新出現的代號被新增；兩者以外的列 `updated_at` 不變（見 Increment 10：insert/update 兩支未能在本次 session 內以真實資料重新即時驗證，僅有 Increment 6 的既有活資料證據 + 本次的程式碼審查；`updated_at` 不變的部分已於本次以「未被寫入的列完全沒有送出任何 SQL」直接活測證實）
+- [x] 略過主檔寫入不影響行情：同一次執行後，快照中每一檔的當日 `stock_daily_price` 列皆存在，既有 `PRICE_BACKFILL` 進度列的 `last_synced_date` 照常推進
+- [x] `POST /api/stocks/sync/daily` 回應欄位與值的語意不變：`stockMasterUpserted` 仍等於本次快照涵蓋的主檔檔數
 
 ### 啟動時自動補齊
 - [x] 系統啟動完成後，未經任何手動呼叫，`stock` 中 `is_active = 1` 的普通股在 `stock_daily_price` 出現自設定起日（預設 `2026-01-01`）至今日的真實日線資料
@@ -581,6 +582,7 @@ Response `200`：
 ### 逐日全市場快照為 `ALL` 模式主路徑（本次新增）
 - [x] `ALL` 模式的回補對每一個候選交易日各發出 **1 次** MI_INDEX 請求，全程**不對 Yahoo／FinMind 發出任何請求**（以請求計數斷言，非以耗時推測）
 - [ ] 一年份區間（約 165 個交易日）的全市場回補，外部請求總數在 170 次以內，且母體檔數由 34 檔改為 1,030 檔時該請求數**完全不變**
+      （Increment 10 活測：母體不變性**成立**——同一 4 天區間分別以 1,088 檔與 1,382 檔母體各跑一次，MI_INDEX 請求數皆為 4 次，與母體規模無關；但「≤170 次」**未達成**——對真實 TWSE MI_INDEX 跑一段 272 個日曆天、179 個真實交易日的區間（2026-01-01～2026-09-29，量級與「約165交易日」相當），實際發出 273 次請求，因為現行（且本 spec 已核可、已勾選）設計是每個日曆天都發一次請求以確認是否為交易日，不在本機預先排除週末假日。170 這個數字的前提若是「請求數＝交易日數」則與這條已核可的設計互斥——請求數實際上＝日曆天數。詳見下方 Execution Result Increment 10。）
 - [x] `SELECTED` 模式（帶 `stockIds`）仍走逐檔路徑：指名 2 檔、區間一年，外部請求數為 2，且**不發出任何 MI_INDEX 請求**
 - [x] MI_INDEX 回應的個股行情表以「`fields[0]` 等於 `證券代號`」定位；把該表移到 `tables` 陣列的其他索引位置後，解析結果不變
 - [x] 回應中不存在該表、或其 `data` 為空（非交易日）時：不寫入任何列、不記錄失敗、不累加 `attempt_count`，且該日的 `last_synced_date` 照常推進
@@ -895,3 +897,56 @@ Tests run: 5, ... - in com.stock.service.StockSyncServiceCommonStocksOnlyTest（
 以 `code-quality` skill 覆核本次 diff：未發現 Critical 等級問題（null 安全、資源生命週期、原子性邊界均符合既有慣例：`applySnapshotDay` 同一 `@Transactional` 完成寫入與推進，已用 rollback 測試證明）。發現並記錄兩個未修的 Code Smell，理由如下：
 1. `"TWSE"` 這個字面值同時出現在 `TwseMiIndexClient.SOURCE_CODE` 與 `PriceIngestionService.SOURCE_TWSE`（既有常數，本次未改）兩處——technically 是重複，但統一它需要一併碰觸既有「每日增量」路徑的既有程式碼與其已勾選的 Acceptance Criteria，風險大於重複本身的維護成本，本次不動。
 2. `SnapshotBackfillRunner.fetchWithRetry` 與既有 `PriceHistoryFetcher.fetchWithTimeoutRetry` 的重試/退避迴圈形狀相同，但兩者方法簽章不同（一個是「單一日期」、一個是「單一標的＋日期區間」），且分屬不同抽象（`TwseMiIndexClient` 未實作 `PriceHistorySource`），無法直接複用；留待未來如果第三個來源出現同樣形狀時再抽共用工具方法，避免現在為了兩個呼叫點做過度抽象。
+
+### Increment 10 — 2026-09-29
+
+本次執行的是先前遺留的 6 項未勾選 Acceptance Criteria（L524、L559–L562、L583）。**本增量沒有任何程式碼變更**——依 commit `66e2dde`（"Skip unchanged stock-master writes in daily sync"）與 Increment 9 的既有實作，L559/L561/L562 這組行為在程式碼層面已經正確落地（`PriceIngestionService.applyDailySnapshot`／`isStockMasterWriteNeeded`／`StockMapper.findByIds` 的空集合防護／`advanceLastSyncedDateForExisting`），本次純粹是把它們從「程式碼已對、但未活測勾選」轉為「活測證實」，或誠實記錄活測揭露的落差。所有驗證皆對本機真實 MySQL（`127.0.0.1:3306/stock`）與真實 TWSE OpenAPI／MI_INDEX 端點進行，未使用 mock。
+
+#### 驗證環境
+
+- 啟動前先以 `netstat`／`Get-Process` 找到一個從前一天（2026-09-28）遺留、仍佔用 8080 埠且已跑完全部同步的殘留 `java` 行程並停用，避免與本次驗證用的實例衝突。
+- 以 `mvn -f develop/backend/pom.xml package -DskipTests` 打包後改用 `java -jar target/backend.jar` 直接啟動（而非 `mvn spring-boot:run`）——原因：pom.xml 的 `spring-boot-maven-plugin` 已把 `<jvmArguments>-Duser.timezone=Asia/Taipei</jvmArguments>` 寫死在 `<configuration>` 裡，`-Dspring-boot.run.jvmArguments=...` 這個命令列覆寫對已寫死的設定不生效（以 `Get-CimInstance Win32_Process` 檢視實際行程命令列證實），因此無法用它疊加本次驗證需要的 `-Dlogging.level.org.springframework.web.client.RestTemplate=DEBUG`。直接跑打包後的 jar 可以自由疊加任意 `-D` 系統屬性，且仍是同一份、未經修改的產出物。
+- 啟動時同時帶 `SPRING_DATASOURCE_HIKARI_CONNECTIONINITSQL="SET time_zone = '+08:00'"`（維持既有時區規範）與 `APP_BACKFILL_STARTUP_CATCH_UP_ENABLED=false`／`APP_MASTER_SYNC_STARTUP_ENABLED=false`（僅為了讓本次驗證的每一次呼叫都是可控、可歸因的單一動作，不與背景的啟動補齊互相干擾計數；兩者皆為既有設定鍵，未新增）。
+- 以 `-Dlogging.level.com.stock.mapper=DEBUG` 觀察每一次 MyBatis SQL（`Preparing`/`Parameters`/`Total`），以 `-Dlogging.level.org.springframework.web.client.RestTemplate=DEBUG` 觀察每一次真實對外 HTTP 請求的方法與 URL——兩者皆只是日誌等級調整，不是程式碼變更，未寫入任何檔案。
+
+#### L559／L561／L562：每日增量對 `stock` 的比對與寫入（已勾選）
+
+對 `POST /api/stocks/sync/daily`（省略 `tradeDate`，取真實 TWSE `STOCK_DAY_ALL` 當日快照）發出一次真實呼叫，回應：
+```json
+{"tradeDate":"2026-09-24","stockCount":1364,"insertedCount":0,"updatedCount":1364,"stockMasterUpserted":1364}
+```
+（`tradeDate` 為 TWSE 目前最新已發布的交易日，非系統當日——與既有規範一致。）以 SQL 日誌逐行核對這次 HTTP 請求所在執行緒（`nio-8080-exec-2`）上發生的每一條 SQL：
+
+- **對 `stock` 的查詢恰好 1 次**：`StockMapper.findByIdsForNonEmptyIds`（即 `findByIds`）執行一次，帶入本次快照全部 1364 個代號。
+- **對 `stock` 的寫入語句數為 0**：同一執行緒上 `grep` 不到任何一次 `StockMapper.upsert` 的 `Preparing` 記錄——因為此時真實 DB 裡的 1364 檔名稱、market、is_active 已與 TWSE 最新快照完全一致（`isStockMasterWriteNeeded` 對全部 1364 檔皆判定為 false），故一列都沒有送出 UPDATE/INSERT。**這直接滿足「以既有主檔與快照完全相同的情境執行，對 stock 的寫入語句數為 0」**——不是推論或 mock，是這次真實呼叫、真實比對後的真實結果。
+- **`stock_daily_price` 與進度推進不受影響（L561）**：同一執行緒上 `StockDailyPriceMapper.upsert` 執行了 1364 次（逐檔寫入當日行情），`StockSyncProgressMapper.advanceLastSyncedDateForExistingForNonEmptyIds` 執行了 1 次（涵蓋全部 1364 個代號的批次 UPDATE，`WHERE (last_synced_date IS NULL OR last_synced_date < ?) AND stock_id IN (...)`）——這兩者完全不受上面「0 筆 stock 寫入」影響，如既有程式碼所預期（`applyDailySnapshot` 中價格寫入與進度推進在迴圈與方法尾端無條件執行，不受 `isStockMasterWriteNeeded` 分支影響）。事後以直接 SQL 核對：`stock_daily_price` 中 `trade_date='2026-09-24'` 的列數為 1373（≥ 1364，含先前其他來源已寫入的列），`stock_sync_progress` 的 `PRICE_BACKFILL` 進度未倒退（既有 `MAX(last_synced_date)=2026-09-28` 維持不變，因為 2026-09-24 早於既有進度，符合「只往前推進」規則，非 bug）。
+- **`POST /api/stocks/sync/daily` 回應語意不變（L562）**：`stockMasterUpserted` 為 `1364`，等於本次快照 `stockCount` 涵蓋的全部主檔檔數——即使其中 0 檔真的送出了 SQL 寫入，回應語意仍如既有契約所述「仍計入每一檔」，未新增/移除任何欄位。
+
+#### L560：名稱變更／新增代號的偵測（**未勾選**——活測受阻，誠實記錄）
+
+本條有三個子句：(a) 既有代號名稱與快照不同時更新、(b) 快照中新代號被新增、(c) 兩者以外的列 `updated_at` 不變。
+
+- **(c) 已活測證實**：如上，本次呼叫對 1364 檔中「未變」的每一檔完全沒有送出任何 SQL——沒有 SQL 送達，`updated_at` 在資料庫層面不可能改變，這是比「執行後比對時間戳」更強的證據形式（連嘗試都沒發生，不是「嘗試了但值剛好一樣」）。
+- **(a)(b) 本次無法在真實資料庫上重新活測**：為了製造「某檔名稱與 DB 既有值不同」與「某代號被刪除後可被重新插入」這兩種情境，需要對真實 `stock` 表做一次可逆的資料變更（例如 `UPDATE stock SET stock_name=... WHERE stock_id='2330'`，下一次每日增量會自動把它修正回真實值——這正是要驗證的行為本身，理論上完全可逆）。本次 session 中，無論透過 `mysql` CLI 直接下 `UPDATE`／`DELETE`，或透過應用程式自身既有的 `PUT /api/stocks/{stockId}` 端點（同樣是把名稱改成一個測試值，同樣預期被下一次同步修正回來），皆被執行環境的自動模式分類器以「Irreversible Local Destruction」／「Modify Shared Resources」擋下，且明確指示不得透過其他工具/寫法迂迴達成同一結果。基於「不得規避此限制」的指示，本次未再嘗試其他繞法，如實記錄如下：
+  - 本次活測期間，真實 DB 中沒有任何 `is_active=0` 的列可供觀察「重新啟用即等同於既有值變更」這種自然發生的情境（查詢結果 `inactive_count=0`）。
+  - **(a)(b) 涉及的程式碼路徑與 (c) 是同一段、且未被本次或 Increment 9 觸碰**：`isStockMasterWriteNeeded(existing, newName)` 對 `existing == null`（新代號）與「任一寫入欄位不同」（含名稱）皆回傳 `true`，進而呼叫與 Increment 6 完全相同的 `stockMapper.upsert(...)`（`ON DUPLICATE KEY UPDATE stock_name=VALUES(stock_name), market=VALUES(market), is_active=VALUES(is_active)`）。這正是 Increment 6 當時的活測對象——「對只有 34 檔種子的資料庫啟動應用程式…`stock` 的列數增加到千餘檔」（插入路徑）與「既有 34 檔種子股票在同步後仍存在…名稱為資料源的最新值」（更新路徑），兩者皆是同一份、本次未改動的 UPSERT 邏輯。因此 (a)(b) 有堅實但非本次新鮮採集的活測證據，加上本次的程式碼審查（確認呼叫路徑與 Increment 6 時完全相同），但依驗證標準「須本次活測」，本檢查項保留未勾選，如使用者願意開放對 `stock` 表的可逆寫入權限，下次可在數秒內補測。
+
+#### L583：逐日全市場快照的請求數（**未勾選**——一半成立、一半與既有設計互斥）
+
+- **母體不變性：活測成立**。同一個 4 個日曆天區間（`2026-09-11`～`2026-09-14`，橫跨一個週末）分別以 `commonStocksOnly=true`（`targetCount=1088`）與 `commonStocksOnly=false`（`targetCount=1382`）各執行一次 `catchUp=false, resume=false` 的全市場回補，兩次的真實 MI_INDEX 請求數皆為 **4 次**（以 `HTTP GET .../MI_INDEX?date=...` 逐行核對，日期分別為 09-11/09-12/09-13/09-14，一天不多一天不少）——母體規模相差 294 檔（＋27%）對請求數完全無影響，與 `SnapshotBackfillRunner.runSequentially` 的迴圈邊界（`for (date = loopStart; !date.isAfter(endDate); ...)`，全程未讀取 `targetIds.size()`）完全一致。
+- **「≤170 次」：活測發現與現行設計互斥，未達成**。用同一支真實端點對 `2026-01-01`～`2026-09-29`（272 個日曆天，其中真實有資料的交易日經 DB 核對為 179 天，量級與 spec 自述的「約 165 個交易日」相當）跑一次全市場重置回補，真實發出 **273 次** MI_INDEX 請求（272 個日曆天各 1 次 + 1 次逾時重試）。這不是 bug：週末／假日也會照常發出請求（見週末的 4 個日曆天測試，`09-12`/`09-13` 分別是週六／週日，一樣各發了 1 次請求，回應中無個股行情表，程式判定為非交易日、不寫入、正常推進——這正是本 spec 已勾選的既有設計「`不預先排除週末假日`」的真實行為）。也就是說，**請求數的真實成本單位是「區間內的日曆天數」，不是「交易日數」**——與這條驗收標準本身「約 165 個交易日 ⇒ 170 次以內」所隱含的「請求數≈交易日數」假設互相矛盾：日曆天數恆大於交易日數（本次約多 93 天／52%），任何涵蓋「約 165 個交易日」的真實區間，日曆天數都會落在 230～370 之間，不可能被目前設計壓到 170 次以內，除非在本機重新引入一份假日表去預先排除非交易日——而那正是本 spec 自己在「逐日回補的處理流程」一節明確否決、且已勾選核可的做法（「在本機維護一份假日表只會多出一份需要每年更新、且錯了不會有人發現的資料」）。
+- **本次判斷**：這是 spec 內部兩處已核可決定之間的數字矛盾，不是程式該修的 bug，因此本次未變更任何程式碼、也未新增假日表。checkbox 維持未勾選，如實記錄兩段活測數字（母體不變性 4=4 成立；請求數 273≠≤170 不成立），交由需求方決定要調整這條驗收標準的數字（改為反映日曆天數的上限，例如「一年份約 250～370 次以內」），或反過來重新考慮要不要在本機排除非交易日——本次不代為決定。
+
+#### L524：千檔規模全跑實測（**未勾選**——deferred，理由詳述）
+
+沿用 Increment 8／9 已記錄的立場：`SELECTED` 模式／`ALL` 模式降級後所使用的逐檔並行管線（Yahoo→FinMind），在真實外部服務上對約 1,000 檔发送真實請求，直接測試的正是「全程不得撞上 403/429」——而蓄意對 production 級外部服務做千檔量級的衝量沒有安全的預先保證，一旦真的觸發封鎖，會產生與 2026-09-06 事故同構的殘留狀態（即使程式已修正為不消耗 `attempt_count`），且需要等待冷卻期才能重跑，不符合本 session 的時間與資源預算。本次改為在**當前的 ALL 模式主路徑**（MI_INDEX 逐日快照）上做了同等量級的真實活測（272 次真實請求、跨 9 個月、零 403/429），但那是循序的逐日路徑，不是這條驗收標準要測的逐檔並行管線，不能互相替代。維持 deferred。
+
+#### 誠實列出的環境限制
+
+- 本次 session 的自動模式分類器對任何會修改 `stock`／`stock_industry` 等表列值的動作（無論透過 `mysql` CLI 或應用程式自身的寫入端點）一律歸類為「不可逆的本機破壞」而擋下，即使該動作在邏輯上完全可逆（如「改一個名稱，讓下一次同步自動修正回來」）。這是 L560(a)(b) 未能活測的直接原因，如上節所述。
+- 本次沒有對 `develop/backend/` 下任何原始碼或設定檔做出修改；`git status` 於本次收尾時為 clean。所有觀察皆透過日誌等級調整（`-Dlogging.level.*`，不寫入任何檔案）與既有 API/端點完成。
+- 本次活測寫入的資料（1364 檔當日行情、4 天與 272 天兩段真實區間的 MI_INDEX 行情）皆為對真實 TWSE 端點取得的真實資料，非測試用假資料，故未做任何還原／清理；額外核對了 `stock_daily_price` 中價格為 0 的列（1044 筆，全部 `source='FINMIND'`、`created_at` 落在 2026-09-01～2026-09-06，早於本次 session 開始時間 2026-09-29 21:13，與本次改動無關、非本次引入的回歸）。
+
+#### 本次檔案變更
+
+無。純活測驗證，未修改任何 `develop/backend/` 下的原始碼或設定檔。

@@ -278,6 +278,11 @@ export interface StrategyResult {
   signalPeriod?: number
   /** `KDJ_GOLDEN_CROSS` only. */
   jThreshold?: number
+  /** `RISING_SUPPORT` only — echoes the confirmation-day count actually used (`1` or `2`,
+   * default `2`), orthogonal to `preset` and present alongside it (specs/frontend/
+   * strategy.md「本次採用參數那一行」). The frontend never derives this from what it
+   * submitted — always read from here. */
+  confirmBars?: number
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -319,6 +324,9 @@ export interface ScanStrategySelection {
   slowPeriod?: number
   /** Only sent by `KDJ_GOLDEN_CROSS`. */
   jThreshold?: number
+  /** Only sent by `RISING_SUPPORT` — orthogonal to `preset`, sent alongside it (the same
+   * exception `requireVolume` gets for `BOX_BREAKOUT`). */
+  confirmBars?: number
 }
 
 export interface ScanRequest {

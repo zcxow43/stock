@@ -126,6 +126,15 @@ public class BoxBreakoutDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after D (specs/backend/strategy-scan.md, "進場日（buyDate）"
+        // table: confirmation-completion day = signalDate for BOX_BREAKOUT). For confirmBars=2
+        // (STRICT) this is the same D+1 bar the pattern's own step 5 already needs to confirm above
+        // the box top — the documented residual look-ahead ("已知限制") — so 1 covers both needs.
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         Params params = presetParams.get(selection.getPreset());
@@ -145,8 +154,9 @@ public class BoxBreakoutDetector implements PatternDetector {
         }
 
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         BoxBreakoutDetailDto lastDetail = null;
-        boolean pendingConfirm = false;
+        boolean anyUnresolvedMatch = false;
 
         for (int i = preCount; i < bars.size(); i++) {
             StockDailyPrice d = bars.get(i);
@@ -193,17 +203,26 @@ public class BoxBreakoutDetector implements PatternDetector {
                 }
             }
 
-            // 5. confirm bars
+            // 5. confirm bars — D+1 existing is required for STRICT's own confirmation step; a
+            // missing D+1 here means this D is unresolved (pendingConfirm), not a non-match.
             if (params.confirmBars >= 2) {
                 if (i + 1 >= bars.size()) {
-                    // D is the last trading day in range with no next-day data yet.
-                    pendingConfirm = true;
+                    anyUnresolvedMatch = true;
                     continue;
                 }
                 StockDailyPrice next = bars.get(i + 1);
                 if (next.getClosePrice().compareTo(boxHigh) <= 0) {
                     continue;
                 }
+            }
+
+            // buyDate: the trading day after D — for confirmBars=2 this is the very bar step 5 just
+            // used to confirm (the documented residual look-ahead); for confirmBars=1 it is a fresh
+            // look-ahead never checked above, so a missing next day here is likewise unresolved.
+            LocalDate buyDate = nextTradingDate(bars, i);
+            if (buyDate == null) {
+                anyUnresolvedMatch = true;
+                continue;
             }
 
             BigDecimal breakoutPercentActual = d.getClosePrice().subtract(boxHigh)
@@ -215,6 +234,7 @@ public class BoxBreakoutDetector implements PatternDetector {
                             .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
             lastSignalDate = d.getTradeDate();
+            lastBuyDate = buyDate;
             lastDetail = new BoxBreakoutDetailDto(
                     boxHigh.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     boxLow.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
@@ -224,9 +244,9 @@ public class BoxBreakoutDetector implements PatternDetector {
         }
 
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        return PatternDetectionOutcome.noMatch(pendingConfirm);
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     @Override

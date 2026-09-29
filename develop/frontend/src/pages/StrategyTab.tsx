@@ -414,6 +414,24 @@ const ONE_DAY_WINDOW_HINT: Record<string, string> = {
   dropDays: '下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中',
 }
 
+/** 待確認行文案 — 十個型態都可能出現，每個型態說明「已經發生了什麼」，一律以「次一交易日
+ * 尚未到」收尾（箱型突破／上漲支撐另外還要等確認日，因此是「確認日或次一交易日尚未到」）。
+ * 這段文字本身是逐型態固定措辭（specs/frontend/strategy.md「待確認：文案逐型態…」），因此
+ * 以型態 `code` 為鍵是這段文案唯一合理的資料形狀——它不是「要不要畫這一行」的判斷（那一律由
+ * `result.pendingConfirm.length > 0` 決定，十個型態一致），只是每個型態各自的固定用語。 */
+const PENDING_CONFIRM_LABEL: Record<StrategyCode, string> = {
+  BOX_BREAKOUT: '已突破，但確認日或次一交易日尚未到',
+  HIGHER_LOWS: '已成立，但次一交易日尚未到',
+  RISING_SUPPORT: '已上漲，但確認日或次一交易日尚未到',
+  REBOUND: '已反彈，但次一交易日尚未到',
+  CUMULATIVE_RISE: '已達標，但次一交易日尚未到',
+  INSTITUTIONAL_NET_RATIO: '已達標，但次一交易日尚未到',
+  INSTITUTIONAL_CONSECUTIVE_BUY: '已達標，但次一交易日尚未到',
+  INSTITUTIONAL_STRENGTH_RANK: '已達標，但次一交易日尚未到',
+  MACD_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
+  KDJ_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
+}
+
 /** The three 法人籌碼 strategy codes — the only place besides `formatStrategyParams`/
  * `renderScanNotes` that names them individually, both for copy that genuinely differs per
  * strategy (「資料不足」／「待確認」wording) and never for deciding what a *card* looks like
@@ -1141,34 +1159,39 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const toggleStrategy = (code: StrategyCode) => {
     setSelectionOrder((order) => (order.includes(code) ? order.filter((c) => c !== code) : [...order, code]))
     const strategy = catalog.find((s) => s.code === code)
+    // `params`／`paramGroups` initialization applies to ANY card that declares them,
+    // regardless of whether the card ALSO has `presets` — 「params 同樣與卡片形狀無關」.
+    // Today this only adds anything for RISING_SUPPORT (`confirmBars`) among the
+    // presets-driven cards; HIGHER_LOWS/BOX_BREOUT declare no `params` so these loops are
+    // no-ops for them, never because of a branch keyed on `presets`/`code`.
+    setParamInputs((inputs) => {
+      if (inputs[code] !== undefined) return inputs
+      const values: Record<string, string> = {}
+      for (const param of strategy?.params ?? []) {
+        if (param.type === 'multiSelect') continue
+        values[param.code] = String(param.default)
+      }
+      return { ...inputs, [code]: values }
+    })
+    setMultiSelectInputs((inputs) => {
+      if (inputs[code] !== undefined) return inputs
+      const values: Record<string, string[]> = {}
+      for (const param of strategy?.params ?? []) {
+        if (param.type !== 'multiSelect') continue
+        values[param.code] = Array.isArray(param.default) ? [...param.default] : []
+      }
+      return { ...inputs, [code]: values }
+    })
+    setGroupEnabled((state) => {
+      if (state[code] !== undefined) return state
+      const values: Record<string, boolean> = {}
+      for (const group of strategy?.paramGroups ?? []) values[group.code] = group.default
+      return { ...state, [code]: values }
+    })
     if (isParamsDriven(strategy)) {
       // No sensitivity to pick a preset from — every param is populated once from its own
-      // `default` and is afterwards entirely in the user's hands (no refill mechanism,
-      // unlike changePreset below).
-      setParamInputs((inputs) => {
-        if (inputs[code] !== undefined) return inputs
-        const values: Record<string, string> = {}
-        for (const param of strategy?.params ?? []) {
-          if (param.type === 'multiSelect') continue
-          values[param.code] = String(param.default)
-        }
-        return { ...inputs, [code]: values }
-      })
-      setMultiSelectInputs((inputs) => {
-        if (inputs[code] !== undefined) return inputs
-        const values: Record<string, string[]> = {}
-        for (const param of strategy?.params ?? []) {
-          if (param.type !== 'multiSelect') continue
-          values[param.code] = Array.isArray(param.default) ? [...param.default] : []
-        }
-        return { ...inputs, [code]: values }
-      })
-      setGroupEnabled((state) => {
-        if (state[code] !== undefined) return state
-        const values: Record<string, boolean> = {}
-        for (const group of strategy?.paramGroups ?? []) values[group.code] = group.default
-        return { ...state, [code]: values }
-      })
+      // `default` (above) and is afterwards entirely in the user's hands (no refill
+      // mechanism, unlike changePreset below).
       return
     }
     setSelectedPresets((presets) => (presets[code] ? presets : { ...presets, [code]: 'STANDARD' }))
@@ -1291,8 +1314,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       }
       // 有靈敏度的卡片同樣可能帶 paramGroups（目前只有箱型突破的 volume）— 送出時一律帶
       // `require<Group>`，欄位名由群組自身的 `code` 推導，與 params 驅動的卡片走同一份
-      // `requireFieldName`，不得為此新增任何以策略或群組 `code` 寫死的分支。
+      // `requireFieldName`，不得為此新增任何以策略或群組 `code` 寫死的分支。它也同樣可能帶
+      // 未分組的 `params`（目前只有上漲支撐的 confirmBars）— 與 params 驅動的卡片走同一份
+      // 迴圈，一律隨 preset 一起送出，不判斷策略 `code`。
       const groupState = groupEnabled[code] ?? {}
+      const values = paramInputs[code] ?? {}
       const selection: ScanStrategySelection = {
         code,
         preset: selectedPresets[code] ?? 'STANDARD',
@@ -1303,6 +1329,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       const bag = selection as unknown as Record<string, number | boolean | string[] | PresetCode>
       for (const group of strategy?.paramGroups ?? []) {
         bag[requireFieldName(group.code)] = groupState[group.code] ?? group.default
+      }
+      for (const param of strategy?.params ?? []) {
+        if (param.type === 'multiSelect') continue
+        if (!isGroupOn(strategy, groupEnabled, param)) continue
+        bag[param.code] = Number(values[param.code] ?? param.default)
       }
       return selection
     }),
@@ -1328,6 +1359,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_FAST_PERIOD: 'fastPeriod',
     INVALID_SLOW_PERIOD: 'slowPeriod',
     INVALID_J_THRESHOLD: 'jThreshold',
+    INVALID_CONFIRM_BARS: 'confirmBars',
   }
 
   /** 回測成功當下的四步初始化（「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報
@@ -1565,8 +1597,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return isRisePercentInputInvalid(risePercentInputs[code] ?? '', SENSITIVITY_RISE_PERCENT_RANGE)
   })
   const hasInvalidParams = selectionOrder.some((code) => {
+    // Checked for ANY selected strategy's own `params`, regardless of whether the card
+    // also has `presets` — a presets-driven card with an empty `params` array (今 底底高／
+    // 箱型突破) simply has nothing for `.some` below to find invalid, never because of a
+    // branch keyed on `presets`/`code`.
     const strategy = catalog.find((s) => s.code === code)
-    if (!isParamsDriven(strategy)) return false
     const values = paramInputs[code] ?? {}
     const multiValues = multiSelectInputs[code] ?? {}
     const rangeOrSelectionInvalid = (strategy?.params ?? []).some((param) => {
@@ -1716,10 +1751,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const formatStrategyParams = (result: StrategyResult): string => {
     const name = strategyName(result.strategy)
     if (result.preset !== undefined) {
-      // 箱型突破是唯一會與 preset 並存回報 requireVolume 的型態；其餘型態此欄位一律未回，
-      // suffix 因此天然只在箱型突破的回應上出現，不需要另外檢查 result.strategy。
-      const suffix = result.requireVolume === false ? '・不看量增' : ''
-      return `${name}（${presetName(result.strategy, result.preset as PresetCode)}${suffix}）`
+      // 箱型突破是唯一會與 preset 並存回報 requireVolume 的型態、上漲支撐是唯一會並存回報
+      // confirmBars 的型態；其餘型態這兩個欄位一律未回，兩段 suffix 因此天然只在各自的回應
+      // 上出現，不需要另外檢查 result.strategy。
+      const volumeSuffix = result.requireVolume === false ? '・不看量增' : ''
+      const confirmBarsSuffix = result.confirmBars !== undefined ? `・確認 ${result.confirmBars} 日` : ''
+      return `${name}（${presetName(result.strategy, result.preset as PresetCode)}${volumeSuffix}${confirmBarsSuffix}）`
     }
     if (result.days !== undefined) {
       return `${name}（${result.days} 日）`
@@ -2003,23 +2040,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         )
       }
       if (result.pendingConfirm.length > 0) {
-        const pendingLabel =
-          result.strategy === 'BOX_BREAKOUT'
-            ? '已突破，但確認日尚未到'
-            : result.strategy === 'RISING_SUPPORT'
-              ? '已上漲，但後兩日的確認尚未完成'
-              : isInstitutional
-                ? '已達標，但次一交易日尚未到'
-                : null
-        if (pendingLabel) {
-          notes.push(
-            <ExpandableNote
-              key={`${result.strategy}-pending`}
-              label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔${pendingLabel}`}
-              ids={result.pendingConfirm}
-            />,
-          )
-        }
+        const pendingLabel = PENDING_CONFIRM_LABEL[result.strategy]
+        notes.push(
+          <ExpandableNote
+            key={`${result.strategy}-pending`}
+            label={`${strategyName(result.strategy)}：另有 ${result.pendingConfirm.length} 檔${pendingLabel}`}
+            ids={result.pendingConfirm}
+          />,
+        )
       }
       return notes
     })
@@ -2626,10 +2654,76 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
             {catalog.map((strategy) => {
               const selected = selectionOrder.includes(strategy.code)
               const paramsDriven = isParamsDriven(strategy)
+              // Shared by BOTH card shapes — `params`/`paramGroups` decide what to render
+              // independently of whether this card also has `presets`
+              // (specs/frontend/strategy.md「params 同樣與卡片形狀無關」). Today only
+              // RISING_SUPPORT (`confirmBars`) uses this from the presets-driven branch.
+              const values = paramInputs[strategy.code] ?? {}
+              const multiValues = multiSelectInputs[strategy.code] ?? {}
+
+              const renderParamRow = (param: StrategyParam) => {
+                const groupOn = isGroupOn(strategy, groupEnabled, param)
+                const disabled = !selected || !groupOn
+
+                // 複選參數（type: "multiSelect"）— one checkbox per `options` entry,
+                // decided purely by `param.type`, never by `param.code`/`strategy.code`
+                // (specs/frontend/strategy.md「複選參數」).
+                if (param.type === 'multiSelect') {
+                  const options = param.options ?? []
+                  const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
+                  const invalid = selected && groupOn && selectedCodes.length < (param.minSelected ?? 0)
+                  return (
+                    <div key={param.code} className="st-param-block">
+                      <div className="st-multiselect-row">
+                        <span className="st-param-label">{param.name}</span>
+                        {options.map((option) => (
+                          <label key={option.code} className="st-multiselect-option">
+                            <input
+                              type="checkbox"
+                              disabled={disabled}
+                              checked={selectedCodes.includes(option.code)}
+                              onChange={() => toggleMultiSelectOption(strategy.code, param, option.code)}
+                            />
+                            {option.name}
+                          </label>
+                        ))}
+                      </div>
+                      {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
+                    </div>
+                  )
+                }
+
+                const value = values[param.code] ?? ''
+                const invalid = selected && groupOn && isParamInputInvalid(value, param)
+                return (
+                  <div key={param.code} className="st-param-block">
+                    <div className="st-param-input-row">
+                      <label htmlFor={`st-param-${strategy.code}-${param.code}`} className="st-param-label">
+                        {param.name}
+                      </label>
+                      <input
+                        id={`st-param-${strategy.code}-${param.code}`}
+                        type="number"
+                        className="st-param-input"
+                        disabled={disabled}
+                        min={param.min}
+                        max={param.max}
+                        step={param.step}
+                        value={value}
+                        onChange={(e) => changeParamInput(strategy.code, param.code, e.target.value)}
+                      />
+                      {/* `unit` empty string (今為 KDJ 黃金交叉的 jThreshold) draws no
+                          suffix box at all — not an empty one — per specs/frontend/
+                          strategy.md「無後綴（unit 為空字串，不畫空白後綴框）」. */}
+                      {param.unit ? <span className="st-param-suffix">{param.unit}</span> : null}
+                    </div>
+                    {param.unit === '日' ? <p className="st-param-hint">回看的交易日數，不含週末與休市日</p> : null}
+                    {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
+                  </div>
+                )
+              }
 
               if (paramsDriven) {
-                const values = paramInputs[strategy.code] ?? {}
-                const multiValues = multiSelectInputs[strategy.code] ?? {}
                 const groups = strategy.paramGroups ?? []
                 const params = strategy.params ?? []
                 const ungrouped = params.filter((p) => !p.group)
@@ -2663,68 +2757,6 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 // side is itself out of range (range error takes priority, shown per-field
                 // by `renderParamRow` above).
                 const lessThanMessage = selected ? lessThanViolationMessage(strategy, values) : null
-
-                const renderParamRow = (param: StrategyParam) => {
-                  const groupOn = isGroupOn(strategy, groupEnabled, param)
-                  const disabled = !selected || !groupOn
-
-                  // 複選參數（type: "multiSelect"）— one checkbox per `options` entry,
-                  // decided purely by `param.type`, never by `param.code`/`strategy.code`
-                  // (specs/frontend/strategy.md「複選參數」).
-                  if (param.type === 'multiSelect') {
-                    const options = param.options ?? []
-                    const selectedCodes = multiValues[param.code] ?? (Array.isArray(param.default) ? param.default : [])
-                    const invalid = selected && groupOn && selectedCodes.length < (param.minSelected ?? 0)
-                    return (
-                      <div key={param.code} className="st-param-block">
-                        <div className="st-multiselect-row">
-                          <span className="st-param-label">{param.name}</span>
-                          {options.map((option) => (
-                            <label key={option.code} className="st-multiselect-option">
-                              <input
-                                type="checkbox"
-                                disabled={disabled}
-                                checked={selectedCodes.includes(option.code)}
-                                onChange={() => toggleMultiSelectOption(strategy.code, param, option.code)}
-                              />
-                              {option.name}
-                            </label>
-                          ))}
-                        </div>
-                        {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
-                      </div>
-                    )
-                  }
-
-                  const value = values[param.code] ?? ''
-                  const invalid = selected && groupOn && isParamInputInvalid(value, param)
-                  return (
-                    <div key={param.code} className="st-param-block">
-                      <div className="st-param-input-row">
-                        <label htmlFor={`st-param-${strategy.code}-${param.code}`} className="st-param-label">
-                          {param.name}
-                        </label>
-                        <input
-                          id={`st-param-${strategy.code}-${param.code}`}
-                          type="number"
-                          className="st-param-input"
-                          disabled={disabled}
-                          min={param.min}
-                          max={param.max}
-                          step={param.step}
-                          value={value}
-                          onChange={(e) => changeParamInput(strategy.code, param.code, e.target.value)}
-                        />
-                        {/* `unit` empty string (今為 KDJ 黃金交叉的 jThreshold) draws no
-                            suffix box at all — not an empty one — per specs/frontend/
-                            strategy.md「無後綴（unit 為空字串，不畫空白後綴框）」. */}
-                        {param.unit ? <span className="st-param-suffix">{param.unit}</span> : null}
-                      </div>
-                      {param.unit === '日' ? <p className="st-param-hint">回看的交易日數，不含週末與休市日</p> : null}
-                      {invalid ? <div className="st-inline-error">{paramErrorMessage(param)}</div> : null}
-                    </div>
-                  )
-                }
 
                 return (
                   <div
@@ -2815,6 +2847,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                       漲幅門檻需介於 {SENSITIVITY_RISE_PERCENT_RANGE.min} ~ {SENSITIVITY_RISE_PERCENT_RANGE.max}
                     </div>
                   ) : null}
+                  {/* presets 非空的卡片同樣可能帶未分組的 `params`（目前只有上漲支撐的
+                      confirmBars）——畫法與 params 驅動的卡片共用同一個 `renderParamRow`，
+                      完全不分策略、不判斷「有沒有 presets」（specs/frontend/strategy.md
+                      「params 同樣與卡片形狀無關」）。底底高／箱型突破的 `params` 為空陣列，
+                      這裡自然不多畫任何輸入。 */}
+                  {(strategy.params ?? []).filter((p) => !p.group).map(renderParamRow)}
                   {/* 目前只有箱型突破的 volume 群組會落在這裡（presets 非空的卡片）——畫法
                       完全不分策略，依 paramGroups 逐筆畫出即可（specs/frontend/strategy.md
                       「選用參數群組...與卡片形狀無關」）。這一節的群組目前恆不轄任何

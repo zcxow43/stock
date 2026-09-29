@@ -28,9 +28,9 @@ import java.util.List;
  * <p>For each trading day D within [startDate, endDate] that has at least 100 trading days of
  * history strictly before it (within the batched lookback, capped at
  * {@link StockDailyIndicator#WARMUP_TRADING_DAYS}): a golden cross is D-1's OSC (DIF-DEA) being
- * &lt;= 0 and D's OSC being &gt; 0. `buyDate` always equals `signalDate` (no confirmation window),
- * so {@link #requiredConfirmTradingDaysAfterEndDate} stays at its default of 0 and pendingConfirm
- * is always empty.
+ * &lt;= 0 and D's OSC being &gt; 0. `buyDate` is the trading day after D (confirmation-completion
+ * day = signalDate) — see specs/backend/strategy-scan.md, "進場日（buyDate）"; a D landing on the
+ * stock's latest available bar produces pendingConfirm instead of a hit.
  */
 @Component
 @Order(9)
@@ -168,6 +168,12 @@ public class MacdGoldenCrossDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after D — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         if (bars.isEmpty()) {
@@ -181,7 +187,9 @@ public class MacdGoldenCrossDetector implements PatternDetector {
 
         boolean anyJudged = false;
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         MacdGoldenCrossDetailDto lastDetail = null;
+        boolean anyUnresolvedMatch = false;
 
         for (int i = MIN_TRADING_DAYS_BEFORE_D; i < bars.size(); i++) {
             LocalDate tradeDate = bars.get(i).getTradeDate();
@@ -196,7 +204,15 @@ public class MacdGoldenCrossDetector implements PatternDetector {
             BigDecimal prevOsc = indicatorRows.get(i - 1).getOsc();
             BigDecimal osc = indicatorRows.get(i).getOsc();
             if (prevOsc.compareTo(BigDecimal.ZERO) <= 0 && osc.compareTo(BigDecimal.ZERO) > 0) {
+                // buyDate: the trading day after D; missing means this cross is unresolved
+                // (pendingConfirm), not a non-match — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+                LocalDate buyDate = nextTradingDate(bars, i);
+                if (buyDate == null) {
+                    anyUnresolvedMatch = true;
+                    continue;
+                }
                 lastSignalDate = tradeDate;
+                lastBuyDate = buyDate;
                 lastDetail = new MacdGoldenCrossDetailDto(
                         indicatorRows.get(i).getDif().setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         indicatorRows.get(i).getDea().setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
@@ -209,10 +225,9 @@ public class MacdGoldenCrossDetector implements PatternDetector {
             return PatternDetectionOutcome.insufficientData();
         }
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        // Never produces pendingConfirm — buyDate always equals signalDate, no confirmation window.
-        return PatternDetectionOutcome.noMatch(false);
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     @Override

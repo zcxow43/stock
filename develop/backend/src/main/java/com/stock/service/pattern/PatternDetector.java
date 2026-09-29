@@ -206,6 +206,29 @@ public interface PatternDetector {
         return false;
     }
 
+    /**
+     * Whether this detector accepts the request's `confirmBars` field — true only for
+     * RISING_SUPPORT. Orthogonal to its preset for the same reason `requireVolume` is orthogonal to
+     * BOX_BREAKOUT's — see specs/backend/strategy-scan.md, "上漲支撐的確認長度可選（confirmBars）".
+     */
+    default boolean acceptsConfirmBars() {
+        return false;
+    }
+
+    /** Inclusive bounds/default for `confirmBars` — meaningful only when {@link #acceptsConfirmBars()}
+     *  is true; see specs/backend/strategy-scan.md, "上漲支撐". */
+    default int getConfirmBarsMin() {
+        return 0;
+    }
+
+    default int getConfirmBarsMax() {
+        return 0;
+    }
+
+    default int getConfirmBarsDefault() {
+        return 0;
+    }
+
     /** Inclusive bounds/default for `fastPeriod` — meaningful only when {@link #acceptsFastPeriod()}
      *  is true; see specs/backend/strategy-scan.md, "MACD 黃金交叉". */
     default int getFastPeriodMin() {
@@ -259,15 +282,17 @@ public interface PatternDetector {
     int requiredLookbackTradingDays(StrategySelectionDto selection);
 
     /**
-     * Trading days of confirmation data required strictly *after* the scan's endDate for this
-     * preset — 0 (the default) when the pattern needs nothing beyond endDate. Drives whether the
-     * batched price read also fetches a small window after endDate, e.g. RISING_SUPPORT's D+1/D+2
-     * (specs/backend/strategy-scan.md, "上漲支撐的確認資料取自 endDate 之後"). Fixed per pattern rather than
-     * per preset when the pattern's own rule says the confirmation length does not vary by sensitivity.
-     * REBOUND/CUMULATIVE_RISE never override this — they do not confirm and so never produce
-     * pendingConfirm (specs/backend/strategy-scan.md, "反彈與累積上漲一律不產生 pendingConfirm").
+     * Trading days of data required strictly *after* the scan's endDate for this selection — 0 (the
+     * default) when the pattern needs nothing beyond endDate. Drives whether the batched price read
+     * also fetches a small window after endDate. Every pattern's `buyDate` is the next trading day
+     * after its own confirmation-completion day (specs/backend/strategy-scan.md, "進場日（buyDate）"),
+     * so every detector needs at least 1 trading day beyond endDate to resolve `buyDate` for a hit
+     * whose confirmation-completion day lands exactly on endDate; RISING_SUPPORT needs
+     * `confirmBars + 1` (its own confirmation window plus the entry day after it) — see
+     * "上漲支撐的確認資料取自 endDate 之後". Takes the whole selection (not just the preset code) because
+     * RISING_SUPPORT's `confirmBars` is a request-level field, orthogonal to preset.
      */
-    default int requiredConfirmTradingDaysAfterEndDate(String presetCode) {
+    default int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
         return 0;
     }
 
@@ -286,6 +311,19 @@ public interface PatternDetector {
      */
     PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                     StrategySelectionDto selection);
+
+    /**
+     * The next trading day's date after {@code bars.get(confirmationIndex)} — i.e. `buyDate`, per
+     * specs/backend/strategy-scan.md, "進場日（buyDate）": "下一個交易日" is always the adjacent list entry,
+     * never {@code date.plusDays(1)}, so a suspension gap is skipped automatically. Returns
+     * {@code null} when no such trading day exists yet (the confirmation-completion day is the last
+     * bar available), the caller's signal that this particular hit is unresolved and must not be
+     * reported until a later scan.
+     */
+    default LocalDate nextTradingDate(List<StockDailyPrice> bars, int confirmationIndex) {
+        int nextIndex = confirmationIndex + 1;
+        return nextIndex < bars.size() ? bars.get(nextIndex).getTradeDate() : null;
+    }
 
     /**
      * Populates the scan response's per-strategy header fields (`preset`, or `days`, or REBOUND's

@@ -46,12 +46,6 @@
             <version>8.0.33</version>
             <scope>runtime</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -66,17 +60,6 @@
                          deploying machine's default timezone. Belt-and-suspenders with the static
                          TimeZone.setDefault(...) in BackendApplication itself. -->
                     <jvmArguments>-Duser.timezone=Asia/Taipei</jvmArguments>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <!-- Same reasoning as above, for `mvn test`: forces every test JVM's default
-                         timezone to Asia/Taipei from process start, independent of the CI/dev
-                         machine's own timezone and of any class-loading order in the Spring test
-                         context. -->
-                    <argLine>-Duser.timezone=Asia/Taipei</argLine>
                 </configuration>
             </plugin>
         </plugins>

@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * POST /api/strategies/backtest — read-only, stateless recomputation of "buy-day close in,
+ * POST /api/strategies/backtest — read-only, stateless recomputation of "buy-day open in,
  * highest open out" per stock over stock_daily_price. Writes nothing and persists no result (see
  * specs/backend/strategy-backtest.md, Overview): every call recomputes from scratch.
  *
@@ -233,16 +233,18 @@ public class StrategyBacktestService {
     }
 
     /**
-     * The buy day's own close, or null when that stock has no row for that exact trade date
-     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 2) or when that row's close is not
+     * The buy day's own OPEN price, or null when that stock has no row for that exact trade date
+     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 2) or when that row's open is not
      * positive (case 3 — a 0 means the stock did not trade that day, not that it was worth 0; see
-     * "價格為 0 的日子不是行情"). Returning null for the 0 case is what keeps computeReturnPercent
-     * from dividing by zero.
+     * "價格為 0 的日子不是行情"). The check and the returned price are both the OPEN column — the
+     * close price is irrelevant here even when it is itself 0 or non-zero (specs/backend/
+     * strategy-backtest.md, "買進價改為買進日開盤價"). Returning null for the 0 case is what keeps
+     * computeReturnPercent from dividing by zero.
      */
     private BigDecimal findBuyPrice(List<StockDailyPrice> rows, LocalDate buyDate) {
         for (StockDailyPrice row : rows) {
             if (row.getTradeDate().equals(buyDate)) {
-                return isTradedPrice(row.getClosePrice()) ? row.getClosePrice() : null;
+                return isTradedPrice(row.getOpenPrice()) ? row.getOpenPrice() : null;
             }
         }
         return null;

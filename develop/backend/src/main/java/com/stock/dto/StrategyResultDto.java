@@ -24,9 +24,10 @@ import java.util.List;
  * KDJ_GOLDEN_CROSS echoes `jThreshold` — neither echoes `preset` — see specs/backend/
  * strategy-scan.md, "技術指標型態".
  *
- * <p>BOX_BREAKOUT is the one exception to "`preset` and a parameter field never coexist": it echoes
- * `requireVolume` (the value actually used, defaulted when omitted) alongside `preset`, since the
- * two are orthogonal — see "量能條件可整個關掉".
+ * <p>BOX_BREAKOUT and RISING_SUPPORT are the two exceptions to "`preset` and a parameter field never
+ * coexist": BOX_BREAKOUT echoes `requireVolume` and RISING_SUPPORT echoes `confirmBars` (both the
+ * value actually used, defaulted when omitted) alongside `preset`, since each is orthogonal to its
+ * own strategy's preset — see "量能條件可整個關掉" and "上漲支撐的確認長度可選（confirmBars）".
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StrategyResultDto {
@@ -34,6 +35,7 @@ public class StrategyResultDto {
     private String strategy;
     private String preset;
     private Boolean requireVolume;
+    private Integer confirmBars;
     private Integer days;
     private Boolean requireRise;
     private Integer dropDays;
@@ -80,6 +82,14 @@ public class StrategyResultDto {
 
     public void setRequireVolume(Boolean requireVolume) {
         this.requireVolume = requireVolume;
+    }
+
+    public Integer getConfirmBars() {
+        return confirmBars;
+    }
+
+    public void setConfirmBars(Integer confirmBars) {
+        this.confirmBars = confirmBars;
     }
 
     public Integer getDays() {

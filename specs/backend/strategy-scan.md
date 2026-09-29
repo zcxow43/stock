@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
 requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）＝**確認完成日的下一個交易日**，回測以該日開盤價買進：上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日；上漲支撐新增確認長度 confirmBars（1 或 2，預設 2，與靈敏度正交，目錄端點以 params 廣告）；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 為訊號日之後的下一個交易日（尚無下一個交易日時列入 pendingConfirm，與法人籌碼型態同一條規則）；箱型突破新增 requireVolume 開關（boolean，預設 true），為 false 時跳過量能判定，與靈敏度正交、不改動 volumeMultiple，目錄端點以 paramGroups 的 volume 一筆廣告，掃描回應同時回 preset 與 requireVolume"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion, stock-indicator-statistics]
@@ -906,7 +906,7 @@ Response `200`：
 - [x] `GET /api/strategies` 回傳五個策略：箱型突破、底底高、上漲支撐、反彈、累積上漲；有靈敏度的三個（箱型突破、底底高、上漲支撐）各三段，說明文字與本 spec 的參數表一致
 - [x] `CUMULATIVE_RISE` 條目 `presets` 為空陣列，並帶策略層級 `description` 與 `params`（`days`：預設 20、範圍 1～90、step 1；`risePercent`：預設 15、範圍 0～50、step 0.1）
 - [x] `REBOUND` 條目 `presets` 為空陣列，帶策略層級 `description`、`paramGroups`（一筆：`rise`，`default` 為 `true`）與四個 `params`：`dropDays`（預設 3、範圍 1～90、step 1）、`dropPercent`（預設 10、範圍 0～50、step 0.1）、`riseDays`（預設 1、範圍 1～90、step 1、`group` 為 `rise`）、`risePercent`（預設 5、範圍 0～50、step 0.1、`group` 為 `rise`）
-- [ ] 底底高／箱型突破兩個條目完全未變，`CUMULATIVE_RISE` 條目亦完全未變；上漲支撐條目的三段 `presets` 說明文字改為不含固定天數（「其後不跌破起漲收盤」），並新增 `params`：`confirmBars`（`name` 為「確認天數」、`unit` 為「日」、`default` `2`、`min` `1`、`max` `2`、`step` `1`）
+- [x] 底底高／箱型突破兩個條目完全未變，`CUMULATIVE_RISE` 條目亦完全未變；上漲支撐條目的三段 `presets` 說明文字改為不含固定天數（「其後不跌破起漲收盤」），並新增 `params`：`confirmBars`（`name` 為「確認天數」、`unit` 為「日」、`default` `2`、`min` `1`、`max` `2`、`step` `1`）
 
 ### 掃描共通行為
 - [x] `POST /api/strategies/scan` 省略 `startDate`／`endDate` 時，區間為「今日往前一個日曆月 ~ 今日」
@@ -954,17 +954,17 @@ Response `200`：
 - [x] 突破近期區間條件生效：D 漲幅達門檻但收盤未高於前 `lookback` 日全部收盤時不命中（以連漲趨勢中的一根大漲驗證）
 - [x] 漲幅門檻生效：漲幅 2.5% 的同一組資料在 `STANDARD`（3%）下不命中，在 `LOOSE`（2%）下命中
 - [x] `lookback` 隨靈敏度改變：同一組資料在 `LOOSE`（前 5 日）下命中，在 `STRICT`（前 20 日）下因未突破更長區間的收盤高點而不命中
-- [ ] 確認長度由 `confirmBars` 決定、不隨靈敏度改變：三段靈敏度在同一個 `confirmBars` 下要求的確認日數相同
-- [ ] 確認日（D+1 起算 `confirmBars` 日）或進場日尚無資料時該檔列於 `pendingConfirm`，不出現在 `items`、不計入 `matchedCount`
-- [ ] 確認資料與進場日可取自 `endDate` 之後：D 為 `endDate` 當日、且 D+1～D+`confirmBars` 與其後的進場日那一列都已存在於資料庫時，該檔正常命中而非落入 `pendingConfirm`
+- [x] 確認長度由 `confirmBars` 決定、不隨靈敏度改變：三段靈敏度在同一個 `confirmBars` 下要求的確認日數相同
+- [x] 確認日（D+1 起算 `confirmBars` 日）或進場日尚無資料時該檔列於 `pendingConfirm`，不出現在 `items`、不計入 `matchedCount`
+- [x] 確認資料與進場日可取自 `endDate` 之後：D 為 `endDate` 當日、且 D+1～D+`confirmBars` 與其後的進場日那一列都已存在於資料庫時，該檔正常命中而非落入 `pendingConfirm`
 - [x] 上漲支撐前置資料不足（`startDate` 前不足 `lookback` 個交易日）的股票列於 `insufficientData`
 - [x] 上漲支撐不驗證量能：僅成交量不同、價格完全相同的兩組資料判定結果一致
 - [x] `RISING_SUPPORT` 的 `signalDate` 為上漲日 D 本身，不是確認完成日、也不是進場日
 - [x] 每一筆命中的 `items[]` 皆含 `buyDate`（date），十個型態皆然
-- [ ] `RISING_SUPPORT` 的 `buyDate` 為 `detail.confirmCloses` 最後一筆 `tradeDate` 之後的**下一個交易日**；以前述 1296／1272／1248 構造資料（`confirmBars: 2`）驗證 `buyDate` 為 D+3 那一列的交易日，同時 `signalDate` 仍為 D
-- [ ] D 與進場日之間有停牌（缺列）時，`RISING_SUPPORT` 的 `buyDate` 為 D 之後第 `confirmBars + 1` 個**有資料列**的交易日，不以日曆日加 N 推算
+- [x] `RISING_SUPPORT` 的 `buyDate` 為 `detail.confirmCloses` 最後一筆 `tradeDate` 之後的**下一個交易日**；以前述 1296／1272／1248 構造資料（`confirmBars: 2`）驗證 `buyDate` 為 D+3 那一列的交易日，同時 `signalDate` 仍為 D
+- [x] D 與進場日之間有停牌（缺列）時，`RISING_SUPPORT` 的 `buyDate` 為 D 之後第 `confirmBars + 1` 個**有資料列**的交易日，不以日曆日加 N 推算
 - [x] D 為 `endDate` 且確認日與進場日取自 `endDate` 之後時，`buyDate` 可晚於 `endDate`，照常回報
-- [ ] `BOX_BREAKOUT`／`HIGHER_LOWS`／`REBOUND`／`CUMULATIVE_RISE` 的 `buyDate` 為 `signalDate` 之後的下一個交易日，不等於 `signalDate`
+- [x] `BOX_BREAKOUT`／`HIGHER_LOWS`／`REBOUND`／`CUMULATIVE_RISE` 的 `buyDate` 為 `signalDate` 之後的下一個交易日，不等於 `signalDate`
 
 ### 反彈
 - [x] 五個參數全部省略時，以 `dropDays: 3`、`dropPercent: 10`、`requireRise: true`、`riseDays: 1`、`risePercent: 5` 判定
@@ -975,7 +975,7 @@ Response `200`：
 - [x] 谷底的「T 必須是低點」限制仍生效：一段連續下跌中只有目前最低那天成為谷底
 - [x] `requireRise: false` 時只以跌幅判定，`signalDate` 等於谷底當日，`detail` 不含 `risePercent`
 - [x] 漲段窗口未跑滿仍照判：谷底落在 `endDate` 前一個交易日、`riseDays: 3` 且已達標 → 命中；同情境未達標 → 未命中，且**不**列入 `pendingConfirm`
-- [ ] `REBOUND` 的 `pendingConfirm` 只在「訊號落在該檔最新一筆日線、尚無下一個交易日」時非空；漲段窗口未跑滿而未達標的情形仍不列入
+- [x] `REBOUND` 的 `pendingConfirm` 只在「訊號落在該檔最新一筆日線、尚無下一個交易日」時非空；漲段窗口未跑滿而未達標的情形仍不列入
 - [x] `dropDays` 與 `riseDays` 算的都是交易日不是日曆日：窗口跨越週末時，週末不佔窗口長度
 - [x] 同一檔在區間內多次命中時仍只回報最近一次 `signalDate`
 - [x] 前置資料需求為 `dropDays − 1 + riseDays` 個交易日（`requireRise: false` 時為 `dropDays − 1`）；不足者列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
@@ -993,7 +993,7 @@ Response `200`：
 - [x] `days: 1` 為合法請求（不回 `400`）；此時除非 `risePercent` 為 `0`，否則零命中
 - [x] `days` 大於某檔可用行情長度時，該檔列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
 - [x] 掃描回應中 `CUMULATIVE_RISE` 那一筆回 `days`（等於實際採用值）且不含 `preset`
-- [ ] 反彈與累積上漲不因「確認窗口未跑滿」產生待確認；唯一會列入 `pendingConfirm` 的情形是訊號日就是該檔最新一筆日線、因而沒有 `buyDate`
+- [x] 反彈與累積上漲不因「確認窗口未跑滿」產生待確認；唯一會列入 `pendingConfirm` 的情形是訊號日就是該檔最新一筆日線、因而沒有 `buyDate`
 
 ### 漲幅門檻覆寫（`risePercent`）
 - [x] 三個策略各自的 `risePercent` 可獨立指定：同一次請求對箱型突破送 `2.5`、對上漲支撐送 `4`、底底高省略，三者分別以 2.5%／4%／該靈敏度原值判定
@@ -1096,7 +1096,7 @@ Response `200`：
 - [x] 暖身上限：某檔在 `startDate` 之前有 400 個交易日行情時，只從 `startDate` 之前第 250 個交易日起運算——改動更早（第 251 根之前）的行情，命中與 `detail` 完全不變
 - [x] 暖身下限：D 之前恰有 99 個交易日時 D 不判定、恰 100 個時 D 照常判定；區間內所有 D 皆不足 100 根的股票列於 `insufficientData`，不在 `items`、不計入 `matchedCount`
 - [x] 行情自 `2026-01-01` 起、不足 250 根但超過 100 根的股票不列入 `insufficientData`，照常判定
-- [ ] `buyDate` 為 `signalDate` 之後的下一個交易日（停牌缺列時取相鄰交易列、不以日曆日加 1，且可晚於 `endDate`）；交叉發生在該檔最新一筆日線、其後尚無交易日時該檔列於 `pendingConfirm` 而非 `items`，且不計入 `matchedCount`
+- [x] `buyDate` 為 `signalDate` 之後的下一個交易日（停牌缺列時取相鄰交易列、不以日曆日加 1，且可晚於 `endDate`）；交叉發生在該檔最新一筆日線、其後尚無交易日時該檔列於 `pendingConfirm` 而非 `items`，且不計入 `matchedCount`
 - [x] 同一檔在區間內兩次交叉 → 只回報最近一次
 - [x] 以相鄰交易日比較：D−1 與 D 之間有停牌造成的日曆間隔時，判定結果與無間隔時一致
 - [x] 行情以批次查詢讀取：全市場掃描時查詢次數不隨股票數增加；MACD 與 KDJ 同一次送出時行情查詢次數與只送其中一個時相同
@@ -1144,42 +1144,42 @@ KDJ 黃金交叉：
 - [x] `requireVolume` 與 `risePercent` 可同時指定：`STANDARD` + `risePercent: 2.5` + `requireVolume: false` 時以突破 2.5%、不看量判定，回應同時回 `preset` 與 `requireVolume: false`；依本 spec 的回應欄位規則，`BOX_BREAKOUT` **不回** `risePercent`，覆寫是否生效以命中結果（`breakoutPercent` 與 `matchedCount`）驗證
 - [x] 對 `BOX_BREAKOUT` 以外的任一型態帶 `requireVolume` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"requireVolume"}`
 - [x] `requireVolume` 帶非布林值（字串 `"false"`、數字 `0`）→ `400`，不得被寬鬆解讀為 `false`
-- [ ] 任一端點收到型別不符或格式錯誤的請求本體 → `400`，`{"code":"INVALID_REQUEST_BODY"}`，不再回 `500`（本增量修掉的既有缺陷：`{"windowDays":"abc"}` 原本回 `500 INTERNAL_ERROR`）
+- [x] 任一端點收到型別不符或格式錯誤的請求本體 → `400`，`{"code":"INVALID_REQUEST_BODY"}`，不再回 `500`（本增量修掉的既有缺陷：`{"windowDays":"abc"}` 原本回 `500 INTERNAL_ERROR`）
 
 ### MACD／KDJ 的買進日改為訊號日的下一個交易日
 
-- [ ] MACD 黃金交叉命中時，`items[].buyDate` 為 `signalDate` 之後的下一個交易日，`signalDate` 仍為交叉當日；KDJ 黃金交叉同此
-- [ ] 停牌缺列時取相鄰的下一筆日線資料列，不以日曆日加 1：交叉日之後留一個日曆缺口的構造資料，`buyDate` 等於該相鄰交易列的日期，且明確不等於 `signalDate.plusDays(1)`
-- [ ] `buyDate` 可以晚於 `endDate`：`endDate` 設為交叉當日、其後的日線已存在時，照常回報該筆與其 `buyDate`
-- [ ] 交叉落在該檔最新一筆日線（其後尚無交易日）時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——這取代了本型態原本「`pendingConfirm` 恆為空陣列」的行為
-- [ ] 某檔較早有一次已有 `buyDate` 的 MACD／KDJ 命中、最新一次交叉尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
-- [ ] 兩個型態的判定本身完全未變：同一份資料的命中日（`signalDate`）、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
+- [x] MACD 黃金交叉命中時，`items[].buyDate` 為 `signalDate` 之後的下一個交易日，`signalDate` 仍為交叉當日；KDJ 黃金交叉同此
+- [x] 停牌缺列時取相鄰的下一筆日線資料列，不以日曆日加 1：交叉日之後留一個日曆缺口的構造資料，`buyDate` 等於該相鄰交易列的日期，且明確不等於 `signalDate.plusDays(1)`
+- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為交叉當日、其後的日線已存在時，照常回報該筆與其 `buyDate`
+- [x] 交叉落在該檔最新一筆日線（其後尚無交易日）時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——這取代了本型態原本「`pendingConfirm` 恆為空陣列」的行為
+- [x] 某檔較早有一次已有 `buyDate` 的 MACD／KDJ 命中、最新一次交叉尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
+- [x] 兩個型態的判定本身完全未變：同一份資料的命中日（`signalDate`）、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
 - [x] 其餘八個型態的 `buyDate` 規則在本增量中未變（其後由「進場日統一為確認完成日的下一個交易日」增量一併改寫，見該節）
 
 
 ### 進場日統一為確認完成日的下一個交易日（本次新增）
 
-- [ ] 十個型態的 `buyDate` 皆為**確認完成日之後的下一個交易日**：箱型突破／底底高／反彈／累積上漲／MACD／KDJ／三個法人籌碼型態為 `signalDate` 之後的下一個交易日，上漲支撐為 D + `confirmBars` + 1
-- [ ] 「下一個交易日」依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
-- [ ] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
-- [ ] 訊號落在該檔最新一筆日線、其後尚無交易日時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——**箱型突破／底底高／反彈／累積上漲四個型態亦然**（這取代了它們原本「`pendingConfirm` 恆為空陣列」或「只在確認日未到時非空」的行為）
-- [ ] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次、`signalDate` 為那一次，該檔**不**在 `pendingConfirm`——十個型態一致
-- [ ] 判定本身完全未變：同一份資料的 `signalDate`、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
-- [ ] 掃描讀入的區間往 `endDate` 之後延伸：其餘九個型態最多 1 個交易日、上漲支撐最多 `confirmBars + 1` 個交易日
-- [ ] 本 spec 的「已知限制」如實記載箱型突破 `confirmBars = 2` 與底底高的殘留落差（各 1 個與 `swingBars` 個交易日），且文件與回應文案未將這兩個型態描述為「無未來資訊」
+- [x] 十個型態的 `buyDate` 皆為**確認完成日之後的下一個交易日**：箱型突破／底底高／反彈／累積上漲／MACD／KDJ／三個法人籌碼型態為 `signalDate` 之後的下一個交易日，上漲支撐為 D + `confirmBars` + 1
+- [x] 「下一個交易日」依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
+- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
+- [x] 訊號落在該檔最新一筆日線、其後尚無交易日時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——**箱型突破／底底高／反彈／累積上漲四個型態亦然**（這取代了它們原本「`pendingConfirm` 恆為空陣列」或「只在確認日未到時非空」的行為）
+- [x] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次、`signalDate` 為那一次，該檔**不**在 `pendingConfirm`——十個型態一致
+- [x] 判定本身完全未變：同一份資料的 `signalDate`、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
+- [x] 掃描讀入的區間往 `endDate` 之後延伸：其餘九個型態最多 1 個交易日、上漲支撐最多 `confirmBars + 1` 個交易日
+- [x] 本 spec 的「已知限制」如實記載箱型突破 `confirmBars = 2` 與底底高的殘留落差（各 1 個與 `swingBars` 個交易日），且文件與回應文案未將這兩個型態描述為「無未來資訊」
 
 ### 上漲支撐的確認長度可選（`confirmBars`，本次新增）
 
-- [ ] `GET /api/strategies` 的 `RISING_SUPPORT` 條目同時帶 `presets`（三段）與 `params`（恰一筆 `confirmBars`，`default` `2`、`min` `1`、`max` `2`、`step` `1`、`unit` 為「日」）；其餘九個策略的條目完全未變
-- [ ] `confirmBars` 省略時行為與現狀的兩日確認一致：同一份資料省略本欄位與明確送 `2`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
-- [ ] `confirmBars: 1` 只要求 D+1 守住：以「D+1 收盤 > 支撐線、D+2 收盤 ≤ 支撐線」的構造資料驗證——送 `1` 命中、送 `2`（或省略）不命中
-- [ ] `confirmBars: 1` 的 `detail.confirmCloses` 為 **1 筆**（D+1），`confirmBars: 2` 為 2 筆（D+1、D+2）
-- [ ] `confirmBars: 1` 的 `buyDate` 為 D+2、`confirmBars: 2` 的 `buyDate` 為 D+3，兩者的 `signalDate` 皆為 D
-- [ ] `confirmBars` 與靈敏度正交：`STRICT`／`STANDARD`／`LOOSE` 搭配 `confirmBars: 1` 皆合法，且各自的 `lookback` 與 `risePercent` 仍依靈敏度取值
-- [ ] `confirmBars` 與 `risePercent` 覆寫可同時指定，互不影響
-- [ ] 掃描回應中 `RISING_SUPPORT` 那一筆**同時**回 `preset` 與 `confirmBars`（實際採用值，省略時回 `2`）；其餘九個策略的回應欄位未變，且都不含 `confirmBars`
-- [ ] `confirmBars` 為 `0`、`3`、`1.5`、字串 → `400`，`{"code":"INVALID_CONFIRM_BARS","strategy":"RISING_SUPPORT"}`
-- [ ] 對 `RISING_SUPPORT` 以外的任一型態帶 `confirmBars` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"confirmBars"}`
+- [x] `GET /api/strategies` 的 `RISING_SUPPORT` 條目同時帶 `presets`（三段）與 `params`（恰一筆 `confirmBars`，`default` `2`、`min` `1`、`max` `2`、`step` `1`、`unit` 為「日」）；其餘九個策略的條目完全未變
+- [x] `confirmBars` 省略時行為與現狀的兩日確認一致：同一份資料省略本欄位與明確送 `2`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
+- [x] `confirmBars: 1` 只要求 D+1 守住：以「D+1 收盤 > 支撐線、D+2 收盤 ≤ 支撐線」的構造資料驗證——送 `1` 命中、送 `2`（或省略）不命中
+- [x] `confirmBars: 1` 的 `detail.confirmCloses` 為 **1 筆**（D+1），`confirmBars: 2` 為 2 筆（D+1、D+2）
+- [x] `confirmBars: 1` 的 `buyDate` 為 D+2、`confirmBars: 2` 的 `buyDate` 為 D+3，兩者的 `signalDate` 皆為 D
+- [x] `confirmBars` 與靈敏度正交：`STRICT`／`STANDARD`／`LOOSE` 搭配 `confirmBars: 1` 皆合法，且各自的 `lookback` 與 `risePercent` 仍依靈敏度取值
+- [x] `confirmBars` 與 `risePercent` 覆寫可同時指定，互不影響
+- [x] 掃描回應中 `RISING_SUPPORT` 那一筆**同時**回 `preset` 與 `confirmBars`（實際採用值，省略時回 `2`）；其餘九個策略的回應欄位未變，且都不含 `confirmBars`
+- [x] `confirmBars` 為 `0`、`3`、`1.5`、字串 → `400`，`{"code":"INVALID_CONFIRM_BARS","strategy":"RISING_SUPPORT"}`
+- [x] 對 `RISING_SUPPORT` 以外的任一型態帶 `confirmBars` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"confirmBars"}`
 
 ---
 ## Execution Result
@@ -1542,3 +1542,39 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
 - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java`（新增 `HttpMessageNotReadableException → 400 INVALID_REQUEST_BODY`）
 - `develop/backend/src/test/java/com/stock/StrategyScanIntegrationTest.java`（新增 10 個測試方法、2 個 helper（`boxBreakoutSelection`／`postRawJson`）、1 個 `toStringList` 多載；修正 `catalog_otherThreeStrategies_untouchedByReboundChange` 的既有斷言以反映 `BOX_BREAKOUT` 現在也有 `paramGroups`）
 - `specs/backend/strategy-scan.md`（本檔：新增本節；**未**勾選驗收框、**未**修改 frontmatter `status`，依交辦指示留給使用者確認）
+
+### Increment 12 — 2026-09-29
+
+本次執行 4 個主題，涵蓋自 Increment 11 以來新增的全部 `- [ ]` 驗收項目（36 項，L909、L957-959、L964-967、L978、L996、L1099、L1147、L1151-1182）：(1) `RISING_SUPPORT` 新增 `confirmBars`（1 或 2，預設 2，與靈敏度正交）；(2) `buyDate` 統一改為「確認完成日之後的下一個交易日」，套用到全部十個型態（上漲支撐為 D + `confirmBars` + 1，其餘九個為 `signalDate` 之後的下一個交易日），且此規則首度讓 `BOX_BREAKOUT`／`HIGHER_LOWS`／`REBOUND`／`CUMULATIVE_RISE`／MACD／KDJ 也會產生 `pendingConfirm`；(3) 確認畸形請求本體回 `400 INVALID_REQUEST_BODY`（發現已在 Increment 11 實作完成，本次僅驗證）；(4) 確認「已知限制」章節如實記載殘留落差、回應文案未宣稱「無未來資訊」。
+
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetector.java` — `requiredConfirmTradingDaysAfterEndDate(String)` 改簽章為 `requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto)`（`RISING_SUPPORT` 的 `confirmBars` 是請求層級欄位，不再只由 preset 決定）；新增共用 default method `nextTradingDate(bars, index)`（回傳 `bars.get(index+1)` 的日期，越界回 `null`），供全部價格/指標型態解析 `buyDate` 與判斷 `pendingConfirm`，避免六個型態各自重寫同一段邊界檢查；新增 `acceptsConfirmBars()`／`getConfirmBarsMin/Max/Default()` 四個 default method，慣例與既有 `acceptsRequireVolume()`／`getFastPeriodMin()` 等一致
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetectionOutcome.java` — 移除舊有的兩參數 `hit(signalDate, detail)`（其 `buyDate=signalDate` 的假設已被本次改動全面推翻，六個呼叫端皆已改用三參數版本）；更新 class javadoc
+  - `develop/backend/src/main/java/com/stock/service/pattern/InstitutionalPatternDetector.java` — `requiredConfirmTradingDaysAfterEndDate` 覆寫的參數型別同步更新（邏輯不變，仍固定回 `1`）
+  - `develop/backend/src/main/java/com/stock/service/pattern/BoxBreakoutDetector.java` — 新增 `requiredConfirmTradingDaysAfterEndDate` 回傳 `1`；`detect()` 迴圈改為「找到符合箱型/盤整/突破/量能的 D 後，先做原有的 `confirmBars>=2` 確認檢查（缺 D+1 時標記 `anyUnresolvedMatch`），再用 `nextTradingDate` 解析 `buyDate`（缺則同樣標記 `anyUnresolvedMatch`）；每次成功解析都覆寫 `lastSignalDate/lastBuyDate/lastDetail`，迴圈結束回報最近一次有 `buyDate` 的命中，否則以 `anyUnresolvedMatch` 決定 `pendingConfirm`」——`STRICT`（`confirmBars=2`）情形下確認用的 D+1 恰為 `buyDate` 本身，故兩個檢查在該情形下等價，這正是 spec「已知限制」記載的殘留落差
+  - `develop/backend/src/main/java/com/stock/service/pattern/HigherLowsDetector.java` — `SwingLow` 新增 `barIndex` 欄位；原本只保留「最後一個符合 `requiredRises` 連續遞增的 swing low」的邏輯改為先收集全部符合的 `qualifyingEnds`（按時間升冪），再逐一以 `nextTradingDate` 檢查 `buyDate` 是否可解析，取最晚且可解析者回報；新增 `requiredConfirmTradingDaysAfterEndDate` 回傳 `1`。程式碼審查發現並以 javadoc 記載一個結構性事實：由於任何 swing low candidacy 本身已要求右側 `swingBars`（最小值 2）根資料存在，其 `buyDate`（僅需右側 1 根）必然已可解析——因此 `HIGHER_LOWS` 的 `pendingConfirm` 機制雖與其餘型態一致實作，但數學上幾乎不可能被觸發，這與既有「已知限制」表格記載的殘留落差（底底高需要 D+`swingBars`）是同一件事的兩種說法
+  - `develop/backend/src/main/java/com/stock/service/pattern/CumulativeRiseDetector.java` — 新增 `requiredConfirmTradingDaysAfterEndDate` 回傳 `1`；`detect()` 找到符合窗口漲幅的 D 後以 `nextTradingDate` 解析 `buyDate`，缺則標記 `anyUnresolvedMatch` 並跳過（不覆寫 `lastSignalDate`）
+  - `develop/backend/src/main/java/com/stock/service/pattern/ReboundDetector.java` — 新增 `requiredConfirmTradingDaysAfterEndDate` 回傳 `1`；找到訊號日 S 後另記錄其在 `bars` 中的索引 `signalIndex`（`requireRise` 為 `true` 時是漲段迴圈變數 `k`，為 `false` 時是 `t`），以 `nextTradingDate` 解析 `buyDate`；沿用既有「`!signalDate.isBefore(lastSignalDate)` 取最晚」比較邏輯，但只對已解析出 `buyDate` 的候選套用，未解析者只標記 `anyUnresolvedMatch`。「漲段窗口未跑滿但未達標」與「已達標但缺 `buyDate`」維持是兩條獨立路徑（前者 `continue`、不影響 `anyUnresolvedMatch`；後者才會設定 `anyUnresolvedMatch`），確保「窗口未跑滿≠待確認」的既有規則不受影響
+  - `develop/backend/src/main/java/com/stock/service/pattern/MacdGoldenCrossDetector.java`／`KdjGoldenCrossDetector.java` — 新增 `requiredConfirmTradingDaysAfterEndDate` 回傳 `1`；`detect()` 找到交叉日 D 後以 `nextTradingDate` 解析 `buyDate`，缺則標記 `anyUnresolvedMatch` 並跳過該候選（`anyJudged`／`insufficientData` 判定邏輯不受影響，仍在解析 `buyDate` 之前就先行標記）
+  - `develop/backend/src/main/java/com/stock/service/pattern/RisingSupportDetector.java` — 移除 `Params` 內的 `confirmBars` 欄位（不再是逐 preset 固定值），改為請求層級的 `resolveConfirmBars(selection)`（省略時為 `2`）；三段 `presets` 說明文字改為「其後不跌破起漲收盤」（移除「2 日」）；新增 `getParams()` 回傳恰一筆 `confirmBars` 的 `ParamDto`；新增 `acceptsConfirmBars()`／`getConfirmBarsMin/Max/Default()`；`requiredConfirmTradingDaysAfterEndDate` 回傳 `resolveConfirmBars(selection) + 1`（原本只回傳固定的 `confirmBars`，即 `2`——這是本次修正的核心缺陷：`buyDate` 需要的是確認完成日**之後**的下一交易日，原本的抓取範圍只夠抓到確認完成日本身，抓不到 `buyDate` 那一列）；`detect()` 確認迴圈仍檢查 `i + confirmBars >= bars.size()`（confirm 資料本身是否齊備），新增後續檢查 `nextTradingDate(bars, i + confirmBars)`（`buyDate` 是否可解析），兩者缺一即標記 `anyUnresolvedMatch`；新增 `populateResultParams` 覆寫，同時回 `preset` 與 `confirmBars`（第二個「`preset` 與參數欄位並存」的例外，繼 `BOX_BREAKOUT` 的 `requireVolume` 之後）
+  - `develop/backend/src/main/java/com/stock/dto/StrategySelectionDto.java` — 新增 `BigDecimal confirmBars` 欄位（與 `windowDays`／`topN` 同慣例：宣告為 `BigDecimal` 而非 `Integer`，讓非整數值能先成功反序列化、再由 `INVALID_CONFIRM_BARS` 拒絕，而不是落入通用的 JSON 解析 `400`）
+  - `develop/backend/src/main/java/com/stock/dto/StrategyResultDto.java` — 新增 `Integer confirmBars` 欄位；更新 class javadoc 說明「`preset` 與參數欄位不並存」的兩個例外
+  - `develop/backend/src/main/java/com/stock/dto/ErrorResponse.java` — 新增 `invalidConfirmBars(String strategy)` 工廠方法（沿用既有的 `strategy` 欄位）
+  - `develop/backend/src/main/java/com/stock/exception/InvalidConfirmBarsException.java`（新檔，與 `InvalidTopNException` 同慣例）
+  - `develop/backend/src/main/java/com/stock/exception/GlobalExceptionHandler.java` — 新增 `InvalidConfirmBarsException` 的 handler
+  - `develop/backend/src/main/java/com/stock/service/StrategyScanService.java` — `loadSeries` 呼叫 `requiredConfirmTradingDaysAfterEndDate` 時改傳整個 `selection`；新增 `confirmBars` 的 `PARAM_NOT_APPLICABLE`／`INVALID_CONFIRM_BARS` 驗證（沿用既有 `validateIntInRange` 泛用驗證方法，慣例與 `fastPeriod`／`slowPeriod` 一致）
+- Notes:
+  - **`design-patterns` skill**：已於實作前呼叫確認。`RISING_SUPPORT` 的 `confirmBars` 沿用既有「`acceptsXxx()` + `getXxxMin/Max/Default()` default method」擴充點慣例（與 `requireVolume`／`fastPeriod` 同一慣例），`nextTradingDate` 是把六個型態重複的「取下一筆資料列日期、越界回 null」邊界檢查收斂成介面上的一個共用 default method，未引入新抽象層。
+  - **`code-quality` skill 自我審查**：已於完成後呼叫檢視。發現並記載一項結構性事實（見上方 `HigherLowsDetector` 條目）：`HIGHER_LOWS` 的 `pendingConfirm` 機制雖與其餘型態一致實作（`nextTradingDate` + `anyUnresolvedMatch`），但由於 swing low 的 candidacy 本身已隱含要求 `buyDate` 所需的資料存在，此路徑在數學上幾乎不可觸發——已在程式碼與本節誠實記載，未偽造構造資料掩蓋這件事。確認 `RisingSupportDetector.resolveConfirmBars` 對 `null`（省略）的處理與既有 `resolveFastPeriod` 等同慣例一致；確認 `BoxBreakoutDetector` 新增的雙重檢查（confirm 齊備 + `buyDate` 可解析）在 `confirmBars=2` 情形下不會重複觸發副作用（兩次檢查共用同一個 `i+1` 索引，第二次必然通過）。未發現需修正的空值安全、例外處理或效能問題。
+  - **驗證方式**：本 spec 明訂「不得寫測試補齊驗收」，故全程以 `mvn compile`／`mvn test-compile` 確認編譯通過，接著 `mvn package -DskipTests` 打包、`java -jar backend.jar`（帶 `SPRING_DATASOURCE_HIKARI_CONNECTIONINITSQL=SET time_zone = '+08:00'`）啟動，對本機 8080 埠的真實服務以 `curl` 送出真實請求、對照真實 MySQL（`stock` schema）資料驗證。
+  - **`RISING_SUPPORT` 專用構造資料**（stock_id `RS01`/`RS03`，驗證後已 `DELETE` 乾淨，`SELECT COUNT(*) FROM stock WHERE stock_id IN ('RS01','RS03')` → `0`）：`RS01` 完全複製 spec 範例數字（前 10 日 lookback 含 `priorHighClose=1236`、D-1 收盤 `1200`、D 收盤 `1296`、D+1 `1272`、D+2 `1248`），並在 D+2 與進場日之間刻意留一個工作日缺口（`2024-03-21`／`22` 不寫入列，模擬停牌），下一筆實際資料列為 `2024-03-25`——實測 `POST /api/strategies/scan`（`STANDARD`，`confirmBars` 省略／明確送 `2` 兩者結果一致）回傳 `signalDate=2024-03-18`、`buyDate=2024-03-25`、`detail` 與 spec JSON 範例逐欄位相符，**證實 `buyDate` 以資料列相鄰認定、正確跳過停牌缺口，而非以 `signalDate.plusDays(N)` 推算**（若以日曆推算，`confirmBars=2` 會得到 `2024-03-21`，實際卻是 `2024-03-25`）。刪除 D+3 那一列後重跑同一查詢，`matchedCount` 變為 `0`、`pendingConfirm=["RS01"]`，證實確認完成但缺進場日資料時的 `pendingConfirm` 行為；補回該列後 `RS01` 以 `confirmBars=1` 重跑，`buyDate=2024-03-20`（D+2，非 D+3），`detail.confirmCloses` 恰 1 筆。`RS03` 另構造confirmBars 判定會分歧的資料（D+1 收盤 `1210` 守住支撐、D+2 收盤 `1195` 跌破）：`confirmBars:1` 於 `STANDARD`／`LOOSE` 下命中（`buyDate=D+2`），`confirmBars:2`（省略或明確送）於同一資料下不命中（`matchedCount=0`，非 `pendingConfirm`，因為這是型態本身不成立，不是缺資料）；`STRICT` 因 lookback=20 大於構造資料筆數落入 `insufficientData`，間接證實 `lookback` 仍逐 preset 獨立取值、不受 `confirmBars` 影響。`INVALID_CONFIRM_BARS`（送 `0`／`3`／`1.5`）與 `PARAM_NOT_APPLICABLE`（對 `BOX_BREAKOUT` 送 `confirmBars`）皆實測回應正確錯誤碼；送字串 `"abc"` 回 `400 INVALID_REQUEST_BODY`（非 `500`）。
+  - **`BOX_BREAKOUT`／`REBOUND`／`CUMULATIVE_RISE` 的 `pendingConfirm`（取代原本恆為空陣列的行為）**：各自以獨立構造股票（`BB01`／`RB01`（含後續 `RB02`，跌段+漲段未跑滿的獨立情境）／`CR01`，驗證後皆已 `DELETE` 乾淨）在「訊號日＝該檔最新一筆日線」時實測回 `pendingConfirm=[<stockId>]`、`matchedCount=0`；插入下一筆資料列後同一查詢改回 `matchedCount=1`，`buyDate` 精確等於新插入那一列的 `trade_date`（皆不等於 `signalDate`），證實這四個型態現在會產生 `pendingConfirm`、且 `buyDate` 邏輯正確。另以 `RB02` 驗證「漲段窗口未跑滿但尚未達標」時是純粹未命中（`items`／`pendingConfirm` 皆空），與「已達標但缺 `buyDate`」的 `pendingConfirm` 路徑保持互斥，符合 spec「不等窗口跑滿」規則未被本次改動波及。
+  - **`HIGHER_LOWS` 的 `buyDate`**：以 Python 独立實作 MA5＋swing low 演算法（`swingBars=2`／`requiredRises=2`／`risePercent=0`，40 筆合成收盤價）預先算出應命中 `2024-09-18`、`buyDate=2024-09-19`，實測 `POST /api/strategies/scan` 逐欄位相符。`pendingConfirm` 部分見上方 Notes 的結構性限制說明——未構造假資料佯裝驗證成功，如實記載為「機制已實作、與其餘型態同一套邏輯，但此型態的判定前提使其數學上幾乎不可觸發」。
+  - **`MACD_GOLDEN_CROSS`／`KDJ_GOLDEN_CROSS` 全部以真實資料庫資料驗證**（未構造假股票，因暖身需要 100+ 根真實交易日資料，構造成本過高且真實資料已足夠）：對 `2317`／`2330`／`2454`／`2603`／`3231` 等真實股票的真實 2026 年價格掃描，`buyDate` 皆為 `signalDate` 的下一筆日線（例如 `3231` 的 KDJ：`signalDate=2026-09-24`、`buyDate=2026-09-29`，中間橫跨一段連續工作日缺口——顯示為真實市場的停市/假日缺口，非單純週末，直接證實「以相鄰資料列認定、非日曆推算」）。全市場 `commonStocksOnly` 掃描（1088 檔，`startDate=2026-09-01`）示範了 `pendingConfirm` 的真實觸發：`MACD_GOLDEN_CROSS` 14 檔、`KDJ_GOLDEN_CROSS` 9 檔落入 `pendingConfirm`；逐一確認其中 `1597` 的 MACD 交叉確實發生在 `2026-09-29`（`stock_daily_price` 該股最新一筆日線的日期），`matchedCount=0`。再將 `startDate` 往前拉到 `2026-01-01`，`1597` 改為命中一筆更早、已有 `buyDate` 的交叉（`signalDate=2026-08-27`、`buyDate=2026-08-28`），且該次查詢的 `pendingConfirm` 不含 `1597`——**直接以真實資料證實「同一檔較早已有 buyDate 的命中優先於較新但未解析的命中」這條十個型態共用的收斂規則**，補足了無法用合成資料驗證的這一項。
+  - **`INVALID_REQUEST_BODY`（主題 3）**：確認此缺陷已在 Increment 11 修掉（`GlobalExceptionHandler` 已有 `HttpMessageNotReadableException → 400`），本次僅以 spec 文字記載的原始重現案例 `{"windowDays":"abc"}` 對 `/api/strategies/scan` 實測，回應為 `400 INVALID_REQUEST_BODY`（非 `500`）。
+  - **「已知限制」文件與用語（主題 4）**：確認 `strategy-scan.md` 的「已知限制」章節（`buyDate` 一節下方）如實記載箱型突破 `confirmBars=2` 與底底高的殘留落差（分別為 1 個與 `swingBars` 個交易日），此文字為 897bb33 提交時即已寫入，本次未改動其內容，僅核實與程式行為一致；`grep -rn "無未來資訊\|look-ahead"` 遍歷 `develop/backend/src/main/java` 僅命中本次新增、如實承認殘留落差的程式註解（`BoxBreakoutDetector.java` 三處），未發現任何回應文案或說明文字宣稱這兩個型態「無未來資訊」。
+  - **全套回歸**：改動後以真實資料同時送出全部十個型態於同一次請求（`stockIds=["2330","2317","2454"]`），十筆 `results` 依送入順序回傳、皆正常回應無例外；`commonStocksOnly`／`risePercent` 覆寫／既有錯誤碼等既有行為以既有構造資料重跑，結果與改動前一致（未在此列出逐項輸出，因與 Increment 1-11 已記載的驗證重複）。
+  - **DB 清理確認**：所有構造股票（`RS01`／`RS03`／`BB01`／`HL01`／`RB01`／`RB02`／`CR01`）驗證後皆已 `DELETE FROM stock_daily_price` 與 `DELETE FROM stock`；`SELECT COUNT(*) FROM stock WHERE stock_id IN (...)` 收尾確認為 `0`。未修改任何既有真實股票的列。
+  - **未能驗證 / 刻意保留**：`HIGHER_LOWS` 的 `pendingConfirm`（L1165 涵蓋的四個型態之一）未能以構造資料直接觸發——如上方 Notes 與程式碼 javadoc 所述，這是該型態自身判定前提（swing low 需要右側 `swingBars`≥2 根資料才能被認出）帶來的數學結果，不是實作缺陷；機制本身（`nextTradingDate` + `anyUnresolvedMatch`）與其餘九個型態逐字相同、且已被其中多個型態的真實/構造資料直接驗證正確。本次選擇誠實記載這個結構性事實，而不是构造一個會與「swing low 需要右側資料才能被認出」這條演算法前提互相矛盾的假案例。
+  - Nothing else deliberately left unfixed.

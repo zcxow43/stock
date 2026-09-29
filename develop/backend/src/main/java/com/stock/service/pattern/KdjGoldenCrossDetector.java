@@ -28,8 +28,10 @@ import java.util.List;
  * strictly before it: J crossing up through both K and D is, per spec, equivalent to — and judged
  * as — K crossing up through D (D-1's K &lt;= D and D's K &gt; D), since J is a linear function of
  * K and D and comparing J directly against K/D risks rounding inconsistencies at the crossing point.
- * The additional condition is D-1's J strictly below `jThreshold`. `buyDate` always equals
- * `signalDate`, so pendingConfirm is always empty.
+ * The additional condition is D-1's J strictly below `jThreshold`. `buyDate` is the trading day
+ * after D (confirmation-completion day = signalDate) — see specs/backend/strategy-scan.md, "進場日
+ * （buyDate）"; a D landing on the stock's latest available bar produces pendingConfirm instead of a
+ * hit.
  */
 @Component
 @Order(10)
@@ -125,6 +127,12 @@ public class KdjGoldenCrossDetector implements PatternDetector {
     }
 
     @Override
+    public int requiredConfirmTradingDaysAfterEndDate(StrategySelectionDto selection) {
+        // buyDate is the trading day after D — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+        return 1;
+    }
+
+    @Override
     public PatternDetectionOutcome detect(List<StockDailyPrice> bars, LocalDate startDate, LocalDate endDate,
                                            StrategySelectionDto selection) {
         if (bars.isEmpty()) {
@@ -141,7 +149,9 @@ public class KdjGoldenCrossDetector implements PatternDetector {
 
         boolean anyJudged = false;
         LocalDate lastSignalDate = null;
+        LocalDate lastBuyDate = null;
         KdjGoldenCrossDetailDto lastDetail = null;
+        boolean anyUnresolvedMatch = false;
 
         for (int i = MIN_TRADING_DAYS_BEFORE_D; i < bars.size(); i++) {
             LocalDate tradeDate = bars.get(i).getTradeDate();
@@ -163,7 +173,15 @@ public class KdjGoldenCrossDetector implements PatternDetector {
             boolean crossedUp = prevK.compareTo(prevD) <= 0 && k.compareTo(d) > 0;
             boolean prevJBelowThreshold = prevJ.compareTo(jThreshold) < 0;
             if (crossedUp && prevJBelowThreshold) {
+                // buyDate: the trading day after D; missing means this cross is unresolved
+                // (pendingConfirm), not a non-match — see specs/backend/strategy-scan.md, "進場日（buyDate）".
+                LocalDate buyDate = nextTradingDate(bars, i);
+                if (buyDate == null) {
+                    anyUnresolvedMatch = true;
+                    continue;
+                }
                 lastSignalDate = tradeDate;
+                lastBuyDate = buyDate;
                 lastDetail = new KdjGoldenCrossDetailDto(
                         k.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         d.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
@@ -178,9 +196,9 @@ public class KdjGoldenCrossDetector implements PatternDetector {
             return PatternDetectionOutcome.insufficientData();
         }
         if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastDetail);
+            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
         }
-        return PatternDetectionOutcome.noMatch(false);
+        return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
     @Override

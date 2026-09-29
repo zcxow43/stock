@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略命中回測 API"
 requirement: "策略掃描結果回測：以每一筆命中的進場日（`buyDate`，由掃描回報＝確認完成日之後的下一個交易日；上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日）**開盤**買進，其後至今日之間以最高開盤價賣出，收益與報酬率扣除買賣手續費（0.1425%，不打折、無最低）與證交稅（0.3%，賣出時），逐筆回報買進日／買進價／賣出日／賣出價／成本／報酬率／收益，加上彙總總報酬率與總收益。一檔股票每有一個相異買進日就是獨立的一筆（各 1 張、各自計入彙總），同一買進日不得重複送出"
 depends_on: [strategy-scan, stock-price-ingestion]
@@ -297,7 +297,7 @@ Response `200`：
 ## Acceptance Criteria
 
 ### 回測規則
-- [ ] `POST /api/strategies/backtest` 對單一標的回傳的 `buyPrice` 等於該檔買進日在 `stock_daily_price` 的 `open_price`
+- [x] `POST /api/strategies/backtest` 對單一標的回傳的 `buyPrice` 等於該檔買進日在 `stock_daily_price` 的 `open_price`
 - [x] `sellPrice` 等於該檔「買進日之後至今日」區間內 `open_price` 的最大值，且 `sellDate` 為該值所在的交易日
 - [x] **買進日當天的開盤價不納入賣出窗口**：構造一檔其買進日開盤價高於其後所有開盤價的資料，回應的 `sellDate` 不等於買進日，`sellPrice` 不等於買進日的開盤價（該價格是這一筆的 `buyPrice`）
 - [x] 最高開盤價在多個交易日出現相同數值時，`sellDate` 為其中**最早**的那一天
@@ -305,7 +305,7 @@ Response `200`：
 - [x] `profit` 等於 `sellPrice × 1000 − sellFee − sellTax − cost`，且 `lotSize` 回傳 `1000`
 - [x] 訊號後一路下跌的標的其 `returnPercent` 與 `profit` **為負值**，未被夾為 `0`，也未改挑其他日期
 - [x] 停牌造成的缺列不會成為 `sellDate`（該日在 `stock_daily_price` 無列，自然不在候選中）
-- [ ] **買進日開盤價為 `0` 時該筆無法回測**：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，**不得回 `500`**（不得對 `0` 做除法）
+- [x] **買進日開盤價為 `0` 時該筆無法回測**：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，**不得回 `500`**（不得對 `0` 做除法）
 - [x] 賣出窗口內開盤價為 `0` 的列**不列入賣出候選**：以一組「窗口內僅有的高開盤價那天為 `0`」的構造資料驗證，`sellDate` 不是那一天
 - [x] 賣出窗口內所有開盤價皆為 `0` 時，視同無可賣出交易日：`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null` 而 `buyPrice` 有值
 - [x] 上述三種情形皆**不計入** `totalCost`／`totalProfit`／`backtestedCount`，且該筆仍留在 `items` 中
@@ -360,20 +360,20 @@ Response `200`：
 
 ### 以進場日買進
 - [x] 請求 `items[]` 以 `buyDate` 表示買進日；只帶 `signalDate`、缺 `buyDate` 的請求回 `400` `INVALID_BUY_DATE`
-- [ ] 以構造資料驗證買進錨定在 `buyDate` 的**開盤**：D+2 收盤 104、D+3 開盤 106／收盤 112、D+4 開盤 110，送 `buyDate`＝D+3 時 `buyPrice` 為 **106**（不是 D+3 的收盤 112，也不是 D+2 的收盤 104），賣出窗口從 D+4 起，`sellDate` 不早於 D+4
+- [x] 以構造資料驗證買進錨定在 `buyDate` 的**開盤**：D+2 收盤 104、D+3 開盤 106／收盤 112、D+4 開盤 110，送 `buyDate`＝D+3 時 `buyPrice` 為 **106**（不是 D+3 的收盤 112，也不是 D+2 的收盤 104），賣出窗口從 D+4 起，`sellDate` 不早於 D+4
 - [x] 同一檔兩筆 `buyDate` 相同即為重複（`DUPLICATE_BACKTEST_ITEM`，`duplicatedItems` 以 `{stockId, buyDate}` 表示），與造成它們的策略或訊號日無關
 - [x] 本端點不接受也不依賴策略代碼或訊號日：相同 `(stockId, buyDate)` 的請求，不論它來自哪個型態，回應完全相同
 
 ### 買進價改為買進日開盤價（本次新增）
 
-- [ ] `buyPrice` 取自買進日那一列的 `open_price`，不再取 `close_price`：同一筆資料在開盤價與收盤價不同時，`buyPrice` 等於開盤價
-- [ ] `cost`／`buyFee`／`profit`／`returnPercent` 全部依新的 `buyPrice` 重算，算式本身不變（`cost = buyPrice × 1000 + buyFee`）
-- [ ] 買進日**開盤價**為 `0`（收盤價不為 `0`）時該筆無法回測：`buyPrice` 為 `null`，回應 `200`、不計入彙總——判斷的是開盤價，不是收盤價
-- [ ] 買進日開盤價 > `0` 但收盤價為 `0` 時該筆**照常回測**，`buyPrice` 為該開盤價
-- [ ] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
-- [ ] 買進日只有一列且其後無列時仍為「無法回測」：`buyPrice` 有值（開盤價）、`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null`，不計入彙總
-- [ ] 價格查詢仍為批次、次數不隨檔數線性增加；買進價與賣出候選同取自 `open_price`，不再另查 `close_price`
-- [ ] 交易成本的三項算法、費率與捨去規則完全未變，只是代入的 `buyPrice` 改為開盤價
+- [x] `buyPrice` 取自買進日那一列的 `open_price`，不再取 `close_price`：同一筆資料在開盤價與收盤價不同時，`buyPrice` 等於開盤價
+- [x] `cost`／`buyFee`／`profit`／`returnPercent` 全部依新的 `buyPrice` 重算，算式本身不變（`cost = buyPrice × 1000 + buyFee`）
+- [x] 買進日**開盤價**為 `0`（收盤價不為 `0`）時該筆無法回測：`buyPrice` 為 `null`，回應 `200`、不計入彙總——判斷的是開盤價，不是收盤價
+- [x] 買進日開盤價 > `0` 但收盤價為 `0` 時該筆**照常回測**，`buyPrice` 為該開盤價
+- [x] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
+- [x] 買進日只有一列且其後無列時仍為「無法回測」：`buyPrice` 有值（開盤價）、`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null`，不計入彙總
+- [x] 價格查詢仍為批次、次數不隨檔數線性增加；買進價與賣出候選同取自 `open_price`，不再另查 `close_price`
+- [x] 交易成本的三項算法、費率與捨去規則完全未變，只是代入的 `buyPrice` 改為開盤價
 
 ---
 ## Execution Result
@@ -541,3 +541,46 @@ Response `200`：
   - `code-quality` skill self-review: reviewed the diff against the checklist (null/absence safety, error handling, resource lifecycle, atomicity, performance, DRY/KISS). No Critical or Important findings — `cost`/`buyFee` are only computed inside the `buyPrice != null` branch (no NPE risk), `computeReturnPercent`'s denominator (`cost`) is always positive whenever it's called (only reachable when `buyPrice` is non-null, and `findBuyPrice` already excludes non-positive closes), the fee/tax line-item computation is factored into one shared helper reused for all three lines (no drift risk), and the endpoint remains read-only/single-query with no new atomicity or concurrency surface. Nothing left unfixed.
 
 - All acceptance criteria in this spec are now checked; `status` set to `done`.
+
+### Increment 6 — 2026-09-29
+- Status: DONE
+
+- Scope: buy price anchored to the buy day's OPEN price instead of its CLOSE price. This was the one remaining gap between this spec and the running code — everything else (buy-date-as-request-field, net-of-cost formulas, batching, the null-price guards) was already correct and unchanged.
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/StrategyBacktestService.java` — `findBuyPrice` now reads and null-checks `row.getOpenPrice()` instead of `row.getClosePrice()` (previously: `isTradedPrice(row.getClosePrice()) ? row.getClosePrice() : null`; now: `isTradedPrice(row.getOpenPrice()) ? row.getOpenPrice() : null`). Class-level javadoc updated from "buy-day close in, highest open out" to "buy-day open in, highest open out". Javadoc on `findBuyPrice` rewritten to state the check and the returned value are both the OPEN column and that CLOSE is irrelevant here even when itself 0 or non-zero.
+
+- What did NOT need to change, and why:
+  - `StockDailyPriceMapper.findByStockIdsAndDateRange` (the single batched query the service already uses) already `SELECT`s `open_price` alongside `close_price` and every other column in one round trip — `StockDailyPrice.getOpenPrice()` was already populated on every row, it was simply never read for the buy price. No mapper/XML change, no new query, no second query for `open_price` vs `close_price` — both come from the one row the batched query already returned (satisfies L375, "不再另查 close_price": nothing separately queries close_price for backtest purposes now, either — it is not read anywhere in this service).
+  - `TradingCostCalculator.fee/tax/cost/profit/returnPercent` and the rounding (`HALF_UP`, per-line-item floor before summing) are untouched — they already took `buyPrice`/`sellPrice` as parameters; only the value fed into `buyPrice` at the call site changed. This satisfies L370/L376 by construction: same formulas, same rates, same floor-then-sum order, different input.
+  - `findSellPick` (sell-window selection: strictly-after-buyDate, max open, earliest-date-on-tie, skip zero opens) was already reading `open_price` from the correct increment (Increment "以進場日買進") — no change needed there. This is what makes L373 (buy day's own open never becomes the sell pick even when it's the period high) already true: the window is `!row.getTradeDate().isAfter(buyDate)` → `continue`, which excludes the buy day's own row regardless of which price column is read.
+
+- Live verification (real HTTP calls against the real MySQL database on `127.0.0.1:3306`, schema `stock`, backend launched via `java -jar develop/backend/target/backend.jar` with `SPRING_DATASOURCE_HIKARI_CONNECTIONINITSQL="SET time_zone = '+08:00'"`, port 8080 confirmed free beforehand and freed again afterward):
+  - `mvn -f develop/backend/pom.xml -o compile` → `BUILD SUCCESS`.
+  - `mvn -f develop/backend/pom.xml -o package -DskipTests` → `BUILD SUCCESS`, produced `backend.jar`.
+  - Backend started clean: log shows `Started BackendApplication`, Hikari pool up, startup catch-up runners completed without error; `curl http://127.0.0.1:8080/api/stocks` → `200` confirmed the app was actually serving before fixture calls began.
+  - Synthetic fixtures inserted directly into the live database under disposable stock ids `BTX01`–`BTX04`, `BTX06` (market `TSE`, the only value the `chk_stock_market` check constraint allows — `TWSE` was rejected first and corrected), all price rows dated 2026-09-22 through 2026-09-25 (real trading-week dates, today being 2026-09-29):
+    - `BTX01`: 09-22 close 104.00 / 09-23 open 106.00 close 112.00 (buyDate) / 09-24 open 110.00 — the spec's own D+2/D+3/D+4 fixture (L363).
+    - `BTX06`: 09-23 open 200.00 (buyDate, the highest open in the whole series) / 09-24 open 100.00 / 09-25 open 90.00 — for L373 (buy day's own period-high open must not become the sell pick).
+    - `BTX02`: 09-23 open 0.00 close 50.00 (buyDate) / 09-24 open 60.00 — for L308/L371 (open-zero-close-nonzero guard).
+    - `BTX03`: 09-23 open 55.00 close 0.00 (buyDate) / 09-24 open 70.00 — for L372 (open-nonzero-close-zero backtests normally).
+    - `BTX04`: 09-23 open 80.00 close 82.00 (buyDate), no later row — for L374 (last-row-for-the-stock still "cannot backtest" but `buyPrice` has a value).
+  - `POST /api/strategies/backtest` with all five items in one request → `200`, response:
+    ```
+    BTX01: buyPrice=106.00, sellDate=2026-09-24, sellPrice=110.00, buyFee=151, sellFee=156, sellTax=330, cost=106151, profit=3363, returnPercent=3.17
+    BTX06: buyPrice=200.00, sellDate=2026-09-24, sellPrice=100.00, buyFee=285, sellFee=142, sellTax=300, cost=200285, profit=-100727, returnPercent=-50.29
+    BTX02: buyPrice=null, sellDate=null, sellPrice=null, buyFee=null, sellFee=null, sellTax=null, cost=null, profit=null, returnPercent=null
+    BTX03: buyPrice=55.00, sellDate=2026-09-24, sellPrice=70.00, buyFee=78, sellFee=99, sellTax=210, cost=55078, profit=14613, returnPercent=26.53
+    BTX04: buyPrice=80.00, sellDate=null, sellPrice=null, buyFee=114, sellFee=null, sellTax=null, cost=80114, profit=null, returnPercent=null
+    backtestedCount=3 (BTX01, BTX06, BTX03 — matches the 3 items that got a sellDate)
+    ```
+  - Re-checked `POST /api/strategies/backtest` with only `{"stockId":"BTX02","buyDate":"2026-09-23"}` and `curl -w "HTTP_STATUS:%{http_code}"` explicitly → `HTTP_STATUS:200`, confirming the open-price-zero guard does not 500 (L308).
+  - Real-stock sanity check (not synthetic): `2330` on `2026-09-23` has `open_price=2475.00`, `close_price=2500.00` in the live table. `POST /api/strategies/backtest` with `{"stockId":"2330","buyDate":"2026-09-23"}` → `buyPrice: 2475.00` (the open, not the close) — confirms the fix on real production data, not only on constructed fixtures.
+  - Unit-checked every number by hand against `TradingCostCalculator`'s own formulas (floor each of buyFee/sellFee/sellTax independently, then `cost = buyPrice×1000+buyFee`, `profit = sellPrice×1000−sellFee−sellTax−cost`, `returnPercent = profit÷cost×100` HALF_UP to 2dp) — all five items' fee/tax/cost/profit/returnPercent reproduce exactly by hand computation, e.g. BTX01: `floor(106×1000×0.001425)=151`, `floor(110×1000×0.001425)=156`, `floor(110×1000×0.003)=330`, `cost=106×1000+151=106151`, `profit=110000−156−330−106151=3363`, `3363÷106151×100=3.1686…→3.17`.
+  - Fixture cleanup confirmed: `SELECT COUNT(*) FROM stock WHERE stock_id LIKE 'BTX%'` → `0`; `SELECT COUNT(*) FROM stock_daily_price WHERE stock_id LIKE 'BTX%'` → `0`. No real stock's rows were touched at any point.
+  - Backend process stopped after verification (`taskkill /F`), port 8080 confirmed free again.
+  - `code-quality` skill self-review: the diff is a single-field swap inside an already null-safe helper (`isTradedPrice` guard unchanged, now applied to `openPrice` instead of `closePrice`) plus two javadoc updates — no null-safety, error-handling, resource-lifecycle, atomicity, or performance change; grepped `main` for any other stale reference to "buy-day close"/`getClosePrice()` in backtest-owned files (`BacktestResultItemDto`, `BacktestItemRequestDto`, `StrategyController`) and found none. No Critical/Important findings; nothing left unfixed.
+
+- Criteria verified live this increment (checked off above): L300, L308, L363, L369, L370, L371, L372, L373, L374, L375, L376 — all 11 of the criteria that were `- [ ]` at the start of this increment, all directly exercised against the running app and the real database.
+
+- Anything NOT independently re-verified, and why: none — every previously-unchecked box in this increment's scope was exercised live. The other, already-checked boxes elsewhere in the spec were not re-run (out of scope for an increment; the rename/formula/batching/validation logic they cover was untouched by this diff, confirmed by the fact that the only production-code change was the single `getClosePrice()` → `getOpenPrice()` swap plus javadoc).

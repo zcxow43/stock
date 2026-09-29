@@ -37,6 +37,11 @@ import java.util.List;
  * lenient boolean coercion, which would otherwise silently accept the JSON string {@code "false"}
  * or the number {@code 0} as {@code false} — the spec requires those to be rejected as a 400, not
  * coerced.
+ *
+ * <p>`confirmBars` is accepted only by RISING_SUPPORT — see specs/backend/strategy-scan.md, "上漲支撐的
+ * 確認長度可選（confirmBars）". Declared as BigDecimal for the same reason as `days`/`windowDays` above: a
+ * non-integer value deserializes successfully and is rejected by INVALID_CONFIRM_BARS instead of a
+ * generic 400.
  */
 public class StrategySelectionDto {
 
@@ -57,6 +62,7 @@ public class StrategySelectionDto {
     private BigDecimal fastPeriod;
     private BigDecimal slowPeriod;
     private BigDecimal jThreshold;
+    private BigDecimal confirmBars;
 
     public StrategySelectionDto() {
     }
@@ -203,5 +209,13 @@ public class StrategySelectionDto {
     @JsonProperty("jThreshold")
     public void setJThreshold(BigDecimal jThreshold) {
         this.jThreshold = jThreshold;
+    }
+
+    public BigDecimal getConfirmBars() {
+        return confirmBars;
+    }
+
+    public void setConfirmBars(BigDecimal confirmBars) {
+        this.confirmBars = confirmBars;
     }
 }
