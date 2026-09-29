@@ -1,6 +1,6 @@
 # 策略型態掃描與回測
 
-從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 勾選十個策略（含三個法人籌碼型態與 MACD／KDJ 兩個技術指標型態）掃描並自動回測（三個批次框預設勾選，表格一出現就是報酬率降冪） → 取消勾選「取消買進價高於 500 元」讓被藏起來的筆勾回並重新顯示 → 展開一檔的多個買進日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 往下捲動、三個總計浮動跟隨」的完整流程。
+從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 於十一張策略卡片中勾選十個（含三個法人籌碼型態與 MACD／KDJ 兩個技術指標型態；第十一張「站上均線」這一輪未勾選）掃描並自動回測（三個批次框預設勾選，表格一出現就是報酬率降冪） → 取消勾選「取消買進價高於 500 元」讓被藏起來的筆勾回並重新顯示 → 展開一檔的多個買進日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 往下捲動、三個總計浮動跟隨」的完整流程。
 
 ![storyboard](strategy/storyboard.png)
 
@@ -12,7 +12,7 @@
 
 | 步驟 | 觸發 | 後端 API | 用途 | 契約 |
 |---|---|---|---|---|
-| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲／三個法人籌碼型態／MACD／KDJ 的參數定義（含外資／投信複選、MACD 短期 EMA 須小於長期 EMA 的 `lessThan` 限制、KDJ 無單位且可為負的 J 門檻）；卡片上的群組勾選框取自各條目的 `paramGroups`——反彈的 `rise`（另外要求反彈漲幅）與箱型突破的 `volume`（要求量增，預設開啟、不轄任何參數） | [strategy-scan](../backend/strategy-scan.md) |
+| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲／三個法人籌碼型態／MACD／KDJ 的參數定義（含外資／投信複選、MACD 短期 EMA 須小於長期 EMA 的 `lessThan` 限制、KDJ 無單位且可為負的 J 門檻）；目錄共十一筆，站上均線以 `params` 的 `maPeriods` 複選廣告 MA5／MA20／MA60（預設全選、至少一個），與法人的 `investors` 走同一套 `type: multiSelect` 機制；卡片上的群組勾選框取自各條目的 `paramGroups`——反彈的 `rise`（另外要求反彈漲幅）與箱型突破的 `volume`（要求量增，預設開啟、不轄任何參數） | [strategy-scan](../backend/strategy-scan.md) |
 | 1 | 進頁載入 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt` 顯示最後同步時間 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 1 | 進頁載入 | `GET /api/stocks?page=1&size=1` | 只取 `total` 顯示常駐的「共 N 檔」 | [stock-catalog](../backend/stock-catalog.md) |
 | 2 | 按「更新股票清單」 | `POST /api/stocks/universe/import` | **此端點即是向交易所抓取上市股票清單的起點**，同時匯入官方產業別 | [stock-universe-import](../backend/stock-universe-import.md) |
@@ -20,7 +20,7 @@
 | 3 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | **此端點即是抓取歷史日 K 的起點**；全市場模式逐交易日各向交易所取一次當日全市場快照 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 3 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 輪詢進度，更新已完成檔數 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 4 | 同步完成 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 重取 `lastSyncedAt` | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 5 | 按「開始掃描」 | `POST /api/strategies/scan` | 一次送入十個策略（箱型突破除 `preset`／`risePercent` 外另帶 `requireVolume`，取自卡片上的「要求量增」勾選框、此處為預設的 `true`；法人籌碼型態各帶 `investors` 與自己的參數；MACD 帶 `fastPeriod`／`slowPeriod`、KDJ 帶 `jThreshold`，兩者的指標由日線即時算出、不讀指標表），回應組成單一命中彙總表與標題下的採用參數那一行；法人籌碼型態另帶 `dataThroughDate` 與達標方。本端點只讀已入庫的法人資料，**不會**向交易所抓取——法人資料由第 3 步的日線回補結束後在背景補齊 | [strategy-scan](../backend/strategy-scan.md) |
+| 5 | 按「開始掃描」 | `POST /api/strategies/scan` | 一次送入十個策略（未勾選的站上均線不在請求裡，假若勾選則另帶 `maPeriods`）（箱型突破除 `preset`／`risePercent` 外另帶 `requireVolume`，取自卡片上的「要求量增」勾選框、此處為預設的 `true`；法人籌碼型態各帶 `investors` 與自己的參數；MACD 帶 `fastPeriod`／`slowPeriod`、KDJ 帶 `jThreshold`，兩者的指標由日線即時算出、不讀指標表），回應組成單一命中彙總表與標題下的採用參數那一行；法人籌碼型態另帶 `dataThroughDate` 與達標方。本端點只讀已入庫的法人資料，**不會**向交易所抓取——法人資料由第 3 步的日線回補結束後在背景補齊 | [strategy-scan](../backend/strategy-scan.md) |
 | 5 | 掃描成功且命中 ≥ 1 檔時**自動送出**（無按鈕） | `POST /api/strategies/backtest` | 對命中清單**逐買進日**算買賣結果（一檔有幾個相異買進日就送幾筆；上漲支撐的買進日為確認完成日 D+2，法人籌碼型態與 MACD／KDJ 兩個技術指標型態為訊號日的次一交易日——後者的交叉若落在該檔最新一根日線、其後還沒有交易日，該筆沒有買進日，掃描把它列在 pendingConfirm，不進表也不回測）；失敗時「重試回測」以同一份內容重送 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 6 | 自動回測完成 | —（不發請求） | 第 5 步的回測回應抵達，填入表格右側六欄、標題右側總成本／總報酬率／總收益三個標籤與標題列下方四個批次勾選框；「隱藏資料不齊」「取消買進價高於 [金額] 元」「僅選取報酬率 [n] % 以上」三者**預設勾選**，初始勾選狀態為「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上」四步的結果，初始排序即報酬率降冪。這些預設不發出任何額外請求 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 7 | 取消勾選「取消買進價高於 500 元」 | —（不發請求） | 被它隱藏的筆依回應各筆的 `buyPrice` 一次勾回並重新顯示，金額輸入恢復可編輯；報酬率框不追溯這些回來的筆，排序維持降冪；純前端 | [strategy-backtest](../backend/strategy-backtest.md) |
