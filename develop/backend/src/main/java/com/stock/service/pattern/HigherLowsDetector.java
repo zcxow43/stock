@@ -39,7 +39,6 @@ public class HigherLowsDetector implements PatternDetector {
 
     public static final String CODE = "HIGHER_LOWS";
     private static final int PRICE_SCALE = 2;
-    private static final int CALC_SCALE = 10;
     private static final int MA_WINDOW = 5;
 
     /**
@@ -232,13 +231,9 @@ public class HigherLowsDetector implements PatternDetector {
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }
 
-    /** MA5 at bars index {@code index} — the arithmetic mean of the 5 closes ending at (and
-     *  including) that index. Caller must ensure {@code index >= MA_WINDOW - 1}. */
+    /** MA5 at bars index {@code index} — see {@link MovingAverage}. Caller must ensure
+     *  {@code index >= MA_WINDOW - 1}. */
     private static BigDecimal ma5(List<StockDailyPrice> bars, int index) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (int k = index - (MA_WINDOW - 1); k <= index; k++) {
-            sum = sum.add(bars.get(k).getClosePrice());
-        }
-        return sum.divide(BigDecimal.valueOf(MA_WINDOW), CALC_SCALE, RoundingMode.HALF_UP);
+        return MovingAverage.simple(bars, index, MA_WINDOW);
     }
 }

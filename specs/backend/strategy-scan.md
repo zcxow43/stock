@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描 API"
 requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）＝**確認完成日的下一個交易日**，回測以該日開盤價買進：上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日；上漲支撐新增確認長度 confirmBars（1 或 2，預設 2，與靈敏度正交，目錄端點以 params 廣告）；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 為訊號日之後的下一個交易日（尚無下一個交易日時列入 pendingConfirm，與法人籌碼型態同一條規則）；箱型突破新增 requireVolume 開關（boolean，預設 true），為 false 時跳過量能判定，與靈敏度正交、不改動 volumeMultiple，目錄端點以 paramGroups 的 volume 一筆廣告，掃描回應同時回 preset 與 requireVolume；新增均線型態站上均線（MA_BREAKOUT），以 maPeriods 複選 MA5／MA20／MA60（預設三者全選、至少一個），勾選的每一條各自獨立判定、任一條達標即命中：前一交易日收盤 ≤ 該日均線、當日收盤 > 當日均線即為訊號日，不做量能與站穩確認，buyDate 為訊號日的下一個交易日"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion, stock-indicator-statistics]
@@ -1242,29 +1242,29 @@ KDJ 黃金交叉：
 ---
 ### 站上均線（`MA_BREAKOUT`，本次新增）
 
-- [ ] `GET /api/strategies` 回傳十一個策略，既有十個之後為 `MA_BREAKOUT`：`name` 為「站上均線」、`presets` 為空陣列、`params` 恰一筆 `maPeriods`（`type` 為 `multiSelect`、`options` 依序為 `MA5`／`MA20`／`MA60`、`default` 為三者全選、`minSelected` 為 `1`），與本 spec 的 JSON 範例完全一致
-- [ ] 既有十個策略的目錄條目完全未變
-- [ ] 以構造資料驗證命中：D−1 收盤 ≤ D−1 的 MA(n)、D 收盤 > D 的 MA(n) 時命中，`signalDate` 為 D，`detail` 各欄與手算相符
-- [ ] 邊界為 `≤` 與 `>`：D 收盤恰等於 D 的 MA(n) 時**不**命中；D−1 收盤恰等於 D−1 的 MA(n) 時**仍可**命中
-- [ ] 只看單邊不算命中：一檔連續多日收盤都在 MA(n) 之上的構造資料，只有「前一日在下、當日在上」的那一天是訊號日，其餘日子不產生命中
-- [ ] MA(n) 取**收盤價**的 n 日簡單移動平均（D 之前含 D 的 n 個交易日算術平均）：以構造資料驗證，同一組行情下收盤均線與最低價均線的穿越日不同時，命中的是收盤均線那一組
-- [ ] 不足 n 根者該日無 MA(n)、不參與判定；區間內沒有任何一個 D 可判定的股票列入 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
-- [ ] 三條均線各自獨立判定、任一條達標即命中：只勾 `MA20` 與勾三條，在同一份資料上對 `MA20` 的判定結果相同
-- [ ] 多條同時達標仍只是**一筆**命中，`detail.matchedPeriods` 依 `MA5` → `MA20` → `MA60` 固定順序列出實際達標的每一條
-- [ ] `detail` 為 `close`／`prevClose`／`matchedPeriods`／`ma5`／`ma20`／`ma60`／`prevMa5`／`prevMa20`／`prevMa60`；未勾選的那一條其 `maN`／`prevMaN` 為 `null`，勾選但未達標者照樣回值
-- [ ] `maPeriods` 省略時以三條全選判定：同一份資料省略本欄位與明確送 `["MA5","MA20","MA60"]`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
-- [ ] 掃描回應中 `MA_BREAKOUT` 那一筆回 `maPeriods`（實際採用值，依 `MA5`→`MA20`→`MA60` 順序），且**不含** `preset`
-- [ ] `buyDate` 為 `signalDate` 之後的下一個交易日，依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
-- [ ] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
-- [ ] 訊號落在該檔最新一筆日線、其後尚無交易日時該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`
-- [ ] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
-- [ ] 同一檔在區間內多次命中時只回報最近一次（已有 `buyDate` 的命中中最近的一次）
-- [ ] 前置資料為 `max(勾選的均線天數)` 個交易日：以只有 30 根日線的構造股票驗證——只勾 `MA5` 時正常判定，勾到 `MA60` 時該檔落入 `insufficientData`
-- [ ] 不讀也不寫 `stock_daily_indicator`：本次不產生任何 DBA migration，不新增任何資料表或欄位
-- [ ] `maPeriods` 為空陣列、含 `MA5`／`MA20`／`MA60` 以外的值、或有重複 → `400`，`{"code":"INVALID_MA_PERIODS","strategy":"MA_BREAKOUT"}`
-- [ ] 對 `MA_BREAKOUT` 以外的任一型態帶 `maPeriods` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"maPeriods"}`
-- [ ] 對 `MA_BREAKOUT` 帶 `preset` → `400` `PRESET_NOT_APPLICABLE`；帶 `risePercent`／`confirmBars`／`requireVolume` → `400` `PARAM_NOT_APPLICABLE`，`param` 指名該欄位
-- [ ] 十一個策略同一次送出時 `results` 依送入順序回傳十一筆，既有十個型態的命中結果與未加本功能時相同
+- [x] `GET /api/strategies` 回傳十一個策略，既有十個之後為 `MA_BREAKOUT`：`name` 為「站上均線」、`presets` 為空陣列、`params` 恰一筆 `maPeriods`（`type` 為 `multiSelect`、`options` 依序為 `MA5`／`MA20`／`MA60`、`default` 為三者全選、`minSelected` 為 `1`），與本 spec 的 JSON 範例完全一致
+- [x] 既有十個策略的目錄條目完全未變
+- [x] 以構造資料驗證命中：D−1 收盤 ≤ D−1 的 MA(n)、D 收盤 > D 的 MA(n) 時命中，`signalDate` 為 D，`detail` 各欄與手算相符
+- [x] 邊界為 `≤` 與 `>`：D 收盤恰等於 D 的 MA(n) 時**不**命中；D−1 收盤恰等於 D−1 的 MA(n) 時**仍可**命中
+- [x] 只看單邊不算命中：一檔連續多日收盤都在 MA(n) 之上的構造資料，只有「前一日在下、當日在上」的那一天是訊號日，其餘日子不產生命中
+- [x] MA(n) 取**收盤價**的 n 日簡單移動平均（D 之前含 D 的 n 個交易日算術平均）：以構造資料驗證，同一組行情下收盤均線與最低價均線的穿越日不同時，命中的是收盤均線那一組
+- [x] 不足 n 根者該日無 MA(n)、不參與判定；區間內沒有任何一個 D 可判定的股票列入 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
+- [x] 三條均線各自獨立判定、任一條達標即命中：只勾 `MA20` 與勾三條，在同一份資料上對 `MA20` 的判定結果相同
+- [x] 多條同時達標仍只是**一筆**命中，`detail.matchedPeriods` 依 `MA5` → `MA20` → `MA60` 固定順序列出實際達標的每一條
+- [x] `detail` 為 `close`／`prevClose`／`matchedPeriods`／`ma5`／`ma20`／`ma60`／`prevMa5`／`prevMa20`／`prevMa60`；未勾選的那一條其 `maN`／`prevMaN` 為 `null`，勾選但未達標者照樣回值
+- [x] `maPeriods` 省略時以三條全選判定：同一份資料省略本欄位與明確送 `["MA5","MA20","MA60"]`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
+- [x] 掃描回應中 `MA_BREAKOUT` 那一筆回 `maPeriods`（實際採用值，依 `MA5`→`MA20`→`MA60` 順序），且**不含** `preset`
+- [x] `buyDate` 為 `signalDate` 之後的下一個交易日，依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
+- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
+- [x] 訊號落在該檔最新一筆日線、其後尚無交易日時該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`
+- [x] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
+- [x] 同一檔在區間內多次命中時只回報最近一次（已有 `buyDate` 的命中中最近的一次）
+- [x] 前置資料為 `max(勾選的均線天數)` 個交易日：以只有 30 根日線的構造股票驗證——只勾 `MA5` 時正常判定，勾到 `MA60` 時該檔落入 `insufficientData`
+- [x] 不讀也不寫 `stock_daily_indicator`：本次不產生任何 DBA migration，不新增任何資料表或欄位
+- [x] `maPeriods` 為空陣列、含 `MA5`／`MA20`／`MA60` 以外的值、或有重複 → `400`，`{"code":"INVALID_MA_PERIODS","strategy":"MA_BREAKOUT"}`
+- [x] 對 `MA_BREAKOUT` 以外的任一型態帶 `maPeriods` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"maPeriods"}`
+- [x] 對 `MA_BREAKOUT` 帶 `preset` → `400` `PRESET_NOT_APPLICABLE`；帶 `risePercent`／`confirmBars`／`requireVolume` → `400` `PARAM_NOT_APPLICABLE`，`param` 指名該欄位
+- [x] 十一個策略同一次送出時 `results` 依送入順序回傳十一筆，既有十個型態的命中結果與未加本功能時相同
 
 ## Execution Result
 - Status: DONE
@@ -1662,3 +1662,28 @@ Implements the remaining 27 unchecked Acceptance Criteria: a per-strategy `riseP
   - **DB 清理確認**：所有構造股票（`RS01`／`RS03`／`BB01`／`HL01`／`RB01`／`RB02`／`CR01`）驗證後皆已 `DELETE FROM stock_daily_price` 與 `DELETE FROM stock`；`SELECT COUNT(*) FROM stock WHERE stock_id IN (...)` 收尾確認為 `0`。未修改任何既有真實股票的列。
   - **未能驗證 / 刻意保留**：`HIGHER_LOWS` 的 `pendingConfirm`（L1165 涵蓋的四個型態之一）未能以構造資料直接觸發——如上方 Notes 與程式碼 javadoc 所述，這是該型態自身判定前提（swing low 需要右側 `swingBars`≥2 根資料才能被認出）帶來的數學結果，不是實作缺陷；機制本身（`nextTradingDate` + `anyUnresolvedMatch`）與其餘九個型態逐字相同、且已被其中多個型態的真實/構造資料直接驗證正確。本次選擇誠實記載這個結構性事實，而不是构造一個會與「swing low 需要右側資料才能被認出」這條演算法前提互相矛盾的假案例。
   - Nothing else deliberately left unfixed.
+
+### Increment 13 — 2026-09-30
+
+新增第十一個型態 站上均線（`MA_BREAKOUT`），涵蓋「站上均線（MA_BREAKOUT，本次新增）」一節的 23 項驗收。
+
+- Status: DONE
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/pattern/MaBreakoutDetector.java`（新檔，`@Order(11)`；`maPeriods` 複選 MA5／MA20／MA60，逐條獨立判定，任一條達標即命中；`buyDate` 用共用的 `nextTradingDate`）
+  - `develop/backend/src/main/java/com/stock/service/pattern/MovingAverage.java`（新檔；全系統唯一的收盤 n 日簡單均線實作）
+  - `develop/backend/src/main/java/com/stock/service/pattern/HigherLowsDetector.java`（`ma5()` 改呼叫 `MovingAverage.simple`，移除自帶的加總／除法；行為不變）
+  - `develop/backend/src/main/java/com/stock/service/pattern/PatternDetector.java`（新增 `getMaPeriodCodes()`／`acceptsMaPeriods()`，預設空清單＝不接受）
+  - `develop/backend/src/main/java/com/stock/service/StrategyScanService.java`（新增 `validateMaPeriods`；把 `validateInvestors` 的「非空／白名單／不重複」抽成通用 `validateMultiSelect`，`investors` 與 `maPeriods` 共用同一份，不以策略 code 判斷）
+  - `develop/backend/src/main/java/com/stock/dto/MaBreakoutDetailDto.java`（新檔）、`StrategySelectionDto.java`（+`maPeriods`）、`StrategyResultDto.java`（+`maPeriods`）、`ErrorResponse.java`（+`invalidMaPeriods`）
+  - `develop/backend/src/main/java/com/stock/exception/InvalidMaPeriodsException.java`（新檔）、`GlobalExceptionHandler.java`（+handler）
+  - `specs/backend/strategy-scan.md`（本節；勾選 23 項驗收）
+- Notes:
+  - **未新增任何資料表／欄位、無 DBA spec**；不讀寫 `stock_daily_indicator`。驗證前後 `stock_daily_price` 皆為 242,641 筆。
+  - **驗證方式**：`mvn package -DskipTests` → `java -jar target/backend.jar`（`SET time_zone = '+08:00'`），以真實 HTTP 呼叫真實資料庫。構造資料用一次性股票 `ZZ01`~`ZZ11`、`ZR00`~`ZR07`（`is_active=0`、`source='ZZTEST'`），驗完全數 DELETE，`SELECT COUNT(*)` 確認殘留 0；未動任何真實股票。App 已停止。
+  - **構造資料**：`ZZ01` 連續在均線之上（僅 idx5 命中）；`ZZ02` D 收盤 22.05 恰等於 MA5 22.05 → 不命中；`ZZ03` D−1 收盤 10.00 恰等於 D−1 MA5 10.00 → 仍命中；`ZZ04` 前五日最低價 5、收盤 10，收盤均線命中（最低價均線不會）；`ZZ05` 60 根平盤後 11.00 → 三條同時達標，`ma5 10.2／ma20 10.05／ma60 10.02` 與手算相符，只回一筆；`ZZ06` 只有 MA5 達標，`ma20 17.1／ma60 19.03／prevMa20 17.5／prevMa60 19.17` 與手算相符；`ZZ07` 訊號日 03-10 之後缺口至 03-17，`buyDate=2025-03-17`（≠ 03-11），`endDate=訊號日` 時仍在 `items`；`ZZ08` 訊號在最新一筆 → `pendingConfirm`；`ZZ09` 較早已有 buyDate 的命中＋最新一筆未確認 → `items` 回較早那次、不在 `pendingConfirm`；`ZZ10` 多次命中只回最近一次已有 buyDate 者；`ZZ11` 30 根日線。
+  - **獨立參考實作**：以 Python 精確有理數依 spec 定義另寫一份判定，對 8 檔各 130 根隨機走勢股（96 次不同區間／勾選組合）與 40 檔真實股票（200 次）逐筆比對 `hit／signalDate／buyDate／matchedPeriods／nomatch／insufficient／pending`，**0 筆不一致**；同時證明 `max(勾選天數)` 的前置資料量足夠。
+  - **迴歸**：以 HEAD 另建 worktree 建置、啟動，對真實資料（2026-07-01~08-31，1088 檔，十個既有型態）送同一份請求，與本次建置的 `results` 逐位元相同；十個既有目錄條目也相同。十一個型態同送時 `results` 依送入順序回十一筆，前十筆與 HEAD 相同。
+  - **順手修掉的缺陷**：`maPeriods:[null]` 曾因 `List.of(...).contains(null)` 丟 NPE 回 500，`validateMultiSelect` 已先擋 null → 回 `400 INVALID_MA_PERIODS`；`investors:[null]` 原本也有同一個潛在問題，現在回 `400 INVALID_INVESTORS`（已驗證）。
+  - **判讀取捨（請確認）**：`insufficientData` 依「區間內沒有任何一個 D 可判定」逐日認定，某條均線在該日資料不足只是「不參與」。因此 30 根股票只勾 `MA60` → `insufficientData`；只勾 `MA5` → 正常判定；`MA5`+`MA60` 或三條全選 → 由 MA5 判定、**不**落入 `insufficientData`。若要「任一勾選均線前置不足即整檔 insufficient」需另行決定。
+  - **與 spec 範例 JSON 的差異（非本次造成）**：目錄的 `BOX_BREAKOUT`、`HIGHER_LOWS` 條目與 spec 開頭範例 JSON 不逐字相同，但與 HEAD 建置的輸出完全一致，屬既有差異；`MA_BREAKOUT` 與其餘八個條目與範例逐字相同。
+  - 未寫、未跑任何測試。

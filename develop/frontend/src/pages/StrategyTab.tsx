@@ -11,6 +11,7 @@ import {
   type InstitutionalNetRatioDetail,
   type InstitutionalStrengthRankDetail,
   type InvestorCode,
+  type MaBreakoutDetail,
   type ParamGroup,
   type PresetCode,
   type ScanRequest,
@@ -414,11 +415,11 @@ const ONE_DAY_WINDOW_HINT: Record<string, string> = {
   dropDays: '下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中',
 }
 
-/** 待確認行文案 — 十個型態都可能出現，每個型態說明「已經發生了什麼」，一律以「次一交易日
+/** 待確認行文案 — 十一個型態都可能出現，每個型態說明「已經發生了什麼」，一律以「次一交易日
  * 尚未到」收尾（箱型突破／上漲支撐另外還要等確認日，因此是「確認日或次一交易日尚未到」）。
  * 這段文字本身是逐型態固定措辭（specs/frontend/strategy.md「待確認：文案逐型態…」），因此
  * 以型態 `code` 為鍵是這段文案唯一合理的資料形狀——它不是「要不要畫這一行」的判斷（那一律由
- * `result.pendingConfirm.length > 0` 決定，十個型態一致），只是每個型態各自的固定用語。 */
+ * `result.pendingConfirm.length > 0` 決定，十一個型態一致），只是每個型態各自的固定用語。 */
 const PENDING_CONFIRM_LABEL: Record<StrategyCode, string> = {
   BOX_BREAKOUT: '已突破，但確認日或次一交易日尚未到',
   HIGHER_LOWS: '已成立，但次一交易日尚未到',
@@ -430,7 +431,14 @@ const PENDING_CONFIRM_LABEL: Record<StrategyCode, string> = {
   INSTITUTIONAL_STRENGTH_RANK: '已達標，但次一交易日尚未到',
   MACD_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
   KDJ_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
+  MA_BREAKOUT: '已站上，但次一交易日尚未到',
 }
+
+/** Backend validation codes that all mean "a `multiSelect` param dropped below its
+ * `minSelected`" — they share ONE handler that finds the card's multiSelect param by `type`
+ * (`INVALID_INVESTORS` on the institutional cards, `INVALID_MA_PERIODS` on 站上均線). A future
+ * multiSelect strategy's code is a list entry here, not a new branch. */
+const MULTI_SELECT_ERROR_CODES: string[] = ['INVALID_INVESTORS', 'INVALID_MA_PERIODS']
 
 /** The three 法人籌碼 strategy codes — the only place besides `formatStrategyParams`/
  * `renderScanNotes` that names them individually, both for copy that genuinely differs per
@@ -456,6 +464,13 @@ function investorLabel(code: string): string {
  * 「三者共有…matchedInvestors」). This is a value-shape check, not a code/param-name branch. */
 function hasMatchedInvestors(detail: StrategyDetail): detail is InstitutionalDetail {
   return 'matchedInvestors' in detail
+}
+
+/** A hit whose `detail` carries a `matchedPeriods` array is a multiSelect-driven MA hit
+ * (today only `MA_BREAKOUT`) — detected structurally off the response shape, exactly like
+ * `hasMatchedInvestors` above, never by strategy `code`. */
+function hasMatchedPeriods(detail: StrategyDetail): detail is MaBreakoutDetail {
+  return 'matchedPeriods' in detail
 }
 
 /** Only `INSTITUTIONAL_NET_RATIO`'s `foreign`/`trust` carry a `direction` — the other two
@@ -510,6 +525,11 @@ interface UnionRow {
   /** The latest `signalDate` among this stock's hits — what the merged table sorts by.
    * Sorting stays keyed on `signalDate`, not `buyDate` — 父列排序不變. */
   latestSignalDate: string
+  /** 「僅選取全符合」的判定，以**股票**為單位：這檔的 `stockId` 出現在掃描回應**每一筆**
+   * `results` 的 `items` 中（列在 `pendingConfirm`／`insufficientData` 不算命中，因為那兩個
+   * 清單本來就不進 `items`）。取自掃描回應而非畫面上的卡片，也不看買進日——一檔的所有筆共用
+   * 同一個值。 */
+  matchesAllStrategies: boolean
   /** This stock's distinct buy dates, newest first. Length 1 → no expand caret, the
    * single group IS the row. Length ≥ 2 → an expand caret reveals one child row per
    * group (specs/frontend/strategy.md「一檔多筆的展開列」). */
@@ -540,6 +560,7 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
     }
   }
   const withGroups: UnionRow[] = Array.from(map.values()).map((row) => {
+    const matchesAllStrategies = result.results.every((r) => r.items.some((item) => item.stockId === row.stockId))
     const byBuyDate = new Map<string, UnionHit[]>()
     for (const hit of row.hits) {
       const plainHit: UnionHit = { strategyCode: hit.strategyCode, signalDate: hit.signalDate, detail: hit.detail }
@@ -556,6 +577,7 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
       stockName: row.stockName,
       hits: row.hits.map((h) => ({ strategyCode: h.strategyCode, signalDate: h.signalDate, detail: h.detail })),
       latestSignalDate,
+      matchesAllStrategies,
       buyDateGroups,
     }
   })
@@ -765,6 +787,17 @@ function computeUnderReturnThresholdKeys(
   })
 }
 
+/** 目前顯示中（不在 `hiddenItemKeys` 內）、且所屬股票不是「全符合」的每一筆——逐股票判定、該檔
+ * 的每一筆同進同出，已被其他框隱藏的筆一律不動。Same reuse rationale as
+ * `computeHighPriceGroupKeys`: the 勾選框's own click handler and the 回測成功時的第 5 步預設
+ * 都呼叫這一份。 */
+function computeNotAllMatchKeys(rows: UnionRow[], hiddenItemKeys: Set<string>): string[] {
+  return rows
+    .filter((row) => !row.matchesAllStrategies)
+    .flatMap((row) => row.buyDateGroups.map((group) => itemKey(row.stockId, group.buyDate)))
+    .filter((key) => !hiddenItemKeys.has(key))
+}
+
 /** 「僅選取報酬率 n% 以上」勾選時一併做的「依報酬率降冪」排序——抽成獨立函式，讓使用者手動
  * 勾選這個框與回測剛完成時第 4 步的預設勾選用的是同一份排序邏輯（specs/frontend/strategy.md
  * 「兩個門檻框改為預設勾選」：不得在回測成功處另外寫一份）。`hiddenItemKeys` 用來過濾父列聚
@@ -954,6 +987,12 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // 重新整理頁面回到 2') — only this `useState` initializer (mount-only) ever resets it.
   const [returnThresholdInput, setReturnThresholdInput] = useState('2')
   const [returnThresholdChecked, setReturnThresholdChecked] = useState(false)
+
+  // ---------- 「僅選取全符合」勾選框 ----------
+  // A remembered switch (not derived from the row checkboxes), reset by every 開始掃描 and by
+  // 取消全選. Whether it can be operated at all depends on the scan response having >= 2
+  // strategies (see `allMatchAvailable` below).
+  const [allMatchChecked, setAllMatchChecked] = useState(false)
 
   const [hideIncomplete, setHideIncomplete] = useState(false)
 
@@ -1374,7 +1413,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * `checkedItemKeys` 等元件狀態：這個函式在 `backtestStrategies(...).then(...)` 內執行時，
    * 那些狀態可能仍是「這次回測開始前」的舊值（例如重新掃描後才觸發的自動回測，`unionRows`
    * 閉包還停在上一批命中清單），讀舊狀態算出來的預設值就會套用在錯的一批筆上。 */
-  const applyBacktestDefaults = (resp: BacktestResponse, rows: UnionRow[]) => {
+  const applyBacktestDefaults = (resp: BacktestResponse, rows: UnionRow[], strategyCount: number) => {
     const allKeys = rows.flatMap((row) => row.buyDateGroups.map((group) => itemKey(row.stockId, group.buyDate)))
     const itemsByKey = new Map<string, BacktestResultItem>()
     for (const item of resp.items) itemsByKey.set(itemKey(item.stockId, item.buyDate), item)
@@ -1398,14 +1437,21 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     const returnAmount = isReturnThresholdInputInvalid(returnThresholdInput) ? null : Number(returnThresholdInput)
     const underReturnKeys = computeUnderReturnThresholdKeys(allKeys, itemsByKey, hiddenAfterStep3, returnAmount)
 
+    // 第 5 步：僅選取全符合 — 只在送出兩個以上策略時才預設勾選；作用範圍同樣是此時仍顯示中的筆，
+    // 且與第 4 步都只取消勾選、不隱藏，兩者互相交換順序結果相同。
+    const allMatchNext = strategyCount >= 2
+    const notAllMatchKeys = allMatchNext ? computeNotAllMatchKeys(rows, hiddenAfterStep3) : []
+
     const nextChecked = new Set(allKeys)
     for (const key of highPriceKeys) nextChecked.delete(key)
     for (const key of underReturnKeys) nextChecked.delete(key)
+    for (const key of notAllMatchKeys) nextChecked.delete(key)
 
     setCheckedItemKeys(nextChecked)
     setHideIncomplete(hideIncompleteNext)
     setPriceThresholdChecked(priceThresholdCheckedNext)
     setReturnThresholdChecked(true)
+    setAllMatchChecked(allMatchNext)
     setSortState({ column: 'returnPercent', direction: 'desc' })
     setSortedRowOrder(computeReturnDescSortOrder(rows, itemsByKey, nextChecked, resp.lotSize, hiddenAfterStep3))
   }
@@ -1417,7 +1463,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * auto-backtest has neither) — the request itself is identical either way. `rows` is passed
    * in explicitly by both call sites (never read from the component's own `unionRows`) for
    * the same staleness reason documented on `applyBacktestDefaults` above. */
-  const runBacktest = (rows: UnionRow[], isRetry: boolean) => {
+  const runBacktest = (rows: UnionRow[], strategyCount: number, isRetry: boolean) => {
     backtestGenerationRef.current += 1
     const generation = backtestGenerationRef.current
     backtestAbortControllerRef.current?.abort()
@@ -1433,7 +1479,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         // an outdated response can never overwrite a result it no longer corresponds to.
         if (backtestGenerationRef.current !== generation) return
         setBacktestResult(resp)
-        applyBacktestDefaults(resp, rows)
+        applyBacktestDefaults(resp, rows, strategyCount)
         setBacktestStatus('success')
         setBacktestErrorMessage(null)
         setIsRetryingBacktest(false)
@@ -1461,6 +1507,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestResult(null)
     setPriceThresholdChecked(false)
     setReturnThresholdChecked(false)
+    setAllMatchChecked(false)
     setHideIncomplete(false)
     setBacktestErrorMessage(null)
     setIsRetryingBacktest(false)
@@ -1493,7 +1540,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         setExpandedStockIds(new Set())
         // 掃描成功且命中至少一檔時，不需任何使用者動作即自動送出一次回測；掃描失敗或命中
         // 0 檔時不送——沒有命中清單就沒有東西可以回測。
-        if (rows.length > 0) runBacktest(rows, false)
+        if (rows.length > 0) runBacktest(rows, resp.results.length, false)
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'UNKNOWN_STOCK_ID') {
@@ -1524,15 +1571,15 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
-        if (err instanceof ApiError && err.code === 'INVALID_INVESTORS') {
+        if (err instanceof ApiError && err.code !== null && MULTI_SELECT_ERROR_CODES.includes(err.code)) {
           // Backend fallback only — client-side `minSelected` validation already blocks
           // this in normal use. Must name the offending card. The message names whichever
-          // `multiSelect` param the card declares (today always `investors`), found by
-          // `type`, never by a hard-coded `investors` code check.
+          // `multiSelect` param the card declares (`investors` on the institutional cards,
+          // `maPeriods` on 站上均線), found by `type`, never by a hard-coded param `code`.
           const code = (err.strategy as StrategyCode) ?? null
           const strategy = code ? catalog.find((s) => s.code === code) : undefined
           const multiParam = strategy?.params?.find((p) => p.type === 'multiSelect')
-          if (code) setParamServerError({ code, message: multiParam ? paramErrorMessage(multiParam) : '請至少勾選一個法人' })
+          if (code) setParamServerError({ code, message: multiParam ? paramErrorMessage(multiParam) : '請至少勾選一個選項' })
           setScanStatus(scanResult ? 'success' : 'idle')
           return
         }
@@ -1677,7 +1724,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
    * this same `unionRows` (the scan itself is never re-run). */
   const handleRetryBacktest = () => {
     if (backtestStatus !== 'error') return
-    runBacktest(unionRows, true)
+    runBacktest(unionRows, scanResult?.results.length ?? 0, true)
   }
 
   const handleSyncClick = () => {
@@ -1739,6 +1786,20 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const progressPercent = (p: ProgressResponse) => (p.total > 0 ? Math.round((completedCount(p) / p.total) * 100) : 0)
 
   const strategyName = (code: StrategyCode) => catalog.find((s) => s.code === code)?.name ?? code
+  /** Options of the strategy's `multiSelect` param (order and text both from the catalogue). */
+  const multiSelectOptionsOf = (code: StrategyCode) => {
+    const param = catalog.find((s) => s.code === code)?.params?.find((p) => p.type === 'multiSelect')
+    return param && param.type === 'multiSelect' ? param.options : []
+  }
+  /** Display name of one option, falling back to the raw `code` if the catalogue doesn't list it. */
+  const multiSelectOptionName = (code: StrategyCode, optionCode: string): string =>
+    multiSelectOptionsOf(code).find((o) => o.code === optionCode)?.name ?? optionCode
+  /** Sorts option codes into the catalogue's option order (MA5, MA20, MA60), unknown codes last. */
+  const sortByOptionOrder = (code: StrategyCode, codes: string[]): string[] => {
+    const order = multiSelectOptionsOf(code).map((o) => o.code)
+    const rank = (c: string) => (order.includes(c) ? order.indexOf(c) : order.length)
+    return [...codes].sort((a, b) => rank(a) - rank(b))
+  }
   const presetName = (code: StrategyCode, preset: PresetCode) =>
     catalog.find((s) => s.code === code)?.presets.find((p) => p.code === preset)?.name ?? preset
 
@@ -1784,6 +1845,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         return `${name}（${investorsPart}・${result.windowDays} 日強度・各前 ${result.topN} 名・${dataPart}）`
       }
     }
+    if (result.maPeriods !== undefined) {
+      // 均線取自掃描回應的 maPeriods（與法人的 investors 同一種做法），不看畫面上的勾選狀態。
+      return `${name}（${result.maPeriods.map((c) => multiSelectOptionName(result.strategy, c)).join('・')}）`
+    }
     if (result.fastPeriod !== undefined && result.slowPeriod !== undefined) {
       // `signalPeriod` is always echoed by the backend (fixed at 9) but read from the
       // response here rather than hard-coded — see「MACD 的訊號線天數同樣取自回應的
@@ -1808,7 +1873,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       // 法人籌碼型態必須標出是哪一方達標 — 「{策略名稱}（{達標方}） {signalDate}」，展開後的子列
       // 沿用同一份 renderUnionHits 因此自動採同一格式。Decided purely by whether this hit's
       // own `detail` carries `matchedInvestors`, never by `strategyCode`.
-      const matchLabel = hit.detail && hasMatchedInvestors(hit.detail) ? institutionalMatchLabel(hit.detail) : null
+      const matchLabel =
+        hit.detail && hasMatchedInvestors(hit.detail)
+          ? institutionalMatchLabel(hit.detail)
+          : hit.detail && hasMatchedPeriods(hit.detail)
+            ? sortByOptionOrder(hit.strategyCode, hit.detail.matchedPeriods ?? [])
+                .map((c) => multiSelectOptionName(hit.strategyCode, c))
+                .join('／')
+            : null
       nodes.push(
         <span key={`${hit.strategyCode}-${idx}`} className="st-union-tag">
           <span className="st-union-tag-name">
@@ -1949,6 +2021,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setCheckedItemKeys(turnOn ? new Set() : new Set(allItemKeys))
     setPriceThresholdChecked(false)
     setReturnThresholdChecked(false)
+    setAllMatchChecked(false)
     setHideIncomplete(false)
   }
 
@@ -2019,6 +2092,28 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       setSortState({ column: 'returnPercent', direction: 'desc' })
       setSortedRowOrder(computeReturnDescSortOrder(unionRows, backtestItemsByKey, updatedChecked, lotSize, hiddenItemKeys))
     }
+  }
+
+  // ---------- 「僅選取全符合」勾選框 ----------
+  // 掃描只送一個策略時每一檔都「全符合」，勾選它沒有任何意義——維持未勾選且 disabled。
+  const allMatchAvailable = (scanResult?.results.length ?? 0) >= 2
+  const allMatchDisabled = backtestResult === null || !allMatchAvailable
+  // 目前顯示中、所屬股票不是全符合的每一筆；取消勾選時重新算出的範圍與勾選時相同（此框沒有
+  // 可改的輸入，範圍只隨「顯示中」的集合而變）。
+  const notAllMatchKeys = computeNotAllMatchKeys(unionRows, hiddenItemKeys)
+
+  /** 勾選「僅選取全符合」→ 顯示中不是全符合的股票的每一筆取消勾選（不隱藏）；取消勾選 → 只把
+   * 它剛才取消掉的那些筆勾回，其餘筆完全不動。**不改排序**，也不重新呼叫任何端點。 */
+  const toggleAllMatch = (turnOn: boolean) => {
+    setAllMatchChecked(turnOn)
+    setCheckedItemKeys((keys) => {
+      const next = new Set(keys)
+      for (const key of notAllMatchKeys) {
+        if (turnOn) next.delete(key)
+        else next.add(key)
+      }
+      return next
+    })
   }
 
   /** 各策略的 insufficientData／pendingConfirm — 合併表格下方逐策略各一行，行首標明策略
@@ -2240,6 +2335,17 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 <p className="st-inline-error st-price-threshold-hint">報酬率需介於 -100 ~ 100、最多兩位小數</p>
               ) : null}
             </div>
+            <label className="st-selectall-item st-allmatch-item">
+              <input
+                type="checkbox"
+                className="st-row-checkbox"
+                checked={allMatchChecked}
+                disabled={allMatchDisabled}
+                onChange={(e) => toggleAllMatch(e.target.checked)}
+                aria-label="僅選取全符合"
+              />
+              <span className={`st-total-label${allMatchDisabled ? ' st-total-label-disabled' : ''}`}>僅選取全符合</span>
+            </label>
             <label className="st-selectall-item st-incomplete-item">
               <input
                 type="checkbox"

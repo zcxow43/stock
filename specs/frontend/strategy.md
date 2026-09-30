@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
 requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**"
 depends_on: [stock-list]
@@ -1229,42 +1229,42 @@ depends_on: [stock-list]
 
 ### 站上均線卡片（本次新增）
 
-- [ ] 策略卡片區多出一張「站上均線」卡片，位於既有十張之後；卡片依該條目的 `params` 畫出一組「均線」複選勾選框（`MA5`／`MA20`／`MA60`），初始三個皆勾選，選項文字與順序全部取自 API
-- [ ] 這張卡片完全由既有的 `type: "multiSelect"` 通用邏輯畫出：程式中不存在以 `MA_BREAKOUT` 或 `maPeriods` 判斷的分支，也未新增任何一種卡片形狀。把 mock 回應中這一筆的 `options` 改為兩個選項，卡片跟著只畫兩個勾選框
-- [ ] 卡片沒有靈敏度下拉（該條目 `presets` 為空陣列），與累積上漲、反彈、法人與技術指標卡片同一種形狀
-- [ ] 未勾選本策略時，均線複選框與該卡片其餘控制項同樣 disabled
-- [ ] 勾選數為 0 時於該卡片下方顯示「請至少勾選一個均線」並擋下送出，與法人複選的 `minSelected` 處理走同一條路徑（不是為本策略另寫的檢查）
-- [ ] 後端回 `INVALID_MA_PERIODS` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
-- [ ] 送出的 `MA_BREAKOUT` 那一筆帶 `maPeriods`（依 `options` 順序排列的勾選 `code` 陣列），且**不帶** `preset`；勾選狀態與預設相同時仍照送
-- [ ] 命中策略與訊號日欄寫成「站上均線（{達標的均線}） {signalDate}」，達標的均線取自該筆 `detail.matchedPeriods`，多條時以「／」連接、順序固定為 `MA5`→`MA20`→`MA60`；展開後的子列採同一格式
-- [ ] 本次採用參數一行對本策略寫成「站上均線（MA5・MA20・MA60）」，均線取自掃描回應的 `maPeriods` 而非畫面上的勾選狀態——掃描後改動勾選框，該行不變
-- [ ] `pendingConfirm` 非空時，表格下方出現「站上均線：另有 N 檔已站上，但次一交易日尚未到」，提示色 `#D9A441`，與其餘十個型態同一種呈現
-- [ ] 這些待確認標的與其他型態一樣**不進命中彙總表、不送回測**，也不計入「共 N 檔」
-- [ ] 「買進日」欄顯示掃描回應該筆的 `buyDate`，前端不自行由訊號日推算；本型態的 `buyDate` 與 `signalDate` 相差一個交易日時，兩欄各自照回應顯示
-- [ ] 回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重：本型態與另一型態落在同一買進日時只送一筆、表上只有一列，該列的命中策略欄並列兩者與各自的訊號日
-- [ ] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
-- [ ] 既有十張卡片的版面、控制項與送出內容完全未變
+- [x] 策略卡片區多出一張「站上均線」卡片，位於既有十張之後；卡片依該條目的 `params` 畫出一組「均線」複選勾選框（`MA5`／`MA20`／`MA60`），初始三個皆勾選，選項文字與順序全部取自 API
+- [x] 這張卡片完全由既有的 `type: "multiSelect"` 通用邏輯畫出：程式中不存在以 `MA_BREAKOUT` 或 `maPeriods` 判斷的分支，也未新增任何一種卡片形狀。把 mock 回應中這一筆的 `options` 改為兩個選項，卡片跟著只畫兩個勾選框
+- [x] 卡片沒有靈敏度下拉（該條目 `presets` 為空陣列），與累積上漲、反彈、法人與技術指標卡片同一種形狀
+- [x] 未勾選本策略時，均線複選框與該卡片其餘控制項同樣 disabled
+- [x] 勾選數為 0 時於該卡片下方顯示「請至少勾選一個均線」並擋下送出，與法人複選的 `minSelected` 處理走同一條路徑（不是為本策略另寫的檢查）
+- [x] 後端回 `INVALID_MA_PERIODS` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
+- [x] 送出的 `MA_BREAKOUT` 那一筆帶 `maPeriods`（依 `options` 順序排列的勾選 `code` 陣列），且**不帶** `preset`；勾選狀態與預設相同時仍照送
+- [x] 命中策略與訊號日欄寫成「站上均線（{達標的均線}） {signalDate}」，達標的均線取自該筆 `detail.matchedPeriods`，多條時以「／」連接、順序固定為 `MA5`→`MA20`→`MA60`；展開後的子列採同一格式
+- [x] 本次採用參數一行對本策略寫成「站上均線（MA5・MA20・MA60）」，均線取自掃描回應的 `maPeriods` 而非畫面上的勾選狀態——掃描後改動勾選框，該行不變
+- [x] `pendingConfirm` 非空時，表格下方出現「站上均線：另有 N 檔已站上，但次一交易日尚未到」，提示色 `#D9A441`，與其餘十個型態同一種呈現
+- [x] 這些待確認標的與其他型態一樣**不進命中彙總表、不送回測**，也不計入「共 N 檔」
+- [x] 「買進日」欄顯示掃描回應該筆的 `buyDate`，前端不自行由訊號日推算；本型態的 `buyDate` 與 `signalDate` 相差一個交易日時，兩欄各自照回應顯示
+- [x] 回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重：本型態與另一型態落在同一買進日時只送一筆、表上只有一列，該列的命中策略欄並列兩者與各自的訊號日
+- [x] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 既有十張卡片的版面、控制項與送出內容完全未變
 
 ### 「僅選取全符合」勾選框（本次新增）
 
-- [ ] 批次勾選框列由四個變成五個，由左至右為「取消全選」「取消買進價高於 [金額] 元」「僅選取報酬率 [n] % 以上」「僅選取全符合」「隱藏資料不齊（無賣出日）」；五者等高、垂直置中對齊，兩個帶數字輸入的門檻框仍相鄰、隱藏框仍在最右
-- [ ] 「僅選取全符合」沒有數字輸入，標示文字固定為「僅選取全符合」、不隨狀態改變
-- [ ] 全符合以**股票**為單位：某檔的 `stockId` 出現在掃描回應**每一筆** `results` 的 `items` 中即為全符合，該檔的**每一筆**都保持勾選——以「A 檔命中策略甲與策略乙、B 檔只命中策略甲」的回應驗證，勾選本框後 A 檔的所有筆仍勾著、B 檔的所有筆全部取消
-- [ ] 不以買進日判定：A 檔那兩個策略落在**不同**買進日（因而是兩列、每列的「命中策略與訊號日」各只有一個策略）時，兩列仍都保持勾選
-- [ ] 判定依掃描回應而非畫面上的卡片：掃描後在卡片上多勾一個策略卻不重掃，本框的判定結果不變
-- [ ] 列在 `pendingConfirm` 或 `insufficientData` 的股票對該策略**不算**命中：某檔在策略甲的 `items`、在策略乙的 `pendingConfirm` 時不是全符合，其每一筆被取消勾選
-- [ ] 只取消勾選、**不隱藏**：不符合的筆整列反灰、不計入三個總計，但仍留在表上；表格不因本框多出「另 K 筆已隱藏」那一行，「共 N 檔」也不變
-- [ ] 作用範圍為目前**顯示中**的筆：被「取消買進價高於 N 元」或「隱藏資料不齊」藏起來的筆不受本框影響
-- [ ] 一檔全符合時它的每一筆都勾著、不符合時每一筆都取消，父列因此不會因本框而呈半選
-- [ ] 取消勾選本框時，它取消掉的那些筆全部勾回，其餘筆完全不動
-- [ ] 不改排序：勾選與取消勾選都不觸發重排，報酬率表頭的排序指示不變
-- [ ] 本次掃描只送一個策略時，本框維持**未勾選且 disabled**；送兩個以上時才可操作
-- [ ] 每次回測成功（含「重試回測」成功）時本框預設勾選（前提是送出兩個以上策略），初始勾選狀態為五步的結果：全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上 → 僅選取全符合；第 4、5 步的作用範圍都是「此時仍顯示中的筆」
-- [ ] 它是記住的開關、不由各筆勾選狀態推導：手動把某一筆非全符合的列勾回來，本框仍維持勾選
-- [ ] 點「取消全選」（不論勾選或取消勾選）時本框變為未勾選，各筆勾選狀態依「取消全選」的結果決定
-- [ ] 與列勾選框同生同滅：回測完成時出現，回測前、回測中、回測失敗時不存在，重新掃描時一併移除
-- [ ] 切換完全在前端完成，**不重新呼叫任何端點**（掃描與回測皆不重打），三個總計、父列合計與「取消全選」的推導狀態就地重算
-- [ ] 本次未新增任何顏色：新勾選框與其 disabled 呈現全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 批次勾選框列由四個變成五個，由左至右為「取消全選」「取消買進價高於 [金額] 元」「僅選取報酬率 [n] % 以上」「僅選取全符合」「隱藏資料不齊（無賣出日）」；五者等高、垂直置中對齊，兩個帶數字輸入的門檻框仍相鄰、隱藏框仍在最右
+- [x] 「僅選取全符合」沒有數字輸入，標示文字固定為「僅選取全符合」、不隨狀態改變
+- [x] 全符合以**股票**為單位：某檔的 `stockId` 出現在掃描回應**每一筆** `results` 的 `items` 中即為全符合，該檔的**每一筆**都保持勾選——以「A 檔命中策略甲與策略乙、B 檔只命中策略甲」的回應驗證，勾選本框後 A 檔的所有筆仍勾著、B 檔的所有筆全部取消
+- [x] 不以買進日判定：A 檔那兩個策略落在**不同**買進日（因而是兩列、每列的「命中策略與訊號日」各只有一個策略）時，兩列仍都保持勾選
+- [x] 判定依掃描回應而非畫面上的卡片：掃描後在卡片上多勾一個策略卻不重掃，本框的判定結果不變
+- [x] 列在 `pendingConfirm` 或 `insufficientData` 的股票對該策略**不算**命中：某檔在策略甲的 `items`、在策略乙的 `pendingConfirm` 時不是全符合，其每一筆被取消勾選
+- [x] 只取消勾選、**不隱藏**：不符合的筆整列反灰、不計入三個總計，但仍留在表上；表格不因本框多出「另 K 筆已隱藏」那一行，「共 N 檔」也不變
+- [x] 作用範圍為目前**顯示中**的筆：被「取消買進價高於 N 元」或「隱藏資料不齊」藏起來的筆不受本框影響
+- [x] 一檔全符合時它的每一筆都勾著、不符合時每一筆都取消，父列因此不會因本框而呈半選
+- [x] 取消勾選本框時，它取消掉的那些筆全部勾回，其餘筆完全不動
+- [x] 不改排序：勾選與取消勾選都不觸發重排，報酬率表頭的排序指示不變
+- [x] 本次掃描只送一個策略時，本框維持**未勾選且 disabled**；送兩個以上時才可操作
+- [x] 每次回測成功（含「重試回測」成功）時本框預設勾選（前提是送出兩個以上策略），初始勾選狀態為五步的結果：全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上 → 僅選取全符合；第 4、5 步的作用範圍都是「此時仍顯示中的筆」
+- [x] 它是記住的開關、不由各筆勾選狀態推導：手動把某一筆非全符合的列勾回來，本框仍維持勾選
+- [x] 點「取消全選」（不論勾選或取消勾選）時本框變為未勾選，各筆勾選狀態依「取消全選」的結果決定
+- [x] 與列勾選框同生同滅：回測完成時出現，回測前、回測中、回測失敗時不存在，重新掃描時一併移除
+- [x] 切換完全在前端完成，**不重新呼叫任何端點**（掃描與回測皆不重打），三個總計、父列合計與「取消全選」的推導狀態就地重算
+- [x] 本次未新增任何顏色：新勾選框與其 disabled 呈現全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2369,3 +2369,64 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Test / build output**: `npm run build` → clean (`tsc -b && vite build`, no errors, `50 modules transformed`). `npm run lint` (`oxlint`) → the same 2 pre-existing warnings as every prior increment (`no-unreachable` in the test file, `set-state-in-effect` in an unrelated stock-search-suggestions effect), 0 new. Per the harness rules for this project, no test file was created, edited, or run as evidence for any criterion above — every checkmark above cites a live-backend or intercepted-response Playwright observation instead.
 
 **Left unchecked**: none — all 18 criteria in this run's scope are satisfied and ticked above; two (#14, #15) are explicitly noted as verified via Playwright response interception rather than live backend data, since the behavior they prove (response value overrides submission; a backend-only validation error) cannot be reached with real data/real client-side input. `status` was set to `done` in the frontmatter — this was the last unchecked group in the file (`grep -n '^\s*-\s\[ \]'` now returns no matches).
+
+### Increment 30 — 2026-09-30
+
+**Scope**: the last 33 `- [ ]` criteria — (A) 站上均線卡片 (15), (B) 「僅選取全符合」勾選框 (18), plus (C) the 十→十一 count correction. All 33 are now ticked; `status` set to `done`.
+
+**Files changed**:
+- `develop/frontend/src/api/strategies.ts` — `'MA_BREAKOUT'` added to `StrategyCode`; new `MaBreakoutDetail` (in the `StrategyDetail` union); `maPeriods?: string[]` on `StrategyResult` (echo) and `ScanStrategySelection`.
+- `develop/frontend/src/pages/StrategyTab.tsx`:
+  - **Card**: no new card code — the eleventh card is drawn by the existing `type: "multiSelect"` path (`renderParamRow`, `toggleStrategy` init, `buildScanPayload`, `hasInvalidParams`). The only MA-specific touch points are response-side: `PENDING_CONFIRM_LABEL.MA_BREAKOUT` (per-strategy fixed wording, same table as the other ten), the `maPeriods` echo in `formatStrategyParams` (same style as `investors`), the structural `matchedPeriods` check in `renderUnionHits` (same style as `matchedInvestors`; option order and names come from the catalogue's multiSelect `options`, so a reversed `matchedPeriods` still renders MA5／MA20／MA60), and `MULTI_SELECT_ERROR_CODES` (`INVALID_INVESTORS`, `INVALID_MA_PERIODS`) which routes to the one shared handler that finds the card's multiSelect param by `type`.
+  - **全符合**: `UnionRow.matchesAllStrategies` (per stock: `stockId` in `items` of every `results` entry; `pendingConfirm`/`insufficientData` never count), pure `computeNotAllMatchKeys(rows, hiddenItemKeys)` shared by the click handler and step 5 of `applyBacktestDefaults(resp, rows, strategyCount)`, `allMatchChecked` state (reset by 開始掃描 and 取消全選), `toggleAllMatch`, disabled/unchecked when `scanResult.results.length < 2`. The new label sits between 僅選取報酬率 and 隱藏資料不齊, reusing existing `st-selectall-item` / `st-total-label` classes (no new CSS rule, no new color).
+  - **Count correction**: no on-screen copy stated a count (cards are drawn from the catalogue); the two code comments saying 十個型態 now say 十一個.
+- `develop/frontend/src/pages/StockListPage.css` — one comment: 四個→五個 batch checkboxes.
+
+**Verification method**: backend jar rebuilt and run against real MySQL (1,088 common stocks), Vite dev server on 5173, Chromium via Playwright, viewport 1500x1000, `colorScheme` emulated as both `light` and `dark`. Default range is 2026-09-21 ~ 2026-09-30. Where "(intercepted)" appears, the scan/catalog/error response was fabricated in the browser via `page.route` (backtest still hit the real backend with real stock ids/dates unless noted) — that is not a live-backend proof for that criterion. "live" = real backend responses only.
+
+**A. 站上均線卡片**
+1. Card after the ten, three options checked, text/order from API — live: 11 cards, `站上均線` last, `均線 ☑MA5 ☑MA20 ☑MA60`. The three options wrap to two lines in a ~268px card (the existing multiSelect row is `flex-wrap`; not changed).
+2. Generic multiSelect, no card branch, two-option mock — (intercepted catalogue) `options` cut to MA5/MA20 -> card draws exactly two boxes. Source grep: no `MA_BREAKOUT`/`maPeriods` in any card-drawing path.
+3. No sensitivity dropdown — live: `select` count in card = 0.
+4. Disabled when unchecked — live: all three option boxes `disabled: true` before checking the card, `false` after.
+5. Zero checked -> 「請至少勾選一個均線」 and scan blocked — live: message under the card, 開始掃描 disabled (same `hasInvalidParams`/`minSelected` path).
+6. `INVALID_MA_PERIODS` under the named card — (intercepted 400 `{code:"INVALID_MA_PERIODS", strategy:"MA_BREAKOUT"}`): message under 站上均線 only, nothing under 累積上漲, no page-wide 「掃描失敗」.
+7. Payload carries `maPeriods`, no `preset` — live: `{"code":"MA_BREAKOUT","maPeriods":["MA5","MA20","MA60"]}` (defaults still sent) and `["MA5","MA60"]` after unchecking MA20.
+8. 命中策略 text from `detail.matchedPeriods` — live: 376 displayed rows, 0 mismatches vs `站上均線（{matchedPeriods 以／連接}） {signalDate}`; (intercepted) response `["MA20","MA5"]` renders `MA5／MA20`; expanded child rows use the same format.
+9. 本次採用參數 from response `maPeriods` — live: `站上均線（MA5・MA20・MA60）`; unchecking MA20/MA60 after the scan left it unchanged.
+10. Pending line — live: `站上均線：另有 240 檔已站上，但次一交易日尚未到`, computed color `rgb(217, 164, 65)` = `#D9A441`.
+11. Pending not in table/backtest/共 N 檔 — live: 2-strategy scan, 0 pending-only ids present in the backtest request; 共 639 檔 = unique hit stocks (pending excluded).
+12. 買進日 = response `buyDate` — live: 376/376 rows match the response, all 376 have `buyDate` != `signalDate` (one trading day later, e.g. 09-24 -> 09-29 across the 中秋 holiday).
+13. `(stockId, buyDate)` dedupe — live: 685 unique pairs = 685 backtest items, 0 duplicates; (intercepted scan) 1101 hit by both strategies on the same buy date -> one row with both tags and their own signal dates, one backtest item.
+14. No new color — live, light vs dark computed color/background/border/accent identical for the MA card name, option labels, option checkboxes, 全符合 label (enabled and disabled), 全符合 checkbox, pending note, params line.
+15. Existing ten cards unchanged — live: request body from the other 8 checkable-without-data cards (箱型突破, 底底高, 上漲支撐, 反彈, 累積上漲, 法人買賣超佔比, MACD, KDJ) has the same fields as before (`requireVolume`, `confirmBars`, `requireRise`, `investors`, `fastPeriod`/`slowPeriod`, `jThreshold`, ...), no `maPeriods`; their code paths are untouched by this diff.
+
+**B. 僅選取全符合** (live = real MA_BREAKOUT + CUMULATIVE_RISE full-market scan, 66 of 639 stocks in both; intercepted = fabricated scan with real stock ids)
+1. Five boxes in order, equal height, centered — live: 取消全選, 取消買進價高於, 僅選取報酬率, 僅選取全符合, 隱藏資料不齊, each h=28px, same vertical center, the two threshold boxes adjacent, hide box rightmost.
+2. No number input, fixed label — live: only a checkbox + 「僅選取全符合」.
+3. Per stock — live: after 取消全選 on/off then 全符合 on, all 639 rows: checked <=> stock in every result's `items` (0 mismatches); (intercepted) A (in both) checked, B (MA only) unchecked.
+4. Not by buy date — (intercepted) 2330 hit by MA on buy date 09-22 and CR on 09-24 -> parent + two children (expanded), both children and the parent checked.
+5. From the scan response, not the cards — (intercepted scan, then checked 底底高 without rescanning, toggled 全符合 off/on): same three unchecked stocks.
+6. pending/insufficient don't count — (intercepted) 2454 in MA `items` + CR `pendingConfirm`, and 2412 in CR `items` + MA `insufficientData`: both unchecked.
+7. Unchecks without hiding — live: 共 639 檔 unchanged, no new 「已隱藏」 line (only the pre-existing 255 from the two hide boxes, identical before/after), 639 rows stay, unmatched rows gray, 「另 396 筆未勾選」 updated, totals recomputed.
+8. Displayed rows only — live: unchecking 取消買進價高於 revealed 33 rows, 19 non-all-match, all 19 checked (全符合 never touched them).
+9. No half-select — live: 0 indeterminate parents after 全符合; (intercepted) 2330 parent checked, not indeterminate.
+10. Unchecking restores only what it unchecked — live: 377 rows changed on uncheck, all non-all-match, all became checked; all-match rows and rows unchecked by the return threshold unchanged (22 still unchecked); re-checking restored the exact default state and totals.
+11. No re-sort — live: row order identical before/after both toggles; header indicator stays `報酬率▼ descending`.
+12. Single strategy -> unchecked + disabled — live: MA-only scan: `checked=false`, `disabled=true`, label uses the existing disabled color `#4A5866`; row checks follow the 報酬率 rule alone.
+13. Default-checked on each successful backtest, five-step result — live: 2-strategy scan, 402 single-group rows, 0 mismatches vs (all-match AND return >= 2 AND visible); (intercepted) 「重試回測」 success after a forced 500 also yields 全符合 checked.
+14. Remembered switch — live: manually re-checking a non-all-match row (2020) left 全符合 checked.
+15. 取消全選 clears it — live: 全符合 unchecked after 取消全選 both directions (all other threshold boxes too), rows follow 取消全選.
+16. Same lifecycle as row checkboxes — (intercepted 500 backtest) failed state: 0 batch controls / 0 row checkboxes; (delayed backtest) during a re-scan: 0 controls, 「回測中…」 shown; controls reappear when done. Before the first scan they do not exist.
+17. No endpoint calls — live: 0 `/api/` requests during default -> off -> on and during the 取消全選 sequences; totals/parents/取消全選 state recompute in place.
+18. No new color — see A14 (enabled label `#93A4B8`, disabled `#4A5866`, checked box `#3E8FD8`, identical light vs dark).
+
+**C. Count correction**: only code comments carried 十個型態 (now 十一個); no rendered text states a count.
+
+**Table geometry** (live, first 30 rows): 10 headers, every body cell's left/right within 1px of its header, all cells in a row share one `top`, 0 `<td>`/`<th>` with `display: flex|grid|block`.
+
+**Build**: `npm run build` clean. `npm run lint` shows only the 1 pre-existing `set-state-in-effect` warning at `StrategyTab.tsx:1170` (not in this diff).
+
+**code-quality self-review**: absence — `result.maPeriods` guarded by `!== undefined`, `detail.matchedPeriods ?? []`, catalogue lookups fall back to the raw code; errors — the new error code goes through the existing handler, nothing swallowed; lifecycle — no new effects/timers/listeners; performance — `matchesAllStrategies` is O(strategies x items) per stock inside `buildUnionRows` (~1,700 items x 2 in the real scan, imperceptible) and each toggle is one pass over rows. Deliberately left as is: `computeNotAllMatchKeys` on un-check recomputes over the *currently* displayed rows (the same trade-off the existing 報酬率 box has if the hidden set changed between check and uncheck).
+
+**Left unchecked**: none. Backend and Vite dev server started for verification were stopped afterwards.

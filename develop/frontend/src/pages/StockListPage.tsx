@@ -4,13 +4,14 @@ import StockOverviewTab from './StockOverviewTab'
 import StrategyTab from './StrategyTab'
 import MomentumTab from './MomentumTab'
 import SimulatedTradeTab from './SimulatedTradeTab'
+import RealTradeTab from './RealTradeTab'
 import './StockListPage.css'
 
-type TabKey = 'overview' | 'strategy' | 'momentum' | 'simulated'
+type TabKey = 'overview' | 'strategy' | 'momentum' | 'simulated' | 'real'
 
 /** Unrecognised or missing `tab` falls back to 總覽 — spec explicitly forbids a blank screen. */
 function resolveTab(raw: string | null): TabKey {
-  return raw === 'strategy' || raw === 'momentum' || raw === 'simulated' ? raw : 'overview'
+  return raw === 'strategy' || raw === 'momentum' || raw === 'simulated' || raw === 'real' ? raw : 'overview'
 }
 
 export default function StockListPage() {
@@ -85,6 +86,15 @@ export default function StockListPage() {
         >
           模擬交易
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'real'}
+          className={`sl-tab${tab === 'real' ? ' sl-tab-active' : ''}`}
+          onClick={() => selectTab('real')}
+        >
+          真實交易
+        </button>
       </div>
 
       {/* All three tabs stay mounted and are toggled with display:none so switching never
@@ -106,6 +116,11 @@ export default function StockListPage() {
           page has no population filter, so the page-level checkbox can't affect it. */}
       <div data-testid="sl-tabpanel-simulated" style={{ display: tab === 'simulated' ? 'block' : 'none' }}>
         {tab === 'simulated' ? <SimulatedTradeTab /> : null}
+      </div>
+      {/* Same mount-only-while-active treatment; likewise ignores `commonStocksOnly`. The data
+          is a bundled CSV, so the only network traffic is GET /api/stocks/{stockId}. */}
+      <div data-testid="sl-tabpanel-real" style={{ display: tab === 'real' ? 'block' : 'none' }}>
+        {tab === 'real' ? <RealTradeTab /> : null}
       </div>
     </div>
   )

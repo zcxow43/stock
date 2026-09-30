@@ -51,6 +51,7 @@ public class StrategyResultDto {
     private Integer slowPeriod;
     private Integer signalPeriod;
     private BigDecimal jThreshold;
+    private List<String> maPeriods;
     private LocalDate dataThroughDate;
     private int matchedCount;
     private List<StrategyHitDto> items;
@@ -215,6 +216,14 @@ public class StrategyResultDto {
     @JsonProperty("jThreshold")
     public void setJThreshold(BigDecimal jThreshold) {
         this.jThreshold = jThreshold;
+    }
+
+    public List<String> getMaPeriods() {
+        return maPeriods;
+    }
+
+    public void setMaPeriods(List<String> maPeriods) {
+        this.maPeriods = maPeriods;
     }
 
     public LocalDate getDataThroughDate() {

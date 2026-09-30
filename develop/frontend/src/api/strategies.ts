@@ -14,6 +14,7 @@ export type StrategyCode =
   | 'INSTITUTIONAL_STRENGTH_RANK'
   | 'MACD_GOLDEN_CROSS'
   | 'KDJ_GOLDEN_CROSS'
+  | 'MA_BREAKOUT'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 export type InvestorCode = 'FOREIGN' | 'TRUST'
 
@@ -215,6 +216,22 @@ export interface KdjGoldenCrossDetail {
   prevJ: number
 }
 
+/** `MA_BREAKOUT`'s judgement detail — only `matchedPeriods` (option `code`s of the lines that
+ * actually crossed, in the backend's fixed order) feeds the UI; the rest is modeled so
+ * `item.detail` matches the wire contract (specs/backend/strategy-scan.md 「站上均線
+ * MA_BREAKOUT」). `maN`/`prevMaN` are `null` for a line that was not selected. */
+export interface MaBreakoutDetail {
+  close: number
+  prevClose: number
+  matchedPeriods: string[]
+  ma5: number | null
+  ma20: number | null
+  ma60: number | null
+  prevMa5: number | null
+  prevMa20: number | null
+  prevMa60: number | null
+}
+
 export type StrategyDetail =
   | BoxBreakoutDetail
   | HigherLowsDetail
@@ -226,6 +243,7 @@ export type StrategyDetail =
   | InstitutionalStrengthRankDetail
   | MacdGoldenCrossDetail
   | KdjGoldenCrossDetail
+  | MaBreakoutDetail
 
 export interface StrategyHit {
   stockId: string
@@ -283,6 +301,9 @@ export interface StrategyResult {
    * strategy.md「本次採用參數那一行」). The frontend never derives this from what it
    * submitted — always read from here. */
   confirmBars?: number
+  /** `MA_BREAKOUT` only — the option `code`s actually applied, echoed from the response
+   * (never from the card's current checkboxes). */
+  maPeriods?: string[]
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -327,6 +348,8 @@ export interface ScanStrategySelection {
   /** Only sent by `RISING_SUPPORT` — orthogonal to `preset`, sent alongside it (the same
    * exception `requireVolume` gets for `BOX_BREAKOUT`). */
   confirmBars?: number
+  /** Only sent by `MA_BREAKOUT` — the checked option `code`s in `options` order. */
+  maPeriods?: string[]
 }
 
 export interface ScanRequest {

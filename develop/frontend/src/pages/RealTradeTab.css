@@ -1,0 +1,104 @@
+/* 真實交易 tab (specs/frontend/real-trade.md) — fixed palette, the same literal hex values as
+   the 模擬交易 tab (「同一個頁面的不同分頁不得有兩套顏色」). Never uses prefers-color-scheme.
+   Shared table / 漲跌 / empty / error classes come from StockListPage.css. */
+
+.real-trade-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rt-summary {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.rt-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.rt-summary-count {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.rt-summary-count b {
+  color: #e6edf5;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rt-summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rt-summary-label {
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+/* No `color` here: default #e6edf5 is inherited from `.stock-list-page`; .sl-up/.sl-down/
+   .sl-flat/.sl-muted set their own color and win over an inherited value. */
+.rt-summary-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-fee-note {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #93a4b8;
+}
+
+.rt-loading {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 56px 24px;
+  text-align: center;
+  color: #93a4b8;
+  font-size: 14px;
+}
+
+.rt-stock-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rt-stock-name {
+  font-size: 13px;
+}
+
+/* 現價日早於今日 → 次要文字色 */
+.rt-stale-date {
+  color: #93a4b8;
+}
+
+/* Rows are not clickable: default cursor, hover background only. */
+.rt-table tbody tr:hover td {
+  background: #1d2a38;
+}
+
+/* 被略過的 CSV 行 — error palette. */
+.rt-skipped {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 8px;
+}

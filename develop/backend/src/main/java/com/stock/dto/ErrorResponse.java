@@ -182,6 +182,11 @@ public class ErrorResponse {
                 null, null, null);
     }
 
+    public static ErrorResponse invalidMaPeriods(String strategy) {
+        return new ErrorResponse("INVALID_MA_PERIODS", null, null, null, null, null, null, null, strategy, null,
+                null, null, null);
+    }
+
     public static ErrorResponse invalidWindowDays(String strategy) {
         return new ErrorResponse("INVALID_WINDOW_DAYS", null, null, null, null, null, null, null, strategy, null,
                 null, null, null);

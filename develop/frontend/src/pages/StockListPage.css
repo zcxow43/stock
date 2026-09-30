@@ -1408,8 +1408,8 @@
     font-size: 12px;
   }
 
-  /* 四個批次勾選框在窄視窗下改用較小的水平間距，並靠 `.st-batch-controls` 的
-     `flex-wrap: wrap` 換行，而不是把四個控制項擠成一排、彼此互相覆蓋或超出面板寬度。 */
+  /* 五個批次勾選框在窄視窗下改用較小的水平間距，並靠 `.st-batch-controls` 的
+     `flex-wrap: wrap` 換行，而不是把五個控制項擠成一排、彼此互相覆蓋或超出面板寬度。 */
   .st-batch-controls {
     gap: 8px 14px;
   }

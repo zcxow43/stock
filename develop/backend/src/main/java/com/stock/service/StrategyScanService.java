@@ -18,6 +18,7 @@ import com.stock.exception.InvalidDropPercentException;
 import com.stock.exception.InvalidFastPeriodException;
 import com.stock.exception.InvalidInvestorsException;
 import com.stock.exception.InvalidJThresholdException;
+import com.stock.exception.InvalidMaPeriodsException;
 import com.stock.exception.InvalidMacdPeriodsException;
 import com.stock.exception.InvalidRatioPercentException;
 import com.stock.exception.InvalidRiseDaysException;
@@ -197,6 +198,7 @@ public class StrategyScanService {
             }
             validateInstitutionalParams(selection, detector);
             validateIndicatorParams(selection, detector);
+            validateMaPeriods(selection, detector);
             if (selection.getRequireVolume() != null && !detector.acceptsRequireVolume()) {
                 // Only BOX_BREAKOUT accepts requireVolume — see specs/backend/strategy-scan.md, "對
                 // BOX_BREAKOUT 以外的型態帶了 requireVolume".
@@ -312,28 +314,47 @@ public class StrategyScanService {
     }
 
     /**
+     * `maPeriods` (MA_BREAKOUT only): rejected with PARAM_NOT_APPLICABLE for every detector that
+     * offers no line codes; otherwise, when present, non-empty, drawn only from the detector's own
+     * line codes and free of duplicates — see specs/backend/strategy-scan.md, "驗證與用語".
+     */
+    private void validateMaPeriods(StrategySelectionDto selection, PatternDetector detector) {
+        if (selection.getMaPeriods() != null && !detector.acceptsMaPeriods()) {
+            throw new ParamNotApplicableException(selection.getCode(), "maPeriods");
+        }
+        if (detector.acceptsMaPeriods()) {
+            validateMultiSelect(selection.getMaPeriods(), detector.getMaPeriodCodes(),
+                    () -> new InvalidMaPeriodsException(selection.getCode()));
+        }
+    }
+
+    /** A multiSelect array may be omitted (null); when present it must be non-empty, use only allowed
+     *  codes, and contain no duplicate. */
+    private void validateMultiSelect(List<String> values, List<String> allowed,
+                                      Supplier<RuntimeException> exceptionSupplier) {
+        if (values == null) {
+            return;
+        }
+        if (values.isEmpty()) {
+            throw exceptionSupplier.get();
+        }
+        Set<String> seen = new HashSet<>();
+        for (String value : values) {
+            // allowed may be an immutable List.of, whose contains(null) throws — guard null explicitly.
+            if (value == null || !allowed.contains(value) || !seen.add(value)) {
+                throw exceptionSupplier.get();
+            }
+        }
+    }
+
+    /**
      * `investors` may be omitted (null, meaning "both" — resolved at detection time); when present
      * it must be non-empty, contain only FOREIGN/TRUST, and have no duplicate — see
      * specs/backend/strategy-scan.md, "investors 為空陣列、含 FOREIGN／TRUST 以外的值、或有重複".
      */
     private void validateInvestors(StrategySelectionDto selection) {
-        List<String> investors = selection.getInvestors();
-        if (investors == null) {
-            return;
-        }
-        if (investors.isEmpty()) {
-            throw new InvalidInvestorsException(selection.getCode());
-        }
-        Set<String> seen = new HashSet<>();
-        for (String investor : investors) {
-            if (!InstitutionalPatternDetector.FOREIGN.equals(investor)
-                    && !InstitutionalPatternDetector.TRUST.equals(investor)) {
-                throw new InvalidInvestorsException(selection.getCode());
-            }
-            if (!seen.add(investor)) {
-                throw new InvalidInvestorsException(selection.getCode());
-            }
-        }
+        validateMultiSelect(selection.getInvestors(), InstitutionalPatternDetector.DEFAULT_INVESTORS,
+                () -> new InvalidInvestorsException(selection.getCode()));
     }
 
     /**

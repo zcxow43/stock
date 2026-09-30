@@ -167,6 +167,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidInvestors(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidMaPeriodsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMaPeriods(InvalidMaPeriodsException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidMaPeriods(e.getStrategy()));
+    }
+
     @ExceptionHandler(InvalidWindowDaysException.class)
     public ResponseEntity<ErrorResponse> handleInvalidWindowDays(InvalidWindowDaysException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidWindowDays(e.getStrategy()));

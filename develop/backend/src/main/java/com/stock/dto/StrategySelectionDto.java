@@ -42,6 +42,9 @@ import java.util.List;
  * 確認長度可選（confirmBars）". Declared as BigDecimal for the same reason as `days`/`windowDays` above: a
  * non-integer value deserializes successfully and is rejected by INVALID_CONFIRM_BARS instead of a
  * generic 400.
+ *
+ * <p>`maPeriods` (a subset of `MA5`/`MA20`/`MA60`) is accepted only by MA_BREAKOUT — see
+ * specs/backend/strategy-scan.md, "站上均線".
  */
 public class StrategySelectionDto {
 
@@ -63,6 +66,7 @@ public class StrategySelectionDto {
     private BigDecimal slowPeriod;
     private BigDecimal jThreshold;
     private BigDecimal confirmBars;
+    private List<String> maPeriods;
 
     public StrategySelectionDto() {
     }
@@ -217,5 +221,13 @@ public class StrategySelectionDto {
 
     public void setConfirmBars(BigDecimal confirmBars) {
         this.confirmBars = confirmBars;
+    }
+
+    public List<String> getMaPeriods() {
+        return maPeriods;
+    }
+
+    public void setMaPeriods(List<String> maPeriods) {
+        this.maPeriods = maPeriods;
     }
 }

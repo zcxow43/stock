@@ -17,6 +17,7 @@ depends_on: []
 | 二、策略 | 型態掃描 | `specs/frontend/strategy.md` |
 | 三、動態 | 產業別漲幅（漲幅平均／漲幅加總） | `specs/frontend/momentum.md` |
 | 四、模擬交易 | 輸入代號加入模擬持股，列出未實現損益 | `specs/frontend/simulated-trade.md` |
+| 五、真實交易 | 列出使用者實際持有的部位與未實現損益，資料來自版控中的 CSV、畫面唯讀 | `specs/frontend/real-trade.md` |
 
 本檔擁有分頁容器本身與分頁一的全部內容；分頁二、三、四的內容由各自的 spec 定義。
 
@@ -47,6 +48,7 @@ depends_on: []
 | 一、總覽 | `GET /api/stocks` 的 `commonStocksOnly` | 清單與「共 N 檔」都只計普通股 |
 | 二、策略 | `POST /api/strategies/scan` 的 `commonStocksOnly`；同頁「同步日 K 至今日」的 `POST /api/stocks/sync/backfill` 的 `commonStocksOnly` | 掃描母體只含普通股，且該分頁的日 K 同步母體同樣只含普通股（見 `specs/frontend/strategy.md`） |
 | 三、動態 | `GET /api/momentum/gain` 的 `commonStocksOnly` | 漲幅計算母體只含普通股（見 `specs/frontend/momentum.md`） |
+| 五、真實交易 | **不送** | 本頁不查母體，只依 CSV 列出的代號逐檔取名稱與現價（含 ETF 與已下市股票）。 |
 | 四、模擬交易 | **不送** | 本頁沒有母體篩選——使用者指名哪一檔就是哪一檔（含 ETF 與已下市股票）。切換這個勾選框時本頁不重新查詢（見 `specs/frontend/simulated-trade.md`） |
 
 **這個設定不寫任何資料表**——它只改查詢帶的參數。`stock` 的內容、`is_active`、以及每日行情回補的標的範圍都不受影響：取消勾選就會立刻看回全部在市股票。
@@ -61,7 +63,7 @@ depends_on: []
 
 1. **頁首列** — 左側標題「股票總覽」，右側顯示「共 N 檔」（N 取自 API 的 `total`，隨篩選條件變動）。
 1a. **頁面層級設定列** — 位於頁首列與頁籤列之間，見下方「頁面層級設定」。
-2. **頁籤列** — 四個頁籤「總覽」「策略」「動態」「模擬交易」，依此順序，位於頁首列下方、篩選列上方。目前分頁以底線與主要文字色標示，非目前分頁為次要文字色。切換分頁不重新載入整頁。
+2. **頁籤列** — 五個頁籤「總覽」「策略」「動態」「模擬交易」「真實交易」，依此順序，位於頁首列下方、篩選列上方。目前分頁以底線與主要文字色標示，非目前分頁為次要文字色。切換分頁不重新載入整頁。
 3. **篩選列** — 搜尋框、市場別下拉、「顯示已下市」核取方塊，右側「新增股票」主要按鈕。
 4. **資料表格 + 分頁列**。表格最右新增「操作」欄，每列含「編輯」與「下市」兩個次要按鈕；已下市的列該按鈕改為「重新上架」。
 
@@ -292,6 +294,12 @@ depends_on: []
 - [x] 頁籤列由左至右為「總覽」「策略」「動態」「模擬交易」，第四個頁籤的內容由 `specs/frontend/simulated-trade.md` 定義
 - [x] 點選「模擬交易」時網址為 `/stocks?tab=simulated`，重新整理仍停在該分頁；`tab` 為無法辨識的值時仍退回總覽
 - [x] 切換頁面層級的「只看上市普通股」時，模擬交易分頁不重新查詢、其請求不帶 `commonStocksOnly`；其餘三個分頁行為不變
+### 第五個頁籤「真實交易」（本次新增）
+
+- [x] 頁籤列由四個變成五個，依序為「總覽」「策略」「動態」「模擬交易」「真實交易」；前四個頁籤的文字、順序、行為與目前分頁指示完全未變
+- [x] 切到「真實交易」時，頁籤列以下整段換成該分頁的內容（見 `specs/frontend/real-trade.md`），頁首列與頁籤列保持不動，與其餘分頁同一套切換機制
+- [x] 「只看上市普通股」勾選框對「真實交易」分頁**不生效也不送出**，與「模擬交易」同樣處置：切換它不改變真實交易分頁的任何內容
+- [x] 頁籤列的顏色、底線與選中樣式沿用既有色碼，本次未新增任何顏色
 
 ## Execution Result
 - Status: DONE
@@ -404,3 +412,13 @@ Adds the fourth tab「模擬交易」to the tab container per the spec's 3 previ
   - Live-verified together with `specs/frontend/simulated-trade.md`'s own verification pass (same session, same running dev/backend servers) — see that spec's `## Execution Result` for the full real-browser walkthrough, which also exercises this tab's shell (URL, reload-persistence, the page-level checkbox not affecting it).
   - `npm test` → 514/514 passing (488 pre-existing + 26 new across this file and `SimulatedTradeTab.test.tsx`); `npm run build` (`tsc -b && vite build`) clean. The one known-flaky test named in this task's instructions (`StrategyTab.test.tsx`'s "disables the stock-search input and shows a hint once 200 stocks are selected") was not touched and was not observed failing in the final full-suite run, consistent with it being flaky rather than reliably broken.
   - Reviewed against `code-quality` before reporting done: the only new logic here is a widened union type, one more button, and switching one panel from "always mounted, display-toggled" to "conditionally mounted" — no new API calls, subscriptions, timers, or loops at this layer (those live in `SimulatedTradeTab` itself, reviewed under `specs/frontend/simulated-trade.md`). No issues found.
+
+### Increment 7 — 2026-09-30
+
+Adds the fifth tab 「真實交易」 to the tab container (content: `specs/frontend/real-trade.md`, executed in the same run). All 4 criteria under 「第五個頁籤「真實交易」」 verified live in Chromium against the real backend.
+
+- Files changed: `develop/frontend/src/pages/StockListPage.tsx` (union type gains `'real'`, fifth `sl-tab` button after 模擬交易, mount-only-while-active panel like 模擬交易, `?tab=real`); reuses the existing `.sl-tab` styles, so no CSS or color was added.
+- Notes:
+  - Tab strip reads 總覽／策略／動態／模擬交易／真實交易; the first four texts, order and URL params are unchanged. Switching swaps only the panel under the strip; header and strip stay.
+  - Toggling 「只看上市普通股」 while on 真實交易 left the tab's content identical and the tab itself issued no request (the only request seen was the overview tab's own list refetch, which already existed).
+  - Tests were not touched (the suite no longer exists).

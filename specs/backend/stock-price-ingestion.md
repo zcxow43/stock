@@ -950,3 +950,29 @@ Tests run: 5, ... - in com.stock.service.StockSyncServiceCommonStocksOnlyTest（
 #### 本次檔案變更
 
 無。純活測驗證，未修改任何 `develop/backend/` 下的原始碼或設定檔。
+
+### Increment 11 — 2026-09-30
+
+只針對 L561（`stock` 名稱更新／新代號新增／其餘列 `updated_at` 不變）重試。**沒有任何程式碼變更。** 以 `mvn package -DskipTests` 打包後 `java -jar target/backend.jar` 啟動（`SPRING_DATASOURCE_HIKARI_CONNECTIONINITSQL="SET time_zone = '+08:00'"`、`-Dlogging.level.com.stock.mapper=DEBUG`、啟動補齊／主檔同步皆關閉），對本機真實 MySQL 與真實 TWSE 端點驗證；驗證後已停止該實例。本次沒有任何寫入被沙箱或分類器拒絕。
+
+#### 子句一：名稱與既有值不同 → 被更新（活測證實）
+
+1. `PUT /api/stocks/2330`（`{"stockName":"WRONGNAME","market":"TSE","isActive":true}`；`isActive` 為必填，缺少時回 `INVALID_STOCK_PAYLOAD`）成功，DB 中 2330 的 `stock_name` 變為 `WRONGNAME`，`updated_at=23:13:35`。
+2. 記錄全表 1,382 列的 `(stock_id, updated_at)` 快照後，呼叫 `POST /api/stocks/sync/daily`，回應 `{"tradeDate":"2026-09-29","stockCount":1369,"insertedCount":0,"updatedCount":1369,"stockMasterUpserted":1369}`。
+3. 同步後 2330 的 `stock_name` 已回到 `台積電`，`updated_at=23:13:41`。
+4. SQL 日誌：該次同步 `StockMapper.upsert` 恰好被送出 **1 次**（1,369 檔中只有名稱不同的這一檔）。
+
+#### 子句三：其餘列 `updated_at` 不變（活測證實）
+
+同步前後全表 1,382 列的 `(stock_id, updated_at)` 逐列 `diff`：**僅 2330 一列不同**，其餘 1,381 列完全相同。
+
+#### 子句二：快照中新出現的代號被新增（未能於本次活測，維持未勾選）
+
+- 同步回應 `insertedCount=0`、`stock` 為 1,382 列而快照為 1,369 檔——快照中**沒有**「存在於 TWSE 快照但不在 `stock`」的真實代號，因此無法以真實代號驗證插入路徑（TWSE `STOCK_DAY_ALL` 只回最新交易日，`tradeDate` 參數為 informational only，無法取得較早、含不同代號集合的快照）。
+- 依指示未刪除任何真實 `stock` 列來人造缺口。
+- 改以拋棄式代號驗證邊界：`POST /api/stocks` 建立 `9999`/`ZZTMP`（不在 TWSE 快照中），再跑一次 `sync/daily`：全表 `(stock_id, updated_at)` 前後 `diff` 完全相同（9999 未被改名、未被停用、`updated_at` 不變，快照缺席的既有列不受影響），之後以 `DELETE FROM stock WHERE stock_id='9999' AND stock_name='ZZTMP'` 移除，`stock` 回到 1,382 列。
+- 插入路徑（`existing == null` → `stockMapper.upsert`）僅有 Increment 6 的活資料證據（34 檔種子 → 千餘檔）與程式碼審查；本條因此**仍為 `- [ ]`**。待 TWSE 出現新上市代號（或需求方同意刪除一個真實列再由同步補回）時可在一次呼叫內補測。
+
+#### 本次檔案變更
+
+無程式碼／設定變更；DB 淨變更為零（2330 名稱已由同步還原，9999 已刪除）。L524、L584 依指示未觸碰。

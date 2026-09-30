@@ -197,6 +197,21 @@ public interface PatternDetector {
     }
 
     /**
+     * The selectable line codes of the request's `maPeriods` multiSelect, in canonical order —
+     * empty (the default) for every detector that does not accept `maPeriods`, non-empty only for
+     * MA_BREAKOUT. Doubles as the accept flag ({@link #acceptsMaPeriods()}) and as the allowed-value
+     * set the generic scan validation checks against, so nothing there needs to know a strategy code.
+     */
+    default List<String> getMaPeriodCodes() {
+        return Collections.emptyList();
+    }
+
+    /** Whether this detector accepts the request's `maPeriods` field — true only for MA_BREAKOUT. */
+    default boolean acceptsMaPeriods() {
+        return !getMaPeriodCodes().isEmpty();
+    }
+
+    /**
      * Whether this detector accepts the request's `requireVolume` field — true only for
      * BOX_BREAKOUT. Orthogonal to its preset: every one of the three sensitivities can be combined
      * with volume on or off, so this is not a fourth preset and never changes `volumeMultiple`
