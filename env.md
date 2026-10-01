@@ -10,6 +10,11 @@
 - Framework: Spring Boot
 - Build: Maven
 
+## Ports
+- 聚合階段（merge 後在 `main` 整合跑）：backend `8080`、frontend `5173`。**開發階段一律不佔用這兩個 port。**
+- 開發階段（各 worktree 的 worker）：自選其他 port，啟動時帶入——backend `SERVER_PORT=<port>`；frontend `npm run dev -- --port <port>`，並以 `API_TARGET=http://localhost:<自己的 backend port>` 指向自己的 backend（不設就會打到聚合階段的 `8080`）。
+- 資料庫與外層 env 檔不分開：所有 worker 共用同一份，小心使用。
+
 # Container
 
 ## Database

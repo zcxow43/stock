@@ -6,10 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Backend (Spring Boot) runs on 8080 and has no CORS config of its own;
-      // proxy /api in dev so the browser sees same-origin requests.
+      // Backend (Spring Boot) has no CORS config of its own; proxy /api in dev
+      // so the browser sees same-origin requests. 8080 is the integration
+      // backend; a worktree worker points API_TARGET at its own backend port.
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.API_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
       },
     },
