@@ -33,7 +33,7 @@
     <div class="cond">
       <h2>掃描條件</h2>
       <div class="cards">
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">底底高</span></div>
           <select><option>嚴格</option></select>
           <div class="desc">以 5 日均線為基準，左右各 5 根，需 3 段遞增，每段高過 2%</div><div class="desc" style="display:none">左右各 3 根，需 2 段遞增，每段高過 1%</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.0"><span class="pct">%</span></div></div>
@@ -42,11 +42,11 @@
           <div class="desc">回看 20 根，箱高 &lt; 8%，突破 1.5% 且量增 1.5 倍</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="1.5"><span class="pct">%</span></div>
           <div class="grp on"><span class="gbox"></span><span class="gl">要求量增</span></div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">上漲支撐</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">上漲支撐</span></div>
           <select><option>標準</option></select>
           <div class="desc">收盤突破前 10 日收盤高點且單日漲幅 ≥ 3%，其後 2 日不跌破起漲收盤</div>
           <div class="rise"><span class="rl">漲幅門檻</span><input value="3.0"><span class="pct">%</span></div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">反彈</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">反彈</span></div>
           <div class="desc">先在回看窗口內自最高收盤跌幅達門檻築出谷底，其後指定天數內自谷底反彈幅度達門檻</div>
           <div class="rise"><span class="rl">下跌天數</span><input value="3" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">跌幅門檻</span><input value="10.0"><span class="pct">%</span></div>
@@ -54,23 +54,23 @@
           <div class="rise"><span class="rl">反彈天數</span><input value="1" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">反彈幅度</span><input value="5.0"><span class="pct">%</span></div>
           <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">累積上漲</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">累積上漲</span></div>
           <div class="desc">回看指定天數，自窗口內最低收盤累積漲幅達門檻的最高點</div>
           <div class="rise"><span class="rl">天數</span><input value="30" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">漲幅門檻</span><input value="15.0"><span class="pct">%</span></div>
           <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">法人買賣超佔比</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人買賣超佔比</span></div>
           <div class="desc">外資（不含外資自營商）或投信近指定天數買賣超合計取絕對值 ÷ 成交股數合計，達門檻即命中，淨買超與淨賣超皆計</div>
           <div class="rise"><span class="rl">法人</span><span class="grp on"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
           <div class="rise"><span class="rl">天數</span><input value="5" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">佔比門檻</span><input value="10.0"><span class="pct">%</span></div>
           <div class="desc">天數為回看的交易日數，不含週末與休市日</div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">法人連續買超</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人連續買超</span></div>
           <div class="desc">外資（不含外資自營商）或投信連續指定天數每日買超</div>
           <div class="rise"><span class="rl">法人</span><span class="grp"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
           <div class="rise"><span class="rl">連續買超天數</span><input value="5" style="width:44px"><span class="pct">日</span></div>
           <div class="desc">連續買超天數為回看的交易日數，不含週末與休市日</div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">法人買超強度排名</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">法人買超強度排名</span></div>
           <div class="desc">外資（不含外資自營商）或投信近指定天數買超合計 ÷ 成交股數合計為強度，只有淨買超者參與，每個交易日外資與投信各取強度前幾名</div>
           <div class="rise"><span class="rl">法人</span><span class="grp on"><span class="gbox"></span><span class="gl">外資</span></span><span class="grp on"><span class="gbox"></span><span class="gl">投信</span></span></div>
           <div class="rise"><span class="rl">天數</span><input value="5" style="width:44px"><span class="pct">日</span>
@@ -81,10 +81,10 @@
           <div class="rise"><span class="rl">短期 EMA</span><input value="5" style="width:44px"><span class="pct">日</span>
             <span class="rl" style="margin-left:6px">長期 EMA</span><input value="20" style="width:44px"><span class="pct">日</span></div>
           <div class="desc">短期 EMA、長期 EMA 為回看的交易日數，不含週末與休市日</div></div>
-        <div class="card on"><div class="top"><span class="box"></span><span class="nm">KDJ 黃金交叉</span></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">KDJ 黃金交叉</span></div>
           <div class="desc">KD(9,3,3) 的 J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 低於門檻</div>
           <div class="rise"><span class="rl">J 門檻</span><input value="40.0"></div></div>
-        <div class="card "><div class="top"><span class="box"></span><span class="nm">站上均線</span></div>
+        <div class="card on"><div class="top"><span class="box"></span><span class="nm">站上均線</span></div>
           <div class="desc">收盤價由下往上站上均線當日為訊號日：前一交易日收盤未高於均線，當日收盤高於均線</div>
           <div class="rise"><span class="rl">均線</span><span class="grp on"><span class="gbox"></span><span class="gl">MA5</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA20</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA60</span></span></div>
           <div class="desc">三條均線各自判定，任一條達標即命中</div></div>
@@ -96,7 +96,7 @@
         <div class="seg"><button>近一個月</button><button>近三個月</button><button>近半年</button></div></div>
       <div class="rangehint">實際區間 2026-08-17 ~ 2026-08-30</div>
       <div class="actions"><button class="btn primary" data-trigger>開始掃描</button>
-        <span class="hint">已勾選 8 個策略</span></div>
+        <span class="hint">已勾選 3 個策略</span></div>
     </div>
     <div class="empty">選擇策略與區間後開始掃描<div class="sub">尚未執行任何掃描</div></div>
   </div>

@@ -37,26 +37,26 @@
         <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
       </filter>
     </defs>
-    <rect x="85.6" y="178.3" width="138.3" height="27.4"
+    <rect x="85.6" y="177.0" width="138.3" height="27.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="865.6" y="178.3" width="138.3" height="27.4"
+    <rect x="865.6" y="177.0" width="138.3" height="27.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="998.5" y="178.3" width="45.8" height="27.4"
+    <rect x="998.5" y="177.0" width="45.8" height="27.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1638.1" y="281.4" width="643.9" height="29.7"
+    <rect x="1638.1" y="279.1" width="643.9" height="29.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1645.6" y="178.3" width="138.3" height="27.4"
+    <rect x="1645.6" y="177.0" width="138.3" height="27.4"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <rect x="1638.1" y="1219.4" width="643.9" height="29.7"
+    <rect x="1638.1" y="1217.1" width="643.9" height="29.7"
           rx="6" fill="none" stroke="#D62828" stroke-width="2" filter="url(#soft)"/>
-    <polygon points="231.0,194.6 838.6,194.6 838.6,201.1 858.6,192.1 838.6,183.1 838.6,189.6 231.0,189.6"
+    <polygon points="231.0,193.2 838.6,193.2 838.6,199.7 858.6,190.7 838.6,181.7 838.6,188.2 231.0,188.2"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1051.0,197.9 1798.9,280.9 1798.2,287.3 1819.1,280.6 1800.2,269.4 1799.5,275.9 1051.5,192.9"
+    <polygon points="1051.0,196.5 1797.7,278.6 1797.0,285.1 1817.9,278.3 1799.0,267.2 1798.3,273.6 1051.5,191.5"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
-    <polygon points="1717.2,213.2 1947.9,1193.7 1941.6,1195.1 1954.9,1212.6 1959.1,1191.0 1952.8,1192.5 1722.1,212.0"
+    <polygon points="1717.2,211.8 1947.9,1191.4 1941.5,1192.9 1954.9,1210.3 1959.1,1188.7 1952.7,1190.2 1722.1,210.6"
              fill="#D62828" stroke="none" filter="url(#soft)"/>
   </svg>
-
+  
   <div class="frame" style="left:70px; top:70px; width:660px;">
     <img src="step-1.png" width="660" height="413" alt="初始畫面：切到第四個頁籤「模擬交易」（網址 /stocks?tab=simulated）。進頁即取一次列表，目前沒有任何模擬持股，所以表格不顯示，改以弱化色說明「尚無模擬持股，輸入股票代號加入第一筆」，摘要列的三個總計顯示「—」而不是 0／0%。加入列只有一格代號輸入，畫面上沒有任何買進日、買進價或張數欄位——那三項都由後端決定（今日以前最後一個有收盤價的交易日、該日收盤、固定 1 張），這是本分頁刻意選擇的形狀。輸入為空，「加入」因此 disabled。頁籤列上方的「只看上市普通股」照常顯示，但本頁不受它影響：切換它時本頁不重新查詢、請求也不帶 commonStocksOnly。">
     <div class="caption"><span class="num">1</span>初始畫面：切到第四個頁籤「模擬交易」（網址 /stocks?tab=simulated）。進頁即取一次列表，目前沒有任何模擬持股，所以表格不顯示，改以弱化色說明「尚無模擬持股，輸入股票代號加入第一筆」，摘要列的三個總計顯示「—」而不是 0／0%。加入列只有一格代號輸入，畫面上沒有任何買進日、買進價或張數欄位——那三項都由後端決定（今日以前最後一個有收盤價的交易日、該日收盤、固定 1 張），這是本分頁刻意選擇的形狀。輸入為空，「加入」因此 disabled。頁籤列上方的「只看上市普通股」照常顯示，但本頁不受它影響：切換它時本頁不重新查詢、請求也不帶 commonStocksOnly。</div><div class="apis"><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/simulated-trades</code><span class="note">進入分頁（含由其他分頁切回、重新整理）即取一次；此時 items 為空陣列、兩個總額為 0、totalReturnPercent 為 null，畫面因此顯示三個「—」，同一份回應的 feeRatePercent／taxRatePercent 組成下方費率說明那一行</span></span></div><div class="api"><span class="verb v-get">GET</span><span class="sig"><code>/api/stocks?page=1&amp;size=1</code><span class="note">/stocks 頁面層級常駐的「共 N 檔」，由頁面本身發出，與本分頁的持股無關</span></span></div></div>

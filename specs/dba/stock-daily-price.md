@@ -67,6 +67,8 @@ CREATE TABLE stock_daily_price (
 
 ### Migration SQL — V012__shift_daily_price_timestamps_to_taipei.sql
 
+**Applied-when**: `SELECT COUNT(*) > 0 FROM schema_migration WHERE version = 'V012'`
+
 一次性資料位移，不改結構。接在 `V010` 之後，理由與 V009／V010 相同。
 
 ```sql

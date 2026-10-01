@@ -1,7 +1,7 @@
 # 文件索引
 
 ## Blueprints (integrated architecture specs)
-- [backend](blueprint/backend.md) — 整合 `stock-price-ingestion`、`stock-universe-import`、`stock-catalog`、`stock-indicator-statistics`、`stock-minute-price`、`industry-gain-ranking`、`strategy-scan`、`strategy-backtest`、`institutional-trade-ingestion` 與 `simulated-trade`：從匯入上市股票清單與官方產業別、啟動自動補齊、行情入庫（全市場回補主路徑為交易所逐日全市場快照，逐檔雙來源為指名模式與降級退路）、指標推導、分 K 隨選抓取（近 30 天 Yahoo、更早由富果補抓）、十個策略型態的掃描（含三個法人籌碼型態與兩個即時推導 MACD／KD 的技術指標型態，以及各型態互不相同的進場日規則）與命中回測、產業別漲幅排行，到以最新收盤價即時估算未實現損益的模擬交易持股的完整系統圖景。大方向／圖表導向——欄位、限制條件與 API 契約細節見下方 `docs/backend/` 各文件。
+- [backend](blueprint/backend.md) — 整合 `stock-price-ingestion`、`stock-universe-import`、`stock-catalog`、`stock-indicator-statistics`、`stock-minute-price`、`industry-gain-ranking`、`strategy-scan`、`strategy-backtest`、`institutional-trade-ingestion`、`simulated-trade` 與 `real-trade` 共十一份 spec：從匯入上市股票清單與官方產業別、啟動自動補齊、行情入庫（全市場回補主路徑為交易所逐日全市場快照，逐檔雙來源為指名模式與降級退路）、指標推導、分 K 隨選抓取（近 30 天 Yahoo、更早由富果補抓）、十一個策略型態的掃描（含三個法人籌碼型態、兩個即時推導 MACD／KD 的技術指標型態與站上均線，十一種型態共用同一條「確認完成日之後的下一個交易日」進場日規則）與命中回測、產業別漲幅排行，到兩本持股帳本——存在資料庫的模擬持股與存在版控 CSV 檔的真實持股——的完整系統圖景。大方向／圖表導向——欄位、限制條件與 API 契約細節見下方 `docs/backend/` 各文件。
 
 ## Backend API 詳細定義
 - [stock-price-ingestion](backend/stock-price-ingestion.md) — 股票行情抓取與回補：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
@@ -14,6 +14,7 @@
 - [industry-gain-ranking](backend/industry-gain-ranking.md) — 產業別漲幅排行 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [institutional-trade-ingestion](backend/institutional-trade-ingestion.md) — 三大法人買賣超抓取與補齊：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [simulated-trade](backend/simulated-trade.md) — 模擬交易持股 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
+- [real-trade](backend/real-trade.md) — 真實交易持股 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 
 ## ER Model (full schema)
 - [er-model](db/er-model.md) — 全 schema 全景圖，加上每個主要功能（master / daily-price / institutional-trade / minute-price / sync-progress / simulated-trade / schema-migration）一張完整欄位細節圖；行情相關的表設計上刻意無實體外鍵，跨群組關聯以 context entity 呈現為邏輯關聯（唯一的實體外鍵在 `stock_industry`）

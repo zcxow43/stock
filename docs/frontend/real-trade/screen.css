@@ -1,6 +1,6 @@
-/* 模擬交易分頁。Scoped by <body class="page-simtrade">.
+/* 真實交易分頁。Scoped by <body class="page-realtrade">.
  *
- * 色碼全部取自 specs/frontend/simulated-trade.md 的 ## Visual Style 表，
+ * 色碼全部取自 specs/frontend/real-trade.md 的 ## Visual Style 表，
  * 一律為固定十六進位值 —— 不得使用任何隨 prefers-color-scheme 改變的變數
  * （.claude/rules/frontend.md 的顏色標準規則）。
  */
@@ -11,9 +11,9 @@
        color:#93A4B8; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
 .tab.on { color:#E6EDF5; border-bottom-color:#3E8FD8; }
 
-.page-simtrade .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
-.page-simtrade .count { font-size:13px; color:#93A4B8; }
-.page-simtrade .count b { color:#E6EDF5; font-weight:600; }
+.page-realtrade .head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
+.page-realtrade .count { font-size:13px; color:#93A4B8; }
+.page-realtrade .count b { color:#E6EDF5; font-weight:600; }
 
 /* 只看上市普通股：頁面層級設定，位於頁籤列上方。本分頁不套用它（不重新查詢、
    請求也不帶 commonStocksOnly），但勾選框本身照常顯示、不變灰。 */
@@ -56,9 +56,9 @@
 .feenote { font-size:12px; color:#93A4B8; margin-top:9px; }
 
 /* ---- 持股表格 ---- */
-.page-simtrade tbody tr.flash { background:#1D2A38; }
-.page-simtrade .sid { font-variant-numeric:tabular-nums; font-weight:600; color:#E6EDF5; }
-.page-simtrade .snm { color:#E6EDF5; margin-left:8px; }
+.page-realtrade tbody tr.flash { background:#1D2A38; }
+.page-realtrade .sid { font-variant-numeric:tabular-nums; font-weight:600; color:#E6EDF5; }
+.page-realtrade .snm { color:#E6EDF5; margin-left:8px; }
 .del { background:none; border:0; padding:0; font-family:inherit; font-size:13px;
        color:#93A4B8; cursor:pointer; }
 
@@ -66,23 +66,19 @@
 .empty { background:#16202C; border:1px solid #26333F; border-radius:8px;
          padding:56px; text-align:center; color:#6B7C90; font-size:14px; }
 
-/* ---- 買進日輸入（type="date"）---- */
-/* 與代號輸入同一組色碼（spec ## Visual Style：背景 #0F1620／邊框 #26333F／focus #3E8FD8）。 */
-.dlbl { font-size:13px; color:#93A4B8; margin-left:4px; }
-.datein { width:160px; height:38px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
-          color:#E6EDF5; font-size:14px; padding:0 10px 0 12px; display:flex; align-items:center;
-          justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; }
-.datein.focus { border-color:#3E8FD8; }
-.datein .cal { flex:none; }
+/* ---- 四格輸入（代號／買進日／買進價／量）---- */
+/* 與模擬交易的代號輸入同一組色碼：背景 #0F1620／邊框 #26333F／focus #3E8FD8／placeholder #6B7C90。 */
+.page-realtrade .codein { width:230px; }
+.page-realtrade .codein.w-date { width:170px; justify-content:space-between; gap:8px; }
+.page-realtrade .codein.w-num { width:130px; }
+.page-realtrade .codein .cal { flex:none; }
+.page-realtrade .codein.w-date.ph { color:#6B7C90; }
 
-/* ---- page-realtrade: 真實交易分頁 ---- */
-.page-realtrade .sumbox { margin-bottom: 14px; }
-.page-realtrade table th.r, .page-realtrade table td.r { text-align: right; }
-.page-realtrade .na { color: #6B7C90; }
-.page-realtrade .stale { color: #93A4B8; }
-.page-realtrade .skiplist {
-  margin-top: 14px; padding: 10px 14px;
-  background: #3A1C1A; border: 1px solid #8A3A34; border-radius: 6px;
-  color: #F09A94; font-size: 13px; line-height: 1.8;
-}
-.page-realtrade .skiplist .st { display: block; }
+/* 現價日早於今日（asOfDate）時用次要文字色 */
+.page-realtrade td.old { color:#93A4B8; }
+
+/* 列內成本、買進價、現價、股數恆為主要文字色，不套漲跌色 */
+.page-realtrade tbody td { color:#E6EDF5; }
+.page-realtrade tbody td.up { color:#E04B45; }
+.page-realtrade tbody td.down { color:#16A75C; }
+.page-realtrade tbody td.old { color:#93A4B8; }

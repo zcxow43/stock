@@ -196,7 +196,7 @@ Response `204`，無內容。
 - [x] 省略 `buyDate` 時 `close_price` 為 `0` 的交易日被跳過，取再前一個 `close_price > 0` 的交易日
 - [x] 建立後修改 `stock_daily_price` 中該買進日的收盤價，再查 `GET`：該筆的 `buyPrice` 與 `cost` 不變
 
-### 指定買進日（本次新增）
+### 指定買進日
 - [x] 帶 `{"stockId":"2330","buyDate":"<某個更早的交易日>"}` 回 `201`，`buyDate` 等於送出的日期、`buyPrice` 等於該檔該日的 `close_price`；未實現損益仍以最新收盤價計算
 - [x] 同一檔以兩個不同的 `buyDate` 各加一筆皆成功，`GET` 依買進日由新到舊列出兩筆，兩筆各自計入彙總
 - [x] 今日已有該檔收盤價時，帶今日為 `buyDate` 可成立（`buyPrice` 為今日收盤、未實現損益為負的費用）

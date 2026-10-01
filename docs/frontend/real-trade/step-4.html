@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>真實交易分頁</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-realtrade">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,032</b> 檔</div>
+    </div>
+    <div class="pageopt"><span class="cb"></span>只看上市普通股（排除 ETF、特別股、TDR）</div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab">策略</button>
+      <button class="tab">動態</button>
+      <button class="tab">模擬交易</button>
+      <button class="tab on">真實交易</button>
+    </div>
+    <div class="addbar">
+      <div class="addrow">
+        <div class="codein ph  focus" ><span class="caret"></span>輸入股票代號，例如 2330</div>
+        <div class="codein w-date" >2026/09/22<svg class="cal" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6B7C90" stroke-width="1.3"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5"/><path d="M1.5 5.5h11M4.5 1v3M9.5 1v3"/></svg></div>
+        <div class="codein ph w-num" >成交價</div>
+        <div class="codein w-num" >3000</div>
+        <button class="addbtn dis">加入</button>
+      </div>
+      <div class="addhint">買進價與股數為你實際的成交價與成交量；股數不是張數，1 張 = 1,000 股</div>
+    </div>
+    <div class="sumbox">
+      <div class="summary">
+        <div class="cnt">共 <b>2</b> 筆</div>
+        <div class="kv"><span class="k">總成本</span><span class="v">2,963,717</span></div>
+        <div class="kv"><span class="k">總未實現損益</span><span class="v up">+127,047</span></div>
+        <div class="kv"><span class="k">總報酬率</span><span class="v up">+4.29%</span></div>
+      </div>
+      <div class="feenote">未實現損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，賣出成本以現價估算</div>
+    </div>
+    <table>
+      <thead><tr><th>代號 / 名稱</th><th>買進日</th><th class="r">買進價</th><th class="r">股數</th><th>現價日</th><th class="r">現價</th><th class="r">成本</th><th class="r">未實現損益</th><th class="r">報酬率</th><th class="r">刪除</th></tr></thead>
+      <tbody>
+        <tr class="flash" data-target><td><span class="sid">2317</span><span class="snm">鴻海</span></td><td>2026-09-22</td><td class="r">226.50</td><td class="r">3,000</td><td class="old">2026-09-30</td><td class="r">231.50</td><td class="r">680,468</td><td class="r up">+10,960</td><td class="r up">+1.61%</td><td class="r"><button class="del">刪除</button></td></tr>
+        <tr><td><span class="sid">2330</span><span class="snm">台積電</span></td><td>2026-09-12</td><td class="r">1,140.00</td><td class="r">2,000</td><td class="old">2026-09-30</td><td class="r">1,205.00</td><td class="r">2,283,249</td><td class="r up">+116,087</td><td class="r up">+5.08%</td><td class="r"><button class="del" data-trigger>刪除</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

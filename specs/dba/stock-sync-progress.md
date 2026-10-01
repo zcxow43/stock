@@ -76,6 +76,8 @@ ALTER TABLE stock_sync_progress
 
 ### Migration SQL — V010__shift_sync_progress_timestamps_to_taipei.sql
 
+**Applied-when**: `SELECT COUNT(*) > 0 FROM schema_migration WHERE version = 'V010'`
+
 一次性資料位移，不改結構。接在 `V008` 之後，且**必須在 `specs/infra/mysql.md` 把容器時區改為 `Asia/Taipei` 並重啟之後**才執行。
 
 本表的 `started_at` / `finished_at` / `updated_at` 都由 mapper 的 `NOW()` 或欄位預設寫入，也就是由**資料庫時鐘**產生。容器先前設為 `TZ: UTC`，因此既有列存的是 UTC 的裸 `DATETIME`，比台北時間早 8 小時。時區改為 `Asia/Taipei` 後，新寫入的列是台北時間，舊列仍是 UTC——同一個欄位會有兩種意義。這支 migration 把舊列一次補正。

@@ -180,7 +180,7 @@ depends_on: [stock-daily-chart]
 - [x] 日 K 頁（`/stocks/{stockId}/daily`）的主圖仍為蠟燭圖，未受本次變更影響
 
 
-### 超出範圍的說明改依最早可取得日顯示（本次新增）
+### 超出範圍的說明改依最早可取得日顯示
 
 - [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「分鐘資料最早只提供到 {availableFrom}，此交易日早於可取得範圍。」，其中日期取自回應的 `availableFrom`，格式 `YYYY-MM-DD`
 - [x] 日期不寫死：將回應的 `availableFrom` 改為另一個日期，畫面上的訊息隨之改變；前端程式中不存在 `2023-05-23` 字面值

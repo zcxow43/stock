@@ -105,7 +105,7 @@ DELETE FROM stock_minute_fetch_status
 - [x] `fetched_at` 與 `source` 允許為 `NULL`（尚未成功抓取的列可寫入）
 
 
-### 清除過時的超出範圍狀態列（本次新增）
+### 清除過時的超出範圍狀態列
 
 - [x] 執行 V015 前後比對：`status = 'OUT_OF_WINDOW' AND trade_date >= '2023-05-23'` 的列數由執行前的值變為 0
 - [x] 執行 V015 後 `Applied-when` 查詢回傳真值（`1`）

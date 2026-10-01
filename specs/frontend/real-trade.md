@@ -20,6 +20,8 @@ depends_on: [stock-list, simulated-trade]
 
 資料實際存在一份隨程式碼版控的 CSV 檔而不是資料庫（見 `specs/backend/real-trade.md`），但**那完全是後端的事**：本頁一律透過 API 存取，不讀檔、不匯入、不知道檔案在哪。**本頁沒有任何上傳、圖片解析或匯入的入口**——資料進到那個檔的另一條路徑（使用者手工編輯、或把券商截圖交給 AI 助理代填）發生在程式之外。
 
+**頁面層級的「只看上市普通股」不影響本頁**：本頁沒有母體篩選這件事——使用者加進來哪一檔就是哪一檔，包含 ETF 與已下市股票。切換那個勾選框時本頁不重新查詢（與模擬交易分頁同一條處置，見 `specs/frontend/simulated-trade.md`；`specs/frontend/stock-list.md` 的「各分頁如何套用」已記上這一條）。
+
 ## Requirements
 
 ### 加入列
@@ -157,7 +159,7 @@ depends_on: [stock-list, simulated-trade]
 - [x] 筆數為 `0` 時三個總計顯示 `—`，不是 `0` 或 `0%`
 - [x] 所有顏色為 `## Visual Style` 的固定色碼，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同；本次未新增任何既有色盤以外的顏色
 
-### 改為與模擬交易對稱：加入列、刪除、改走 API（本次新增）
+### 改為與模擬交易對稱：加入列、刪除、改走 API
 
 - [x] 本頁**不再讀取任何 CSV 檔**：程式中不存在對 `real-trades.csv` 的 import 或 fetch，資料一律來自 `GET /api/real-trades`；`develop/frontend/src/data/` 底下與此功能相關的檔案已移除
 - [x] 加入列有四格輸入，由左至右為代號、買進日、買進價、量，**四格初始皆為空白**——特別是買進日**不**預填上一次收盤日

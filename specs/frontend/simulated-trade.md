@@ -167,7 +167,7 @@ depends_on: [stock-list]
 - [x] 所有顏色為 `## Visual Style` 的固定色碼，`prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 
 
-### 指定買進日（本次新增）
+### 指定買進日
 - [x] 加入列有一格買進日輸入（`type="date"`），預設值等於回應的 `defaultBuyDate`、`max` 等於回應的 `asOfDate`；`defaultBuyDate` 為 `null` 時留空且「加入」disabled
 - [x] 送出的 body 為 `{ stockId, buyDate }`，買進日即輸入框當下的值（沿用預設時也照樣帶出）；在買進日輸入框按 Enter 同樣送出
 - [x] 把買進日改成更早的交易日再加入：該列的買進日與買進價為那一天的值（以 mock 回應驗證畫面顯示的是回應值）

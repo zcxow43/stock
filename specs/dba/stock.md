@@ -59,6 +59,8 @@ CREATE TABLE stock (
 
 ### Migration SQL — V007__seed_listed_stocks.sql
 
+**Applied-when**: `SELECT COUNT(*) = 34 FROM stock WHERE stock_id IN ('1101','1102','1216','1301','1303','2002','2207','2303','2308','2317','2327','2330','2345','2357','2379','2382','2395','2412','2454','2603','2609','2615','2881','2882','2886','2891','3008','3034','3231','3661','3711','4904','6505','6669')`
+
 開發用種子資料：一批常見上市（`TSE`）股票，讓剛建好、還沒跑過任何行情抓取的資料庫也能在股票總覽頁搜尋並點選標的。接在 `V006`（`stock_minute_fetch_status`）之後，是本表繼 `V002` 之後擁有的第二個版本；它只寫資料、不改結構。
 
 以 `INSERT ... ON DUPLICATE KEY UPDATE` 寫入，因此可重複執行：既有列被更新為最新名稱，不會因主鍵重複而失敗，也不會產生重複股票。`SET NAMES utf8mb4` 是必要的——少了它，中文名稱會依連線端預設字元集寫成亂碼。
@@ -114,6 +116,8 @@ ON DUPLICATE KEY UPDATE
 種子清單是開發樣本，不是完整上市清單。全市場 universe 一律由行情抓取流程以 UPSERT 補齊——兩者寫入同一張表、同一種語意，所以先跑哪個都不會衝突。
 
 ### Migration SQL — V011__shift_stock_timestamps_to_taipei.sql
+
+**Applied-when**: `SELECT COUNT(*) > 0 FROM schema_migration WHERE version = 'V011'`
 
 一次性資料位移，不改結構。接在 `V009` 之後，理由與 `specs/dba/stock-sync-progress.md` 的 V009 完全相同：`created_at` / `updated_at` 由資料庫時鐘寫入，容器時區從 `UTC` 改為 `Asia/Taipei` 之前寫入的列比台北時間早 8 小時。
 
