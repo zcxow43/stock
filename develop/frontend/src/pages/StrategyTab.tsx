@@ -525,6 +525,9 @@ interface UnionRow {
   /** The latest `signalDate` among this stock's hits — what the merged table sorts by.
    * Sorting stays keyed on `signalDate`, not `buyDate` — 父列排序不變. */
   latestSignalDate: string
+  /** 預設排序第一層：該檔命中的**相異策略數**（跨全部筆的聯集，不是筆數）。父列與每個子列
+   * 共用這一個值，所以一檔的幾筆不會被第一層拆到表格兩頭。 */
+  strategyCount: number
   /** 「僅選取全符合」的判定，以**股票**為單位：這檔的 `stockId` 出現在掃描回應**每一筆**
    * `results` 的 `items` 中（列在 `pendingConfirm`／`insufficientData` 不算命中，因為那兩個
    * 清單本來就不進 `items`）。取自掃描回應而非畫面上的卡片，也不看買進日——一檔的所有筆共用
@@ -577,11 +580,14 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
       stockName: row.stockName,
       hits: row.hits.map((h) => ({ strategyCode: h.strategyCode, signalDate: h.signalDate, detail: h.detail })),
       latestSignalDate,
+      strategyCount: new Set(row.hits.map((h) => h.strategyCode)).size,
       matchesAllStrategies,
       buyDateGroups,
     }
   })
+  // 預設排序三層：命中策略數由多到少 → 最新 signalDate 由新到舊 → 同日 stockId 升冪。
   return withGroups.sort((a, b) => {
+    if (a.strategyCount !== b.strategyCount) return b.strategyCount - a.strategyCount
     if (a.latestSignalDate !== b.latestSignalDate) return a.latestSignalDate < b.latestSignalDate ? 1 : -1
     return a.stockId < b.stockId ? -1 : a.stockId > b.stockId ? 1 : 0
   })
@@ -1961,7 +1967,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   )
 
   // ---------- 買進價／報酬率欄排序 ----------
-  // Rows to actually render: `unionRows`'s own default order (最新 signalDate 由新到舊、
+  // Rows to actually render: `unionRows`'s own default order (命中策略數由多到少、最新 signalDate 由新到舊、
   // 同日 stockId 升冪) whenever no sort is active, or the frozen snapshot from the last
   // header click otherwise. Looking rows up by stockId rather than storing row objects
   // directly in `sortedRowOrder` keeps the snapshot itself trivially serializable state

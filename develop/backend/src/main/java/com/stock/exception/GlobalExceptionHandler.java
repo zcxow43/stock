@@ -266,6 +266,27 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.noPriceOnBuyDate(e.getStockId(), e.getBuyDate()));
     }
 
+    @ExceptionHandler(RealTradeNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRealTradeNotFound(RealTradeNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.realTradeNotFound(e.getId()));
+    }
+
+    @ExceptionHandler(InvalidBuyPriceException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBuyPrice(InvalidBuyPriceException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyPrice(e.getBuyPrice()));
+    }
+
+    @ExceptionHandler(InvalidSharesException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidShares(InvalidSharesException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidShares(e.getShares()));
+    }
+
+    @ExceptionHandler(MalformedTradeFileException.class)
+    public ResponseEntity<ErrorResponse> handleMalformedTradeFile(MalformedTradeFileException e) {
+        log.error("data/real-trades.csv is malformed: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("MALFORMED_TRADE_FILE"));
+    }
+
     @ExceptionHandler(InvalidMetricException.class)
     public ResponseEntity<ErrorResponse> handleInvalidMetric(InvalidMetricException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("INVALID_METRIC"));

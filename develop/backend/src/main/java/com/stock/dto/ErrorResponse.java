@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -46,6 +47,10 @@ public class ErrorResponse {
     // simulated-trade.md wire contract: SIMULATED_TRADE_NOT_FOUND's "id" key — the path {id} that
     // matched no row.
     private final Long id;
+    // real-trade.md wire contract: INVALID_BUY_PRICE's "buyPrice" and INVALID_SHARES's "shares" echo the
+    // offending number exactly as parsed (null when the field was missing, so the key is omitted).
+    private final BigDecimal buyPrice;
+    private final BigDecimal shares;
 
     public ErrorResponse(String code) {
         this(code, null, null, null, null, null, null, null, null, null, null, null, null);
@@ -53,6 +58,25 @@ public class ErrorResponse {
 
     public ErrorResponse(String code, List<String> unknownIds) {
         this(code, unknownIds, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    // Pre-real-trade 13-arg form, kept so every existing factory below stays untouched; it just
+    // delegates to the full constructor.
+    private ErrorResponse(@JsonProperty("code") String code,
+                           @JsonProperty("unknownIds") List<String> unknownIds,
+                           @JsonProperty("limit") Integer limit,
+                           @JsonProperty("allowed") List<?> allowed,
+                           @JsonProperty("stockId") String stockId,
+                           @JsonProperty("fields") List<String> fields,
+                           @JsonProperty("unknown") List<String> unknown,
+                           @JsonProperty("duplicated") List<String> duplicated,
+                           @JsonProperty("strategy") String strategy,
+                           @JsonProperty("param") String param,
+                           @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems,
+                           @JsonProperty("buyDate") String buyDate,
+                           @JsonProperty("id") Long id) {
+        this(code, unknownIds, limit, allowed, stockId, fields, unknown, duplicated, strategy, param,
+                duplicatedItems, buyDate, id, null, null);
     }
 
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
@@ -71,7 +95,9 @@ public class ErrorResponse {
                            @JsonProperty("param") String param,
                            @JsonProperty("duplicatedItems") List<BacktestDuplicateItemDto> duplicatedItems,
                            @JsonProperty("buyDate") String buyDate,
-                           @JsonProperty("id") Long id) {
+                           @JsonProperty("id") Long id,
+                           @JsonProperty("buyPrice") BigDecimal buyPrice,
+                           @JsonProperty("shares") BigDecimal shares) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -85,6 +111,8 @@ public class ErrorResponse {
         this.duplicatedItems = duplicatedItems;
         this.buyDate = buyDate;
         this.id = id;
+        this.buyPrice = buyPrice;
+        this.shares = shares;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
@@ -270,6 +298,32 @@ public class ErrorResponse {
     public static ErrorResponse simulatedTradeNotFound(Long id) {
         return new ErrorResponse("SIMULATED_TRADE_NOT_FOUND", null, null, null, null, null, null, null, null, null,
                 null, null, id);
+    }
+
+    /** REAL_TRADE_NOT_FOUND (specs/backend/real-trade.md, "驗證與錯誤"): {id}, omitted when the path id was not a number at all. */
+    public static ErrorResponse realTradeNotFound(Long id) {
+        return new ErrorResponse("REAL_TRADE_NOT_FOUND", null, null, null, null, null, null, null, null, null,
+                null, null, id, null, null);
+    }
+
+    /** INVALID_BUY_PRICE (specs/backend/real-trade.md): {buyPrice}, the offending number. */
+    public static ErrorResponse invalidBuyPrice(BigDecimal buyPrice) {
+        return new ErrorResponse("INVALID_BUY_PRICE", null, null, null, null, null, null, null, null, null,
+                null, null, null, buyPrice, null);
+    }
+
+    /** INVALID_SHARES (specs/backend/real-trade.md): {shares}, the offending number. */
+    public static ErrorResponse invalidShares(BigDecimal shares) {
+        return new ErrorResponse("INVALID_SHARES", null, null, null, null, null, null, null, null, null,
+                null, null, null, null, shares);
+    }
+
+    public BigDecimal getBuyPrice() {
+        return buyPrice;
+    }
+
+    public BigDecimal getShares() {
+        return shares;
     }
 
     public String getCode() {

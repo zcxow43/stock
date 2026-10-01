@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "真實交易分頁"
 requirement: "第五個分頁「真實交易」與模擬交易分頁完全對稱：同樣有加入列、同樣可逐筆刪除、同樣的表格欄位與三個總計。差別有兩個——加入列多兩格輸入（買進價、量），且四格輸入全部預設空白（模擬交易的買進日預設為上一次收盤日）；以及資料存在一份隨程式碼版控的 CSV 檔而非資料庫，但那是後端的事，本頁一律透過 API 存取，不自己讀檔。命中的股票名稱、現價、成本、未實現損益、報酬率與三個總計全部取自回應，每日隨行情刷新。"
 depends_on: [stock-list, simulated-trade]
@@ -159,27 +159,27 @@ depends_on: [stock-list, simulated-trade]
 
 ### 改為與模擬交易對稱：加入列、刪除、改走 API（本次新增）
 
-- [ ] 本頁**不再讀取任何 CSV 檔**：程式中不存在對 `real-trades.csv` 的 import 或 fetch，資料一律來自 `GET /api/real-trades`；`develop/frontend/src/data/` 底下與此功能相關的檔案已移除
-- [ ] 加入列有四格輸入，由左至右為代號、買進日、買進價、量，**四格初始皆為空白**——特別是買進日**不**預填上一次收盤日
-- [ ] 「加入」按鈕在四格任一為空時 disabled；四格皆有值時可按；送出期間 disabled 並顯示「加入中…」
-- [ ] 在任一格按 Enter 等同按「加入」；四格未填滿時按 Enter 不送出
-- [ ] 送出的 body 為 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶，值即四格當下的內容（代號前後空白已去除）
-- [ ] 加入成功後**只清空代號與買進價**，買進日與量維持不變；加入失敗時四格都不清空
-- [ ] 加入成功後重新呼叫 `GET /api/real-trades`，表格與三個總計依新回應重繪（不就地改動畫面上的陣列）
-- [ ] 說明文字講明股數不是張數：文案含「股數不是張數，1 張 = 1,000 股」
-- [ ] 每一列有「刪除」文字按鈕，按下**不彈確認對話框**，直接送 `DELETE /api/real-trades/{id}`，`id` 取自該列；成功後重新取得列表
-- [ ] 刪除一筆後其餘各列的 `id` 依新回應更新：刪掉第一筆後，接著刪「原本第二筆」那一列，送出的 `id` 是新回應裡的值而不是舊的
-- [ ] 列的順序一律照回應的 `items` 順序，畫面不重排；表頭不可排序、列不可點選、不導向任何頁面
-- [ ] 三個總計與費率說明全部取自回應（`totalCost`／`totalUnrealizedProfit`／`totalReturnPercent`／`feeRatePercent`／`taxRatePercent`），畫面不自己加總；`totalReturnPercent` 為 `null` 時顯示 `—`
-- [ ] 某筆的 `currentDate`／`currentPrice`／`unrealizedProfit`／`returnPercent` 為 `null` 時該四欄顯示 `—`，**成本照常顯示**；`stockName` 為 `null` 時名稱位置留空、代號照常顯示
-- [ ] `skippedLines` 非空時於表格下方以錯誤色逐筆列出「第 {lineNumber} 行格式有誤，已略過：{content}」；為空時這一塊不出現
-- [ ] 清單為空時顯示「還沒有任何部位，用上面那一列加入」，且**加入列照常可用**
-- [ ] `GET` 回 `500` `MALFORMED_TRADE_FILE` 時顯示對應文案、不顯示表格、加入列 disabled
-- [ ] 六個加入錯誤碼各自的文案依本 spec 的對照表顯示在加入列下方，且四格都不清空
-- [ ] `DELETE` 回 `REAL_TRADE_NOT_FOUND` 時顯示「這一筆已經不存在了」並重新取得列表
-- [ ] 前端先擋下的四種輸入錯誤（買進價 ≤ 0 或超過兩位小數、股數非正整數、買進日晚於今日、任一格為空）不送出請求即提示
-- [ ] 本頁不呼叫 `GET /api/simulated-trades`
-- [ ] 新增的兩格輸入與「刪除」按鈕所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致；本次未新增任何顏色
+- [x] 本頁**不再讀取任何 CSV 檔**：程式中不存在對 `real-trades.csv` 的 import 或 fetch，資料一律來自 `GET /api/real-trades`；`develop/frontend/src/data/` 底下與此功能相關的檔案已移除
+- [x] 加入列有四格輸入，由左至右為代號、買進日、買進價、量，**四格初始皆為空白**——特別是買進日**不**預填上一次收盤日
+- [x] 「加入」按鈕在四格任一為空時 disabled；四格皆有值時可按；送出期間 disabled 並顯示「加入中…」
+- [x] 在任一格按 Enter 等同按「加入」；四格未填滿時按 Enter 不送出
+- [x] 送出的 body 為 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶，值即四格當下的內容（代號前後空白已去除）
+- [x] 加入成功後**只清空代號與買進價**，買進日與量維持不變；加入失敗時四格都不清空
+- [x] 加入成功後重新呼叫 `GET /api/real-trades`，表格與三個總計依新回應重繪（不就地改動畫面上的陣列）
+- [x] 說明文字講明股數不是張數：文案含「股數不是張數，1 張 = 1,000 股」
+- [x] 每一列有「刪除」文字按鈕，按下**不彈確認對話框**，直接送 `DELETE /api/real-trades/{id}`，`id` 取自該列；成功後重新取得列表
+- [x] 刪除一筆後其餘各列的 `id` 依新回應更新：刪掉第一筆後，接著刪「原本第二筆」那一列，送出的 `id` 是新回應裡的值而不是舊的
+- [x] 列的順序一律照回應的 `items` 順序，畫面不重排；表頭不可排序、列不可點選、不導向任何頁面
+- [x] 三個總計與費率說明全部取自回應（`totalCost`／`totalUnrealizedProfit`／`totalReturnPercent`／`feeRatePercent`／`taxRatePercent`），畫面不自己加總；`totalReturnPercent` 為 `null` 時顯示 `—`
+- [x] 某筆的 `currentDate`／`currentPrice`／`unrealizedProfit`／`returnPercent` 為 `null` 時該四欄顯示 `—`，**成本照常顯示**；`stockName` 為 `null` 時名稱位置留空、代號照常顯示
+- [x] `skippedLines` 非空時於表格下方以錯誤色逐筆列出「第 {lineNumber} 行格式有誤，已略過：{content}」；為空時這一塊不出現
+- [x] 清單為空時顯示「還沒有任何部位，用上面那一列加入」，且**加入列照常可用**
+- [x] `GET` 回 `500` `MALFORMED_TRADE_FILE` 時顯示對應文案、不顯示表格、加入列 disabled
+- [x] 六個加入錯誤碼各自的文案依本 spec 的對照表顯示在加入列下方，且四格都不清空
+- [x] `DELETE` 回 `REAL_TRADE_NOT_FOUND` 時顯示「這一筆已經不存在了」並重新取得列表
+- [x] 前端先擋下的四種輸入錯誤（買進價 ≤ 0 或超過兩位小數、股數非正整數、買進日晚於今日、任一格為空）不送出請求即提示
+- [x] 本頁不呼叫 `GET /api/simulated-trades`
+- [x] 新增的兩格輸入與「刪除」按鈕所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致；本次未新增任何顏色
 
 ## Execution Result
 - Status: DONE
@@ -204,3 +204,17 @@ depends_on: [stock-list, simulated-trade]
     - Requests: in the production build, 9 distinct ids gave exactly 9 `GET /api/stocks/{id}` calls (1101 appears in four rows, 2330 in two); every request on the tab was GET. (The Vite dev server double-fires effects under React StrictMode, so dev shows each call twice with the first aborted; that is a dev-only artifact.)
   - After the final `catch` tightening in `RealTradeTab.tsx` (log unexpected errors instead of dropping them) I re-ran `npm run build` and lint but did not re-drive the browser; the changed branch is only reachable by a non-abort failure inside the `.then`.
   - Not verified / limits: the criterion 「第 3 行有誤的檔案驗證顯示 3」 was checked with the same rule on lines 16-22 (offset by header, comment and blank lines), not with a file literally erroring on line 3. Backend and Vite dev/preview were stopped at the end.
+
+### Increment 2 — 2026-10-01 (加入列、刪除、改走 API)
+- Status: DONE
+- Files changed:
+  - `develop/frontend/src/api/realTrades.ts` (new) — typed `GET`/`POST`/`DELETE /api/real-trades` client and `RealTradeApiError`
+  - `develop/frontend/src/pages/RealTradeTab.tsx` (rewritten) — add bar (代號/買進日/買進價/量, all blank), per-row 刪除, summary and 股數 column from the response, `skippedLines` list, malformed-file state; re-fetches after every successful POST/DELETE
+  - `develop/frontend/src/pages/RealTradeTab.css` — add-bar, input, 刪除 and row-flash styles, all existing literal hex
+  - `develop/frontend/src/pages/StockListPage.tsx` — comment only
+  - `develop/frontend/src/data/real-trades.csv`, `develop/frontend/src/data/realTrades.ts` — deleted (`src/data/` is now gone); nothing in the frontend reads `real-trades.csv` any more (the only remaining occurrence is the file name inside the malformed-file error copy)
+- Verification (Playwright/Chromium against the real backend on 8080 and Vite on 5173; `data/real-trades.csv` restored to header-only afterwards):
+  - Real: empty state (totals `—`, 4 blank inputs, 加入 disabled, hint text), 3-of-4 filled stays disabled and Enter sends nothing, front-end blocks for shares 1.5 / 0, price 0 / 1.234 / -5, future date (no request, message shown, inputs kept), add by Enter sends `{"stockId":"2330","buyDate":"2026-09-15","buyPrice":1000.5,"shares":2000}` (trimmed) then `GET`, only 代號/買進價 cleared, 加入中… shown while POST in flight, row flash class applied, real `UNKNOWN_STOCK_ID` copy with inputs kept, delete sends `DELETE /1` then `GET`, deleting the originally-second row afterwards sends `DELETE /1` (renumbered), no dialog, real stale-page delete -> 404 `REAL_TRADE_NOT_FOUND` toast and refetch, two real skipped lines (file lines 5 and 7) below the table in error colors, real malformed header (no table, five controls disabled), zero `simulated-trades` requests.
+  - Mocked responses (Playwright route): null `stockName`/current fields row (`—`, cost kept, muted color), `totalReturnPercent: null`, the other five add error codes, first-load 500 + 重試.
+  - Geometry: 10 header cells, every body cell's left/right equals its header's, one `top` per row, no non-`table-cell` td/th. Colors: computed values equal the Visual Style hexes; full color dump identical under `prefers-color-scheme` dark and light.
+- Not driven: none unchecked. `status:` frontmatter left as is for `/dev` to flip.

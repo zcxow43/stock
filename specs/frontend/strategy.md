@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
 requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘九個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**"
 depends_on: [stock-list]
@@ -1276,15 +1276,15 @@ depends_on: [stock-list]
 - [x] 本次未新增任何顏色：新勾選框與其 disabled 呈現全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 ### 預設排序改為命中策略數優先（本次新增）
 
-- [ ] 預設排序的第一層為**命中策略數由多到少**：以「A 檔命中 3 種、B 檔命中 2 種、C 檔命中 1 種」的掃描回應驗證，順序為 A → B → C，即使 C 的 `signalDate` 比 A、B 都新
-- [ ] 第二、三層不變：命中數相同時仍依該檔各策略中最新的 `signalDate` 由新到舊，同日依 `stockId` 升冪
-- [ ] 數的是**相異策略數，不是筆數**：同一個策略在兩個不同訊號日命中同一檔仍只算 1 種，該檔不因此排到只命中 1 種的其他檔前面
-- [ ] 一檔多筆時，父列與它的每一個子列共用同一個命中數（取該檔全部筆命中策略的聯集），同一檔的幾筆不會被第一層拆到表格兩頭
-- [ ] 待確認與資料不足的標的不進表，因此不參與這個排序
-- [ ] 只勾一個策略掃描時每一檔的命中數都是 1，順序與本次改動前完全相同（退化為原本的 `signalDate` 排序）
-- [ ] 表頭排序循環的第 3 次「還原預設排序」還原的是這個三層順序，不是舊的兩層順序
-- [ ] 點表頭依某一欄排序後，值相同（含兩列同為「—」）時的先後依這個三層預設排序決定
-- [ ] 回測完成時表格仍為報酬率降冪（那是「僅選取報酬率 n% 以上」預設勾選一併切換的排序，不是預設排序），本次改動不影響該行為
+- [x] 預設排序的第一層為**命中策略數由多到少**：以「A 檔命中 3 種、B 檔命中 2 種、C 檔命中 1 種」的掃描回應驗證，順序為 A → B → C，即使 C 的 `signalDate` 比 A、B 都新
+- [x] 第二、三層不變：命中數相同時仍依該檔各策略中最新的 `signalDate` 由新到舊，同日依 `stockId` 升冪
+- [x] 數的是**相異策略數，不是筆數**：同一個策略在兩個不同訊號日命中同一檔仍只算 1 種，該檔不因此排到只命中 1 種的其他檔前面
+- [x] 一檔多筆時，父列與它的每一個子列共用同一個命中數（取該檔全部筆命中策略的聯集），同一檔的幾筆不會被第一層拆到表格兩頭
+- [x] 待確認與資料不足的標的不進表，因此不參與這個排序
+- [x] 只勾一個策略掃描時每一檔的命中數都是 1，順序與本次改動前完全相同（退化為原本的 `signalDate` 排序）
+- [x] 表頭排序循環的第 3 次「還原預設排序」還原的是這個三層順序，不是舊的兩層順序
+- [x] 點表頭依某一欄排序後，值相同（含兩列同為「—」）時的先後依這個三層預設排序決定
+- [x] 回測完成時表格仍為報酬率降冪（那是「僅選取報酬率 n% 以上」預設勾選一併切換的排序，不是預設排序），本次改動不影響該行為
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2450,3 +2450,19 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **code-quality self-review**: absence — `result.maPeriods` guarded by `!== undefined`, `detail.matchedPeriods ?? []`, catalogue lookups fall back to the raw code; errors — the new error code goes through the existing handler, nothing swallowed; lifecycle — no new effects/timers/listeners; performance — `matchesAllStrategies` is O(strategies x items) per stock inside `buildUnionRows` (~1,700 items x 2 in the real scan, imperceptible) and each toggle is one pass over rows. Deliberately left as is: `computeNotAllMatchKeys` on un-check recomputes over the *currently* displayed rows (the same trade-off the existing 報酬率 box has if the hidden set changed between check and uncheck).
 
 **Left unchecked**: none. Backend and Vite dev server started for verification were stopped afterwards.
+
+### Increment 31 — 2026-10-01
+
+**Change**: `develop/frontend/src/pages/StrategyTab.tsx` only. `UnionRow` gets `strategyCount` (size of the `Set` of distinct `strategyCode`s over ALL of the stock's hits, so parent and every child share it; not a hit count). `buildUnionRows`'s default sort is now three-tier: `strategyCount` desc, then `latestSignalDate` desc, then `stockId` asc. Nothing else needed to change: `displayRows` (restore) falls back to `unionRows`, and `handleSortClick` sorts a copy of `unionRows` with a stable comparator, so header-tie order and 第 3 次還原 both inherit the new order. `pendingConfirm`/`insufficientData` never enter `items`, so they never enter the count. No colors touched. Backtest-complete sort (報酬率降冪 from `computeReturnDescSortOrder`) untouched.
+
+**Verified in Chrome (Playwright, light scheme) on the running app** (backend :8080 + Vite :5173, stopped afterwards):
+- MOCKED scan + backtest responses (shapes real data cannot produce on demand), 3 strategies. Hits: 1111 in 3 strategies (09-22); 6666 in 2 (09-29); 2222 and 5555 in 2 (09-23); 8888 in 2 on two different buy dates (09-15/09-16); 3333, 4444, 9999 in 1 (09-30, the newest); 7777 in BOX on two signal dates (09-10, 09-24), count 1, two rows. 9999 also in `pendingConfirm` of two strategies, 5555 in `insufficientData` and 6666 in `pendingConfirm` of RISING_SUPPORT.
+  - Restored default order on screen: `1111, 6666, 2222, 5555, 8888, 3333, 4444, 9999, 7777` — 3 種 first, then 2 種 by date (09-29, 09-23 tie by stockId, 8888 last), then 1 種 by date then id; 3333/4444/9999 (newest signal dates) sit behind every 2 種 row; 7777 (two rows, one strategy) last, not ahead of anyone; 5555 and 6666 stay 2 種 (insufficient/pending not counted); 9999 stays 1 種 (pending not counted). Expanded view: `8888 child child` and `7777 child child`, each stock's children adjacent to its parent.
+  - After backtest: `6666,2222,5555,1111,8888,3333,4444,9999,7777` with 報酬率 ▼ (return-desc, unchanged behavior).
+  - 報酬率 header cycle (from the post-backtest desc): asc `3333,4444,9999,1111,8888,7777,2222,5555,6666` -> restore = default order above -> desc `6666,2222,5555,8888,7777,1111,3333,4444,9999` -> asc -> restore again identical. Ties break by the 3-tier default: 2222 before 5555 (equal 5%), 8888 before 7777 (equal 3%; the old 2-tier order would have put 7777 first), `—` ties 3333,4444,9999 in default order. 買進價 header cycle likewise ends at the default order.
+  - Single strategy (BOX only): default order `4444,6666,7777,2222,5555,1111,8888`, identical to the old signalDate desc / stockId asc order.
+- REAL backend scan (BOX_BREAKOUT, HIGHER_LOWS, RISING_SUPPORT, REBOUND; 106 rows): the scan response was recorded and the expected order computed independently from it; the screen's order matched exactly (`MATCH true`). The first two rows were 2104 and 2347 (2 種, signalDate 09-23), ahead of every 1 種 row including 1441/2020/6189 with the newer signalDate 09-29. The backtest request in that run was still a mocked response.
+
+**Build**: `npm run build` clean. `npm run lint` could not be run (eslint config not found under the installed eslint version); the pre-existing warning in this file was not touched.
+
+**Left unchecked**: none.

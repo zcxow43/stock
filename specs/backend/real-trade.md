@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "真實交易 API"
 requirement: "真實交易與模擬交易完全對稱——同樣可加入、列出、刪除，同樣即時算出現價與未實現損益。唯一的差別是儲存位置：模擬交易寫資料庫的 simulated_trade 表，真實交易寫一份隨程式碼版控的 CSV 檔，由本模組讀寫。另一個差別是買進價與股數由呼叫端指定（模擬交易的買進價取當日收盤、股數固定 1,000），因為記錄的是使用者真正的成交價與成交量。不新增任何資料表。"
 depends_on: [simulated-trade, stock-catalog]
@@ -227,46 +227,63 @@ Response `204`，無內容。`id` 為 `GET` 回報的資料行序號。
 ## Acceptance Criteria
 
 ### 儲存與檔案格式
-- [ ] 資料讀寫的路徑為 `data/real-trades.csv`（專案根目錄），該檔進版控；`develop/frontend/src/data/real-trades.csv` 不再被任何程式讀取
-- [ ] 欄位名列逐字為 `stockId,buyDate,buyPrice,shares` 時正常解析；改成其他內容時 `GET`／`POST`／`DELETE` 皆回 `500` `MALFORMED_TRADE_FILE`，且 `POST`／`DELETE` 未寫入檔案（以寫入前後的檔案位元組比對驗證）
-- [ ] 檔案不存在時 `GET` 回 `200` 空清單（不是 `404`／`500`）；接著 `POST` 一筆會建立該檔並寫入欄位名列與那一筆
-- [ ] 只有欄位名列時 `GET` 回 `200`，`items` 與 `skippedLines` 為空陣列、兩個總額為 `0`、`totalReturnPercent` 為 `null`
-- [ ] 空白行與以 `#` 開頭的註解行被略過，不進 `items`、不進 `skippedLines`、不佔 `id` 序號
-- [ ] `POST` 與 `DELETE` 之後，欄位名列、註解行、空白行與被略過的格式錯誤行**全部原樣保留在原來的相對位置**：以一個含註解行、空白行與一個壞行的檔案驗證，新增一筆後那三類行逐字不變
-- [ ] 寫入為先寫暫存檔再原子換名：寫入完成後目錄中不留任何暫存檔
-- [ ] 不新增任何資料表或欄位，本次不產生任何 DBA migration；只讀 `stock` 與 `stock_daily_price`
+- [x] 資料讀寫的路徑為 `data/real-trades.csv`（專案根目錄），該檔進版控；`develop/frontend/src/data/real-trades.csv` 不再被任何程式讀取（於 `specs/frontend/real-trade.md` 同一次 `/dev` 執行中補齊：`develop/frontend/src/data/` 整個目錄已刪除，`develop/frontend/src` 內唯一出現 `real-trades.csv` 字樣的地方是 `RealTradeTab.tsx:14` 的錯誤訊息文案，非讀取）
+- [x] 欄位名列逐字為 `stockId,buyDate,buyPrice,shares` 時正常解析；改成其他內容時 `GET`／`POST`／`DELETE` 皆回 `500` `MALFORMED_TRADE_FILE`，且 `POST`／`DELETE` 未寫入檔案（以寫入前後的檔案位元組比對驗證）
+- [x] 檔案不存在時 `GET` 回 `200` 空清單（不是 `404`／`500`）；接著 `POST` 一筆會建立該檔並寫入欄位名列與那一筆
+- [x] 只有欄位名列時 `GET` 回 `200`，`items` 與 `skippedLines` 為空陣列、兩個總額為 `0`、`totalReturnPercent` 為 `null`
+- [x] 空白行與以 `#` 開頭的註解行被略過，不進 `items`、不進 `skippedLines`、不佔 `id` 序號
+- [x] `POST` 與 `DELETE` 之後，欄位名列、註解行、空白行與被略過的格式錯誤行**全部原樣保留在原來的相對位置**：以一個含註解行、空白行與一個壞行的檔案驗證，新增一筆後那三類行逐字不變
+- [x] 寫入為先寫暫存檔再原子換名：寫入完成後目錄中不留任何暫存檔
+- [x] 不新增任何資料表或欄位，本次不產生任何 DBA migration；只讀 `stock` 與 `stock_daily_price`
 
 ### `GET` 的計算與回應
-- [ ] 以買進價 `21.55`、股數 `1000`、現價 `23.10` 驗證：`buyFee` `30`、`sellFee` `32`、`sellTax` `69`、`cost` `21580`、`unrealizedProfit` `1419`、`returnPercent` `6.58`（三項成本各自獨立無條件捨去至整數元）
-- [ ] **與模擬交易共用同一份算法**：把同一組（買進價、股數、現價）分別建成一筆真實交易與一筆等值的模擬交易，兩個端點回的 `cost`／`unrealizedProfit`／`returnPercent` **逐位相同**
-- [ ] `shares` 解讀為**股數**不是張數：`shares` 為 `2000` 的一筆，成本以 2,000 股計算
-- [ ] `buyPrice` 原樣取自 CSV，**不**向行情索取該日收盤價、也不以收盤價覆蓋：以「CSV 寫 `21.55`、該日實際收盤不同」的情境驗證回的是 `21.55`
-- [ ] 現價日等於買進日時 `unrealizedProfit` 為負值，不得夾為 `0`
-- [ ] `items` 依 `buyDate` 由新到舊、同日依 `stockId` 升冪、再同依 `id` 升冪；同檔同日兩筆保持檔案中的先後
-- [ ] `feeRatePercent` 為 `0.1425`、`taxRatePercent` 為 `0.3`、`asOfDate` 為今日；回應**不含** `lotSize`（股數逐筆不同，沒有統一的每筆股數可報）與 `defaultBuyDate`（四個輸入都沒有預設值）
-- [ ] `totalReturnPercent` 的分母只含**有現價**的那幾筆的 `cost`：以「兩筆有現價、一筆查不到現價」的資料驗證分母不含第三筆
-- [ ] 全部筆都查不到現價時 `totalUnrealizedProfit` 為 `0`、`totalReturnPercent` 為 `null`，`totalCost` 照常有值
+- [x] 以買進價 `21.55`、股數 `1000`、現價 `23.10` 驗證：`buyFee` `30`、`sellFee` `32`、`sellTax` `69`、`cost` `21580`、`unrealizedProfit` `1419`、`returnPercent` `6.58`（三項成本各自獨立無條件捨去至整數元）
+- [x] **與模擬交易共用同一份算法**：把同一組（買進價、股數、現價）分別建成一筆真實交易與一筆等值的模擬交易，兩個端點回的 `cost`／`unrealizedProfit`／`returnPercent` **逐位相同**
+- [x] `shares` 解讀為**股數**不是張數：`shares` 為 `2000` 的一筆，成本以 2,000 股計算
+- [x] `buyPrice` 原樣取自 CSV，**不**向行情索取該日收盤價、也不以收盤價覆蓋：以「CSV 寫 `21.55`、該日實際收盤不同」的情境驗證回的是 `21.55`
+- [x] 現價日等於買進日時 `unrealizedProfit` 為負值，不得夾為 `0`
+- [x] `items` 依 `buyDate` 由新到舊、同日依 `stockId` 升冪、再同依 `id` 升冪；同檔同日兩筆保持檔案中的先後
+- [x] `feeRatePercent` 為 `0.1425`、`taxRatePercent` 為 `0.3`、`asOfDate` 為今日；回應**不含** `lotSize`（股數逐筆不同，沒有統一的每筆股數可報）與 `defaultBuyDate`（四個輸入都沒有預設值）
+- [x] `totalReturnPercent` 的分母只含**有現價**的那幾筆的 `cost`：以「兩筆有現價、一筆查不到現價」的資料驗證分母不含第三筆
+- [x] 全部筆都查不到現價時 `totalUnrealizedProfit` 為 `0`、`totalReturnPercent` 為 `null`，`totalCost` 照常有值
 
 ### 查不到現價與查不到主檔
-- [ ] 某檔在 `stock_daily_price` 沒有任何 `close_price > 0` 的列時：`currentDate`／`currentPrice`／`sellFee`／`sellTax`／`unrealizedProfit`／`returnPercent` 皆為 `null`，`buyFee` 與 `cost` 照常有值，該筆計入 `totalCost` 但不計入另兩個總計
-- [ ] `stockId` 不在 `stock` 主檔時 `stockName` 為 `null`，整個 `GET` 仍回 `200`（**不得**因此回 `404` 或讓清單失敗）
+- [x] 某檔在 `stock_daily_price` 沒有任何 `close_price > 0` 的列時：`currentDate`／`currentPrice`／`sellFee`／`sellTax`／`unrealizedProfit`／`returnPercent` 皆為 `null`，`buyFee` 與 `cost` 照常有值，該筆計入 `totalCost` 但不計入另兩個總計
+- [x] `stockId` 不在 `stock` 主檔時 `stockName` 為 `null`，整個 `GET` 仍回 `200`（**不得**因此回 `404` 或讓清單失敗）
 
 ### 格式錯誤逐行回報
-- [ ] 欄位數不是 4、`buyDate` 非法或晚於今日、`buyPrice` 不大於 `0` 或小數超過兩位、`shares` 不是大於 `0` 的整數 → 該行被略過，其餘各行照常回報
-- [ ] `skippedLines[].lineNumber` 為**含欄位名列、1 起算**的實際檔案行號：以錯誤恰在第 3 行的檔案驗證回的是 `3`
-- [ ] `skippedLines[].content` 為該行原始內容，原樣回報
-- [ ] 被略過的行不佔 `id` 序號：第 2 行壞、第 3 行好時，第 3 行那一筆的 `id` 為 `1`
+- [x] 欄位數不是 4、`buyDate` 非法或晚於今日、`buyPrice` 不大於 `0` 或小數超過兩位、`shares` 不是大於 `0` 的整數 → 該行被略過，其餘各行照常回報
+- [x] `skippedLines[].lineNumber` 為**含欄位名列、1 起算**的實際檔案行號：以錯誤恰在第 3 行的檔案驗證回的是 `3`
+- [x] `skippedLines[].content` 為該行原始內容，原樣回報
+- [x] 被略過的行不佔 `id` 序號：第 2 行壞、第 3 行好時，第 3 行那一筆的 `id` 為 `1`
 
 ### `POST`
-- [ ] 四個欄位齊全且合法時回 `201`，形狀與 `GET` 的 `items[]` 單筆相同，`id` 為寫入後的資料行序號；再 `GET` 一次看得到該筆
-- [ ] **四個欄位全部必填**：分別缺 `stockId`／`buyDate`／`buyPrice`／`shares` 各回對應的 `400`，且**任一個缺漏都不會被補上預設值**
-- [ ] `buyDate` 不要求該日在庫中有收盤價：以一個該檔確定沒有行情的過去日期新增，回 `201` 而**不是** `NO_PRICE_ON_BUY_DATE`
-- [ ] `buyDate` 晚於今日 → `400` `INVALID_BUY_DATE`；`buyPrice` 為 `0`、負數或三位小數 → `400` `INVALID_BUY_PRICE`；`shares` 為 `0`、負數或小數 → `400` `INVALID_SHARES`
-- [ ] `stockId` 去除空白後為空 → `400` `INVALID_STOCK_ID`；不存在於 `stock` → `400` `UNKNOWN_STOCK_ID`；代號前後帶空白時去除後比對成功
-- [ ] **同檔同日可以有多筆**：對同一個 `(stockId, buyDate)` 以不同 `buyPrice` 連續 `POST` 兩次，兩次皆回 `201`，`GET` 回兩筆獨立的列，**沒有任何 `409`**
-- [ ] 請求本體型別不符（例如 `shares` 給字串）→ `400` `INVALID_REQUEST_BODY`，不回 `500`
+- [x] 四個欄位齊全且合法時回 `201`，形狀與 `GET` 的 `items[]` 單筆相同，`id` 為寫入後的資料行序號；再 `GET` 一次看得到該筆
+- [x] **四個欄位全部必填**：分別缺 `stockId`／`buyDate`／`buyPrice`／`shares` 各回對應的 `400`，且**任一個缺漏都不會被補上預設值**
+- [x] `buyDate` 不要求該日在庫中有收盤價：以一個該檔確定沒有行情的過去日期新增，回 `201` 而**不是** `NO_PRICE_ON_BUY_DATE`
+- [x] `buyDate` 晚於今日 → `400` `INVALID_BUY_DATE`；`buyPrice` 為 `0`、負數或三位小數 → `400` `INVALID_BUY_PRICE`；`shares` 為 `0`、負數或小數 → `400` `INVALID_SHARES`
+- [x] `stockId` 去除空白後為空 → `400` `INVALID_STOCK_ID`；不存在於 `stock` → `400` `UNKNOWN_STOCK_ID`；代號前後帶空白時去除後比對成功
+- [x] **同檔同日可以有多筆**：對同一個 `(stockId, buyDate)` 以不同 `buyPrice` 連續 `POST` 兩次，兩次皆回 `201`，`GET` 回兩筆獨立的列，**沒有任何 `409`**
+- [x] 請求本體型別不符（例如 `shares` 給字串）→ `400` `INVALID_REQUEST_BODY`，不回 `500`
 
 ### `DELETE`
-- [ ] 刪除存在的 `id` 回 `204`，再 `GET` 一次該筆消失、其餘各筆的 `id` 依新的行位置重新編號
-- [ ] `id` 不是正整數、為 `0`、或超出當下的資料行數 → `404` `REAL_TRADE_NOT_FOUND`
-- [ ] 刪除後檔案中的註解行與空白行仍在原來的相對位置
+- [x] 刪除存在的 `id` 回 `204`，再 `GET` 一次該筆消失、其餘各筆的 `id` 依新的行位置重新編號
+- [x] `id` 不是正整數、為 `0`、或超出當下的資料行數 → `404` `REAL_TRADE_NOT_FOUND`
+- [x] 刪除後檔案中的註解行與空白行仍在原來的相對位置
+
+---
+## Execution Result
+- Status: DONE（33 項中 32 項已對 live app + 真實資料庫驗證；1 項因屬前端範圍未勾）
+- Files changed:
+  - New: `data/real-trades.csv`（僅欄位名列）
+  - New: `develop/backend/src/main/java/com/stock/controller/RealTradeController.java`
+  - New: `.../service/RealTradeService.java`, `.../service/RealTradeCsvStore.java`（讀、解析、整檔改寫、暫存檔＋原子換名、保留原檔權限；路徑預設為往上找到含 `develop/backend/pom.xml` 的目錄下的 `data/real-trades.csv`，可用 `app.real-trade.csv-path` 覆寫）
+  - New: `.../domain/RealTrade.java`
+  - New DTO: `CreateRealTradeRequest`, `RealTradeItemDto`, `RealTradeResponseDto`, `SkippedLineDto`, `StrictNumberDeserializer`（buyPrice/shares 只接受 JSON 數字，字串→`INVALID_REQUEST_BODY`）
+  - New exception: `MalformedTradeFileException`, `RealTradeNotFoundException`, `InvalidBuyPriceException`, `InvalidSharesException`
+  - Changed: `dto/ErrorResponse.java`（新增 `buyPrice`/`shares` 欄位與三個 factory；舊 13 參數建構子委派給新的 15 參數建構子，既有 factory 不動）、`exception/GlobalExceptionHandler.java`（四個 handler）
+- Notes:
+  - 成本演算法直接呼叫與模擬交易共用的 `TradingCostCalculator`；`INVALID_BUY_DATE`／`INVALID_STOCK_ID`／`UNKNOWN_STOCK_ID` 重用模擬交易既有的 exception 與回應形狀。
+  - 不新增資料表、不產生 DBA migration；只讀 `stock`、`stock_daily_price`。
+  - Live 驗證用的夾具（`stock`/`stock_daily_price` 中的 `RT01`–`RT04`）與為了比對模擬交易而臨時建立的 `simulated_trade` 表（live DB 原本就沒有該表）都已在驗證後清除／刪除。
+  - 已知未處理：`buyPrice` 沒有上限（如 `1e30` 會被寫入 CSV）；spec 未規定上限。

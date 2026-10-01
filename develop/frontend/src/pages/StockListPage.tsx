@@ -118,7 +118,7 @@ export default function StockListPage() {
         {tab === 'simulated' ? <SimulatedTradeTab /> : null}
       </div>
       {/* Same mount-only-while-active treatment; likewise ignores `commonStocksOnly`. The data
-          is a bundled CSV, so the only network traffic is GET /api/stocks/{stockId}. */}
+          lives behind GET/POST/DELETE /api/real-trades (the backend owns the CSV). */}
       <div data-testid="sl-tabpanel-real" style={{ display: tab === 'real' ? 'block' : 'none' }}>
         {tab === 'real' ? <RealTradeTab /> : null}
       </div>

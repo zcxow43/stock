@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日。逐檔歷史採 Yahoo 為主、FinMind 為備援的雙來源，任一來源對本機 IP 施加封鎖時自動切換來源繼續作業，不中斷批次、不消耗重試次數。回補的全市場母體預設只含上市普通股（排除 ETF／特別股／TDR，可由 commonStocksOnly 覆寫）。全市場回補的主路徑改為交易所 MI_INDEX 逐日全市場快照（每個交易日 1 次請求，取代逐檔的每檔 1 次），逐檔雙來源保留給指定多檔模式與快照不可用時的降級；每日增量與逐日快照都必須推進 last_synced_date，修掉「資料已寫入但進度未推進、導致每個交易日重抓整個母體」的浪費"
 depends_on: []
@@ -560,7 +560,7 @@ Response `200`：
 - [x] 主檔同步只寫入 `market = 'TSE'` 的列，不因本步驟產生任何 `OTC` 列
 - [x] 既有 34 檔種子股票在同步後仍存在，其 `stock_id` 未變動、名稱為資料源的最新值
 - [x] 每日增量（含啟動主檔同步）對 `stock` 只發出一次比對查詢，並只對「不存在」或「名稱等寫入欄位有變」的股票發出寫入；以既有主檔與快照完全相同的情境執行，對 `stock` 的寫入語句數為 0
-- [ ] 快照中某檔名稱與 `stock` 既有值不同時，該檔名稱被更新；快照中新出現的代號被新增；兩者以外的列 `updated_at` 不變（見 Increment 10：insert/update 兩支未能在本次 session 內以真實資料重新即時驗證，僅有 Increment 6 的既有活資料證據 + 本次的程式碼審查；`updated_at` 不變的部分已於本次以「未被寫入的列完全沒有送出任何 SQL」直接活測證實）
+- [x] 快照中某檔名稱與 `stock` 既有值不同時，該檔名稱被更新；快照中新出現的代號被新增；兩者以外的列 `updated_at` 不變（Increment 12 以真實 MySQL＋真實 TWSE 快照活測三個子句）
 - [x] 略過主檔寫入不影響行情：同一次執行後，快照中每一檔的當日 `stock_daily_price` 列皆存在，既有 `PRICE_BACKFILL` 進度列的 `last_synced_date` 照常推進
 - [x] `POST /api/stocks/sync/daily` 回應欄位與值的語意不變：`stockMasterUpserted` 仍等於本次快照涵蓋的主檔檔數
 
@@ -977,3 +977,35 @@ Tests run: 5, ... - in com.stock.service.StockSyncServiceCommonStocksOnlyTest（
 #### 本次檔案變更
 
 無程式碼／設定變更；DB 淨變更為零（2330 名稱已由同步還原，9999 已刪除）。L524、L584 依指示未觸碰。
+
+### Increment 12 — 2026-10-01
+
+只針對 L563（名稱更新／新代號新增／其餘列 `updated_at` 不變）。**沒有任何程式碼變更**，既有實作即正確。以 `mvn package -DskipTests` 打包後 `java -jar target/backend.jar` 啟動（`-Dlogging.level.com.stock.mapper=DEBUG`、啟動補齊／主檔同步關閉），對本機 MySQL（`127.0.0.1:3306/stock`）與真實 TWSE `STOCK_DAY_ALL`（交易日 2026-09-30）驗證；驗證後已停止實例，DB 已還原。
+
+#### 名稱被更新（活測證實）
+
+1. `PUT /api/stocks/2330` 把名稱改為 `WRONGNAME`，`updated_at=2026-10-01 11:08:09`；先匯出全表 1,381 列 `(stock_id, stock_name, updated_at)`。
+2. `POST /api/stocks/sync/daily` 回應 `{"tradeDate":"2026-09-30","stockCount":1373,"insertedCount":1373,"updatedCount":0,"stockMasterUpserted":1373}`。
+3. 同步後 2330 名稱回到 `台積電`，`updated_at=11:08:12`；全表前後 `diff` 只有 2330 這一列不同（1,380 列完全相同）。
+
+#### 新代號被新增（活測證實）
+
+- 真實快照中沒有「在快照有成交、卻不在 `stock`」的代號（快照的 `00625K`、`020011` 為無成交列，依設計被略過，不屬新增）。因此改為人造缺口：`00400A`（`主動國泰動能高息`，在當日快照內、`stock_industry` 0 列、無外鍵參照，故刪除無連帶影響）以 `DELETE FROM stock` 刪除，`stock` 剩 1,380 列，並再匯出全表 `(stock_id, stock_name, updated_at)`。
+- 再呼叫一次 `POST /api/stocks/sync/daily`，回應 `stockMasterUpserted=1373`。`stock` 回到 1,381 列，前後 `diff` 只多出 `00400A | 主動國泰動能高息 | 2026-10-01 11:08:34`；其餘 1,380 列的 `updated_at` 無一變動。
+- SQL 日誌：該次同步 `StockMapper.upsert` 恰好 1 次，參數 `00400A, 主動國泰動能高息, TSE, true`。
+
+#### 其餘列 `updated_at` 不變（活測證實）
+
+兩次同步（共 1,373 檔快照）各只送出 1 次 `StockMapper.upsert`（2330、00400A），其餘列全表 `diff` 無差異。
+
+#### 還原
+
+- `00400A` 的 `created_at`／`updated_at` 以 `UPDATE` 還原為 `2026-09-01 12:26:59`／`2026-09-18 18:24:27`；`2330` 名稱已由同步修正為 `台積電`（`updated_at` 停在 `2026-10-01 11:08:12`，為本次同步所寫）。`stock` 共 1,381 列，與開始時相同。
+
+#### L526（千檔規模全跑實測，維持 `- [ ]`）
+
+沿用 Increment 10 的立場：要驗證只能對 Yahoo／FinMind 發送約 1,000 次真實請求，而這正是該條要證明「不會觸發」的 403／429 封鎖風險；蓄意以此衝量 production 第三方服務並無安全的預先保證，一旦被封鎖需等待冷卻期才能恢復。找不到不蓄意衝量即可證明的方法，維持延後。
+
+#### 本次檔案變更
+
+無程式碼變更；僅更新本 spec（勾選 L563、新增本增量）。

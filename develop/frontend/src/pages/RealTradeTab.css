@@ -102,3 +102,114 @@
   border: 1px solid #8a3a34;
   border-radius: 8px;
 }
+
+/* ---------- 加入列 (same literal hex as .sim-add-* in SimulatedTradeTab.css) ---------- */
+
+.rt-add-bar {
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.rt-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rt-add-input {
+  height: 38px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  box-sizing: border-box;
+  /* Pins the native date/number widgets to the dark palette in light OS mode too. */
+  color-scheme: dark;
+}
+
+.rt-add-input::placeholder {
+  color: #6b7c90;
+}
+
+.rt-add-input:focus {
+  border-color: #3e8fd8;
+}
+
+.rt-add-input:disabled {
+  color: #6b7c90;
+  cursor: default;
+}
+
+.rt-code-input {
+  width: 240px;
+}
+
+.rt-date-input {
+  width: 170px;
+}
+
+.rt-num-input {
+  width: 120px;
+}
+
+.rt-add-error {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: inline-block;
+}
+
+.rt-add-hint {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #93a4b8;
+}
+
+.rt-del-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: #93a4b8;
+  cursor: pointer;
+}
+
+.rt-del-btn:hover:not(:disabled) {
+  color: #e04b45;
+}
+
+.rt-del-btn:disabled {
+  color: #4a5866;
+  cursor: default;
+}
+
+/* 加入成功時的列閃爍 — one iteration, same background as the row-hover color. */
+@keyframes rt-row-flash {
+  0% {
+    background: transparent;
+  }
+  25% {
+    background: #1d2a38;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.rt-row-flash td {
+  animation: rt-row-flash 1.2s ease;
+}
