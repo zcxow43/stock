@@ -1,6 +1,8 @@
 package com.stock.service;
 
 import com.stock.config.BackfillProperties;
+import com.stock.domain.Stock;
+import com.stock.mapper.StockMapper;
 import com.stock.mapper.StockSyncProgressMapper;
 import com.stock.service.external.ExternalApiException;
 import com.stock.service.external.ExternalApiMalformedException;
@@ -30,6 +32,14 @@ import java.util.concurrent.CompletableFuture;
  * only have workers queue on the same per-source rate gate for no benefit (spec: 逐日路徑循序執行，
  * 不套用逐檔路徑的並行度設定).
  *
+ * <p><b>Market split</b> (spec: 逐日回補的處理流程 — 母體與區間解析完成後，依 {@code stock.market} 拆成上市標的
+ * 與上櫃標的): MI_INDEX is a 證交所 endpoint and only ever returns listed (TSE) rows, so an OTC target
+ * can never be served by the day-by-day snapshot at all. OTC targets are therefore excluded from
+ * the day loop entirely — including from its {@code last_synced_date} advancement, which would
+ * otherwise record days the snapshot provably did not cover for them and make {@code catchUp} skip
+ * those days forever — and are handed to {@link BackfillRunner}'s per-stock Yahoo/FinMind pipeline
+ * after the loop, under exactly {@code SELECTED}'s rules (spec: step 7).
+ *
  * <p>Progress stays PENDING for the whole population throughout the loop and flips to DONE only
  * once every candidate day has been processed (spec: 逐日回補的處理流程 step 6 /
  * 進度的顯示語意刻意維持逐檔不變's "中途看起來像沒有進展" trade-off) — {@code last_synced_date} is what
@@ -48,6 +58,14 @@ public class SnapshotBackfillRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotBackfillRunner.class);
 
+    /**
+     * Only this exact market value routes a target away from the snapshot path. Anything else
+     * (TSE, or a row whose market was never classified) keeps the pre-existing snapshot behavior:
+     * MI_INDEX returns the whole listed market, so a listed code simply absent from one day's
+     * response means it did not trade that day, which is a covered day, not an uncovered one.
+     */
+    private static final String MARKET_OTC = "OTC";
+
     private final TwseMiIndexClient miIndexClient;
     private final SourceAvailabilityTracker availabilityTracker;
     private final SourceRateLimiter rateLimiter;
@@ -56,11 +74,14 @@ public class SnapshotBackfillRunner {
     private final PriceIngestionService priceIngestionService;
     private final BackfillRunner backfillRunner;
     private final JobRunningRegistry jobRunningRegistry;
+    private final StockMapper stockMapper;
 
     public SnapshotBackfillRunner(TwseMiIndexClient miIndexClient, SourceAvailabilityTracker availabilityTracker,
                                    SourceRateLimiter rateLimiter, BackfillProperties properties,
                                    StockSyncProgressMapper progressMapper, PriceIngestionService priceIngestionService,
-                                   BackfillRunner backfillRunner, JobRunningRegistry jobRunningRegistry) {
+                                   BackfillRunner backfillRunner, JobRunningRegistry jobRunningRegistry,
+                                   StockMapper stockMapper) {
+        this.stockMapper = stockMapper;
         this.miIndexClient = miIndexClient;
         this.availabilityTracker = availabilityTracker;
         this.rateLimiter = rateLimiter;
@@ -91,20 +112,52 @@ public class SnapshotBackfillRunner {
         if (targetIds.isEmpty()) {
             return;
         }
-        LocalDate loopStart = progressMapper.findMinTargetStartDate(jobType, targetIds);
+
+        // MI_INDEX covers listed stocks only, so the population splits by stock.market before
+        // anything is fetched (spec: 依 stock.market 拆成上市標的與上櫃標的). Only the TSE side walks the
+        // day loop; the OTC side goes per-stock afterwards.
+        List<String> snapshotIds = new ArrayList<>();
+        List<String> perStockIds = new ArrayList<>();
+        for (Stock stock : stockMapper.findByIds(targetIds)) {
+            if (MARKET_OTC.equals(stock.getMarket())) {
+                perStockIds.add(stock.getStockId());
+            } else {
+                snapshotIds.add(stock.getStockId());
+            }
+        }
+
+        if (!runSnapshotDays(jobType, snapshotIds, endDate)) {
+            // MI_INDEX unusable: the TSE targets it did not get through join the OTC ones in a
+            // single per-stock handoff, so both share one worker pool rather than two in sequence.
+            perStockIds.addAll(0, notCaughtUp(jobType, snapshotIds, endDate));
+        }
+        if (!perStockIds.isEmpty()) {
+            backfillRunner.runConcurrently(jobType, perStockIds, true);
+        }
+    }
+
+    /**
+     * Walks the candidate day range for the TSE (snapshot-covered) targets only. Returns
+     * {@code true} when the whole range was processed, {@code false} when MI_INDEX turned out to be
+     * unusable and the caller must degrade the remainder to the per-stock pipeline.
+     */
+    private boolean runSnapshotDays(String jobType, List<String> snapshotIds, LocalDate endDate) {
+        if (snapshotIds.isEmpty()) {
+            return true;
+        }
+        LocalDate loopStart = progressMapper.findMinTargetStartDate(jobType, snapshotIds);
         if (loopStart == null || loopStart.isAfter(endDate)) {
             // Nothing left to fetch for any target (e.g. every one was already caught up by the
             // time this actually ran) -- still converge to DONE, no request issued.
-            progressMapper.markDoneForIds(jobType, targetIds);
-            return;
+            progressMapper.markDoneForIds(jobType, snapshotIds);
+            return true;
         }
 
         for (LocalDate date = loopStart; !date.isAfter(endDate); date = date.plusDays(1)) {
             if (!availabilityTracker.isAvailable(TwseMiIndexClient.SOURCE_CODE)) {
                 log.info("TWSE MI_INDEX unavailable at the start of {}; degrading the rest of this "
                         + "PRICE_BACKFILL batch to the per-stock Yahoo/FinMind pipeline.", date);
-                degradeToPerStock(jobType, targetIds, endDate);
-                return;
+                return false;
             }
 
             List<NormalizedPriceRow> rows;
@@ -114,8 +167,7 @@ public class SnapshotBackfillRunner {
                 availabilityTracker.markBlocked(TwseMiIndexClient.SOURCE_CODE, e.getRetryAfterSeconds());
                 log.info("TWSE MI_INDEX blocked fetching {}: {}. Degrading the rest of this "
                         + "PRICE_BACKFILL batch to the per-stock Yahoo/FinMind pipeline.", date, e.getMessage());
-                degradeToPerStock(jobType, targetIds, endDate);
-                return;
+                return false;
             } catch (RateLimitedException | ExternalApiException | ExternalApiMalformedException e) {
                 // Any other persistent MI_INDEX trouble (retries exhausted, malformed response, a
                 // non-2xx connectivity failure): treated the same as a block so ONE bad day
@@ -125,16 +177,18 @@ public class SnapshotBackfillRunner {
                 availabilityTracker.markBlocked(TwseMiIndexClient.SOURCE_CODE, null);
                 log.warn("TWSE MI_INDEX request failed fetching {}: {}. Degrading the rest of this "
                         + "PRICE_BACKFILL batch to the per-stock Yahoo/FinMind pipeline.", date, e.getMessage());
-                degradeToPerStock(jobType, targetIds, endDate);
-                return;
+                return false;
             }
 
             // Same-transaction write + progress advance (spec: 單日的行情寫入與 last_synced_date 推進
-            // 在同一個交易邊界內完成).
-            priceIngestionService.applySnapshotDay(rows, new HashSet<>(targetIds), jobType, date);
+            // 在同一個交易邊界內完成). Only snapshotIds are advanced — an OTC target's
+            // last_synced_date must never move on a day this snapshot could not cover it
+            // (spec: 上櫃標的的 last_synced_date 不由逐日快照推進).
+            priceIngestionService.applySnapshotDay(rows, new HashSet<>(snapshotIds), jobType, date);
         }
 
-        progressMapper.markDoneForIds(jobType, targetIds);
+        progressMapper.markDoneForIds(jobType, snapshotIds);
+        return true;
     }
 
     /**
@@ -164,22 +218,16 @@ public class SnapshotBackfillRunner {
     }
 
     /**
-     * Hands every target not yet caught up through endDate to the existing per-stock pipeline,
-     * each continuing from its own last_synced_date + 1 (resume=true semantics) — exactly where
-     * the day-by-day loop left it (spec: 降級不改變任何已處理標的的狀態，也不重抓已寫入的日期). A target that
-     * happens to already be caught up (e.g. the block occurs exactly at endDate) is left alone
-     * rather than handed to a pipeline that would immediately no-op it anyway.
-     *
-     * Does not itself manage {@code jobRunningRegistry} — this runs synchronously inside {@link
-     * #run}'s try/finally, which releases the lock exactly once after this returns.
+     * The subset of the given targets not yet caught up through endDate — what the per-stock
+     * pipeline still has to do, each stock continuing from its own last_synced_date + 1
+     * (resume=true semantics), exactly where the day-by-day loop left it (spec: 降級不改變任何已處理標的
+     * 的狀態，也不重抓已寫入的日期). A target that happens to already be caught up (e.g. the block occurs
+     * exactly at endDate) is left out rather than handed to a pipeline that would no-op it anyway.
      */
-    private void degradeToPerStock(String jobType, List<String> targetIds, LocalDate endDate) {
-        List<String> caughtUp = progressMapper.findCaughtUpStockIds(jobType, targetIds, endDate);
-        List<String> remaining = new ArrayList<>(targetIds);
-        remaining.removeAll(caughtUp);
-        if (!remaining.isEmpty()) {
-            backfillRunner.runConcurrently(jobType, remaining, true);
-        }
+    private List<String> notCaughtUp(String jobType, List<String> ids, LocalDate endDate) {
+        List<String> remaining = new ArrayList<>(ids);
+        remaining.removeAll(progressMapper.findCaughtUpStockIds(jobType, ids, endDate));
+        return remaining;
     }
 
     private void sleep(long millis) {

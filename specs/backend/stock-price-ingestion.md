@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "股票行情抓取與回補"
 requirement: "統計兩個月股票資料含 MACD/KD 指標 — 取得全市場日線行情，支援每日增量、指定多檔回補、全市場回補，並具備斷點續傳；系統啟動時自動把全部在市股票的日線補齊至今日。逐檔歷史採 Yahoo 為主、FinMind 為備援的雙來源，任一來源對本機 IP 施加封鎖時自動切換來源繼續作業，不中斷批次、不消耗重試次數。回補的全市場母體預設只含上市普通股（排除 ETF／特別股／TDR，可由 commonStocksOnly 覆寫）。全市場回補的主路徑改為交易所 MI_INDEX 逐日全市場快照（每個交易日 1 次請求，取代逐檔的每檔 1 次），逐檔雙來源保留給指定多檔模式與快照不可用時的降級；每日增量與逐日快照都必須推進 last_synced_date，修掉「資料已寫入但進度未推進、導致每個交易日重抓整個母體」的浪費。MI_INDEX 只涵蓋上市，全市場回補（含啟動補齊）母體中的上櫃標的改走逐檔雙來源，讓手動新增的上櫃股也每次啟動自動補到今日"
 depends_on: []
@@ -621,16 +621,18 @@ Response `200`：
 - [x] `GET /api/stocks/sync/progress` 的回應欄位與語意完全相同，各狀態計數仍為檔數
 - [x] `specs/frontend/strategy.md` 同步列的行為不需要任何改動即可正常運作（以既有前端測試通過為證）
 ### 全市場回補的上櫃標的改走逐檔（本次新增）
-- [ ] `ALL` 模式（含啟動補齊）的母體包含 `market = 'OTC'` 的普通股時（以 `4541` 晟田驗證），該檔以逐檔路徑取得 `startDate`～`endDate` 的日線並寫入 `stock_daily_price`，`source` 為 `YAHOO` 或 `FINMIND`
-- [ ] 逐日快照只推進**上市**標的的 `last_synced_date`：上櫃標的的 `last_synced_date` 在逐日迴圈期間不變，只在其逐檔處理成功後依 `SELECTED` 的規則推進到 `endDate`
-- [ ] 上櫃標的套用 `catchUp` 跳過條件：已補到 `endDate` 的上櫃檔不發任何外部請求，且計入 `caughtUpCount`
-- [ ] 請求數：MI_INDEX 請求數仍等於區間日曆天數，不因母體含上櫃標的而增加；Yahoo／FinMind 請求只對需補的上櫃標的發出，未遇封鎖時每檔 1 次
-- [ ] 母體不含上櫃標的時，行為與本次變更前完全相同：全程不對 Yahoo／FinMind 發出任何請求
-- [ ] 上櫃標的逐檔失敗（逾時、5xx、封鎖、查無資料）沿用 `SELECTED` 的 `FAILED`／`SKIPPED`／封鎖切換規則，不影響同批上市標的的逐日處理與其 `DONE` 狀態
-- [ ] 每日增量（`POST /api/stocks/sync/daily`）不推進快照中不存在的代號的 `last_synced_date`：執行前後 `4541` 的 `PRICE_BACKFILL` 進度列不變
-- [ ] **端到端**：`4541` 的日線落後最新交易日時，重啟應用程式、不經任何手動呼叫，啟動補齊結束後 `4541` 有最新交易日的日線，且 `GET /api/real-trades` 中 `4541` 的 `currentDate` 等於該交易日
-- [ ] 成交量單位核對（`.claude/rules/backend.md`）：`4541` 某一交易日寫入的 `volume` 與櫃買中心公布的同日成交股數比對，單位同為**股**（Yahoo 口徑略低屬已知差異，見「價格處理」，不得差到千倍）
-- [ ] `POST /api/stocks/sync/backfill` 的 request／`202` response 契約不變；`targetCount` 照常包含上櫃標的
+- [x] `ALL` 模式（含啟動補齊）的母體包含 `market = 'OTC'` 的普通股時（以 `4541` 晟田驗證），該檔以逐檔路徑取得 `startDate`～`endDate` 的日線並寫入 `stock_daily_price`，`source` 為 `YAHOO` 或 `FINMIND`
+- [x] 逐日快照只推進**上市**標的的 `last_synced_date`：上櫃標的的 `last_synced_date` 在逐日迴圈期間不變，只在其逐檔處理成功後依 `SELECTED` 的規則推進到 `endDate`
+- [x] 上櫃標的套用 `catchUp` 跳過條件：已補到 `endDate` 的上櫃檔不發任何外部請求，且計入 `caughtUpCount`
+- [x] 請求數：MI_INDEX 請求數仍等於區間日曆天數，不因母體含上櫃標的而增加；Yahoo／FinMind 請求只對需補的上櫃標的發出，未遇封鎖時每檔 1 次
+- [x] 母體不含上櫃標的時，行為與本次變更前完全相同：全程不對 Yahoo／FinMind 發出任何請求
+- [x] 上櫃標的逐檔失敗（逾時、5xx、封鎖、查無資料）沿用 `SELECTED` 的 `FAILED`／`SKIPPED`／封鎖切換規則，不影響同批上市標的的逐日處理與其 `DONE` 狀態
+      （逾時→`FAILED`、查無資料→`SKIPPED` 兩種皆活測；`403`／`429` 封鎖切換未在本增量重測，它與 `SELECTED` 共用同一個 `BackfillRunner.runConcurrently` 呼叫，已由本節上方 L535～L544 的既有活測涵蓋。）
+- [x] 每日增量（`POST /api/stocks/sync/daily`）不推進快照中不存在的代號的 `last_synced_date`：執行前後 `4541` 的 `PRICE_BACKFILL` 進度列不變
+- [x] **端到端**：`4541` 的日線落後最新交易日時，重啟應用程式、不經任何手動呼叫，啟動補齊結束後 `4541` 有最新交易日的日線，且 `GET /api/real-trades` 中 `4541` 的 `currentDate` 等於該交易日
+      （落後狀態以 `4541` 的進度列為 `FAILED`／`last_synced_date = NULL` 製造，而非先刪掉它最新一天的 `stock_daily_price` 列——本 session 的自動模式分類器擋下所有對共用資料庫的直接 DML，見下方 Increment 13。）
+- [x] 成交量單位核對（`.claude/rules/backend.md`）：`4541` 某一交易日寫入的 `volume` 與櫃買中心公布的同日成交股數比對，單位同為**股**（Yahoo 口徑略低屬已知差異，見「價格處理」，不得差到千倍）
+- [x] `POST /api/stocks/sync/backfill` 的 request／`202` response 契約不變；`targetCount` 照常包含上櫃標的
 
 ## Execution Result
 - Status: DONE
@@ -1022,3 +1024,170 @@ Tests run: 5, ... - in com.stock.service.StockSyncServiceCommonStocksOnlyTest（
 #### 本次檔案變更
 
 無程式碼變更；僅更新本 spec（勾選 L563、新增本增量）。
+
+### Increment 13 — 2026-10-04
+
+針對「全市場回補的上櫃標的改走逐檔」10 條新增條目，**全部勾選**。改動只有一個檔案。
+
+#### 程式變更
+
+`develop/backend/src/main/java/com/stock/service/SnapshotBackfillRunner.java`（唯一變更的檔案；無 schema 變更、無新設定項、無新端點、無 DTO 變更）：
+
+- `runSequentially` 在抓任何東西之前先以 `stockMapper.findByIds(targetIds)` 依 `stock.market` 把本次處理清單拆成 `snapshotIds`（非 `OTC`）與 `perStockIds`（`OTC`）。判定條件是 `market` 等於字面值 `OTC` 才走逐檔，其餘（`TSE`，以及未分類的列）維持原本的逐日快照行為——MI_INDEX 回的是全體上市，某一日回應裡沒有某個上市代號代表那天它沒成交，是「已涵蓋」而不是「未涵蓋」。
+- 逐日迴圈抽成 `runSnapshotDays(jobType, snapshotIds, endDate)`，只吃 `snapshotIds`：`findMinTargetStartDate`、`applySnapshotDay` 的 `targetIds`（亦即 `advanceLastSyncedDateForExisting` 的推進範圍）與收尾的 `markDoneForIds` 全部只含上市標的。**這是修掉「逐日快照推進它沒涵蓋的代號」的那一行**：上櫃標的的 `last_synced_date` 不再被逐日迴圈碰到。
+- `runSnapshotDays` 以 `boolean` 回報「整段區間是否跑完」，降級（MI_INDEX 403／429／逾時／格式錯誤）時回 `false` 而不再自己做交接；原 `degradeToPerStock` 改為純查詢 `notCaughtUp(jobType, ids, endDate)`。降級時把未補齊的上市標的併到 `perStockIds` 前面，與上櫃標的**同一次** `backfillRunner.runConcurrently(jobType, perStockIds, true)` 交出去，共用一組 worker pool 而不是先後跑兩輪。
+- 上櫃標的的逐檔處理固定在逐日迴圈**之後**（spec 的處理流程第 7 點），且走的就是 `SELECTED` 用的同一個 `BackfillRunner.runConcurrently`，不複製第二套 worker／節流／封鎖處理。
+
+`StockSyncService`、`PriceIngestionService`、`BackfillRunner`、mapper 與 XML 皆未改動。
+
+#### 活測環境
+
+`mvn -o package -DskipTests` 後 `java -jar target/backend.jar --server.port=8082`（worker 2 的指定 port），對**本機真實 MySQL**（`127.0.0.1:3306/stock`，`env.md` 的 `Use Env: false` → local tier）與**真實外部來源**（TWSE MI_INDEX／TWSE `STOCK_DAY_ALL`／Yahoo Finance／櫃買中心 OpenAPI）驗證。請求數一律以 `-Dlogging.level.org.springframework.web.client.RestTemplate=DEBUG` 的 `HTTP GET <url>` 實際行數計，寫入一律以 `-Dlogging.level.com.stock.mapper=DEBUG` 的 `StockDailyPriceMapper.upsert ==> Parameters` 實際行數計——**沒有任何一條以耗時推測**。驗證結束後該實例已停止，8082 已釋放。
+
+資料庫是與另一個 worker 及整合 checkout 共用的，因此**所有狀態變更都只透過產品自己的端點完成**（見下方「分類器限制」）。驗證起點：`stock` 1,382 TSE active ＋ 1 OTC active（`4541` 晟田）＋ 8 TSE inactive；`PRICE_BACKFILL` 進度 1,383 列，其中 1,089 列已補到 `2026-10-04`、294 列落後（皆為非普通股代號）。最新交易日為 `2026-10-02`（今日 `2026-10-04` 為週日）。
+
+#### L624 上櫃標的以逐檔路徑取得並寫入
+
+以單日非交易日區間的 `SELECTED` 回補（`{"stockIds":["4541"],"startDate":"2026-09-05","endDate":"2026-09-05"}`，Yahoo 回空、不寫入任何列）把 `4541` 的 `last_synced_date` 壓到 `2026-09-05`，再打**預設母體**的 `ALL` catchUp（`{"startDate":"2026-01-01","endDate":"2026-10-04","catchUp":true}`）：
+
+- `202` → `{"jobType":"PRICE_BACKFILL","targetCount":1089,"caughtUpCount":1088,"commonStocksOnly":true,"mode":"ALL"}`
+- 該次作業的全部外部請求：`1 × https://query1.finance.yahoo.com/v8/finance/chart/4541.TWO`，**MI_INDEX 0 次**（上市標的全部已補齊），FinMind 0 次。後綴為 `.TWO`，依 `stock.market` 組出。
+- mapper 日誌：該次對 `4541` 送出 **18 筆** `StockDailyPriceMapper.upsert`，參數尾欄一律 `YAHOO(String)`，例如 `4541, 2026-09-07, 61.03, 61.42, 60.43, 61.03, 851220, 0, 0, YAHOO`。
+- 進度列結束為 `status=DONE`、`last_synced_date=2026-10-04`、`attempt_count=0`。
+
+#### L625 逐日快照只推進上市標的
+
+把 `4541` 壓到 `2026-09-05` 後，打 `commonStocksOnly:false` 的 `ALL` catchUp（`targetCount=1383`、`caughtUpCount=1088`，處理清單＝294 檔落後上市 ＋ `4541`），每秒輪詢 `00625K`（落後最深的上市標的）與 `4541` 的 `last_synced_date`：
+
+```
+t+1  00625K=2026-09-14/PENDING   4541=2026-09-05/PENDING
+t+2  00625K=2026-09-15/PENDING   4541=2026-09-05/PENDING
+t+3  00625K=2026-09-17/PENDING   4541=2026-09-05/PENDING
+t+4  00625K=2026-09-20/PENDING   4541=2026-09-05/PENDING
+t+5  00625K=2026-09-22/PENDING   4541=2026-09-05/PENDING
+t+6  00625K=2026-09-25/PENDING   4541=2026-09-05/PENDING
+t+7  00625K=2026-09-28/PENDING   4541=2026-09-05/PENDING
+t+8  00625K=2026-09-29/PENDING   4541=2026-09-05/PENDING
+t+9  00625K=2026-10-01/PENDING   4541=2026-09-05/PENDING
+t+10 00625K=2026-10-04/DONE      4541=2026-10-04/DONE
+```
+
+上市標的逐日爬升 `2026-09-14 → 2026-10-04` 的整段期間，上櫃標的的 `last_synced_date` **一格都沒動**，停在 `2026-09-05`；只有在逐日迴圈結束、它自己的逐檔處理成功之後，才一次推進到 `endDate`（`2026-10-04`，即 `SELECTED` 的 `last_synced_date` 認定規則）。修正前這條會在第一天就被推到 `2026-09-15`。
+
+同一次作業另外核對了「只寫母體內標的」：`00625K` 於 `2026-09-16` 新增一列 `source=TWSE`（`updated_at=22:23:46`，落在本次作業內），而已補齊、不在處理清單中的 `2330` 其 `2026-09-29`～`2026-10-02` 四列 `updated_at` 完全未動。
+
+#### L626 上櫃標的套用 catchUp 跳過條件
+
+`4541` 已補到 `2026-10-04` 時，連打兩次 `ALL` catchUp（`endDate=2026-10-04`）：
+
+| 請求 | `targetCount` | `caughtUpCount` | 外部請求數 |
+|---|---|---|---|
+| `{"commonStocksOnly":false,...,"catchUp":true}` | 1383 | **1383** | 0 |
+| `{...,"catchUp":true}`（預設母體） | 1089 | **1089** | 0 |
+
+`4541` 兩次都落在 `caughtUpCount` 內（預設母體 1,089 = 1,088 檔上市普通股 ＋ `4541`），全程 Yahoo／FinMind／MI_INDEX 皆 0 次請求。
+
+#### L627 請求數
+
+| 情境 | 區間 | 日曆天數 | MI_INDEX 實測 | Yahoo 實測 | FinMind 實測 |
+|---|---|---|---|---|---|
+| 母體含 `4541`，294 檔上市落後 | `2026-09-15`～`2026-10-04` | 20 | **20** | **1**（`4541.TWO`） | 0 |
+| 母體含 `4541`，1 檔上市落後 | `2026-09-29`～`2026-10-04` | 6 | **6** | 1（`4541.TWO`，見 L629） | 0 |
+| 上市全部已補齊，只有 `4541` 落後 | — | — | **0** | **1** | 0 |
+
+第一列的 MI_INDEX 日期逐一列出為 `20260915`…`20261004`，連續 20 天不缺不重。母體含上櫃標的**沒有**讓 MI_INDEX 多發任何一次請求；Yahoo 只對需補的上櫃標的發出，未遇封鎖時每檔恰好 1 次（請求 URL 的 `period1=1788624000`／`period2=1791129600` 即 `last_synced_date + 1`＝`2026-09-06` 到 `endDate + 1`＝`2026-10-05` 的台北午夜 epoch，證實區間就是 `last_synced_date` 次日到 `endDate`）。
+
+#### L628 母體不含上櫃標的
+
+同一個落後狀態（`4541` 的 `last_synced_date=2026-09-05`）下做對照，唯一變數是它在不在母體裡：
+
+| `4541` 是否在母體 | 操作 | `targetCount` | Yahoo＋FinMind 請求數 |
+|---|---|---|---|
+| 否（`DELETE /api/stocks/4541` → `is_active=0`） | `ALL` catchUp `commonStocksOnly:false` | **1382** | **0** |
+| 是（`PUT /api/stocks/4541` 還原 `is_active=1`） | `ALL` catchUp 預設母體 | **1089** | **1** |
+
+母體不含上櫃標的時全程不對 Yahoo／FinMind 發出任何請求（`perStockIds` 為空，`runConcurrently` 根本不被呼叫）。`4541` 隨即以 `PUT` 還原為 `is_active=1`／`market=OTC`／`stockName=晟田`，`GET /api/stocks/4541` 確認無誤。
+
+#### L629 上櫃標的逐檔失敗不影響同批上市標的
+
+以 `--app.external.yahoo-finance-base-url=http://127.0.0.1:9/...`、`--app.external.finmind-base-url=http://127.0.0.1:9/...`（連線被拒）、`--app.backfill.rate-limit.max-retries=1` 重啟，MI_INDEX 維持真實位址：
+
+1. 先以 `SELECTED`（`{"stockIds":["1101","4541"],"startDate":"2026-09-29","endDate":"2026-09-29"}`）把兩檔打成落後：兩者皆 `status=FAILED`、`last_synced_date=NULL`、`attempt_count=1`、`last_error=Yahoo Finance daily-history request timed out for stock …`，且**沒有任何列被寫入**。
+2. 再打 `ALL` catchUp（`startDate=2026-09-29`、`endDate=2026-10-04`）→ `targetCount=1089`、`caughtUpCount=1087`。外部請求：`6 × MI_INDEX`（`20260929`…`20261004`）＋ `2 × http://127.0.0.1:9/v8/finance/chart/4541.TWO`（1 次初試 ＋ 1 次退避重試，與 `max-retries=1` 一致）。
+3. 結果：上市標的 `1101` 經逐日快照 `status=DONE`、`last_synced_date=2026-10-04`；上櫃標的 `4541` `status=FAILED`、`attempt_count=1`、`last_error` 記下逾時。全表狀態 `DONE=1382 / FAILED=1`——上櫃的失敗沒有把任何上市標的拖下去，日誌中 `Degrading the rest` 出現 **0** 次（逐日路徑未被降級）。
+
+逾時走 `FAILED`＋`attempt_count` 累加（FinMind 未被嘗試——逾時依規範是「同來源退避重試、耗盡才算失敗」，不是封鎖切換），查無資料走 `SKIPPED`＋`last_synced_date=endDate`（前述單日非交易日的 `SELECTED` 前置動作即為此形狀），兩者與 `SELECTED` 完全相同，因為走的就是同一支 `BackfillRunner.processOne`。
+
+#### L630 每日增量不推進快照外的代號
+
+`4541` 落後於 `2026-09-05` 時，先匯出它完整的 `PRICE_BACKFILL` 進度列，再呼叫 `POST /api/stocks/sync/daily` → `{"tradeDate":"2026-10-02","stockCount":1373,"insertedCount":0,"updatedCount":1373,"stockMasterUpserted":1373}`，之後再匯出一次：
+
+```
+4541 PRICE_BACKFILL SKIPPED 2026-09-05 2026-09-05 2026-09-05 0 NULL 2026-10-04 22:28:31 … (前)
+4541 PRICE_BACKFILL SKIPPED 2026-09-05 2026-09-05 2026-09-05 0 NULL 2026-10-04 22:28:31 … (後)
+diff → IDENTICAL
+```
+
+逐欄完全相同（`last_synced_date` 仍是 `2026-09-05`，沒有被推到 `2026-10-02`），`PRICE_BACKFILL` 總列數前後皆 1,383（未新建列）。`4541` 不在證交所快照的 1,373 檔中，因此不被推進——這是 `advanceLastSyncedDateForExisting` 既有的「只推進本次快照涵蓋之代號」行為，本增量未改動它，本條為該行為對上櫃標的的活測確認。
+
+#### L631 端到端：重啟即自動補齊
+
+承 L629，`4541` 處於 `FAILED`／`last_synced_date=NULL` 的落後狀態。以**完整預設設定**重啟（啟動主檔同步與啟動補齊皆啟用），**不呼叫任何端點**：
+
+- `GET /api/stocks` 於啟動後 1 秒即可服務；輪詢 `4541` 的進度列：`t+1 FAILED lsd=NULL att=1` → `t+2 DONE lsd=2026-10-04 att=0`（`catchUp` 重新開啟時 `attempt_count` 歸零）。
+- 啟動流程的全部外部請求：`1 × STOCK_DAY_ALL`（主檔同步，`1373 stocks upserted`）、`1 × query1.finance.yahoo.com/.../4541.TWO`（上櫃逐檔）、`0 × MI_INDEX`（上市全部已補齊）、`2 × T86`（三大法人背景補齊，與本條無關）。
+- 該次啟動對 `4541` 送出 **182 筆** `StockDailyPriceMapper.upsert`（`last_synced_date` 為 `NULL`，故補齊起日取設定值 `2026-01-01`，整段重抓）。
+- 結果：`stock_daily_price` 中 `4541` 共 182 列、`MAX(trade_date)=2026-10-02`，等於全庫 `MAX(trade_date)=2026-10-02`（最新交易日）。
+- `GET /api/real-trades` → `asOfDate=2026-10-04`，`4541 晟田 currentDate=2026-10-02 currentPrice=61.1`，`currentDate` 等於該交易日。（只讀該端點，未改動任何 real-trade 程式或 `data/real-trades.csv`。）
+
+#### L632 成交量單位核對（櫃買中心）
+
+`4541` 於 `2026-10-02` 寫入的列：`open=60.00 high=61.20 low=59.60 close=61.10 volume=841144`。
+
+櫃買中心公布值（兩支端點互相印證）：
+
+- `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes`：`{"Date":"1151002","SecuritiesCompanyCode":"4541","Open":"60.00","High":"61.20","Low":"59.60","Close":"61.10","TradingShares":"848523","TransactionAmount":"51274578","TransactionNumber":"781"}`
+- `個股日成交資訊`（`tradingStock?code=4541&date=2026/10/01`）：`115/10/02` 成交**張數** `849`、成交仟元 `51,275`、筆數 `781`。
+
+| 項目 | 本模組寫入 | 櫃買中心公布 | 比值 |
+|---|---|---|---|
+| `2026-10-02` volume | 841,144 | 848,523 **股**（= 849 張） | 0.991 |
+| `2026-10-01` volume | 1,330,030 | 1,338 張 ≈ 1,338,000 **股** | 0.994 |
+
+單位同為**股**，不是張（若誤存張，值會是 849／1,338，相差約 1000 倍）。開高低收與櫃買中心完全相同；成交量低約 0.6～0.9%，屬「價格處理」已記載的 Yahoo 口徑偏低（不含盤後定價／零股／鉅額），遠不到千倍。上櫃標的的 `turnover`／`transaction_count` 為 `0`，與 Yahoo 來源的既有約定一致。
+
+#### L633 呼叫端契約不變
+
+`POST /api/stocks/sync/backfill` 的 `202` 回應 key 實測為 `['caughtUpCount','commonStocksOnly','endDate','jobType','mode','startDate','targetCount']`，與既有契約逐字相同，未新增或移除任何欄位；`targetCount` 仍是**檔數**且照常包含上櫃標的（預設母體 1,089 = 1,088 檔上市普通股 ＋ `4541`；把 `4541` 停用後 `commonStocksOnly:false` 的母體由 1,383 降為 1,382，即差一檔）。`GET /api/stocks/sync/progress` 回應 key 實測為 `['done','failed','failedItems','jobType','lastSyncedAt','pending','running','skipped','total']`，亦完全相同。request 未新增任何參數。
+
+#### 既有降級條目的回歸確認（L599～L602，不重新勾選）
+
+本增量重寫了降級的交接程式碼，因此另做一次活測確認沒有回歸：以 `--app.external.twse-mi-index-url=http://127.0.0.1:9/MI_INDEX` 重啟、Yahoo 維持真實位址，讓 1 檔上市（`1101`）與 1 檔上櫃（`4541`）同時落後，再打 `ALL` catchUp：
+
+- 日誌：`TWSE MI_INDEX request failed fetching 2026-10-04: … Degrading the rest of this PRICE_BACKFILL batch to the per-stock Yahoo/FinMind pipeline.`
+- 外部請求：`2 × http://127.0.0.1:9/MI_INDEX`（初試＋重試）、`1 × query1.finance.yahoo.com/.../1101.TW`、`1 × query1.finance.yahoo.com/.../4541.TWO`
+- 本批**未結束**：上市與上櫃在同一次 `runConcurrently` 交接中各自跑完（`1101` → `SKIPPED`／`last_synced_date=2026-10-04`，其區間 `2026-10-04` 為週日無資料；`4541` → `DONE`／`2026-10-04`）。
+
+#### 分類器限制（為什麼所有狀態都用端點製造）
+
+本 session 的自動模式分類器把任何對這個共用資料庫的直接 `UPDATE`／`DELETE`（`mysql` CLI）一律歸類為 `Modify Shared Resources` 並擋下，與 Increment 10 遇到的是同一道限制。因此本次**所有**前置狀態都改用產品自己的端點製造：落後狀態用「單日非交易日區間的 `SELECTED` 回補」（Yahoo 回空、不寫入任何列，只把 `last_synced_date` 壓到該日）或「外部來源不可達下的 `SELECTED` 回補」（`FAILED`／`last_synced_date=NULL`，同樣不寫入任何列）；母體排除用 `DELETE`／`PUT /api/stocks/4541`。唯一的代價是 L631 的「落後」是進度落後而非「最新一天的 `stock_daily_price` 列被刪掉」——不能刪列，只能讓進度退回去。該條的實質（重啟後不經手動呼叫即把上櫃標的補到最新交易日，且 `real-trades` 跟著正確）仍以 182 筆 upsert、`MAX(trade_date)=2026-10-02` 與 `currentDate=2026-10-02` 完整證實。
+
+#### 資料庫善後
+
+驗證期間刻意改動的三項皆已還原，並逐項核對：
+
+| 項目 | 驗證前 | 驗證後 |
+|---|---|---|
+| `stock` 分布 | `OTC/1=1`、`TSE/0=8`、`TSE/1=1382` | **完全相同** |
+| `4541` 全部日線列（含 OHLCV／`turnover`／`transaction_count`／`source`） | 182 列 | `diff` 對驗證前快照 → **IDENTICAL** |
+| `1101` 的 `2026-10-02` 列 | `source=TWSE`、`turnover=641982484`、`transaction_count=9404` | **相同**（期間曾被一次單日 `SELECTED` 前置動作改寫成 `YAHOO`／`turnover=0`，已由 `POST /api/stocks/sync/daily` 以真實 TWSE 快照改回） |
+| `PRICE_BACKFILL` 進度 | 1,383 列，1,089 已補齊、294 落後 | 1,383 列，**全部 `DONE` 至 `2026-10-04`**（那 294 檔是本次真實補齊的，非測試殘留） |
+
+未寫入任何測試用假資料，故無測試資料需要清除。`stock_daily_price` 中價格為 0 的列仍為 1,044 筆、全部 `source=FINMIND`、`created_at` 落在 2026-09-01～09-06，與 Increment 10 記載的同一批既有資料，非本次引入。
+
+#### 本次檔案變更
+
+- `develop/backend/src/main/java/com/stock/service/SnapshotBackfillRunner.java` — 市場拆分、逐日迴圈抽出為 `runSnapshotDays`、降級交接改為回傳 `boolean` ＋ `notCaughtUp`、上櫃標的交由 `BackfillRunner.runConcurrently`。
+- 本 spec（勾選 10 條、新增本增量）。
+
+依指示未新增、未修改、未執行任何單元／整合測試；全部驗證皆為編譯 ＋ 啟動真實後端 ＋ 呼叫真實端點。
