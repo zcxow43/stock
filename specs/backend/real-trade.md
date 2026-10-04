@@ -243,7 +243,7 @@ Response `204`，無內容。`id` 為 `GET` 回報的資料行序號。
 - [x] `buyPrice` 原樣取自 CSV，**不**向行情索取該日收盤價、也不以收盤價覆蓋：以「CSV 寫 `21.55`、該日實際收盤不同」的情境驗證回的是 `21.55`
 - [x] 現價日等於買進日時 `unrealizedProfit` 為負值，不得夾為 `0`
 - [x] `items` 依 `buyDate` 由新到舊、同日依 `stockId` 升冪、再同依 `id` 升冪；同檔同日兩筆保持檔案中的先後
-- [x] `feeRatePercent` 為 `0.1425`、`taxRatePercent` 為 `0.3`、`asOfDate` 為今日；回應**不含** `lotSize`（股數逐筆不同，沒有統一的每筆股數可報）與 `defaultBuyDate`（四個輸入都沒有預設值）
+- [x] `feeRatePercent` 為 `0.1425`、`taxRatePercent` 為 `0.3`、`asOfDate` 為今日；回應**不含** `lotSize`（股數逐筆不同，沒有統一的每筆股數可報）與 `defaultBuyDate`（買進日的預設值就是今日，前端直接取同一個回應裡的 `asOfDate`，不需要第二個欄位）
 - [x] `totalReturnPercent` 的分母只含**有現價**的那幾筆的 `cost`：以「兩筆有現價、一筆查不到現價」的資料驗證分母不含第三筆
 - [x] 全部筆都查不到現價時 `totalUnrealizedProfit` 為 `0`、`totalReturnPercent` 為 `null`，`totalCost` 照常有值
 

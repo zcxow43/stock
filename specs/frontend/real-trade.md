@@ -1,7 +1,7 @@
 ---
 status: done
 title: "真實交易分頁"
-requirement: "第五個分頁「真實交易」與模擬交易分頁完全對稱：同樣有加入列、同樣可逐筆刪除、同樣的表格欄位與三個總計。差別有兩個——加入列多兩格輸入（買進價、量），且四格輸入全部預設空白（模擬交易的買進日預設為上一次收盤日）；以及資料存在一份隨程式碼版控的 CSV 檔而非資料庫，但那是後端的事，本頁一律透過 API 存取，不自己讀檔。命中的股票名稱、現價、成本、未實現損益、報酬率與三個總計全部取自回應，每日隨行情刷新。"
+requirement: "第五個分頁「真實交易」與模擬交易分頁完全對稱：同樣有加入列、同樣可逐筆刪除、同樣的表格欄位與三個總計。差別有兩個——加入列多兩格輸入（買進價、量），買進日預設為今日（回應的 `asOfDate`，台北日曆日）、其餘三格預設空白（模擬交易的買進日預設為上一次收盤日）；以及資料存在一份隨程式碼版控的 CSV 檔而非資料庫，但那是後端的事，本頁一律透過 API 存取，不自己讀檔。命中的股票名稱、現價、成本、未實現損益、報酬率與三個總計全部取自回應，每日隨行情刷新。"
 depends_on: [stock-list, simulated-trade]
 ---
 
@@ -16,7 +16,7 @@ depends_on: [stock-list, simulated-trade]
 **版面與行為與模擬交易分頁對稱**——同樣的加入列、同樣的逐筆刪除、同樣的表格與三個總計。只有兩處不同：
 
 1. **加入列多兩格輸入：買進價與量。** 模擬交易的買進價由系統取當日收盤、股數固定 1 張；真實交易記的是使用者真正的成交價與成交量，只有他自己知道。
-2. **四格輸入全部預設空白。** 模擬交易的買進日預設為上一次收盤日，因為那是它最可能的值；真實交易的買進日是一個過去的實際成交日，猜哪一天都不會比空白更有用。
+2. **買進日預設為今日，其餘三格預設空白。** 買進日的預設值取自回應的 `asOfDate`（今日，台北日曆日），**不在前端以瀏覽器時鐘推算**——同一條處置見 `specs/frontend/simulated-trade.md`，日期一律由後端的回應決定。代號、買進價、量沒有可猜的值，一律空白。模擬交易預設的是上一次收盤日，因為它需要一個有收盤價的日子；真實交易記的是使用者自己的成交日，而最常被記下的那一天就是當天。
 
 資料實際存在一份隨程式碼版控的 CSV 檔而不是資料庫（見 `specs/backend/real-trade.md`），但**那完全是後端的事**：本頁一律透過 API 存取，不讀檔、不匯入、不知道檔案在哪。**本頁沒有任何上傳、圖片解析或匯入的入口**——資料進到那個檔的另一條路徑（使用者手工編輯、或把券商截圖交給 AI 助理代填）發生在程式之外。
 
@@ -31,14 +31,15 @@ depends_on: [stock-list, simulated-trade]
 | 元素 | 行為 |
 |---|---|
 | 代號輸入 | 單行文字，placeholder「輸入股票代號，例如 2330」；前後空白自動去除；**預設空白** |
-| 買進日 | 日期輸入（`type="date"`），**預設空白**；`max` 為回應的 `asOfDate`（不能選未來） |
+| 買進日 | 日期輸入（`type="date"`），**預設為回應的 `asOfDate`（今日，台北日曆日）**；`max` 同為 `asOfDate`（不能選未來），故預設值即可選範圍的上界 |
 | 買進價 | 數字輸入，placeholder「成交價」，**預設空白**；接受大於 `0` 的數值，最多兩位小數 |
 | 量 | 數字輸入，placeholder「股數」，**預設空白**；接受大於 `0` 的整數 |
 | 「加入」按鈕 | 主要按鈕；**四格任一為空即 disabled**；送出期間 disabled 並顯示「加入中…」 |
 | 說明文字 | 輸入列下方一行次要文字：「買進價與股數為你實際的成交價與成交量；股數不是張數，1 張 = 1,000 股」 |
 
 - 在任一格按 Enter 等同按「加入」（四格皆有值時才生效）。
-- **四格都沒有預設值**，「加入」在使用者把四格都填完之前一直是 disabled。
+- **只有買進日有預設值**；代號、買進價、量三格一律空白，「加入」在這三格也填完之前一直是 disabled（「四格任一為空即 disabled」的規則不變，買進日只是進入分頁時就已有值）。
+- **買進日的預設值只在第一次 `GET` 成功時設定一次**，之後任何重新取得列表（加入、刪除、重試）都不再覆寫使用者當下的值——這是「加入成功後買進日維持不變」能成立的原因。第一次 `GET` 還沒回來、或回 `500` 時買進日留空。使用者手動清空後維持空白，不自動填回今日。
 - **「量」的標籤與說明必須講明是股數。** 1 張 = 1,000 股，買 2 張要填 `2000`。用股數而不是張數，是因為真實交易會有零股，張數表達不了；但「量」這個字本身不帶單位，所以單位必須在說明文字裡講清楚，否則使用者會填 `2`。
 - 加入成功後**只清空代號與買進價**，買進日與量維持不變——連續輸入同一天、同樣張數的幾筆是常見情形。加入失敗時四格都不清空。
 
@@ -90,7 +91,7 @@ depends_on: [stock-list, simulated-trade]
 
 | 時機 | 呼叫 | 用途 |
 |---|---|---|
-| 進入分頁 | `GET /api/real-trades` | 取整份清單、三個總計、費率與 `skippedLines` |
+| 進入分頁 | `GET /api/real-trades` | 取整份清單、三個總計、費率、`skippedLines` 與 `asOfDate`（買進日輸入的預設值與 `max`） |
 | 按「加入」 | `POST /api/real-trades` | body `{ stockId, buyDate, buyPrice, shares }`，四欄全帶 |
 | 加入成功後 | `GET /api/real-trades` | 重新取得列表——排序、總計與各筆 `id` 一律由後端決定 |
 | 按「刪除」 | `DELETE /api/real-trades/{id}` | `id` 取自該列 |
@@ -162,7 +163,7 @@ depends_on: [stock-list, simulated-trade]
 ### 改為與模擬交易對稱：加入列、刪除、改走 API
 
 - [x] 本頁**不再讀取任何 CSV 檔**：程式中不存在對 `real-trades.csv` 的 import 或 fetch，資料一律來自 `GET /api/real-trades`；`develop/frontend/src/data/` 底下與此功能相關的檔案已移除
-- [x] 加入列有四格輸入，由左至右為代號、買進日、買進價、量，**四格初始皆為空白**——特別是買進日**不**預填上一次收盤日
+- [x] 加入列有四格輸入，由左至右為代號、買進日、買進價、量；買進日**不**預填上一次收盤日（它現在的預設值見下方「買進日預設今日」）
 - [x] 「加入」按鈕在四格任一為空時 disabled；四格皆有值時可按；送出期間 disabled 並顯示「加入中…」
 - [x] 在任一格按 Enter 等同按「加入」；四格未填滿時按 Enter 不送出
 - [x] 送出的 body 為 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶，值即四格當下的內容（代號前後空白已去除）
@@ -182,6 +183,19 @@ depends_on: [stock-list, simulated-trade]
 - [x] 前端先擋下的四種輸入錯誤（買進價 ≤ 0 或超過兩位小數、股數非正整數、買進日晚於今日、任一格為空）不送出請求即提示
 - [x] 本頁不呼叫 `GET /api/simulated-trades`
 - [x] 新增的兩格輸入與「刪除」按鈕所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致；本次未新增任何顏色
+
+### 買進日預設今日（本次新增）
+
+- [x] 第一次 `GET /api/real-trades` 成功後，買進日輸入的值等於回應的 `asOfDate`（今日，台北日曆日）；代號、買進價、量三格仍為空白
+- [x] 買進日的 `max` 等於 `asOfDate`，與預設值相同——預設值本身即可選範圍的上界，不經任何操作就已是合法值
+- [x] 預設值不以瀏覽器本機時鐘推算：把 `GET` 回應的 `asOfDate` 換成另一個日期（例如 `2026-09-15`）時，買進日顯示的就是那一天，而不是當下的系統日期
+- [x] 第一次 `GET` 尚未回來時買進日留空；回 `500`（含 `MALFORMED_TRADE_FILE`）時買進日留空且加入列 disabled
+- [x] 加入成功後重新 `GET` **不覆寫**買進日：把買進日改成 `asOfDate` 以外的日期並成功加入，該格仍是改過的值，不會被重設回今日
+- [x] 刪除成功後重新 `GET`、以及首次載入失敗後按「重試」成功，同樣都不覆寫買進日
+- [x] 使用者手動清空買進日後該格維持空白、不自動填回今日，且「加入」變為 disabled
+- [x] 「四格任一為空即 disabled」的規則不變；差別只在進入分頁後買進日已有值，所以只填代號、買進價、量三格即可送出
+- [x] `POST` 的 body 仍為 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶，`buyDate` 即買進日輸入當下的值（沿用預設今日時也照樣帶出）
+- [x] 本次未新增任何顏色，也未改動 `## Visual Style` 的任何既有色碼
 
 ## Execution Result
 - Status: DONE
@@ -220,3 +234,14 @@ depends_on: [stock-list, simulated-trade]
   - Mocked responses (Playwright route): null `stockName`/current fields row (`—`, cost kept, muted color), `totalReturnPercent: null`, the other five add error codes, first-load 500 + 重試.
   - Geometry: 10 header cells, every body cell's left/right equals its header's, one `top` per row, no non-`table-cell` td/th. Colors: computed values equal the Visual Style hexes; full color dump identical under `prefers-color-scheme` dark and light.
 - Not driven: none unchecked. `status:` frontmatter left as is for `/dev` to flip.
+
+### Increment 3 — 2026-10-04 (買進日預設今日)
+- Files changed: `develop/frontend/src/pages/RealTradeTab.tsx`（+7 行；CSS、API 層、後端皆未動）
+- 做法：新增 `buyDateDefaultedRef`；`runFetch` 成功時若尚未設過預設，就把它標記並以 `setBuyDateValue(current => current === '' ? resp.asOfDate : current)` 填入回應的 `asOfDate`。只在第一次成功的 GET 設定一次，之後加入／刪除／重試的重新 GET 都不碰買進日；`max` 原本就是 `data?.asOfDate`，無需改動。未使用瀏覽器本機時鐘。未新增任何顏色。
+- Live 驗證（真實 backend `SERVER_PORT=8091` + Vite `--port 5191`，Playwright/Chromium；`npm run build` 通過）：
+  - 真實：首次 GET 後買進日 = `2026-10-04`、`max` = `2026-10-04`，代號／買進價／量為空，「加入」disabled；只填三格後「加入」enabled
+  - 真實：沿用預設日期加入，POST body = `{"stockId":"2330","buyDate":"2026-10-04","buyPrice":100,"shares":1000}`
+  - 真實：改成 `2026-09-01` 加入成功並重新 GET 後，買進日仍為 `2026-09-01`；改成 `2026-08-15` 後刪除成功並重新 GET，仍為 `2026-08-15`
+  - 真實：四格皆填後手動清空買進日，該格維持空白（500ms 後仍空）且「加入」disabled
+  - Mock（route 攔截 GET）：`asOfDate: 2026-09-15` → 買進日與 `max` 皆為 `2026-09-15`；GET 延遲 1.5s 期間買進日為空、回來後為 `2026-10-04`；GET 回 500 與 `MALFORMED_TRADE_FILE` 時買進日為空、「加入」disabled；首次 500 後按「重試」成功 → `2026-10-04`；首次 500 後使用者先填 `2026-07-07` 再重試成功 → 仍為 `2026-07-07`
+  - 驗證用的列已刪除；`data/real-trades.csv` 已還原為原始位元組（md5 `1bc0961bf1a4a17badaaf1bbf5776608`，與驗證前相同；後端寫檔會把 CRLF 改成 LF，已手動還原）

@@ -104,6 +104,9 @@ export default function RealTradeTab() {
   // Re-set to `true` inside the effect (not just at declaration): StrictMode's dev-only
   // mount→unmount→remount would otherwise leave a stale `false` on the real mount.
   const mountedRef = useRef(true)
+  // 買進日 defaults to the backend's `asOfDate` once, on the first successful GET. Later
+  // refetches (加入 / 刪除 / 重試) must never overwrite what the user has in the field.
+  const buyDateDefaultedRef = useRef(false)
 
   /** Fetches the list and replaces `data`/`status`. Used for the initial load, 重試, and the
    * mandatory re-fetch after every successful 加入/刪除 — the table is never patched in place,
@@ -118,6 +121,10 @@ export default function RealTradeTab() {
         if (!mountedRef.current) return
         setData(resp)
         setStatus('success')
+        if (!buyDateDefaultedRef.current) {
+          buyDateDefaultedRef.current = true
+          setBuyDateValue((current) => (current === '' ? resp.asOfDate : current))
+        }
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return

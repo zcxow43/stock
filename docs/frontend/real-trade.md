@@ -12,9 +12,9 @@
 
 | 步驟 | 觸發 | 後端 API | 用途 | 契約 |
 |---|---|---|---|---|
-| 1 | 切到「真實交易」頁籤 | `GET /api/real-trades` | 取整份清單、三個總計、費率與 `skippedLines`；此時全為空，畫面顯示三個「—」。回應的 `asOfDate` 同時是買進日輸入的上限 | [real-trade](../backend/real-trade.md) |
+| 1 | 切到「真實交易」頁籤 | `GET /api/real-trades` | 取整份清單、三個總計、費率與 `skippedLines`；此時全為空，畫面顯示三個「—」。回應的 `asOfDate` 同時是買進日輸入的**預設值**（今日 `2026-10-01`，不以瀏覽器時鐘推算）與 `max` 上限 | [real-trade](../backend/real-trade.md) |
 | 1 | 同上（頁面層級，非本分頁） | `GET /api/stocks?page=1&size=1` | `/stocks` 頁首列常駐的「共 N 檔」，由頁面容器發出，與本分頁的持股無關 | [stock-catalog](../backend/stock-catalog.md) |
-| 2 | 填完四格輸入 | — | 純前端：四格都有值時「加入」才由 disabled 轉為可按，不送任何請求 | — |
+| 2 | 填完代號、買進價、量，並把預填的買進日改成實際成交日 | — | 純前端：四格都有值時「加入」才由 disabled 轉為可按，不送任何請求 | — |
 | 3 | 按「加入」 | `POST /api/real-trades` | 以 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶建立一筆，回 201 | [real-trade](../backend/real-trade.md) |
 | 3 | 加入成功後 | `GET /api/real-trades` | 重新取得列表——排序、三個總計與各筆 `id` 一律由後端決定，不就地改動畫面上的陣列 | [real-trade](../backend/real-trade.md) |
 | 4 | 在輸入列按 Enter | `POST /api/real-trades` | 與按「加入」同一支端點；同檔同日可以有多筆，不做唯一性檢查 | [real-trade](../backend/real-trade.md) |
