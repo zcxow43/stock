@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "真實交易 API"
 requirement: "真實交易與模擬交易完全對稱——同樣可加入、列出、刪除，同樣即時算出現價與未實現損益。唯一的差別是儲存位置：模擬交易寫資料庫的 simulated_trade 表，真實交易寫一份隨程式碼版控的 CSV 檔，由本模組讀寫。另一個差別是買進價與股數由呼叫端指定（模擬交易的買進價取當日收盤、股數固定 1,000），因為記錄的是使用者真正的成交價與成交量。不新增任何資料表。另有兩個逐筆的設定也存在同一份 CSV、因此可持久化：`excluded`（勾選後該筆不計入三個總計，但該筆自己的數字照常回報）與 `targetSellPrice`（使用者自填的目標賣價，只記錄與回報，不衍生任何計算）。"
 depends_on: [simulated-trade, stock-catalog]
@@ -322,28 +322,28 @@ Response `204`，無內容。`id` 為 `GET` 回報的資料行序號。
 - [x] 刪除後檔案中的註解行與空白行仍在原來的相對位置
 
 ### 不統計（`excluded`）與目標賣價（`targetSellPrice`）
-- [ ] 六欄名列 `stockId,buyDate,buyPrice,shares,excluded,targetSellPrice` 正常解析；舊的四欄名列也正常解析，且該檔各筆回 `excluded` 為 `false`、`targetSellPrice` 為 `null`
-- [ ] 同一個檔案中欄位數 4、5、6 的三種資料行同時存在時皆正常解析：缺的尾欄各自補為 `excluded` `false`／`targetSellPrice` `null`，三筆都進 `items`、都不進 `skippedLines`
-- [ ] `excluded` 接受 `true`／`false` 且不分大小寫（`TRUE`／`False` 皆可），空值視為 `false`；給 `yes`／`1`／`是` 等其他內容 → 該行進 `skippedLines` 並被略過
-- [ ] `targetSellPrice` 空值回 `null`；給 `0`、負數或三位小數 → 該行進 `skippedLines` 並被略過
-- [ ] `excluded` 為 `true` 的一筆**仍出現在 `items` 中**，且它自己的 `buyFee`／`cost`／`currentDate`／`currentPrice`／`sellFee`／`sellTax`／`unrealizedProfit`／`returnPercent` 全部照常有值（與它被設為 `false` 時逐位相同）
-- [ ] `excluded` 為 `true` 的一筆**不計入** `totalCost`、`totalUnrealizedProfit`、`totalReturnPercent`：以三筆資料驗證——把其中一筆由 `false` 改為 `true` 後，`totalCost` 恰好減少該筆的 `cost`、`totalUnrealizedProfit` 恰好減少該筆的 `unrealizedProfit`、`totalReturnPercent` 等於剩下兩筆重算的值
-- [ ] 全部筆都 `excluded` 為 `true` 時：`totalCost` 與 `totalUnrealizedProfit` 為 `0`、`totalReturnPercent` 為 `null`，`items` 仍含全部筆
-- [ ] `targetSellPrice` **不影響任何計算**：對同一筆只改 `targetSellPrice`（含設為遠高於與遠低於現價的兩個值），`cost`／`unrealizedProfit`／`returnPercent`／三個總計／`items` 的排序全部逐位不變
-- [ ] `PATCH /api/real-trades/{id}` 只給 `excluded` 時只改該欄、`targetSellPrice` 不動；只給 `targetSellPrice` 時只改該欄、`excluded` 不動；兩個都給時兩欄都改
-- [ ] `PATCH` 明確給 `targetSellPrice: null` 會清掉已設定的目標賣價（再 `GET` 回 `null`，CSV 該欄為空）；**省略**該欄則維持原值
-- [ ] `PATCH` 兩個欄位都省略（`{}`）回 `200` 與該筆現狀，且檔案位元組與呼叫前完全相同（未改寫）
-- [ ] `PATCH` 回 `200`，形狀與 `GET` 的 `items[]` 單筆相同、`id` 不變；回應中的 `excluded`／`targetSellPrice` 即改動後的值
-- [ ] `PATCH` 的 `targetSellPrice` 給 `0`、負數或三位小數 → `400` `INVALID_TARGET_SELL_PRICE`，且**檔案未被改寫**
-- [ ] `PATCH` 的 `id` 不是正整數、為 `0`、或超出當下的資料行數 → `404` `REAL_TRADE_NOT_FOUND`，且檔案未被改寫
-- [ ] `PATCH` 的本體型別不符（例如 `excluded` 給字串）→ `400` `INVALID_REQUEST_BODY`，不回 `500`
-- [ ] `PATCH` **不能改**代號、買進日、買進價、股數：本體帶這四個欄位時它們一律不生效（`GET` 回的那四個值與呼叫前相同）
-- [ ] `POST` **不接受** `excluded`／`targetSellPrice`：本體帶了這兩欄也一樣，新寫入的那一筆回 `excluded` `false`、`targetSellPrice` `null`
-- [ ] **名列升級**：以舊的四欄名列的檔案做一次 `POST`（或 `PATCH`／`DELETE`）後，檔案第一行變成六欄名列；再 `GET` 一次結果不變
-- [ ] **不重新格式化既有數字**：原本寫 `1140.00` 的一行，在任何一次整檔寫回之後該欄仍逐字為 `1140.00`（不得變成 `1140.0` 或 `1140`）
-- [ ] 欄位不足六欄的既有資料行，在整檔寫回後於尾端補成六欄（`excluded` 為 `false`、`targetSellPrice` 為空），前四欄字面不變
-- [ ] `PATCH` 之後，欄位名列、註解行、空白行與被略過的格式錯誤行**全部保留在原來的相對位置**（以含這三類行的檔案驗證）
-- [ ] 本次仍**不新增任何資料表或資料庫欄位**、不產生任何 DBA migration；只讀 `stock` 與 `stock_daily_price`
+- [x] 六欄名列 `stockId,buyDate,buyPrice,shares,excluded,targetSellPrice` 正常解析；舊的四欄名列也正常解析，且該檔各筆回 `excluded` 為 `false`、`targetSellPrice` 為 `null`
+- [x] 同一個檔案中欄位數 4、5、6 的三種資料行同時存在時皆正常解析：缺的尾欄各自補為 `excluded` `false`／`targetSellPrice` `null`，三筆都進 `items`、都不進 `skippedLines`
+- [x] `excluded` 接受 `true`／`false` 且不分大小寫（`TRUE`／`False` 皆可），空值視為 `false`；給 `yes`／`1`／`是` 等其他內容 → 該行進 `skippedLines` 並被略過
+- [x] `targetSellPrice` 空值回 `null`；給 `0`、負數或三位小數 → 該行進 `skippedLines` 並被略過
+- [x] `excluded` 為 `true` 的一筆**仍出現在 `items` 中**，且它自己的 `buyFee`／`cost`／`currentDate`／`currentPrice`／`sellFee`／`sellTax`／`unrealizedProfit`／`returnPercent` 全部照常有值（與它被設為 `false` 時逐位相同）
+- [x] `excluded` 為 `true` 的一筆**不計入** `totalCost`、`totalUnrealizedProfit`、`totalReturnPercent`：以三筆資料驗證——把其中一筆由 `false` 改為 `true` 後，`totalCost` 恰好減少該筆的 `cost`、`totalUnrealizedProfit` 恰好減少該筆的 `unrealizedProfit`、`totalReturnPercent` 等於剩下兩筆重算的值
+- [x] 全部筆都 `excluded` 為 `true` 時：`totalCost` 與 `totalUnrealizedProfit` 為 `0`、`totalReturnPercent` 為 `null`，`items` 仍含全部筆
+- [x] `targetSellPrice` **不影響任何計算**：對同一筆只改 `targetSellPrice`（含設為遠高於與遠低於現價的兩個值），`cost`／`unrealizedProfit`／`returnPercent`／三個總計／`items` 的排序全部逐位不變
+- [x] `PATCH /api/real-trades/{id}` 只給 `excluded` 時只改該欄、`targetSellPrice` 不動；只給 `targetSellPrice` 時只改該欄、`excluded` 不動；兩個都給時兩欄都改
+- [x] `PATCH` 明確給 `targetSellPrice: null` 會清掉已設定的目標賣價（再 `GET` 回 `null`，CSV 該欄為空）；**省略**該欄則維持原值
+- [x] `PATCH` 兩個欄位都省略（`{}`）回 `200` 與該筆現狀，且檔案位元組與呼叫前完全相同（未改寫）
+- [x] `PATCH` 回 `200`，形狀與 `GET` 的 `items[]` 單筆相同、`id` 不變；回應中的 `excluded`／`targetSellPrice` 即改動後的值
+- [x] `PATCH` 的 `targetSellPrice` 給 `0`、負數或三位小數 → `400` `INVALID_TARGET_SELL_PRICE`，且**檔案未被改寫**
+- [x] `PATCH` 的 `id` 不是正整數、為 `0`、或超出當下的資料行數 → `404` `REAL_TRADE_NOT_FOUND`，且檔案未被改寫
+- [x] `PATCH` 的本體型別不符（例如 `excluded` 給字串）→ `400` `INVALID_REQUEST_BODY`，不回 `500`
+- [x] `PATCH` **不能改**代號、買進日、買進價、股數：本體帶這四個欄位時它們一律不生效（`GET` 回的那四個值與呼叫前相同）
+- [x] `POST` **不接受** `excluded`／`targetSellPrice`：本體帶了這兩欄也一樣，新寫入的那一筆回 `excluded` `false`、`targetSellPrice` `null`
+- [x] **名列升級**：以舊的四欄名列的檔案做一次 `POST`（或 `PATCH`／`DELETE`）後，檔案第一行變成六欄名列；再 `GET` 一次結果不變
+- [x] **不重新格式化既有數字**：原本寫 `1140.00` 的一行，在任何一次整檔寫回之後該欄仍逐字為 `1140.00`（不得變成 `1140.0` 或 `1140`）
+- [x] 欄位不足六欄的既有資料行，在整檔寫回後於尾端補成六欄（`excluded` 為 `false`、`targetSellPrice` 為空），前四欄字面不變
+- [x] `PATCH` 之後，欄位名列、註解行、空白行與被略過的格式錯誤行**全部保留在原來的相對位置**（以含這三類行的檔案驗證）
+- [x] 本次仍**不新增任何資料表或資料庫欄位**、不產生任何 DBA migration；只讀 `stock` 與 `stock_daily_price`
 
 ---
 ## Execution Result
@@ -361,3 +361,23 @@ Response `204`，無內容。`id` 為 `GET` 回報的資料行序號。
   - 不新增資料表、不產生 DBA migration；只讀 `stock`、`stock_daily_price`。
   - Live 驗證用的夾具（`stock`/`stock_daily_price` 中的 `RT01`–`RT04`）與為了比對模擬交易而臨時建立的 `simulated_trade` 表（live DB 原本就沒有該表）都已在驗證後清除／刪除。
   - 已知未處理：`buyPrice` 沒有上限（如 `1e30` 會被寫入 CSV）；spec 未規定上限。
+
+### Increment 2 — 2026-10-04
+- Status: DONE（「不統計與目標賣價」小節 21 項全部對 live app（`SERVER_PORT=8081`）+ 真實資料庫驗證並勾選）
+- Files changed:
+  - Changed: `domain/RealTrade.java`（`excluded`、`targetSellPrice`）、`dto/RealTradeItemDto.java`（兩個新欄位）、`service/RealTradeCsvStore.java`（接受四／六欄名列；資料行 4–6 欄；`update`；寫回時名列升級並補欄）、`service/RealTradeService.java`（三個總計排除 `excluded`；`update`）、`controller/RealTradeController.java`（`PATCH /api/real-trades/{id}`）、`dto/ErrorResponse.java`（`targetSellPrice` 與 `invalidTargetSellPrice`）、`exception/GlobalExceptionHandler.java`
+  - New: `dto/UpdateRealTradeRequest.java`（`targetSellPrice` 三態：省略／null／數值；多餘欄位忽略）、`exception/InvalidTargetSellPriceException.java`
+  - Reused unchanged: `StrictBooleanDeserializer`、`StrictNumberDeserializer`
+  - Data: `data/real-trades.csv` 升級為六欄名列，既有 9 筆資料行尾端補 `,false,`（前四欄逐字不變，`84.60` 仍為 `84.60`）
+- Live 驗證（以 `app.real-trade.csv-path` 指到 scratch CSV，驗完已刪除；真實檔只做 GET／`PATCH {}`／無效 PATCH，位元組不變）:
+  - 四欄名列、六欄名列、同檔 4／5／6 欄混合皆 `200`，缺欄補 `false`／`null`；`TRUE`／`False` 可、空值為 `false`；`yes`／`1`／`是`、`targetSellPrice` 的 `0`／`-5`／`1.234`、7 欄皆進 `skippedLines`
+  - 三筆（2457／2459／2460）+ 一筆無行情：全部計入時 `totalCost` 95134 / 利潤 96925 / 113.87；PATCH 2459 為 `excluded:true` 後 52073 / 10958 / 26.05（剛好減去 43061 與 85967，26.05 = 10958 ÷ (20028+22031)）；該筆自己的 `cost`／`unrealizedProfit`／`returnPercent` 不變；全部排除時 0 / 0 / `null` 且 `items` 仍 4 筆
+  - `targetSellPrice` 設 99999.99 與 0.01：除該欄外整個回應逐位相同、排序不變
+  - PATCH：只給 `excluded` 不動 target；只給 target 不動 excluded；兩個都給兩欄都改；`targetSellPrice:null` 清成空欄；省略則保留；`{}` 回 `200` 且檔案 mtime 與位元組皆不變
+  - 錯誤（檔案位元組皆不變）：target `0`／`-1`／`1.234` → `400 INVALID_TARGET_SELL_PRICE`；id `0`／`5`／`99`／`-1`／`abc` → `404 REAL_TRADE_NOT_FOUND`；`excluded:"true"`／`"yes"`、`targetSellPrice:"5"`、壞 JSON → `400 INVALID_REQUEST_BODY`；壞名列 → `500 MALFORMED_TRADE_FILE` 且不寫入
+  - PATCH 本體帶 `stockId`／`buyDate`／`buyPrice`／`shares` 不生效；POST 本體帶 `excluded:true`／`targetSellPrice:99` 回 `201` 且為 `false`／`null`
+  - 名列升級：四欄名列檔經 POST／PATCH／DELETE 後第一行為六欄名列；`1140.00`、`21.5`、`22.0` 逐字保留；4／5 欄資料行補成六欄；註解、空白行（含只有空白的行）、壞行原樣留在原相對位置；目錄中無暫存檔
+  - 不新增資料表、無 DBA migration、未插入任何 DB fixture（無行情／無主檔情境直接用 CSV 內的 `NOPE9` 代號）
+- Notes:
+  - 未解決（沿用）：`targetSellPrice` 與 `buyPrice` 一樣沒有上限。
+  - `data/real-trades.csv` 實際只有 9 筆資料行（10 行含名列），已全部保留。

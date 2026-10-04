@@ -43,7 +43,10 @@ import java.util.regex.Pattern;
 @Component
 public class RealTradeCsvStore {
 
-    public static final String HEADER = "stockId,buyDate,buyPrice,shares";
+    /** The header every write produces. */
+    public static final String HEADER = "stockId,buyDate,buyPrice,shares,excluded,targetSellPrice";
+    /** The original four-column header: still readable, upgraded to {@link #HEADER} on the next write. */
+    public static final String LEGACY_HEADER = "stockId,buyDate,buyPrice,shares";
 
     private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
     private static final Pattern PRICE = Pattern.compile("\\d+(\\.\\d{1,2})?");
@@ -91,22 +94,50 @@ public class RealTradeCsvStore {
         BigDecimal price = buyPrice.setScale(2);
         lines.add(stockId + "," + buyDate + "," + price.toPlainString() + "," + shares);
         writeLines(lines);
-        return new RealTrade(idForNewRow, lines.size() - 1, stockId, buyDate, price, shares);
+        return new RealTrade(idForNewRow, lines.size() - 1, stockId, buyDate, price, shares, false, null);
+    }
+
+    /**
+     * Rewrites only the {@code excluded}/{@code targetSellPrice} cells of row {@code id}; the first four
+     * cells stay byte-for-byte. {@code excluded == null} leaves that cell, and
+     * {@code !targetSellPriceGiven} leaves the target cell ({@code targetSellPrice == null} with the flag
+     * set clears it). Writes nothing when neither field is being changed. Returns the row as it now stands.
+     */
+    public synchronized RealTrade update(Long id, Boolean excluded, boolean targetSellPriceGiven,
+                                         BigDecimal targetSellPrice) {
+        List<String> lines = readLines();
+        Snapshot snapshot = parse(lines);
+        RealTrade target = locate(snapshot, id);
+        if (excluded == null && !targetSellPriceGiven) {
+            return target;
+        }
+        String[] cells = lines.get(target.getLineIndex()).trim().split(",", -1);
+        String excludedCell = excluded != null ? excluded.toString() : (cells.length > 4 ? cells[4] : "false");
+        String targetCell = targetSellPriceGiven
+                ? (targetSellPrice == null ? "" : targetSellPrice.setScale(2).toPlainString())
+                : (cells.length > 5 ? cells[5] : "");
+        lines.set(target.getLineIndex(), cells[0] + "," + cells[1] + "," + cells[2] + "," + cells[3] + ","
+                + excludedCell + "," + targetCell);
+        writeLines(lines);
+        return parse(lines).getTrades().get((int) (id - 1));
+    }
+
+    private RealTrade locate(Snapshot snapshot, Long id) {
+        if (id == null || id < 1 || id > snapshot.getTrades().size()) {
+            throw new RealTradeNotFoundException(id);
+        }
+        return snapshot.getTrades().get((int) (id - 1));
     }
 
     /** Removes the data row whose id is {@code id}; every other line is written back untouched. */
     public synchronized void delete(Long id) {
         List<String> lines = readLines();
-        Snapshot snapshot = parse(lines);
-        if (id == null || id < 1 || id > snapshot.getTrades().size()) {
-            throw new RealTradeNotFoundException(id);
-        }
-        RealTrade target = snapshot.getTrades().get((int) (id - 1));
+        RealTrade target = locate(parse(lines), id);
         lines.remove(target.getLineIndex());
         writeLines(lines);
     }
 
-    /** All raw lines, header first; a missing file counts as header-only. Header must match exactly. */
+    /** All raw lines, header first; a missing file counts as header-only. Header must be one of the two legal forms. */
     private List<String> readLines() {
         List<String> lines;
         if (!Files.exists(path)) {
@@ -121,8 +152,10 @@ public class RealTradeCsvStore {
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot read " + path, e);
         }
-        if (lines.isEmpty() || !HEADER.equals(lines.get(0).trim())) {
-            throw new MalformedTradeFileException("real-trades.csv header must be exactly: " + HEADER);
+        String header = lines.isEmpty() ? "" : lines.get(0).trim();
+        if (!HEADER.equals(header) && !LEGACY_HEADER.equals(header)) {
+            throw new MalformedTradeFileException(
+                    "real-trades.csv header must be exactly: " + HEADER + " (or the legacy " + LEGACY_HEADER + ")");
         }
         return lines;
     }
@@ -150,7 +183,7 @@ public class RealTradeCsvStore {
     /** Returns the position, or {@code null} when the row breaks any rule in the spec's table. */
     private RealTrade parseRow(String line, int id, int lineIndex, LocalDate today) {
         String[] cells = line.split(",", -1);
-        if (cells.length != 4) {
+        if (cells.length < 4 || cells.length > 6) {
             return null;
         }
         String stockId = cells[0].trim();
@@ -176,11 +209,34 @@ public class RealTradeCsvStore {
         if (buyDate.isAfter(today) || buyPrice.signum() <= 0 || shareCount <= 0) {
             return null;
         }
-        return new RealTrade(id, lineIndex, stockId, buyDate, buyPrice.setScale(2), shareCount);
+        boolean excluded = false;
+        if (cells.length > 4) {
+            String flag = cells[4].trim();
+            if (flag.equalsIgnoreCase("true")) {
+                excluded = true;
+            } else if (!flag.isEmpty() && !flag.equalsIgnoreCase("false")) {
+                return null;
+            }
+        }
+        BigDecimal targetSellPrice = null;
+        if (cells.length > 5 && !cells[5].trim().isEmpty()) {
+            String target = cells[5].trim();
+            if (!PRICE.matcher(target).matches()) {
+                return null;
+            }
+            targetSellPrice = new BigDecimal(target);
+            if (targetSellPrice.signum() <= 0) {
+                return null;
+            }
+            targetSellPrice = targetSellPrice.setScale(2);
+        }
+        return new RealTrade(id, lineIndex, stockId, buyDate, buyPrice.setScale(2), shareCount, excluded,
+                targetSellPrice);
     }
 
     /** Whole-file rewrite: UTF-8 (no BOM), LF, via a sibling temp file renamed over the target. */
     private void writeLines(List<String> lines) {
+        upgradeToCurrentLayout(lines);
         StringBuilder content = new StringBuilder();
         for (String line : lines) {
             content.append(line).append('\n');
@@ -206,6 +262,28 @@ public class RealTradeCsvStore {
                 } catch (IOException ignored) {
                     // best effort: the move already consumed the temp file on success
                 }
+            }
+        }
+    }
+
+    /**
+     * Header becomes the six-column form; each valid data row with fewer than six cells gets the missing
+     * trailing cells (excluded false, target empty) appended. Existing cells are never reformatted, and
+     * comments, blank lines and malformed rows are left exactly as they are.
+     */
+    private void upgradeToCurrentLayout(List<String> lines) {
+        LocalDate today = LocalDate.now(TAIPEI);
+        lines.set(0, HEADER);
+        for (int i = 1; i < lines.size(); i++) {
+            String line = lines.get(i).trim();
+            if (line.isEmpty() || line.startsWith("#") || parseRow(line, 0, i, today) == null) {
+                continue;
+            }
+            int cells = line.split(",", -1).length;
+            if (cells == 4) {
+                lines.set(i, line + ",false,");
+            } else if (cells == 5) {
+                lines.set(i, line + ",");
             }
         }
     }

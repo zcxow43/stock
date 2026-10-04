@@ -6,8 +6,10 @@ import com.stock.domain.StockDailyPrice;
 import com.stock.dto.CreateRealTradeRequest;
 import com.stock.dto.RealTradeItemDto;
 import com.stock.dto.RealTradeResponseDto;
+import com.stock.dto.UpdateRealTradeRequest;
 import com.stock.exception.InvalidBuyPriceException;
 import com.stock.exception.InvalidSharesException;
+import com.stock.exception.InvalidTargetSellPriceException;
 import com.stock.exception.InvalidSimulatedTradeBuyDateException;
 import com.stock.exception.InvalidStockIdException;
 import com.stock.exception.RealTradeNotFoundException;
@@ -31,7 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * GET/POST/DELETE /api/real-trades — specs/backend/real-trade.md. The mirror image of
+ * GET/POST/PATCH/DELETE /api/real-trades — specs/backend/real-trade.md. The mirror image of
  * {@link SimulatedTradeService}: same cost model ({@link TradingCostCalculator}), same current-price
  * lookup, same ordering rule. What differs is storage (a CSV, see {@link RealTradeCsvStore}) and that
  * buy price and share count come from the caller. Nothing here writes to the database.
@@ -92,6 +94,9 @@ public class RealTradeService {
             RealTradeItemDto item = toItemDto(trade, nameByStock.get(trade.getStockId()),
                     currentByStock.get(trade.getStockId()));
             items.add(item);
+            if (item.isExcluded()) {
+                continue; // reported in items with its own numbers, but left out of every total
+            }
             totalCost = totalCost.add(item.getCost());
             if (item.getUnrealizedProfit() != null) {
                 totalUnrealizedProfit = totalUnrealizedProfit.add(item.getUnrealizedProfit());
@@ -141,13 +146,34 @@ public class RealTradeService {
     }
 
     public void delete(String rawId) {
-        Long id = null;
+        store.delete(parseId(rawId));
+    }
+
+    /** PATCH: only {@code excluded} and {@code targetSellPrice} can change; an absent field is left alone. */
+    public RealTradeItemDto update(String rawId, UpdateRealTradeRequest request) {
+        Long id = parseId(rawId);
+        if (request == null) {
+            request = new UpdateRealTradeRequest(); // a literal JSON `null` body: nothing to change
+        }
+        BigDecimal target = request.getTargetSellPrice();
+        if (request.isTargetSellPricePresent() && target != null
+                && (target.signum() <= 0 || target.stripTrailingZeros().scale() > MAX_PRICE_SCALE)) {
+            throw new InvalidTargetSellPriceException(target);
+        }
+        RealTrade trade = store.update(id, request.getExcluded(), request.isTargetSellPricePresent(), target);
+        Stock stock = stockMapper.findById(trade.getStockId());
+        StockDailyPrice current = loadCurrentPrices(Collections.singletonList(trade.getStockId()),
+                LocalDate.now(TAIPEI)).get(trade.getStockId());
+        return toItemDto(trade, stock == null ? null : stock.getStockName(), current);
+    }
+
+    /** A path segment that is not an integer is the spec's 404, with no id to echo. */
+    private Long parseId(String rawId) {
         try {
-            id = Long.valueOf(rawId.trim());
+            return Long.valueOf(rawId.trim());
         } catch (NumberFormatException e) {
             throw new RealTradeNotFoundException(null);
         }
-        store.delete(id);
     }
 
     private LocalDate parseBuyDate(String raw, LocalDate today) {
@@ -175,6 +201,8 @@ public class RealTradeService {
         dto.setBuyDate(trade.getBuyDate());
         dto.setBuyPrice(trade.getBuyPrice());
         dto.setShares(trade.getShares());
+        dto.setExcluded(trade.isExcluded());
+        dto.setTargetSellPrice(trade.getTargetSellPrice());
 
         BigDecimal buyFee = TradingCostCalculator.fee(trade.getBuyPrice(), trade.getShares());
         BigDecimal cost = TradingCostCalculator.cost(trade.getBuyPrice(), trade.getShares(), buyFee);

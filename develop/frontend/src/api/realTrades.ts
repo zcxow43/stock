@@ -22,6 +22,10 @@ export interface RealTradeItem {
   unrealizedProfit: number | null
   /** Two decimals, can be negative. */
   returnPercent: number | null
+  /** `true` → the row is left out of the three totals (its own numbers are still reported). */
+  excluded: boolean
+  /** The user's own target; recorded only, never used in any calculation. */
+  targetSellPrice: number | null
 }
 
 export interface SkippedLine {
@@ -114,4 +118,21 @@ export async function createRealTrade(
 /** DELETE /api/real-trades/{id} — 204 no content. */
 export async function deleteRealTrade(id: number, signal?: AbortSignal): Promise<void> {
   await request<void>(`/api/real-trades/${id}`, { method: 'DELETE' }, signal)
+}
+
+/** Body of PATCH /api/real-trades/{id}: only the keys present are changed. */
+export type RealTradePatch = { excluded: boolean } | { targetSellPrice: number | null }
+
+/** PATCH /api/real-trades/{id} — change one row's 不統計 flag or 目標賣價. Returns the updated
+ * row; callers still re-fetch the list because the three totals are backend-computed. */
+export async function updateRealTrade(id: number, patch: RealTradePatch, signal?: AbortSignal): Promise<RealTradeItem> {
+  return request<RealTradeItem>(
+    `/api/real-trades/${id}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    },
+    signal,
+  )
 }

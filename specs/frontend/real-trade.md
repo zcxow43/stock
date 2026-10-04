@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "真實交易分頁"
 requirement: "第五個分頁「真實交易」與模擬交易分頁完全對稱：同樣有加入列、同樣可逐筆刪除、同樣的表格欄位與三個總計。差別有兩個——加入列多兩格輸入（買進價、量），買進日預設為今日（回應的 `asOfDate`，台北日曆日）、其餘三格預設空白（模擬交易的買進日預設為上一次收盤日）；以及資料存在一份隨程式碼版控的 CSV 檔而非資料庫，但那是後端的事，本頁一律透過 API 存取，不自己讀檔。命中的股票名稱、現價、成本、未實現損益、報酬率與三個總計全部取自回應，每日隨行情刷新。另有兩個逐筆的設定：最左邊的「不統計」checkbox（勾選後該筆不計入三個總計，但該列自己的數字照常顯示）與「目標賣價」可輸入欄，兩者都持久化在後端的資料檔裡。"
 depends_on: [stock-list, simulated-trade]
@@ -227,28 +227,28 @@ depends_on: [stock-list, simulated-trade]
 
 ### 不統計與目標賣價（本次新增）
 
-- [ ] 表格欄位順序為 **不統計**、代號/名稱、買進日、買進價、股數、現價日、現價、**目標賣價**、成本、未實現損益、報酬率、刪除，共 12 欄；「不統計」是最左邊第一欄且置中，「目標賣價」緊鄰現價右邊且靠右
-- [ ] 每一列最左邊有一個 checkbox，勾選狀態等於該筆回應的 `excluded`；該欄標題文字為「不統計」
-- [ ] 點一下 checkbox 立刻送出 `PATCH /api/real-trades/{id}`，body 為 `{ "excluded": true }`／`{ "excluded": false }`（只帶這一欄，不帶 `targetSellPrice`）；成功後重新呼叫 `GET /api/real-trades` 並依新回應重繪
-- [ ] 送出期間該 checkbox disabled；同一列的「目標賣價」與「刪除」、其餘各列、加入列都**不被 disable**
-- [ ] `PATCH` 失敗時該 checkbox 回復成原本的勾選狀態，並在該列下方顯示錯誤訊息
-- [ ] 勾選某一列後三個總計依新回應減少（`totalCost` 減該筆 `cost`、`totalUnrealizedProfit` 減該筆 `unrealizedProfit`），而**該列自己的成本／未實現損益／報酬率仍照常顯示**、該列仍留在表格中
-- [ ] 重新整理頁面後勾選狀態仍在（持久化於後端資料檔，不是瀏覽器狀態）
-- [ ] 摘要列在有 M 筆被勾為不統計時顯示「共 N 筆（M 筆未統計）」；M 為 `0` 時只顯示「共 N 筆」
-- [ ] 全部筆都被勾為不統計時三個總計顯示 `—`（不是 `0`／`0%`），且表格仍列出全部筆
-- [ ] 「目標賣價」欄是可輸入的數字格，值為 `targetSellPrice`，未設定時為空且 placeholder 為「—」，`aria-label` 為「目標賣價」
-- [ ] 在目標賣價格按 Enter 或移開焦點即送出 `PATCH`，body 為 `{ "targetSellPrice": 1250 }`（只帶這一欄）；成功後重新呼叫 `GET /api/real-trades`
-- [ ] 目標賣價**留空後送出**時 body 為 `{ "targetSellPrice": null }`，成功後該格變回空的 placeholder
-- [ ] **值沒變就不送**：進入目標賣價格後未改內容即 blur（含原本為空、離開時仍為空）**不發任何請求**
-- [ ] 在目標賣價格按 Esc 回復原值且不送出任何請求
-- [ ] 前端先擋下不合格的目標賣價（`0`、負數、三位小數、非數字）：**不送出請求**，在該列下方顯示「目標賣價必須大於 0，最多兩位小數」並回復原值
-- [ ] 後端回 `400` `INVALID_TARGET_SELL_PRICE` 時顯示同一句文案於該列下方，並回復原值
-- [ ] `PATCH` 回 `404` `REAL_TRADE_NOT_FOUND` 時顯示「這一筆已經不存在了」並重新取得列表
-- [ ] 設定目標賣價**不改變任何其他數字**：只改目標賣價（含設成遠高於與遠低於現價的值）後，該列的成本／未實現損益／報酬率與三個總計全部不變、列的順序也不變，且**現價超過目標賣價時不做任何提示或變色**
-- [ ] 加入列仍只有四格輸入：**沒有**「不統計」checkbox 也**沒有**「目標賣價」輸入；`POST` 的 body 仍只有 `{ stockId, buyDate, buyPrice, shares }` 四欄
-- [ ] 新加入的一筆在列表中是未勾選、目標賣價為空
-- [ ] `GET` 回 `500` `MALFORMED_TRADE_FILE` 時不顯示表格，因此也沒有任何 checkbox 或目標賣價格可操作
-- [ ] 新增的 checkbox 與目標賣價格所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同；本次未新增任何顏色
+- [x] 表格欄位順序為 **不統計**、代號/名稱、買進日、買進價、股數、現價日、現價、**目標賣價**、成本、未實現損益、報酬率、刪除，共 12 欄；「不統計」是最左邊第一欄且置中，「目標賣價」緊鄰現價右邊且靠右
+- [x] 每一列最左邊有一個 checkbox，勾選狀態等於該筆回應的 `excluded`；該欄標題文字為「不統計」
+- [x] 點一下 checkbox 立刻送出 `PATCH /api/real-trades/{id}`，body 為 `{ "excluded": true }`／`{ "excluded": false }`（只帶這一欄，不帶 `targetSellPrice`）；成功後重新呼叫 `GET /api/real-trades` 並依新回應重繪
+- [x] 送出期間該 checkbox disabled；同一列的「目標賣價」與「刪除」、其餘各列、加入列都**不被 disable**
+- [x] `PATCH` 失敗時該 checkbox 回復成原本的勾選狀態，並在該列下方顯示錯誤訊息
+- [x] 勾選某一列後三個總計依新回應減少（`totalCost` 減該筆 `cost`、`totalUnrealizedProfit` 減該筆 `unrealizedProfit`），而**該列自己的成本／未實現損益／報酬率仍照常顯示**、該列仍留在表格中
+- [x] 重新整理頁面後勾選狀態仍在（持久化於後端資料檔，不是瀏覽器狀態）
+- [x] 摘要列在有 M 筆被勾為不統計時顯示「共 N 筆（M 筆未統計）」；M 為 `0` 時只顯示「共 N 筆」
+- [x] 全部筆都被勾為不統計時三個總計顯示 `—`（不是 `0`／`0%`），且表格仍列出全部筆
+- [x] 「目標賣價」欄是可輸入的數字格，值為 `targetSellPrice`，未設定時為空且 placeholder 為「—」，`aria-label` 為「目標賣價」
+- [x] 在目標賣價格按 Enter 或移開焦點即送出 `PATCH`，body 為 `{ "targetSellPrice": 1250 }`（只帶這一欄）；成功後重新呼叫 `GET /api/real-trades`
+- [x] 目標賣價**留空後送出**時 body 為 `{ "targetSellPrice": null }`，成功後該格變回空的 placeholder
+- [x] **值沒變就不送**：進入目標賣價格後未改內容即 blur（含原本為空、離開時仍為空）**不發任何請求**
+- [x] 在目標賣價格按 Esc 回復原值且不送出任何請求
+- [x] 前端先擋下不合格的目標賣價（`0`、負數、三位小數、非數字）：**不送出請求**，在該列下方顯示「目標賣價必須大於 0，最多兩位小數」並回復原值
+- [x] 後端回 `400` `INVALID_TARGET_SELL_PRICE` 時顯示同一句文案於該列下方，並回復原值
+- [x] `PATCH` 回 `404` `REAL_TRADE_NOT_FOUND` 時顯示「這一筆已經不存在了」並重新取得列表
+- [x] 設定目標賣價**不改變任何其他數字**：只改目標賣價（含設成遠高於與遠低於現價的值）後，該列的成本／未實現損益／報酬率與三個總計全部不變、列的順序也不變，且**現價超過目標賣價時不做任何提示或變色**
+- [x] 加入列仍只有四格輸入：**沒有**「不統計」checkbox 也**沒有**「目標賣價」輸入；`POST` 的 body 仍只有 `{ stockId, buyDate, buyPrice, shares }` 四欄
+- [x] 新加入的一筆在列表中是未勾選、目標賣價為空
+- [x] `GET` 回 `500` `MALFORMED_TRADE_FILE` 時不顯示表格，因此也沒有任何 checkbox 或目標賣價格可操作
+- [x] 新增的 checkbox 與目標賣價格所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同；本次未新增任何顏色
 
 ## Execution Result
 - Status: DONE
@@ -298,3 +298,24 @@ depends_on: [stock-list, simulated-trade]
   - 真實：四格皆填後手動清空買進日，該格維持空白（500ms 後仍空）且「加入」disabled
   - Mock（route 攔截 GET）：`asOfDate: 2026-09-15` → 買進日與 `max` 皆為 `2026-09-15`；GET 延遲 1.5s 期間買進日為空、回來後為 `2026-10-04`；GET 回 500 與 `MALFORMED_TRADE_FILE` 時買進日為空、「加入」disabled；首次 500 後按「重試」成功 → `2026-10-04`；首次 500 後使用者先填 `2026-07-07` 再重試成功 → 仍為 `2026-07-07`
   - 驗證用的列已刪除；`data/real-trades.csv` 已還原為原始位元組（md5 `1bc0961bf1a4a17badaaf1bbf5776608`，與驗證前相同；後端寫檔會把 CRLF 改成 LF，已手動還原）
+
+### Increment 4 — 2026-10-04 (不統計與目標賣價)
+- Files changed:
+  - `develop/frontend/src/api/realTrades.ts` — `RealTradeItem` gains `excluded` / `targetSellPrice`; new `updateRealTrade(id, patch)` (`PATCH /api/real-trades/{id}`)
+  - `develop/frontend/src/pages/RealTradeTab.tsx` — leftmost 「不統計」 checkbox column, 「目標賣價」 input column right of 現價 (12 columns), per-control pending state, per-row error row, summary 「共 N 筆（M 筆未統計）」, totals `—` when every row is excluded (also 總成本 now gets the muted `—` color), PATCH-then-refetch that keeps the table mounted (`runFetch(silent)`)
+  - `develop/frontend/src/pages/RealTradeTab.css` — checkbox, target input, row-error and summary-excluded styles, all literal hex already in `## Visual Style`
+- 做法：兩個控制項各自送出 `PATCH`，body 只帶被改的那一欄；成功後一律重新 `GET`（不就地改陣列）。目標賣價在 Enter / blur 送出、Esc 放棄；內容沒變（空對空、或數值相同如 `95.50` vs `95.5`）不送；`0`、負數、三位小數、`1e` 這類非數字由前端擋下並在該列下方顯示錯誤。`npm run build` 與 `oxlint`（RealTradeTab 無警告）通過；未寫任何測試。
+- Live 驗證（真實 backend `SERVER_PORT=8081`，`--app.real-trade.csv-path` 指向 scratch CSV `develop/backend/target/scratch/rt.csv`；Vite `--port 5174`；Playwright/Chromium；`data/real-trades.csv` 未被觸碰）：
+  - 欄位：12 個 th = 不統計 | 代號 / 名稱 | 買進日 | 買進價 | 股數 | 現價日 | 現價 | 目標賣價 | 成本 | 未實現損益 | 報酬率 | 刪除；不統計欄 th/td `text-align: center`，目標賣價 th/td `right`；每個 body cell 的 left/right 與表頭一致、每列所有 cell 同一 `top`、無任何非 `table-cell` 的 td/th
+  - 勾選：點 2356 的 checkbox 送出 `PATCH /api/real-trades/2 {"excluded":true}` 然後 `GET /api/real-trades`；總計 `1,452,566 / +1,330,517 / +91.60%` → `1,292,338 / +1,373,267 / +106.26%`（差額即該筆 cost 160,228 與 P&L -42,750），該列仍顯示 `160,228 / -42,750 / -26.68%`；摘要 `共 4 筆（1 筆未統計）`，取消後 `共 4 筆`；`reload` 後仍勾選
+  - 送出期間（PATCH 延遲 1.2s）：該列 checkbox `disabled=true`；同列目標賣價與刪除、其他三列的三個控制項、加入列四個輸入皆 `disabled=false`
+  - 全部勾選：`共 4 筆（4 筆未統計）`，三個總計皆 `—`（顏色 `rgb(107,124,144)` = `#6B7C90`），4 列仍在；還原後總計回來
+  - 目標賣價：`aria-label="目標賣價"`、placeholder `—`、未設定時值為空；Enter 送 `PATCH …/1 {"targetSellPrice":1250}` + `GET`；blur 送 `PATCH …/2 {"targetSellPrice":88}` + `GET`；清空 Enter 送 `{"targetSellPrice":null}`，之後該格變回空 placeholder；空格 focus/blur、有值格 focus/blur、重打同數值（`95.50` vs 已存 95.5）皆 0 個請求；輸入 `777`／清空後按 Esc 皆 0 個請求並回復原值
+  - 前端擋下：`0`、`-5`、`1.234`、`1e`（badInput）皆 0 個請求，該列下方多一個 `tr.rt-row-error` 顯示「目標賣價必須大於 0，最多兩位小數」，輸入回復原值；之後一次合法送出會清掉該錯誤
+  - 不改變其他數字：把 2330 的目標賣價設成 `1` 與 `9999999`（現價 2500）後，四列文字、三個總計、列順序完全不變，現價格顏色仍為 `rgb(230,237,245)` = `#E6EDF5`
+  - 失敗路徑：**mock** 後端 `400 {"code":"INVALID_TARGET_SELL_PRICE"}` → 同一句文案顯示於該列下方、值回復 95.50、輸入不再 disabled（後端真實 400 無法由前端 UI 觸發，因為前端先擋）；**mock** `PATCH` 回 500 → checkbox 回到未勾、該列下方顯示「更新失敗，請稍後再試」；**真實** 404：另開連線 `DELETE /api/real-trades/1` 後，在舊頁面對 id 5 那列點 checkbox → `PATCH /api/real-trades/5 {"excluded":true}` 回 404，顯示「這一筆已經不存在了」並重新 `GET`，列數 5 → 4
+  - 加入列：仍是 代號／買進日／買進價／量（股數）四個輸入，0 個 checkbox；`POST` body `{"stockId":"2330","buyDate":"2026-10-04","buyPrice":1500,"shares":1000}`；新列未勾選、目標賣價為空
+  - `GET` 回 500 `MALFORMED_TRADE_FILE`（**mock**）：分頁內 0 個 table、0 個 checkbox、0 個目標賣價格
+  - 顏色：checkbox 未勾 `#0F1620`/邊框 `#26333F`、勾選 `#3E8FD8`/勾號 `#FFFFFF`、送出中 `#16202C`/`#26333F`/勾號 `#4A5866`；目標賣價格 `#0F1620`/`#26333F`/文字 `#E6EDF5`/placeholder `#6B7C90`/focus 邊框 `#3E8FD8`/disabled `#16202C`/`#26333F`/`#4A5866`；列錯誤 `#F09A94`/`#3A1C1A`/`#8A3A34`。以上計算色在 `prefers-color-scheme` `dark` 與 `light` 模擬下 JSON 完全相同；未新增顏色
+  - 未單獨驗證：checkbox 的 keyboard focus 邊框（`:focus-visible` 規則已寫，色碼 `#3E8FD8`，但未用鍵盤聚焦實測）
+- 資料與環境：`data/real-trades.csv` 完全沒被動過（驗證全部走 scratch CSV）；未插入任何 DB 資料列；兩個行程已停止。

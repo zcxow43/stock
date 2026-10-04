@@ -17,6 +17,8 @@ public class RealTradeItemDto {
     private LocalDate buyDate;
     private BigDecimal buyPrice;
     private int shares;
+    private boolean excluded;
+    private BigDecimal targetSellPrice;
     private BigDecimal buyFee;
     private BigDecimal cost;
     private LocalDate currentDate;
@@ -75,6 +77,22 @@ public class RealTradeItemDto {
 
     public void setShares(int shares) {
         this.shares = shares;
+    }
+
+    public boolean isExcluded() {
+        return excluded;
+    }
+
+    public void setExcluded(boolean excluded) {
+        this.excluded = excluded;
+    }
+
+    public BigDecimal getTargetSellPrice() {
+        return targetSellPrice;
+    }
+
+    public void setTargetSellPrice(BigDecimal targetSellPrice) {
+        this.targetSellPrice = targetSellPrice;
     }
 
     public BigDecimal getBuyFee() {
