@@ -103,3 +103,12 @@
 .page-realtrade .tgt.focus { border-color:#3E8FD8; }
 .page-realtrade .tgt .caret { display:inline-block; width:1px; height:14px; background:#3E8FD8;
                               margin-left:1px; vertical-align:-2px; }
+
+/* ---- 設定模式 ---- */
+/* 「設定」／「完成」按鈕：摘要列、總報酬率數值右邊同一行；樣式同「加入」 #3E8FD8 / #FFFFFF。 */
+.page-realtrade .addbtn.setbtn { height:30px; padding:0 16px; margin-left:16px; font-size:13px; }
+/* 非設定模式的目標賣價：純文字，無框、透明底；已設定 #E6EDF5、未設定的「—」 #6B7C90。 */
+.page-realtrade .tgt.ro { background:transparent; border-color:transparent; }
+
+/* ---- 不統計的列：整列灰底 #2B3036、排在最後（兩種模式都一樣），文字色不變 ---- */
+.page-realtrade tbody tr.excl { background:#2B3036; }
