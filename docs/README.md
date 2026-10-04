@@ -14,7 +14,7 @@
 - [industry-gain-ranking](backend/industry-gain-ranking.md) — 產業別漲幅排行 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [institutional-trade-ingestion](backend/institutional-trade-ingestion.md) — 三大法人買賣超抓取與補齊：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 - [simulated-trade](backend/simulated-trade.md) — 模擬交易持股 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
-- [real-trade](backend/real-trade.md) — 真實交易持股 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
+- [real-trade](backend/real-trade.md) — 真實交易 API：欄位定義、限制條件、跨主題規則、完整 API 清單，`/doc-backend` 產出
 
 ## ER Model (full schema)
 - [er-model](db/er-model.md) — 全 schema 全景圖，加上每個主要功能（master / daily-price / institutional-trade / minute-price / sync-progress / simulated-trade / schema-migration）一張完整欄位細節圖；行情相關的表設計上刻意無實體外鍵，跨群組關聯以 context entity 呈現為邏輯關聯（唯一的實體外鍵在 `stock_industry`）

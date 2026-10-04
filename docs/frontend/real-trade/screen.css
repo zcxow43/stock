@@ -82,3 +82,24 @@
 .page-realtrade tbody td.up { color:#E04B45; }
 .page-realtrade tbody td.down { color:#16A75C; }
 .page-realtrade tbody td.old { color:#93A4B8; }
+
+/* ---- 不統計 checkbox（列首第一欄）---- */
+/* 色碁與 .pageopt .cb 同一組：未勾 #0F1620/#26333F、勾選 #3E8FD8、勾號 #FFFFFF。 */
+.page-realtrade thead th.c, .page-realtrade tbody td.c { text-align:center; }
+.page-realtrade .rowcb { display:inline-block; width:15px; height:15px; border-radius:3px;
+                         background:#0F1620; border:1px solid #26333F; position:relative;
+                         vertical-align:middle; }
+.page-realtrade .rowcb.on { background:#3E8FD8; border-color:#3E8FD8; }
+.page-realtrade .rowcb.on::after { content:"¹3"; color:#FFFFFF; font-size:11px;
+                                   position:absolute; left:2px; top:-3px; line-height:1; }
+
+/* ---- 目標賣價（可輸入格，緊鄰現價右邊）---- */
+/* 與四格輸入同一組色碁：背景 #0F1620、邊框 #26333F、focus #3E8FD8、placeholder #6B7C90。 */
+.page-realtrade .tgt { display:inline-block; min-width:92px; height:28px; line-height:26px;
+                       background:#0F1620; border:1px solid #26333F; border-radius:5px;
+                       color:#E6EDF5; font-size:13px; padding:0 9px; text-align:right;
+                       font-variant-numeric:tabular-nums; }
+.page-realtrade .tgt.ph { color:#6B7C90; }
+.page-realtrade .tgt.focus { border-color:#3E8FD8; }
+.page-realtrade .tgt .caret { display:inline-block; width:1px; height:14px; background:#3E8FD8;
+                              margin-left:1px; vertical-align:-2px; }
