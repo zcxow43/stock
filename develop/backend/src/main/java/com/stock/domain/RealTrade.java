@@ -17,14 +17,19 @@ public final class RealTrade {
     private final LocalDate buyDate;
     private final BigDecimal buyPrice;
     private final int shares;
+    private final boolean excluded;
+    private final BigDecimal targetSellPrice;
 
-    public RealTrade(int id, int lineIndex, String stockId, LocalDate buyDate, BigDecimal buyPrice, int shares) {
+    public RealTrade(int id, int lineIndex, String stockId, LocalDate buyDate, BigDecimal buyPrice, int shares,
+                     boolean excluded, BigDecimal targetSellPrice) {
         this.id = id;
         this.lineIndex = lineIndex;
         this.stockId = stockId;
         this.buyDate = buyDate;
         this.buyPrice = buyPrice;
         this.shares = shares;
+        this.excluded = excluded;
+        this.targetSellPrice = targetSellPrice;
     }
 
     public int getId() {
@@ -49,5 +54,15 @@ public final class RealTrade {
 
     public int getShares() {
         return shares;
+    }
+
+    /** {@code true}: left out of the three totals only; the row still reports its own numbers. */
+    public boolean isExcluded() {
+        return excluded;
+    }
+
+    /** The user's own target sell price per share, or {@code null} when unset. Never used in a calculation. */
+    public BigDecimal getTargetSellPrice() {
+        return targetSellPrice;
     }
 }

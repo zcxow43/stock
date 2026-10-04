@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   RealTradeApiError,
   createRealTrade,
   deleteRealTrade,
   fetchRealTrades,
+  updateRealTrade,
   type RealTradeItem,
   type RealTradeListResponse,
+  type RealTradePatch,
 } from '../api/realTrades'
 import './RealTradeTab.css'
 
@@ -13,6 +15,10 @@ type Status = 'loading' | 'success' | 'error' | 'malformed'
 
 const MALFORMED_LOAD_MESSAGE = '交易紀錄檔的欄位名列不正確，請修好 data/real-trades.csv 的第一行'
 const MALFORMED_ADD_MESSAGE = '交易紀錄檔的欄位名列不正確，這一筆沒有寫入'
+const INVALID_TARGET_MESSAGE = '目標賣價必須大於 0，最多兩位小數'
+const NOT_FOUND_MESSAGE = '這一筆已經不存在了'
+/** 不統計 + 代號/名稱 + 買進日 + 買進價 + 股數 + 現價日 + 現價 + 目標賣價 + 成本 + 未實現損益 + 報酬率 + 刪除 */
+const COLUMN_COUNT = 12
 
 function formatMoney(value: number): string {
   return value.toLocaleString('en-US')
@@ -80,6 +86,70 @@ function addErrorMessage(err: unknown): string {
   return '加入失敗，請稍後再試'
 }
 
+function patchErrorMessage(err: unknown): string {
+  if (err instanceof RealTradeApiError && err.code === 'INVALID_TARGET_SELL_PRICE') return INVALID_TARGET_MESSAGE
+  return '更新失敗，請稍後再試'
+}
+
+function targetText(value: number | null): string {
+  return value == null ? '' : formatPrice(value)
+}
+
+/** What a commit did: `'revert'` means nothing was (successfully) changed, so the field goes
+ * back to the stored value; `'ok'` means the new value is on its way back via the re-fetch. */
+type CommitResult = 'ok' | 'revert'
+
+interface TargetSellPriceInputProps {
+  value: number | null
+  disabled: boolean
+  onCommit: (raw: string, badInput: boolean) => Promise<CommitResult>
+}
+
+/** 目標賣價 cell — commits on Enter or blur, abandons on Esc. Holds its own draft text so a
+ * half-typed value never reaches the backend. */
+function TargetSellPriceInput({ value, disabled, onCommit }: TargetSellPriceInputProps) {
+  const [draft, setDraft] = useState(targetText(value))
+  // A new stored value (after the re-fetch) replaces whatever is in the field.
+  const [seenValue, setSeenValue] = useState(value)
+  if (value !== seenValue) {
+    setSeenValue(value)
+    setDraft(targetText(value))
+  }
+
+  const commit = async (input: HTMLInputElement) => {
+    const result = await onCommit(input.value, input.validity.badInput)
+    if (result === 'revert') setDraft(targetText(value))
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      step="0.01"
+      className="rt-target-input"
+      placeholder="—"
+      aria-label="目標賣價"
+      value={draft}
+      disabled={disabled}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => void commit(e.currentTarget)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          void commit(e.currentTarget)
+        } else if (e.key === 'Escape') {
+          // Reset the draft first: the blur that follows then finds draft === stored value and
+          // sends nothing.
+          e.preventDefault()
+          e.currentTarget.value = targetText(value)
+          setDraft(targetText(value))
+          e.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
 /** 真實交易分頁 — specs/frontend/real-trade.md, the 5th tab in `/stocks`. Mirrors
  * SimulatedTradeTab, but the data lives in a CSV the backend owns, so this component only
  * ever talks to /api/real-trades. Mounted only while the tab is active (see StockListPage.tsx)
@@ -98,6 +168,10 @@ export default function RealTradeTab() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [tableMessage, setTableMessage] = useState<string | null>(null)
   const [flashId, setFlashId] = useState<number | null>(null)
+  // Per-row PATCH state: which control is in flight ("<id>:excluded" / "<id>:target") and the
+  // error to show under that row. Only the changed control is disabled.
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
 
   const stockIdRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -111,15 +185,18 @@ export default function RealTradeTab() {
   /** Fetches the list and replaces `data`/`status`. Used for the initial load, 重試, and the
    * mandatory re-fetch after every successful 加入/刪除 — the table is never patched in place,
    * because deleting one row renumbers the others' `id`. */
-  const runFetch = () => {
+  const runFetch = (silent = false) => {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
-    setStatus('loading')
+    // `silent` keeps the table mounted (a PATCH refetch must not tear down the control the
+    // user is in the middle of using); the data is still replaced wholesale.
+    if (!silent) setStatus('loading')
     return fetchRealTrades(controller.signal)
       .then((resp) => {
         if (!mountedRef.current) return
         setData(resp)
+        setRowErrors({})
         setStatus('success')
         if (!buyDateDefaultedRef.current) {
           buyDateDefaultedRef.current = true
@@ -209,7 +286,7 @@ export default function RealTradeTab() {
     } catch (err) {
       if (!mountedRef.current) return
       if (err instanceof RealTradeApiError && err.code === 'REAL_TRADE_NOT_FOUND') {
-        setTableMessage('這一筆已經不存在了')
+        setTableMessage(NOT_FOUND_MESSAGE)
         await runFetch()
       } else {
         setTableMessage('刪除失敗，請稍後再試')
@@ -219,9 +296,75 @@ export default function RealTradeTab() {
     }
   }
 
+  const setControlPending = (key: string, on: boolean) => {
+    setPending((current) => {
+      const next = new Set(current)
+      if (on) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
+  const setRowError = (id: number, message: string | null) => {
+    setRowErrors((current) => {
+      const { [id]: _previous, ...rest } = current
+      return message == null ? rest : { ...rest, [id]: message }
+    })
+  }
+
+  /** Sends one PATCH, then re-fetches (totals are backend-computed and ids may shift) — never
+   * edits the list in place. A failure leaves `data` untouched, so the control snaps back. */
+  const patchItem = async (item: RealTradeItem, patch: RealTradePatch, key: string): Promise<CommitResult> => {
+    if (pending.has(key)) return 'revert'
+    setControlPending(key, true)
+    setRowError(item.id, null)
+    try {
+      await updateRealTrade(item.id, patch)
+      if (!mountedRef.current) return 'ok'
+      setTableMessage(null)
+      await runFetch(true)
+      return 'ok'
+    } catch (err) {
+      if (!mountedRef.current) return 'revert'
+      if (err instanceof RealTradeApiError && err.code === 'REAL_TRADE_NOT_FOUND') {
+        setTableMessage(NOT_FOUND_MESSAGE)
+        await runFetch(true)
+      } else {
+        setRowError(item.id, patchErrorMessage(err))
+      }
+      return 'revert'
+    } finally {
+      if (mountedRef.current) setControlPending(key, false)
+    }
+  }
+
+  const handleToggleExcluded = (item: RealTradeItem) => {
+    void patchItem(item, { excluded: !item.excluded }, `${item.id}:excluded`)
+  }
+
+  const handleTargetCommit = async (item: RealTradeItem, raw: string, badInput: boolean): Promise<CommitResult> => {
+    const text = raw.trim()
+    if (badInput) {
+      setRowError(item.id, INVALID_TARGET_MESSAGE)
+      return 'revert'
+    }
+    const valid = PRICE_PATTERN.test(text) && Number(text) > 0
+    // 值沒變就不送: blank over blank, or the same number as stored.
+    if (text === '' ? item.targetSellPrice == null : valid && Number(text) === item.targetSellPrice) return 'revert'
+    if (text === '') return patchItem(item, { targetSellPrice: null }, `${item.id}:target`)
+    if (!valid) {
+      setRowError(item.id, INVALID_TARGET_MESSAGE)
+      return 'revert'
+    }
+    return patchItem(item, { targetSellPrice: Number(text) }, `${item.id}:target`)
+  }
+
   const items = data?.items ?? []
   const skippedLines = data?.skippedLines ?? []
-  const hasTotals = status === 'success' && data != null && items.length > 0
+  const excludedCount = items.filter((item) => item.excluded).length
+  // Totals are the backend's; the only decision made here is that "nothing counted" (empty
+  // list, or every row 不統計) shows — rather than 0 / 0%.
+  const hasTotals = status === 'success' && data != null && items.length - excludedCount > 0
   const isEmpty = status === 'success' && data != null && items.length === 0
   const inputsDisabled = malformed
 
@@ -308,10 +451,13 @@ export default function RealTradeTab() {
             <div className="rt-summary-row">
               <div className="rt-summary-count">
                 共 <b>{items.length}</b> 筆
+                {excludedCount > 0 ? <span className="rt-summary-excluded">（{excludedCount} 筆未統計）</span> : null}
               </div>
               <div className="rt-summary-item">
                 <span className="rt-summary-label">總成本</span>
-                <span className="rt-summary-value">{hasTotals && data ? formatMoney(data.totalCost) : '—'}</span>
+                <span className={`rt-summary-value${hasTotals && data ? '' : ' sl-muted'}`}>
+                  {hasTotals && data ? formatMoney(data.totalCost) : '—'}
+                </span>
               </div>
               <div className="rt-summary-item">
                 <span className="rt-summary-label">總未實現損益</span>
@@ -352,12 +498,14 @@ export default function RealTradeTab() {
               <table className="sl-table rt-table">
                 <thead>
                   <tr>
+                    <th className="rt-center">不統計</th>
                     <th>代號 / 名稱</th>
                     <th>買進日</th>
                     <th className="sl-r">買進價</th>
                     <th className="sl-r">股數</th>
                     <th>現價日</th>
                     <th className="sl-r">現價</th>
+                    <th className="sl-r">目標賣價</th>
                     <th className="sl-r">成本</th>
                     <th className="sl-r">未實現損益</th>
                     <th className="sl-r">報酬率</th>
@@ -367,8 +515,20 @@ export default function RealTradeTab() {
                 <tbody>
                   {items.map((item: RealTradeItem) => {
                     const stale = item.currentDate != null && item.currentDate < data.asOfDate
+                    const rowError = rowErrors[item.id]
                     return (
-                      <tr key={item.id} className={flashId === item.id ? 'rt-row-flash' : undefined}>
+                      <Fragment key={item.id}>
+                      <tr className={flashId === item.id ? 'rt-row-flash' : undefined}>
+                        <td className="rt-center">
+                          <input
+                            type="checkbox"
+                            className="rt-exclude-box"
+                            aria-label="不統計"
+                            checked={item.excluded}
+                            disabled={pending.has(`${item.id}:excluded`)}
+                            onChange={() => handleToggleExcluded(item)}
+                          />
+                        </td>
                         <td>
                           <div className="rt-stock-cell">
                             <span className="sl-code">{item.stockId}</span>
@@ -383,6 +543,13 @@ export default function RealTradeTab() {
                         </td>
                         <td className={`sl-r${item.currentPrice == null ? ' sl-muted' : ''}`}>
                           {item.currentPrice != null ? formatPrice(item.currentPrice) : '—'}
+                        </td>
+                        <td className="sl-r">
+                          <TargetSellPriceInput
+                            value={item.targetSellPrice}
+                            disabled={pending.has(`${item.id}:target`)}
+                            onCommit={(raw, badInput) => handleTargetCommit(item, raw, badInput)}
+                          />
                         </td>
                         <td className="sl-r">{formatMoney(item.cost)}</td>
                         <td
@@ -406,6 +573,14 @@ export default function RealTradeTab() {
                           </button>
                         </td>
                       </tr>
+                      {rowError ? (
+                        <tr className="rt-row-error">
+                          <td colSpan={COLUMN_COUNT}>
+                            <div className="rt-row-error-msg">{rowError}</div>
+                          </td>
+                        </tr>
+                      ) : null}
+                      </Fragment>
                     )
                   })}
                 </tbody>

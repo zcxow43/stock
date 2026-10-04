@@ -51,6 +51,8 @@ public class ErrorResponse {
     // offending number exactly as parsed (null when the field was missing, so the key is omitted).
     private final BigDecimal buyPrice;
     private final BigDecimal shares;
+    // real-trade.md wire contract: INVALID_TARGET_SELL_PRICE's "targetSellPrice" echoes the offending number.
+    private final BigDecimal targetSellPrice;
 
     public ErrorResponse(String code) {
         this(code, null, null, null, null, null, null, null, null, null, null, null, null);
@@ -79,6 +81,15 @@ public class ErrorResponse {
                 duplicatedItems, buyDate, id, null, null);
     }
 
+    // Pre-PATCH 15-arg form (buyPrice/shares included); delegates to the full constructor.
+    private ErrorResponse(String code, List<String> unknownIds, Integer limit, List<?> allowed, String stockId,
+                          List<String> fields, List<String> unknown, List<String> duplicated, String strategy,
+                          String param, List<BacktestDuplicateItemDto> duplicatedItems, String buyDate, Long id,
+                          BigDecimal buyPrice, BigDecimal shares) {
+        this(code, unknownIds, limit, allowed, stockId, fields, unknown, duplicated, strategy, param,
+                duplicatedItems, buyDate, id, buyPrice, shares, null);
+    }
+
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
     // single-constructor auto-detection no longer applies, so response deserialization in tests
     // needs this to be unambiguous.
@@ -97,7 +108,8 @@ public class ErrorResponse {
                            @JsonProperty("buyDate") String buyDate,
                            @JsonProperty("id") Long id,
                            @JsonProperty("buyPrice") BigDecimal buyPrice,
-                           @JsonProperty("shares") BigDecimal shares) {
+                           @JsonProperty("shares") BigDecimal shares,
+                           @JsonProperty("targetSellPrice") BigDecimal targetSellPrice) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -113,6 +125,7 @@ public class ErrorResponse {
         this.id = id;
         this.buyPrice = buyPrice;
         this.shares = shares;
+        this.targetSellPrice = targetSellPrice;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
@@ -316,6 +329,16 @@ public class ErrorResponse {
     public static ErrorResponse invalidShares(BigDecimal shares) {
         return new ErrorResponse("INVALID_SHARES", null, null, null, null, null, null, null, null, null,
                 null, null, null, null, shares);
+    }
+
+    /** INVALID_TARGET_SELL_PRICE (specs/backend/real-trade.md): {targetSellPrice}, the offending number. */
+    public static ErrorResponse invalidTargetSellPrice(BigDecimal targetSellPrice) {
+        return new ErrorResponse("INVALID_TARGET_SELL_PRICE", null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, targetSellPrice);
+    }
+
+    public BigDecimal getTargetSellPrice() {
+        return targetSellPrice;
     }
 
     public BigDecimal getBuyPrice() {

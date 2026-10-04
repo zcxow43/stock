@@ -276,6 +276,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyPrice(e.getBuyPrice()));
     }
 
+    @ExceptionHandler(InvalidTargetSellPriceException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTargetSellPrice(InvalidTargetSellPriceException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.invalidTargetSellPrice(e.getTargetSellPrice()));
+    }
+
     @ExceptionHandler(InvalidSharesException.class)
     public ResponseEntity<ErrorResponse> handleInvalidShares(InvalidSharesException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidShares(e.getShares()));

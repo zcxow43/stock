@@ -83,6 +83,111 @@
   color: #93a4b8;
 }
 
+.rt-summary-excluded {
+  margin-left: 4px;
+}
+
+/* 不統計 column — centered checkbox. Layout stays on the checkbox, never on the <td>/<th>. */
+.sl-table thead th.rt-center,
+.sl-table td.rt-center {
+  text-align: center;
+}
+
+.rt-exclude-box {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  vertical-align: middle;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 3px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.rt-exclude-box:focus-visible {
+  outline: none;
+  border-color: #3e8fd8;
+}
+
+.rt-exclude-box:checked {
+  background: #3e8fd8;
+  border-color: #3e8fd8;
+}
+
+.rt-exclude-box:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.rt-exclude-box:disabled {
+  background: #16202c;
+  border-color: #26333f;
+  cursor: default;
+}
+
+.rt-exclude-box:disabled:checked::after {
+  border-color: #4a5866;
+}
+
+/* 目標賣價 cell — the same literal hex as the 加入列 inputs. */
+.rt-target-input {
+  width: 96px;
+  height: 30px;
+  background: #0f1620;
+  border: 1px solid #26333f;
+  border-radius: 6px;
+  color: #e6edf5;
+  padding: 0 8px;
+  font-size: 14px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  outline: none;
+  box-sizing: border-box;
+  color-scheme: dark;
+}
+
+.rt-target-input::placeholder {
+  color: #6b7c90;
+}
+
+.rt-target-input:focus {
+  border-color: #3e8fd8;
+}
+
+.rt-target-input:disabled {
+  background: #16202c;
+  border-color: #26333f;
+  color: #4a5866;
+  cursor: default;
+}
+
+/* PATCH 失敗訊息 — sits in its own row directly under the row it belongs to. */
+.rt-table tbody tr.rt-row-error:hover td {
+  background: transparent;
+}
+
+.rt-row-error-msg {
+  font-size: 12px;
+  color: #f09a94;
+  background: #3a1c1a;
+  border: 1px solid #8a3a34;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: inline-block;
+}
+
 /* Rows are not clickable: default cursor, hover background only. */
 .rt-table tbody tr:hover td {
   background: #1d2a38;
