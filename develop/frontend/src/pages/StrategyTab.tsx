@@ -415,11 +415,11 @@ const ONE_DAY_WINDOW_HINT: Record<string, string> = {
   dropDays: '下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中',
 }
 
-/** 待確認行文案 — 十一個型態都可能出現，每個型態說明「已經發生了什麼」，一律以「次一交易日
+/** 待確認行文案 — 十二個型態都可能出現，每個型態說明「已經發生了什麼」，一律以「次一交易日
  * 尚未到」收尾（箱型突破／上漲支撐另外還要等確認日，因此是「確認日或次一交易日尚未到」）。
  * 這段文字本身是逐型態固定措辭（specs/frontend/strategy.md「待確認：文案逐型態…」），因此
  * 以型態 `code` 為鍵是這段文案唯一合理的資料形狀——它不是「要不要畫這一行」的判斷（那一律由
- * `result.pendingConfirm.length > 0` 決定，十一個型態一致），只是每個型態各自的固定用語。 */
+ * `result.pendingConfirm.length > 0` 決定，十二個型態一致），只是每個型態各自的固定用語。 */
 const PENDING_CONFIRM_LABEL: Record<StrategyCode, string> = {
   BOX_BREAKOUT: '已突破，但確認日或次一交易日尚未到',
   HIGHER_LOWS: '已成立，但次一交易日尚未到',
@@ -432,6 +432,7 @@ const PENDING_CONFIRM_LABEL: Record<StrategyCode, string> = {
   MACD_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
   KDJ_GOLDEN_CROSS: '已交叉，但次一交易日尚未到',
   MA_BREAKOUT: '已站上，但次一交易日尚未到',
+  VOLUME_SURGE: '已放量，但次一交易日尚未到',
 }
 
 /** Backend validation codes that all mean "a `multiSelect` param dropped below its
@@ -1404,6 +1405,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     INVALID_FAST_PERIOD: 'fastPeriod',
     INVALID_SLOW_PERIOD: 'slowPeriod',
     INVALID_J_THRESHOLD: 'jThreshold',
+    INVALID_INCREASE_PERCENT: 'increasePercent',
     INVALID_CONFIRM_BARS: 'confirmBars',
   }
 
@@ -1864,6 +1866,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     }
     if (result.jThreshold !== undefined) {
       return `${name}（前一日 J < ${formatTrimmedPercent(result.jThreshold)}）`
+    }
+    if (result.increasePercent !== undefined) {
+      return `${name}（量增 ≥ ${formatTrimmedPercent(result.increasePercent)}%）`
     }
     return name
   }

@@ -16,6 +16,7 @@ import com.stock.exception.InvalidDateRangeException;
 import com.stock.exception.InvalidDropDaysException;
 import com.stock.exception.InvalidDropPercentException;
 import com.stock.exception.InvalidFastPeriodException;
+import com.stock.exception.InvalidIncreasePercentException;
 import com.stock.exception.InvalidInvestorsException;
 import com.stock.exception.InvalidJThresholdException;
 import com.stock.exception.InvalidMaPeriodsException;
@@ -199,6 +200,7 @@ public class StrategyScanService {
             validateInstitutionalParams(selection, detector);
             validateIndicatorParams(selection, detector);
             validateMaPeriods(selection, detector);
+            validateIncreasePercent(selection, detector);
             if (selection.getRequireVolume() != null && !detector.acceptsRequireVolume()) {
                 // Only BOX_BREAKOUT accepts requireVolume — see specs/backend/strategy-scan.md, "對
                 // BOX_BREAKOUT 以外的型態帶了 requireVolume".
@@ -310,6 +312,23 @@ public class StrategyScanService {
         if (detector.acceptsJThreshold()) {
             validateRangeAndScale(selection.getJThreshold(), detector.getJThresholdMin(),
                     detector.getJThresholdMax(), RISE_PERCENT_MAX_SCALE, () -> new InvalidJThresholdException(code));
+        }
+    }
+
+    /**
+     * `increasePercent` (VOLUME_SURGE only): rejected with PARAM_NOT_APPLICABLE for every other
+     * detector; otherwise range/one-decimal validated against the detector's own bounds — see
+     * specs/backend/strategy-scan.md, "量開始變多" and 驗證與錯誤.
+     */
+    private void validateIncreasePercent(StrategySelectionDto selection, PatternDetector detector) {
+        String code = selection.getCode();
+        if (selection.getIncreasePercent() != null && !detector.acceptsIncreasePercent()) {
+            throw new ParamNotApplicableException(code, "increasePercent");
+        }
+        if (detector.acceptsIncreasePercent()) {
+            validateRangeAndScale(selection.getIncreasePercent(), detector.getIncreasePercentMin(),
+                    detector.getIncreasePercentMax(), RISE_PERCENT_MAX_SCALE,
+                    () -> new InvalidIncreasePercentException(code));
         }
     }
 

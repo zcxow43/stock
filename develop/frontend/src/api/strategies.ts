@@ -15,6 +15,7 @@ export type StrategyCode =
   | 'MACD_GOLDEN_CROSS'
   | 'KDJ_GOLDEN_CROSS'
   | 'MA_BREAKOUT'
+  | 'VOLUME_SURGE'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 export type InvestorCode = 'FOREIGN' | 'TRUST'
 
@@ -232,6 +233,19 @@ export interface MaBreakoutDetail {
   prevMa60: number | null
 }
 
+/** `VOLUME_SURGE`'s judgement detail — signal-day volume vs the average of the prior 5
+ * trading days, plus the same figures for the day before. Not rendered anywhere in the merged
+ * table (「判定明細…不在本表呈現」) — modeled so `item.detail` matches the wire contract
+ * (specs/backend/strategy-scan.md「量開始變多 VOLUME_SURGE」). */
+export interface VolumeSurgeDetail {
+  volume: number
+  averageVolume: number
+  increasePercent: number
+  prevVolume: number
+  prevAverageVolume: number
+  prevIncreasePercent: number | null
+}
+
 export type StrategyDetail =
   | BoxBreakoutDetail
   | HigherLowsDetail
@@ -244,6 +258,7 @@ export type StrategyDetail =
   | MacdGoldenCrossDetail
   | KdjGoldenCrossDetail
   | MaBreakoutDetail
+  | VolumeSurgeDetail
 
 export interface StrategyHit {
   stockId: string
@@ -304,6 +319,8 @@ export interface StrategyResult {
   /** `MA_BREAKOUT` only — the option `code`s actually applied, echoed from the response
    * (never from the card's current checkboxes). */
   maPeriods?: string[]
+  /** `VOLUME_SURGE` only — the 量增門檻 (%) actually applied, echoed from the response. */
+  increasePercent?: number
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -350,6 +367,8 @@ export interface ScanStrategySelection {
   confirmBars?: number
   /** Only sent by `MA_BREAKOUT` — the checked option `code`s in `options` order. */
   maPeriods?: string[]
+  /** Only sent by `VOLUME_SURGE`. */
+  increasePercent?: number
 }
 
 export interface ScanRequest {

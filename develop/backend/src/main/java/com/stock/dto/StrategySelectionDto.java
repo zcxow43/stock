@@ -45,6 +45,10 @@ import java.util.List;
  *
  * <p>`maPeriods` (a subset of `MA5`/`MA20`/`MA60`) is accepted only by MA_BREAKOUT — see
  * specs/backend/strategy-scan.md, "站上均線".
+ *
+ * <p>`increasePercent` is accepted only by VOLUME_SURGE — see specs/backend/strategy-scan.md, "量開始變多".
+ * BigDecimal for the same reason as `jThreshold`: a value with more than one decimal digit
+ * deserializes successfully and is rejected by INVALID_INCREASE_PERCENT.
  */
 public class StrategySelectionDto {
 
@@ -67,6 +71,7 @@ public class StrategySelectionDto {
     private BigDecimal jThreshold;
     private BigDecimal confirmBars;
     private List<String> maPeriods;
+    private BigDecimal increasePercent;
 
     public StrategySelectionDto() {
     }
@@ -229,5 +234,13 @@ public class StrategySelectionDto {
 
     public void setMaPeriods(List<String> maPeriods) {
         this.maPeriods = maPeriods;
+    }
+
+    public BigDecimal getIncreasePercent() {
+        return increasePercent;
+    }
+
+    public void setIncreasePercent(BigDecimal increasePercent) {
+        this.increasePercent = increasePercent;
     }
 }

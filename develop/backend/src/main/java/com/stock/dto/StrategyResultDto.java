@@ -24,6 +24,9 @@ import java.util.List;
  * KDJ_GOLDEN_CROSS echoes `jThreshold` — neither echoes `preset` — see specs/backend/
  * strategy-scan.md, "技術指標型態".
  *
+ * <p>VOLUME_SURGE echoes `increasePercent` (the threshold actually used) and no `preset` — see
+ * specs/backend/strategy-scan.md, "量開始變多".
+ *
  * <p>BOX_BREAKOUT and RISING_SUPPORT are the two exceptions to "`preset` and a parameter field never
  * coexist": BOX_BREAKOUT echoes `requireVolume` and RISING_SUPPORT echoes `confirmBars` (both the
  * value actually used, defaulted when omitted) alongside `preset`, since each is orthogonal to its
@@ -52,6 +55,7 @@ public class StrategyResultDto {
     private Integer signalPeriod;
     private BigDecimal jThreshold;
     private List<String> maPeriods;
+    private BigDecimal increasePercent;
     private LocalDate dataThroughDate;
     private int matchedCount;
     private List<StrategyHitDto> items;
@@ -216,6 +220,14 @@ public class StrategyResultDto {
     @JsonProperty("jThreshold")
     public void setJThreshold(BigDecimal jThreshold) {
         this.jThreshold = jThreshold;
+    }
+
+    public BigDecimal getIncreasePercent() {
+        return increasePercent;
+    }
+
+    public void setIncreasePercent(BigDecimal increasePercent) {
+        this.increasePercent = increasePercent;
     }
 
     public List<String> getMaPeriods() {

@@ -196,6 +196,26 @@ public interface PatternDetector {
         return false;
     }
 
+    /** Whether this detector accepts the request's `increasePercent` field — true only for
+     *  VOLUME_SURGE. */
+    default boolean acceptsIncreasePercent() {
+        return false;
+    }
+
+    /** Inclusive bounds/default for `increasePercent` — meaningful only when
+     *  {@link #acceptsIncreasePercent()} is true; see specs/backend/strategy-scan.md, "量開始變多". */
+    default BigDecimal getIncreasePercentMin() {
+        return BigDecimal.ZERO;
+    }
+
+    default BigDecimal getIncreasePercentMax() {
+        return BigDecimal.ZERO;
+    }
+
+    default BigDecimal getIncreasePercentDefault() {
+        return BigDecimal.ZERO;
+    }
+
     /**
      * The selectable line codes of the request's `maPeriods` multiSelect, in canonical order —
      * empty (the default) for every detector that does not accept `maPeriods`, non-empty only for

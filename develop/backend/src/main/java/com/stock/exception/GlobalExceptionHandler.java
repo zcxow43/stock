@@ -212,6 +212,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidJThreshold(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidIncreasePercentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidIncreasePercent(InvalidIncreasePercentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidIncreasePercent(e.getStrategy()));
+    }
+
     @ExceptionHandler(InvalidConfirmBarsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidConfirmBars(InvalidConfirmBarsException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidConfirmBars(e.getStrategy()));

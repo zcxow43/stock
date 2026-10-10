@@ -268,6 +268,11 @@ public class ErrorResponse {
                 null, null, null);
     }
 
+    public static ErrorResponse invalidIncreasePercent(String strategy) {
+        return new ErrorResponse("INVALID_INCREASE_PERCENT", null, null, null, null, null, null, null, strategy, null,
+                null, null, null);
+    }
+
     public static ErrorResponse invalidConfirmBars(String strategy) {
         return new ErrorResponse("INVALID_CONFIRM_BARS", null, null, null, null, null, null, null, strategy, null,
                 null, null, null);

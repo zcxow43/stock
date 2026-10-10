@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量開始變多卡片（成交量開始放大的股票），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量開始變多（量增 ≥ 50%）」"
 depends_on: [stock-list]
 ---
 
@@ -34,9 +34,9 @@ depends_on: [stock-list]
 | 回應形狀 | 目前適用 | 卡片內容 |
 |---|---|---|
 | `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、**該條目 `params` 逐一畫出的輸入**（目前只有上漲支撐有一個：確認天數）、目前選定靈敏度的說明文字一行、**該條目 `paramGroups` 的每一個群組勾選框**（目前只有箱型突破有一個） |
-| `presets` 為空陣列、帶 `params` | 累積上漲、反彈、法人買賣超佔比、法人連續買超、法人買超強度排名、MACD 黃金交叉、KDJ 黃金交叉 | 勾選框、策略名稱、**依 `params` 逐一畫出的輸入**（數字輸入或複選勾選框，見下）、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
+| `presets` 為空陣列、帶 `params` | 累積上漲、反彈、法人買賣超佔比、法人連續買超、法人買超強度排名、MACD 黃金交叉、KDJ 黃金交叉、站上均線、量開始變多 | 勾選框、策略名稱、**依 `params` 逐一畫出的輸入**（數字輸入或複選勾選框，見下）、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
 
-卡片共十張，依 API 回應的順序排列，**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
+卡片共十二張，依 API 回應的順序排列，**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
 
 以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。反彈就是這條規則的第一個實證：它從有靈敏度改成無靈敏度時，卡片的形狀應該自動跟著 API 變，前端不必為此改任何判斷。
 
@@ -90,11 +90,13 @@ depends_on: [stock-list]
 
 兩張技術指標卡片同樣依 `params` 畫出：MACD 黃金交叉為「短期 EMA」「長期 EMA」兩格（日），KDJ 黃金交叉為一格「J 門檻」（無單位、可填負數）；預設與範圍以 API 當下回的值為準。
 
+量開始變多卡片同樣依 `params` 畫出：一格「量增門檻」（%），預設 `50`、範圍 `0` ~ `1000`、最多一位小數，皆以 API 當下回的值為準。它的意思是「當日成交量比前 5 個交易日均量多出至少這個百分比」，判定規則見 `specs/backend/strategy-scan.md` 的「量開始變多」；卡片上以該條目的 `description` 一行說明，前端不另寫解釋文字。**這張卡片不需要任何新的卡片程式**——它是「`presets` 為空、一個數字參數」的形狀，與 KDJ 黃金交叉相同。
+
 - **參數間的大小限制（`lessThan`）**：數字參數帶 `lessThan` 時，其值必須**嚴格小於**同一張卡片中 `code` 為該值的參數。違反時於該卡片下方以錯誤色顯示「{本參數名}需小於{對方參數名}」並擋下送出（例如「短期 EMA需小於長期 EMA」）；兩格任一改變時即時重新檢查，恢復成立時訊息即消失。任一格本身超出範圍時先顯示範圍錯誤，不同時顯示兩則。後端的 `INVALID_MACD_PERIODS` 為後備。**依 `lessThan` 判斷，不得以策略或參數 `code` 寫死。** 快線天數不小於慢線時 MACD 永遠不會出現使用者要的黃金交叉（見 `specs/backend/strategy-scan.md`），讓使用者送出後才拿到零命中或錯誤，不如在輸入當下就講清楚。
 - **`min` 可為負數**：數字輸入必須接受負號與負值（「J 門檻」的 `min` 為 `-100`），範圍檢查一律照 `min`／`max` 做，不得假設下限為 0。
 
 - **單位為「日」的參數指的是交易日數**，不是日曆天——這類輸入下方一律以一行次要文字說明「回看的交易日數，不含週末與休市日」，否則使用者填 30 會以為是最近一個月。
-- 非整數（`20.5`）、超出範圍（`0`、`91`）或留空時，前端即擋下並在該卡片下方提示「<參數名>需介於 <min> ~ <max> 的整數」（幅度類參數則為「<參數名>需介於 <min> ~ <max>」），不送出請求；後端的 `INVALID_DAYS`／`INVALID_DROP_DAYS`／`INVALID_RISE_DAYS`／`INVALID_DROP_PERCENT`／`INVALID_RISE_PERCENT` 為後備。
+- 非整數（`20.5`）、超出範圍（`0`、`91`）或留空時，前端即擋下並在該卡片下方提示「<參數名>需介於 <min> ~ <max> 的整數」（幅度類參數則為「<參數名>需介於 <min> ~ <max>」），不送出請求；後端的 `INVALID_DAYS`／`INVALID_DROP_DAYS`／`INVALID_RISE_DAYS`／`INVALID_DROP_PERCENT`／`INVALID_RISE_PERCENT`／`INVALID_INCREASE_PERCENT` 為後備。
 - **累積上漲填天數 `1` 是合法的，但畫面必須先講清楚它的結果**：窗口只有當天時累積漲幅恆為 0%，除非漲幅門檻也填 0，否則掃描一定零命中。天數輸入為 `1` 且漲幅門檻大於 `0` 時，於該卡片下方以提示色顯示「天數為 1 時窗口只有當天，累積漲幅恆為 0%，不會有命中」。這是提示、不是錯誤——不擋送出，使用者仍可按「開始掃描」。
 - **反彈填下跌天數 `1` 同理**：窗口只有當天、跌幅恆為 0%，除非跌幅門檻也填 0，否則零命中。此時於該卡片下方以同一個提示色顯示「下跌天數為 1 時窗口只有當天，跌幅恆為 0%，不會有命中」，同樣不擋送出。
 
@@ -150,7 +152,7 @@ depends_on: [stock-list]
 | 勾選框 | 前端狀態，非回應欄位 | 回測後 |
 | 代號 / 名稱 | 各策略 `items` 的 `stockId` / `stockName` | 一律 |
 | 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 | 一律 |
-| 買進日 | 該筆的 `buyDate`——掃描回應各筆回報的進場日，回測回應原樣帶回。十一個型態一律為**確認完成日之後的下一個交易日**（上漲支撐為 D+`confirmBars`+1，其餘十個型態為訊號日的下一個交易日；見 `specs/backend/strategy-scan.md`） | 回測後 |
+| 買進日 | 該筆的 `buyDate`——掃描回應各筆回報的進場日，回測回應原樣帶回。十二個型態一律為**確認完成日之後的下一個交易日**（上漲支撐為 D+`confirmBars`+1，其餘十一個型態為訊號日的下一個交易日；見 `specs/backend/strategy-scan.md`） | 回測後 |
 | 買進價 | 回測回應該筆的 `buyPrice`，即**買進日的開盤價**，兩位小數 | 回測後 |
 | 賣出日 | 回測回應該筆的 `sellDate` | 回測後 |
 | 賣出價 | 回測回應該筆的 `sellPrice`，兩位小數 | 回測後 |
@@ -161,7 +163,7 @@ depends_on: [stock-list]
 
 **買進日不得省略成「就是訊號日，看左邊那欄就好」。** 左邊的「命中策略與訊號日」在一檔多訊號時會列出多個日期，而這一列的買進價與報酬率只對應其中一個；沒有一個獨立的買進日欄位，讀者無從知道是哪一個。
 
-**買進日與訊號日本來就不同，十一個型態皆然。**「命中策略與訊號日」顯示型態成立的那一天，買進日欄顯示確認完成之後第一個真正買得到的交易日——同一列上兩個日期不一致是正確的，不得把買進日改回顯示訊號日。上漲支撐差距最大：訊號日是起漲日 D，買進日是 D+`confirmBars`+1。
+**買進日與訊號日本來就不同，十二個型態皆然。**「命中策略與訊號日」顯示型態成立的那一天，買進日欄顯示確認完成之後第一個真正買得到的交易日——同一列上兩個日期不一致是正確的，不得把買進日改回顯示訊號日。上漲支撐差距最大：訊號日是起漲日 D，買進日是 D+`confirmBars`+1。
 
 **「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。策略的排列順序與勾選順序一致。
 
@@ -176,7 +178,9 @@ depends_on: [stock-list]
 
 **站上均線必須標出是哪一條均線達標。** 每一筆寫成「站上均線（{達標的均線}） {signalDate}」，達標的均線依該筆 `detail.matchedPeriods` 決定，依 `MA5` → `MA20` → `MA60` 固定順序、多條時以「／」連接（例如「站上均線（MA5／MA20） 2026-09-24」）。理由與法人籌碼型態相同：一個型態涵蓋三條均線，只寫「站上均線」讀者無從得知是哪一條被突破，而那正是判讀強弱時最先要看的資訊。
 
-**訊號落在該檔最新一筆日線、其後還沒有交易日時，該檔不會進命中彙總表**——它沒有買進日可報，掃描回應把它列在待確認（見 `specs/backend/strategy-scan.md`）。這對十個型態一致。
+**量開始變多不加任何標示**，寫成「量開始變多 {signalDate}」。它只有一個判定對象（該檔自己的成交量），沒有「哪一方／哪一條」可標；實際量增幅度屬於判定明細，依本表既有取捨不在表上呈現。
+
+**訊號落在該檔最新一筆日線、其後還沒有交易日時，該檔不會進命中彙總表**——它沒有買進日可報，掃描回應把它列在待確認（見 `specs/backend/strategy-scan.md`）。這對十二個型態一致。
 
 **各型態的判定明細（箱型區間、量能倍數、低點序列、支撐價、高點日／低點收盤…）不在本表呈現。** 這五個型態的明細欄位彼此完全不同，無法疊在同一列上：橫向全攤開會是二十幾欄且大量空白，逐策略分表則違背本表存在的理由。這是**刻意接受的取捨**——本表回答「這次掃描要看哪幾檔、進場點在哪天、回測結果如何」；本表**不提供**導向日 K 頁的點擊，判定依據不在本頁查看。
 
@@ -199,6 +203,7 @@ depends_on: [stock-list]
 | MACD 黃金交叉 | `{策略名稱}（{fastPeriod}／{slowPeriod}／{signalPeriod}）` | MACD 黃金交叉（5／20／9） |
 | KDJ 黃金交叉 | `{策略名稱}（前一日 J < {jThreshold}）` | KDJ 黃金交叉（前一日 J < 40） |
 | 站上均線 | `{策略名稱}（{均線}）` | 站上均線（MA5・MA20・MA60） |
+| 量開始變多 | `{策略名稱}（量增 ≥ {increasePercent}%）` | 量開始變多（量增 ≥ 50%） |
 
 其中 `{均線}` 為回應 `maPeriods` 依 `MA5` → `MA20` → `MA60` 固定順序、以「・」連接；`{法人}` 為回應 `investors` 依序對應「外資」「投信」、以「／」連接；`{法人資料}` 在 `dataThroughDate` 有值時為「法人資料至 {dataThroughDate}」，為 `null` 時為「尚無法人資料」。
 
@@ -545,9 +550,9 @@ depends_on: [stock-list]
 各策略區塊移除後，`insufficientData` 與 `pendingConfirm` 改在**合併表格下方**呈現，**逐策略各一行**，行首標明策略名稱：
 
 - 資料不足：「{策略名稱}：另有 N 檔因區間前的歷史資料不足而未納入判定」，可展開看代號清單。三個法人籌碼型態的原因可能是行情、也可能是法人資料不足，其文字為「{策略名稱}：另有 N 檔因行情或法人資料不足而未納入判定」。
-- 待確認：文案逐型態，一律說明「已經發生了什麼」與「還在等什麼」——箱型突破為「{策略名稱}：另有 N 檔已突破，但確認日或次一交易日尚未到」，上漲支撐為「{策略名稱}：另有 N 檔已上漲，但確認日或次一交易日尚未到」，底底高為「{策略名稱}：另有 N 檔已成立，但次一交易日尚未到」，反彈為「…另有 N 檔已反彈，但次一交易日尚未到」，累積上漲為「…另有 N 檔已達標，但次一交易日尚未到」，三個法人籌碼型態為「…另有 N 檔已達標，但次一交易日尚未到」，MACD／KDJ 兩個技術指標型態為「…另有 N 檔已交叉，但次一交易日尚未到」，站上均線為「…另有 N 檔已站上，但次一交易日尚未到」。**十一個型態都可能出現待確認行**：買進日是確認完成日的下一個交易日，訊號落在最新一根日線上時就還沒有買進日可報。
+- 待確認：文案逐型態，一律說明「已經發生了什麼」與「還在等什麼」——箱型突破為「{策略名稱}：另有 N 檔已突破，但確認日或次一交易日尚未到」，上漲支撐為「{策略名稱}：另有 N 檔已上漲，但確認日或次一交易日尚未到」，底底高為「{策略名稱}：另有 N 檔已成立，但次一交易日尚未到」，反彈為「…另有 N 檔已反彈，但次一交易日尚未到」，累積上漲為「…另有 N 檔已達標，但次一交易日尚未到」，三個法人籌碼型態為「…另有 N 檔已達標，但次一交易日尚未到」，MACD／KDJ 兩個技術指標型態為「…另有 N 檔已交叉，但次一交易日尚未到」，站上均線為「…另有 N 檔已站上，但次一交易日尚未到」，量開始變多為「…另有 N 檔已放量，但次一交易日尚未到」。**十二個型態都可能出現待確認行**：買進日是確認完成日的下一個交易日，訊號落在最新一根日線上時就還沒有買進日可報。
 
-兩者皆使用提示色 `#D9A441`。**十一個型態都可能出現待確認行**（見 `specs/backend/strategy-scan.md` 的「進場日（`buyDate`）」）：每一個型態的買進日都是確認完成日之後的下一個交易日，訊號落在該檔最新一筆日線上時就還沒有買進日可報。
+兩者皆使用提示色 `#D9A441`。**十二個型態都可能出現待確認行**（見 `specs/backend/strategy-scan.md` 的「進場日（`buyDate`）」）：每一個型態的買進日都是確認完成日之後的下一個交易日，訊號落在該檔最新一筆日線上時就還沒有買進日可報。
 
 **這兩類標的不納入合併表格，也不納入回測**——它們不是命中。把「沒掃到」和「掃了沒有」混為一談，會讓人誤以為那些股票已經確認沒有型態。
 
@@ -611,7 +616,7 @@ depends_on: [stock-list]
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
-| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
+| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`，站上均線為 `maPeriods`，量開始變多為 `increasePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
 | 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
@@ -633,7 +638,7 @@ depends_on: [stock-list]
 | `INVALID_DAYS` | 於回應 `strategy` 指名的那張卡片下方顯示「天數需介於 1 ~ 90 的整數」（前端已先擋，此為後備），同樣必須定位到該卡片 |
 | `INVALID_WINDOW_DAYS` / `INVALID_BUY_DAYS` / `INVALID_TOP_N` / `INVALID_FAST_PERIOD` / `INVALID_SLOW_PERIOD` | 於回應 `strategy` 指名的那張卡片下方顯示「<參數名>需介於 <min> ~ <max> 的整數」（前端已先擋，此為後備），參數名、`min`、`max` 取自 `GET /api/strategies` 中該策略對應參數的 `name`／`min`／`max`，不在前端寫死數字 |
 | `INVALID_RATIO_PERCENT` | 於法人買賣超佔比卡片下方顯示「<參數名>需介於 <min> ~ <max>」（前端已先擋，此為後備），數字取自該參數的 `min`／`max` |
-| `INVALID_J_THRESHOLD` | 於回應 `strategy` 指名的那張卡片下方顯示「<參數名>需介於 <min> ~ <max>」（前端已先擋，此為後備），數字取自該參數的 `min`／`max`，`min` 為負數時照樣顯示（「J 門檻需介於 -100 ~ 100」） |
+| `INVALID_J_THRESHOLD` / `INVALID_INCREASE_PERCENT` | 於回應 `strategy` 指名的那張卡片下方顯示「<參數名>需介於 <min> ~ <max>」（前端已先擋，此為後備），數字取自該參數的 `min`／`max`，`min` 為負數時照樣顯示（「J 門檻需介於 -100 ~ 100」） |
 | `INVALID_MACD_PERIODS` | 於回應 `strategy` 指名的那張卡片下方顯示「{本參數名}需小於{對方參數名}」（前端已先擋，此為後備），兩個名稱取自該策略中帶 `lessThan` 的參數及其所指參數的 `name`，不在前端寫死 |
 | `INVALID_INVESTORS` | 於回應 `strategy` 指名的那張卡片下方顯示「請至少勾選一個法人」（前端已先擋，此為後備） |
 | `PRESET_NOT_APPLICABLE` / `DAYS_NOT_APPLICABLE` / `PARAM_NOT_APPLICABLE` | 三者一律視為程式錯誤：正常操作不會送出這種組合（卡片依 `presets` 是否為空決定畫哪些控制項、選用群組決定哪些欄位隨請求送出）。訊息顯示在回應 `strategy` 指名的那張卡片下方，回應帶 `param` 時文字為「帶入了不適用的參數：{param}」，未帶 `param` 時為通用錯誤訊息。`param` 的值原樣取自回應，不在前端逐策略寫死——會讀到這個訊息的人一定是開發者，欄位名正是他需要的那個字 |
@@ -1253,6 +1258,24 @@ depends_on: [stock-list]
 - [x] 回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重：本型態與另一型態落在同一買進日時只送一筆、表上只有一列，該列的命中策略欄並列兩者與各自的訊號日
 - [x] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 - [x] 既有十張卡片的版面、控制項與送出內容完全未變
+
+### 量開始變多卡片
+
+- [x] 策略卡片區多出一張「量開始變多」卡片，位於既有十一張之後（共十二張）；卡片依該條目的 `params` 畫出一格數字輸入，標籤「量增門檻」、後綴 `%`，初始值 `50`，標籤／後綴／預設／範圍／step 全部取自 API，前端不寫死
+- [x] 這張卡片完全由既有的數字參數通用邏輯畫出：程式中不存在以 `VOLUME_SURGE` 或 `increasePercent` 判斷要畫什麼控制項的分支，也未新增任何一種卡片形狀
+- [x] 卡片沒有靈敏度下拉、沒有「漲幅門檻」輸入、沒有群組勾選框（該條目 `presets` 為空陣列、無 `paramGroups`）；說明文字一行取自該條目的 `description`
+- [x] 未勾選本策略時「量增門檻」輸入 disabled；勾選後可輸入
+- [x] 使用者可自行輸入百分比：改成 `100` 後送出的該筆為 `{"code":"VOLUME_SURGE","increasePercent":100}`；值與預設相同時仍照送 `increasePercent: 50`；一律**不帶** `preset`、`risePercent`
+- [x] 超出範圍（`-1`、`1000.1`）、小數超過一位（`50.55`）或留空時，前端即擋下並在該卡片下方提示「量增門檻需介於 0 ~ 1000」，「開始掃描」不送出請求；`0`、`50.5`、`1000` 可送出
+- [x] 後端回 `INVALID_INCREASE_PERCENT` 時，訊息顯示在回應 `strategy` 指名的卡片下方（「量增門檻需介於 0 ~ 1000」，數字取自該參數的 `min`／`max`），而非全頁通用錯誤
+- [x] 命中策略與訊號日欄寫成「量開始變多 {signalDate}」，不加括號標示；展開後的子列採同一格式
+- [x] 本次採用參數一行對本策略寫成「量開始變多（量增 ≥ 50%）」，百分比取自掃描回應的 `increasePercent` 而非畫面上的輸入值——掃描後改動輸入，該行不變；`100.0` 寫成 `100`、`50.5` 照寫
+- [x] `pendingConfirm` 非空時，表格下方出現「量開始變多：另有 N 檔已放量，但次一交易日尚未到」，提示色 `#D9A441`，與其餘十一個型態同一種呈現；`insufficientData` 非空時為「量開始變多：另有 N 檔因區間前的歷史資料不足而未納入判定」
+- [x] 這些待確認與資料不足的標的**不進命中彙總表、不送回測**，也不計入「共 N 檔」
+- [x] 「買進日」欄顯示掃描回應該筆的 `buyDate`，前端不自行由訊號日推算；回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重
+- [x] 本型態與另一型態同時勾選時，「僅選取全符合」與預設排序的命中策略數照既有規則把它算作一個策略，不需為它另寫判斷
+- [x] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 既有十一張卡片的版面、控制項與送出內容完全未變；十二張卡片一列放不下時換行，頁面不出現水平捲軸
 
 ### 「僅選取全符合」勾選框
 
@@ -2466,3 +2489,47 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Build**: `npm run build` clean. `npm run lint` could not be run (eslint config not found under the installed eslint version); the pre-existing warning in this file was not touched.
 
 **Left unchecked**: none.
+
+### Increment 32 — 2026-10-10
+
+**Scope**: the 15 unchecked criteria of `### 量開始變多卡片` (twelfth card 「量開始變多」 `VOLUME_SURGE`). No box ticked, `status` untouched (dispatcher's call).
+
+**Files changed**:
+- `develop/frontend/src/api/strategies.ts` — `'VOLUME_SURGE'` added to `StrategyCode`; new `VolumeSurgeDetail` (in the `StrategyDetail` union, type-only, not rendered); `increasePercent?: number` on `StrategyResult` (response echo) and `ScanStrategySelection` (request field, type-only).
+- `develop/frontend/src/pages/StrategyTab.tsx` — (1) `PENDING_CONFIRM_LABEL.VOLUME_SURGE = '已放量，但次一交易日尚未到'` (the same per-strategy fixed-wording table as the other eleven; required because the table is `Record<StrategyCode, string>`); (2) `INVALID_INCREASE_PERCENT: 'increasePercent'` added to `PARAM_ERROR_CODE_TO_PARAM_CODE` (next to `INVALID_J_THRESHOLD`; the existing generic handler routes it to the card named by `strategy` and builds the message from that param's `min`/`max`); (3) `formatStrategyParams`: one response-side branch `result.increasePercent !== undefined` -> `{name}（量增 ≥ {formatTrimmedPercent(increasePercent)}%）`, same style as the `jThreshold` branch; (4) two comments 十一個型態 -> 十二個型態.
+- Nothing else. The card itself, the payload (`buildScanPayload` numeric-params loop), range/decimal validation (`isParamInputInvalid`), the 命中策略 cell (`renderUnionHits`; the detail has no `matchedInvestors`/`matchedPeriods`, so no bracket), the insufficient-data wording (generic non-institutional text), 僅選取全符合 and the default sort need no change: they are all generic. `isParamInputInvalid` already enforces "at most one decimal" from `step: 0.1`, so no generic fix was needed. No CSS touched, no new color.
+- `package-lock.json` was rewritten by `npm install` in the fresh worktree and was restored with `git checkout -- package-lock.json`; `package.json` untouched.
+
+**Method**: Vite dev server on 5174 (`API_TARGET=http://localhost:8081`), the already-running worktree backend on 8081, Chromium via Playwright, viewport 1500x1000, default range 2026-09-28 ~ 2026-10-10. "live" = real backend responses only; "intercepted" = `page.route` used. Only two things were intercepted: the 400 `INVALID_INCREASE_PERCENT` and a fabricated non-empty `insufficientData` (real scan response with 3 non-hit stock ids injected; backtest stayed live).
+
+**Verification per criterion**
+1. Card, API-driven — live: 12 cards, last `量開始變多`; one `input[type=number]` (min 0, max 1000, step 0.1), label `量增門檻`, suffix `%`; value is `""` while unchecked (same as the KDJ card, the existing populate-on-check behaviour) and `50` right after checking. All from the API entry.
+2. No branch / no new shape — live + source grep (see below).
+3. No select / 漲幅門檻 / group checkbox — live: `select` 0, text contains `漲幅門檻` false, checkboxes in card 1 (the head checkbox), description text === API `description`.
+4. Disabled until checked — live: input `disabled` true before, false after checking.
+5. Payload — live captured: default `{"code":"VOLUME_SURGE","increasePercent":50}`; after typing 100 `{"code":"VOLUME_SURGE","increasePercent":100}`; no `preset`/`risePercent`.
+6. Range check — live: `-1`, `1000.1`, `50.55`, blank each show 「量增門檻需介於 0 ~ 1000」 under the card, 開始掃描 disabled, 0 requests; `0`, `50.5`, `1000` fired one request each with `increasePercent` 0 / 50.5 / 1000 and no message.
+7. `INVALID_INCREASE_PERCENT` — intercepted (400 `{"code":"INVALID_INCREASE_PERCENT","strategy":"VOLUME_SURGE"}`, with 累積上漲 also checked): the only `.st-inline-error` on the page is under 量開始變多 reading 「量增門檻需介於 0 ~ 1000」; no 「掃描失敗」 anywhere; 開始掃描 stays enabled.
+8. 命中策略 cell — live: 644/644 rendered rows match `^量開始變多 \d{4}-\d\d-\d\d$`, no bracket. Expanded child row, live (量開始變多 + 站上均線, stock 6152): child `量開始變多 2026-10-02` with 買進日 2026-10-05 beside `站上均線（MA5） 2026-09-30`. Note: a single VOLUME_SURGE scan returns at most one hit per stock (items == 1089 stocks over 近三個月), so the two-buy-date expansion can only be seen together with another strategy.
+9. 本次採用參數 — live: `量開始變多（量增 ≥ 50%）`; after scanning at 100 -> `≥ 100%`; typing 77 without rescanning left the line at `≥ 100%`; scan at 50.5 -> `≥ 50.5%`; back to 50 -> `≥ 50%`. (The backend echoes the number; `100.0` arrives as `100`, formatted by the existing `formatTrimmedPercent`.)
+10. Pending / insufficient — pending live: `量開始變多：另有 40 檔已放量，但次一交易日尚未到`, computed colour `rgb(217, 164, 65)` (= `#D9A441`). Insufficient intercepted (3 injected ids): `量開始變多：另有 3 檔因區間前的歷史資料不足而未納入判定`, same colour.
+11. Not in table / backtest / 共 N 檔 — live (40 pending-only ids) + intercepted (3 insufficient ids): 0 of them in the table, 0 in the backtest request, header stays `命中彙總 — 共 802 檔` = 802 distinct hit stocks (`matchedCount` 802).
+12. 買進日 / dedupe — live: all 644 rendered single-date rows show exactly the response `buyDate` (all 802 hits have `buyDate` != `signalDate`); backtest `items[]` = 802 `{stockId,buyDate}` pairs, 802 unique, set-equal to the response's distinct `(stockId, buyDate)` pairs (近三個月: 1089 / 1089 / 1089).
+13. 僅選取全符合 / 預設排序 — live, VOLUME_SURGE + 站上均線: payload `[{VOLUME_SURGE,50},{MA_BREAKOUT,[MA5,MA20,MA60]}]`; 全符合 box checked + enabled; of 287 displayed rows for stocks in only one strategy 0 are checked, and after unchecking 全符合 all 287 become checked again; the 652 stocks in both are checked iff they pass the 報酬率 threshold (the unchecked ones are below 2%, e.g. 1.93%). 報酬率 header cycle ▼ -> ▲ -> ↕ (restore) gives an order identical to the independently computed three-tier order (strategy count desc, latest signalDate desc, stockId asc) over the 568 shown rows. No special case for VOLUME_SURGE.
+14. Colours — live, `colorScheme` `light` (`matchMedia('(prefers-color-scheme: dark)')` false) vs `dark` (true): computed color/background/border/accent of card, name, label, input (disabled and enabled), suffix, description, head checkbox, params line, union tag name/date, pending note, inline error are identical (`diffKeys: []`). Values: name `rgb(230,237,245)`, label/suffix/desc/params-line `rgb(147,164,184)`, input disabled `rgb(74,88,102)` / enabled `rgb(230,237,245)` on `rgb(15,22,32)`, pending `rgb(217,164,65)`, checkbox accent `rgb(62,143,216)`. No new colour.
+15. Existing eleven cards / wrapping — live, all 12 checked at defaults, one scan: eleven payload entries `BOX_BREAKOUT{STANDARD,1.5,requireVolume:true}`, `HIGHER_LOWS{STANDARD,1}`, `RISING_SUPPORT{STANDARD,3,confirmBars:2}`, `REBOUND{requireRise,dropDays 3,dropPercent 10,riseDays 1,risePercent 5}`, `CUMULATIVE_RISE{20,15}`, three `INSTITUTIONAL_*{investors,...}`, `MACD{5,20}`, `KDJ{jThreshold 40}`, `MA_BREAKOUT{maPeriods}`, then `{VOLUME_SURGE,50}` last; the field sets are the same as in Increments 30/31 (the diff touches none of their code paths; no pre-change run was made, so this is by-diff + field-set comparison, not a before/after capture). Cards wrap 5 / 5 / 2 per row at 1500 (tops -199, 184, 474); `scrollWidth == clientWidth` at 1500, 1280, 1000, 760. Table geometry (first 30 rows): 10 headers, every body cell within 1px of its header, one `top` per row, 0 non-`table-cell` `<td>`.
+
+**Source grep** — `VOLUME_SURGE|increasePercent|INVALID_INCREASE_PERCENT|VolumeSurge` appear only at:
+- `api/strategies.ts:18` `StrategyCode` union member (type-only); `:236-261` `VolumeSurgeDetail` + union member (type-only, never rendered); `:322-323` `StrategyResult.increasePercent` (response-side field); `:370-371` `ScanStrategySelection.increasePercent` (type-only; the value is written by the generic `bag[param.code] = Number(...)` loop, never by name).
+- `StrategyTab.tsx:435` `PENDING_CONFIRM_LABEL` entry (response-side fixed wording, mandatory for the `Record<StrategyCode,…>`); `:1408` error-code -> param-code table (response-side, same as `INVALID_J_THRESHOLD`); `:1870-1871` `formatStrategyParams` echo branch (response-side, 本次採用參數 line).
+- None in card drawing (`renderParamRow`/`isParamsDriven`), payload building (`buildScanPayload`), input validation (`isParamInputInvalid`/`hasInvalidParams`) or `renderUnionHits`.
+
+**Build / lint**: `npm run build` clean (tsc + vite). `npm run lint` (oxlint) runs; only the pre-existing `react(set-state-in-effect)` warning at `StrategyTab.tsx:1177` (not in this diff).
+
+**code-quality self-review**: absence — `result.increasePercent` guarded by `!== undefined` (0 is a valid value and still renders `≥ 0%`); no new chained access. Errors — the new backend code goes through the existing handler, nothing swallowed, falls back to 「參數不合法」 if the param is missing from the catalogue. Lifecycle / performance — no new effect, timer, listener or request. DRY — reused `formatTrimmedPercent`, `paramErrorMessage`, the generic numeric path; nothing duplicated. No findings left unfixed.
+
+**Left unverified**: (a) a before/after capture of the eleven existing cards' payloads (no pre-change run; argued by diff + field set); (b) the two-buy-date child-row expansion was verified live only in combination with 站上均線 because VOLUME_SURGE alone yields one hit per stock; (c) the live scan returned `insufficientData: []`, so that line is intercepted-only.
+
+**派工端（`/dev`）的獨立複核**（真實瀏覽器、Vite 5174 → 本次建置的後端 8081、真實資料庫，全程未攔截任何回應）：進頁共 12 張卡片、最後一張「量開始變多」，未勾選時「量增門檻」輸入 disabled（`min 0`／`max 1000`／`step 0.1`、無 `select`），勾選後顯示 `50`；按「開始掃描」送出 `{"strategies":[{"code":"VOLUME_SURGE","increasePercent":50}],"startDate":"2026-09-28","endDate":"2026-10-10","commonStocksOnly":true}`，畫面為「命中彙總 — 共 802 檔」、本次採用參數「量開始變多（量增 ≥ 50%）」（`rgb(147, 164, 184)`）、命中列如「1459 聯發 量開始變多 2026-09-30 2026-10-01 …」（644 列顯示中，格式不符 0 列）、待確認行「量開始變多：另有 40 檔已放量，但次一交易日尚未到」（`rgb(217, 164, 65)`）。把輸入改成 `100` 而未重掃時該行仍為 50%；重掃送出 `increasePercent: 100`，畫面變為「共 553 檔」「量開始變多（量增 ≥ 100%）」。輸入 `1000.1` 與 `50.55` 時卡片內出現「量增門檻需介於 0 ~ 1000」（`rgb(240, 154, 148)`）、「開始掃描」disabled、未發出任何請求；改回 `50.5` 後訊息消失、按鈕恢復可按。另將 `VolumeSurgeDetail.prevIncreasePercent` 的型別改為 `number | null`（後端在前一日基準均量為 0 時回 `null`），改後 `npm run build` 無錯誤。驗證用的 5174 與 8081 兩個行程皆已停止。
+
+**與驗收文字的一處落差（沿用既有行為，未改）**：卡片未勾選時數字輸入為空白，勾選當下才填入 API 的 `default`（`50`）——這是全部依 `params` 畫出的卡片共用的既有行為（KDJ 黃金交叉等皆同），不是本卡片獨有。

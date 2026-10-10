@@ -89,6 +89,9 @@
           <div class="desc">收盤價由下往上站上均線當日為訊號日：前一交易日收盤未高於均線，當日收盤高於均線</div>
           <div class="rise"><span class="rl">均線</span><span class="grp on"><span class="gbox"></span><span class="gl">MA5</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA20</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA60</span></span></div>
           <div class="desc">三條均線各自判定，任一條達標即命中</div></div>
+        <div class="card "><div class="top"><span class="box"></span><span class="nm">量開始變多</span></div>
+          <div class="desc">當日成交量較前 5 個交易日均量增加達門檻，且前一交易日尚未達標——放量的第一天為訊號日</div>
+          <div class="rise"><span class="rl">量增門檻</span><input value="50.0"><span class="pct">%</span></div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button></div></div>
@@ -99,7 +102,7 @@
       <div class="actions"><button class="btn primary" disabled>開始掃描</button>
         <span class="hint">請至少勾選一個策略</span></div>
     </div>
-    <div class="empty">選擇策略與區間後開始掃描<div class="sub">尚未執行任何掃描</div></div>
+    <div class="empty" style="padding:28px">選擇策略與區間後開始掃描<div class="sub">尚未執行任何掃描</div></div>
   </div>
 </body>
 </html>
