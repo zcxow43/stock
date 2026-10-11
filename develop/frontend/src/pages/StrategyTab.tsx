@@ -684,9 +684,13 @@ interface ParentAggregate {
   totalChildren: number
   /** Checked AND backtestable (`sellDate` non-null) children — what「{N} 筆」counts. */
   includedCount: number
-  /** Cost-weighted average buy price across `includedCount` children, `null` when 0
-   * (specs/frontend/strategy.md「該檔的子筆全被取消勾選時…顯示「—」」). */
+  /** 買進均價 across `includedCount` children, already rounded half-up to 2 decimals;
+   * `null` when 0 (specs/frontend/strategy.md「該檔沒有任何計入的筆時…顯示「—」」). */
   avgBuyPrice: number | null
+  /** 賣出均價 — the SAME children, formula and rounding as `avgBuyPrice`, so the two are
+   * always both numbers or both `null` (specs/frontend/strategy.md「同一批筆」). Both are
+   * raw trade prices: no fee, no tax. */
+  avgSellPrice: number | null
   /** Sum of `profit` across `includedCount` children — `0` is a real, displayable value
    * (only meaningful when `includedCount > 0`; callers check that before rendering it). */
   totalProfit: number
@@ -708,11 +712,14 @@ function computeParentAggregate(
 ): ParentAggregate {
   let checkedChildren = 0
   let includedCount = 0
-  // 買進價 is `buyPrice × lotSize` 的總和 ÷ lotSize — unrelated to trading cost, so this
-  // accumulator stays on the raw price. 報酬率 is cost-weighted on the response's own `cost`
-  // (含買進手續費) — a SEPARATE accumulator, never derived from `totalBuyAmount` above, so
-  // the frontend never has to compute a fee itself to get the denominator right.
-  let totalBuyAmount = 0
+  // 買進均價／賣出均價 are share-weighted means of the raw trade prices (`price × lotSize` 的
+  // 總和 ÷ 總股數) — unrelated to trading cost. They accumulate in integer 分 so the final
+  // division rounds a true half (25.075) up instead of inheriting a binary-float 25.07499….
+  // 報酬率 is cost-weighted on the response's own `cost` (含買進手續費) — a SEPARATE
+  // accumulator, never derived from the price sums, so the frontend never has to compute a
+  // fee itself to get the denominator right.
+  let totalBuyCentShares = 0
+  let totalSellCentShares = 0
   let totalCost = 0
   let totalProfit = 0
   for (const group of groups) {
@@ -721,13 +728,16 @@ function computeParentAggregate(
     const item = backtestItemsByKey.get(itemKey(stockId, group.buyDate))
     if (!checked || !item || item.sellDate === null) continue
     includedCount += 1
-    totalBuyAmount += (item.buyPrice ?? 0) * lotSize
+    totalBuyCentShares += Math.round((item.buyPrice ?? 0) * 100) * lotSize
+    totalSellCentShares += Math.round((item.sellPrice ?? 0) * 100) * lotSize
     totalCost += item.cost ?? 0
     totalProfit += item.profit ?? 0
   }
-  const avgBuyPrice = includedCount > 0 ? totalBuyAmount / (lotSize * includedCount) : null
+  const totalShares = lotSize * includedCount
+  const avgBuyPrice = totalShares > 0 ? Math.round(totalBuyCentShares / totalShares) / 100 : null
+  const avgSellPrice = totalShares > 0 ? Math.round(totalSellCentShares / totalShares) / 100 : null
   const returnPercent = includedCount > 0 && totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
-  return { checkedChildren, totalChildren: groups.length, includedCount, avgBuyPrice, totalProfit, returnPercent }
+  return { checkedChildren, totalChildren: groups.length, includedCount, avgBuyPrice, avgSellPrice, totalProfit, returnPercent }
 }
 
 /** 「—」視為最小值 — represented as `-Infinity` so both a `null` value and any real number
@@ -2533,15 +2543,15 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                             })}
                             </div>
                           </td>
-                          {/* 價格欄：上行為成本加權均價、下行為弱化色「—」（多筆沒有單一賣出
-                              價，理由同寬視窗時的賣出價欄）。 */}
+                          {/* 價格欄：上行為買進均價、下行為賣出均價（同一批計入的筆）；沒有
+                              計入的筆時兩行皆為弱化色「—」。 */}
                           <td className="sl-r">
                             <div className="st-stacked-cell">
                               <div>
                                 {agg.avgBuyPrice != null ? formatPrice2(agg.avgBuyPrice) : <span className="sl-muted">—</span>}
                               </div>
                               <div>
-                                <span className="sl-muted">—</span>
+                                {agg.avgSellPrice != null ? formatPrice2(agg.avgSellPrice) : <span className="sl-muted">—</span>}
                               </div>
                             </div>
                           </td>
@@ -2578,10 +2588,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                               )
                             })}
                           </td>
-                          {/* 賣出價：恆為弱化色「—」（多筆各有各的賣出價，沒有單一合計值），且
-                              需與同欄其他列的賣出價同樣靠右對齊（sl-r，過去這裡漏掉，造成錯位）。 */}
+                          {/* 賣出價：與買進價同一批計入的筆的賣出均價，沒有計入的筆時為弱化色
+                              「—」；需與同欄其他列的賣出價同樣靠右對齊（sl-r，過去這裡漏掉，造成
+                              錯位）。 */}
                           <td className="sl-r">
-                            <span className="sl-muted">—</span>
+                            {agg.avgSellPrice != null ? formatPrice2(agg.avgSellPrice) : <span className="sl-muted">—</span>}
                           </td>
                         </>
                       )}

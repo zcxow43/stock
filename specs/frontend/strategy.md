@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）；一檔多筆的父列賣出價不再恆為「—」，改顯示與父列買進價同一批筆（已勾選且可回測）的賣出均價，兩個均價皆為未含費稅的成交價（2026-10-11，使用者原文「賣出價要標記上」）"
 depends_on: [stock-list]
 ---
 
@@ -306,7 +306,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - **價格欄**：表頭兩行「買進價」「賣出價」；每一筆**上行為 `buyPrice`、下行為 `sellPrice`**，兩行皆靠右對齊。
 - **疊的是「買對買、賣對賣」**：上行永遠是買進、下行永遠是賣出，使用者一眼往下就是這一筆的出場。不得改成「日期與價格疊一起」（買進日上、買進價下）——那樣一列要橫看兩格才讀得到同一筆的買與賣。
 - **數值、格式與顏色完全不變**：只是換位置。無法回測時下行為弱化色 `#6B7C90` 的「—」，買進價為 `null` 時上行同為「—」；未勾選整列反灰的規則照舊套用在兩行上。
-- **一檔多筆的父列**：日期欄逐筆列出，每一筆佔上下兩行（上行買進日、下行賣出日），筆與筆之間依買進日由新到舊，已勾選／未勾選的配色與寬視窗時相同；價格欄上行為成本加權均價、下行為弱化色「—」（多筆沒有單一賣出價，理由同寬視窗時的賣出價欄）。
+- **一檔多筆的父列**：日期欄逐筆列出，每一筆佔上下兩行（上行買進日、下行賣出日），筆與筆之間依買進日由新到舊，已勾選／未勾選的配色與寬視窗時相同；價格欄上行為買進均價、下行為賣出均價，兩行皆靠右對齊，算法、格式與顏色同寬視窗時父列的買進價欄與賣出價欄（見「父列在摺疊時顯示什麼」）；該檔沒有任何已勾選且可回測的筆時，兩行皆為弱化色「—」。
 - **排序**：價格欄表頭的「買進價」那一行即是買進價的排序控制，外觀（手指游標、↕／▼／▲、排序中改主要文字色）與行為與寬視窗時的「買進價」表頭完全相同；「賣出價」「買進日」「賣出日」三行不可排序。報酬率、收益兩欄不變。
 - **即時切換**：拖拉視窗跨過 1280px 時立即換版，不重新整理、不重打任何端點；勾選、展開、隱藏、排序狀態與浮動總計全部保留。
 - **只影響回測後的這四欄**：回測前表格本來就沒有這四欄；其餘各欄、總計、批次勾選框、說明行都不因寬度改變。
@@ -326,7 +326,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - **「—」視為最小值。** 買進價為 `null`、報酬率或收益為 `null`（無法回測），或父列因子筆全被取消勾選而顯示「—」的列：降冪時排在最後，升冪時排在最前。
 - **值相同時依預設排序決定先後**（含兩列同為「—」），讓同一份資料每次點出來的順序都一樣。
 - **單筆列**以該筆的 `buyPrice`／`returnPercent`／`profit` 排序。
-- **一檔多筆的父列以它畫面上顯示的值排序**：買進價為已勾選各子筆的成本加權均價，報酬率為已勾選各子筆的成本加權報酬率，收益為已勾選各子筆 `profit` 的總和（見「父列在摺疊時顯示什麼」）。排序依據必須是使用者眼睛看到的那個數字，否則會出現「父列顯示 5%，卻排在 3% 下面」這種無法從畫面解釋的順序。
+- **一檔多筆的父列以它畫面上顯示的值排序**：買進價為計入各筆的買進均價，報酬率為已勾選各子筆的成本加權報酬率，收益為已勾選各子筆 `profit` 的總和（見「父列在摺疊時顯示什麼」）。排序依據必須是使用者眼睛看到的那個數字，否則會出現「父列顯示 5%，卻排在 3% 下面」這種無法從畫面解釋的順序。
 - **排序後切換勾選，列的位置不動。** 父列合計會隨勾選即時重算，但表格不因此自動重排——使用者正在逐列排除標的時，列在手下跳走會讓他點錯列。排序只在**點表頭的那一刻**依當下顯示的值決定；下一次點表頭時，才依那時的值、以循環的下一個狀態重排。
 - **子列在父列內部依同一欄、同一方向排序**（「—」同樣視為最小值，值相同依買進日由新到舊）；還原預設排序時，子列回到依買進日由新到舊。父列摺疊時逐行列出的買進日／賣出日**不隨排序改變順序**，恆為依買進日由新到舊——那是日期清單，不是這三欄的值。
 - **排序不影響其他任何狀態**：勾選狀態、展開狀態、「共 N 檔」、三個總計與兩行「未計入」說明都不因排序改變。
@@ -353,24 +353,35 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 
 ##### 父列在摺疊時顯示什麼
 
-父列的**買進日與賣出日逐筆列出**該檔每一筆的日期；**買進價、報酬率、收益顯示該檔已勾選各子筆的合計**：
+父列的**買進日與賣出日逐筆列出**該檔每一筆的日期；**買進價、賣出價、報酬率、收益顯示該檔已勾選各子筆的合計**。四個合計欄涵蓋的是**同一批筆**——該檔已勾選且可回測（`sellDate` 不為 `null`）的筆，以下稱「計入的筆」：
 
 | 欄位 | 父列顯示 |
 |---|---|
 | 買進日 | 該檔**每一筆**的 `buyDate`，由新到舊上下逐行列出，一行一筆；**已勾選的那一筆為主要文字色 `#E6EDF5`，未勾選的那一筆為弱化色 `#6B7C90`** |
-| 買進價 | 該檔已勾選各筆 `buyPrice × lotSize` 的總和 ÷ `lotSize`，即成本加權均價，兩位小數 |
+| 買進價 | **買進均價**＝計入各筆 `buyPrice` 的總和 ÷ 計入筆數。每筆固定 `lotSize` 股，所以以股數加權與算術平均是同一個數字。四捨五入至小數第二位（第三位為 5 時進位） |
 | 賣出日 | 與買進日欄**同一順序、同一行數**逐行列出各筆的 `sellDate`：第 k 行的賣出日與買進日欄第 k 行屬於同一筆；無法回測的那一筆該行為弱化色「—」；已勾選／未勾選的配色同買進日欄 |
-| 賣出價 | 弱化色 `#6B7C90` 的「—」，**與同欄其他列的賣出價一樣靠右對齊**（多筆各有各的賣出價，沒有單一合計值） |
-| 報酬率 | 該檔已勾選各筆的**成本加權**報酬率＝`該檔已勾選收益總和 ÷ 該檔已勾選成本總和 × 100`，成本為各筆回應的 `cost`（含買進手續費） |
-| 收益 | 該檔已勾選各筆 `profit` 的總和 |
+| 賣出價 | **賣出均價**＝計入各筆 `sellPrice` 的總和 ÷ 計入筆數，與買進均價同一批筆、同一個算法、同一個四捨五入規則；主要文字色 `#E6EDF5`，**與同欄其他列的賣出價一樣靠右對齊** |
+| 報酬率 | 計入各筆的**成本加權**報酬率＝`計入各筆收益總和 ÷ 計入各筆成本總和 × 100`，成本為各筆回應的 `cost`（含買進手續費） |
+| 收益 | 計入各筆 `profit` 的總和 |
 
 **日期逐筆列出、價格卻取合計，是因為日期不能合計。** 兩個買進日沒有「平均買進日」，只挑一個又會讓其他筆的進出場在收合時完全隱形；逐行並排則讓每一行的買進日與賣出日互相對應，收合著就看得出每一筆各持有了多久。價格與報酬率可以成本加權合計，所以取合計。**父列不再顯示「{N} 筆」**——列出了幾行日期就是幾筆。逐筆列出的日期**包含未勾選的筆**（以弱化色呈現），因為它們描述的是「這檔有哪幾次進出場」，與要不要計入總計是兩件事。
 
 **父列的算法必須與標題的總計同一套。** 兩者都是成本加權，差別只在涵蓋範圍（一檔 vs 全部）。父列若改用各子筆報酬率的算術平均，同一個畫面上就會有兩套互相矛盾的加權方式，而使用者一定會拿父列去加總驗算標題。
 
-**父列隨子列的勾選即時重算**，不重打端點——所需的 `buyPrice`、`cost`、`profit`、`lotSize` 都已在回測回應裡。
+**父列的賣出價顯示賣出均價，是使用者 2026-10-11 的決定**（原文「賣出價要標記上」）。在此之前這一格恆為「—」，理由是多筆各有各的賣出價；但同一列的買進價早已是多筆的均價，只有賣出價留白，使用者在收合的父列上看得到買在哪、看不到賣在哪。兩格因此改採同一個口徑：
 
-**該檔的子筆全被取消勾選時**，父列的買進價／報酬率／收益顯示弱化色 `#6B7C90` 的「—」，買進日與賣出日照常逐筆列出、全部為弱化色，不得顯示 `0%` 或 `0`。理由與標題總計相同：`0` 是算過剛好打平，「—」是沒有東西可以算。
+- **同一批筆。** 買進均價與賣出均價都只算計入的筆，所以兩格一定同時有數字、同時為「—」；不會出現一格算三筆、另一格算兩筆。
+- **兩個均價都是成交價，不含任何費稅。** 買進均價不含買進手續費，賣出均價不含賣出手續費與證交稅——與單筆列的買進價／賣出價（回應的 `buyPrice`／`sellPrice`）同一口徑。買進日即最新交易日的筆（賣出價等於買進價）是一筆普通的計入筆，照常進兩個均價。
+- **價差與父列收益差在費稅，差多少是算得出來的。** `(賣出均價 − 買進均價) × lotSize × 計入筆數` 是這批筆**未扣費稅**的價差；父列的收益是已扣費稅的 `profit` 總和，兩者的關係是
+
+  `父列收益 ＝ (賣出均價 − 買進均價) × lotSize × 計入筆數 − 計入各筆 (buyFee + sellFee + sellTax) 的總和`
+
+  以未四捨五入的均價計算時這是恆等式；拿畫面上兩位小數的均價驗算時，誤差不超過 `0.01 × lotSize × 計入筆數` 元（`lotSize` 為 1000 時每筆 10 元）。父列報酬率則是 `父列收益 ÷ 計入各筆 cost 總和 × 100`，分子已扣費稅、分母含買進手續費，所以它必然低於 `(賣出均價 − 買進均價) ÷ 買進均價 × 100`——這與單筆列上「報酬率不等於 `(賣出價 − 買進價) ÷ 買進價`」是同一件事，不是父列獨有的落差。
+- **賣出均價不可排序。** 可排序的仍只有「買進價」「報酬率」「收益」三欄。
+
+**父列隨子列的勾選即時重算**，不重打端點——所需的 `buyPrice`、`sellPrice`、`cost`、`profit`、`lotSize` 都已在回測回應裡。
+
+**該檔沒有任何計入的筆時**（最常見的是子筆全被取消勾選），父列的買進價／賣出價／報酬率／收益顯示弱化色 `#6B7C90` 的「—」，買進日與賣出日照常逐筆列出、全部為弱化色，不得顯示 `0%` 或 `0`。理由與標題總計相同：`0` 是算過剛好打平，「—」是沒有東西可以算。
 
 ##### 父子勾選框的連動
 
@@ -689,7 +700,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 按「設定」、隱藏／解除隱藏、全部解除隱藏、排序、按「完成」 | **不呼叫任何 API**——隱藏與順序只讀寫瀏覽器的 `localStorage`，`GET /api/strategies` 的回應不因此改變 |
 | 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（**只含未隱藏且已勾選的策略，依選項區卡片的顯示順序排列**；有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`，站上均線為 `maPeriods`，量多為 `increasePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
-| 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
+| 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`sellPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
 
@@ -803,7 +814,8 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 展開後子列背景 | `#131C27` |
 | 子列左側縮排導引線 | `#26333F` |
 | 父列逐筆列出的買進日／賣出日（已勾選／未勾選） | `#E6EDF5` / `#6B7C90` |
-| 父列賣出價的「—」 | `#6B7C90` |
+| 父列買進均價／賣出均價的數值 | `#E6EDF5`（與主要文字同值） |
+| 父列買進價／賣出價無計入的筆時的「—」 | `#6B7C90` |
 | 未勾選列的整列文字（含報酬率與收益） | `#6B7C90` |
 | 「另 N 檔未勾選，未計入」說明文字 | `#93A4B8` |
 | 快捷區間鈕（未選）背景／文字 | `#1B2836` / `#93A4B8` |
@@ -1058,7 +1070,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 父列收益等於該檔已勾選各子筆 `profit` 的總和
 - [x] 父列買進價等於該檔已勾選各子筆的成本加權均價
 - [x] 收合的父列買進日欄由新到舊逐行列出該檔每一筆的買進日（一行一筆），賣出日欄以相同順序與行數列出各筆的 `sellDate`，第 k 行兩欄屬於同一筆；父列不顯示「{N} 筆」
-- [x] 父列賣出價恆顯示 `#6B7C90` 的「—」，且與同欄其他列的賣出價同樣靠右對齊（以實際渲染位置驗證右緣一致）
+- [x] 父列的賣出價儲存格與同欄其他列的賣出價同樣靠右對齊（以實際渲染位置驗證右緣一致）；該檔沒有任何已勾選且可回測的筆時，它顯示 `#6B7C90` 的「—」
 - [x] 該檔子筆全部取消勾選時，父列買進價／報酬率／收益顯示「—」而**非** `0%`／`0`，買進日與賣出日仍逐筆列出且全部為弱化色
 - [x] 切換任一子筆的勾選，父列合計與標題兩個總計同步重算，且**不發出任何網路請求**
 
@@ -1248,7 +1260,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 視窗寬 1280px：回測後表格為「買進日／賣出日」「買進價／賣出價」兩欄，每筆上行為買進、下行為賣出；視窗寬 1281px：恢復為四個獨立欄位
 - [x] 視窗寬 960px：回測後表格不出現水平捲軸，報酬率與收益兩欄完整可見（以實際瀏覽器量測表格容器 `scrollWidth ≤ clientWidth`）
 - [x] 疊欄時數值、格式與顏色與寬視窗相同；無法回測的筆下行顯示弱化色「—」，未勾選整列反灰套用在上下兩行
-- [x] 一檔多筆父列：日期欄每筆佔上下兩行（買進日／賣出日），依買進日由新到舊，已勾選／未勾選配色正確；價格欄上行為成本加權均價、下行為弱化色「—」
+- [x] 一檔多筆父列：日期欄每筆佔上下兩行（買進日／賣出日），依買進日由新到舊，已勾選／未勾選配色正確；價格欄上行為買進均價、下行為父列的賣出價（該檔沒有任何已勾選且可回測的筆時兩行皆為弱化色「—」）
 - [x] 疊欄時點「買進價」那一行表頭依買進價排序（降冪→升冪→還原），指示圖示與寬視窗一致；「賣出價」「買進日」「賣出日」不可排序
 - [x] 拖拉視窗跨過 1280px 時即時換版，勾選、展開、隱藏、排序狀態保留，不發出任何網路請求（以請求計數斷言）
 - [x] 疊欄未新增任何顏色，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
@@ -1440,6 +1452,19 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 取消全部批次框使每一筆皆勾選且無隱藏時，畫面上的總成本／總報酬率／總收益等於回應的 `totalCost`／`totalReturnPercent`／`totalProfit`（回應的彙總已含這種筆）
 - [x] 該筆列上沒有任何額外的標記、圖示或說明文字，與其他可回測筆的列結構相同
 - [x] 回應中 `sellDate` 為 `null` 的筆（以攔截回測回應注入一筆驗證）仍由「隱藏資料不齊（無賣出日）」預設隱藏、仍計入「另 N 筆尚無可賣出交易日，未計入」，取消勾選該框後出現且五欄為 `#6B7C90` 的「—」
+
+### 父列的賣出均價
+
+- [x] 一檔多筆的父列賣出價顯示該檔已勾選且可回測各筆 `sellPrice` 的總和 ÷ 筆數（兩位小數），不再是「—」：以一次真實掃描的至少三個父列，用回測回應中各子筆的 `sellPrice` 手算，與畫面上的數字逐一相符
+- [x] 父列買進價與賣出價涵蓋同一批筆：取消其中一筆子列的勾選後，兩格都改為只含其餘已勾選筆的均價，且兩格必同時為數字或同時為「—」
+- [x] 均價四捨五入至小數第二位、第三位為 5 時進位，買進均價與賣出均價同此規則：以一個兩筆價格總和的「分」為奇數的父列驗證（例如 `25.05` 與 `25.10` 顯示 `25.08`，不是 `25.07`）
+- [x] 以一個父列用回測回應驗算：`(賣出均價 − 買進均價) × lotSize × 計入筆數 − 計入各筆 (buyFee + sellFee + sellTax) 的總和` 等於父列顯示的收益（以畫面上兩位小數的均價計算時，差距不超過 `0.01 × lotSize × 計入筆數` 元），父列報酬率等於該收益 ÷ 計入各筆 `cost` 總和 × 100
+- [x] 該檔的子筆全部取消勾選時，父列賣出價與買進價同為 `#6B7C90` 的「—」，不顯示 `0.00`
+- [x] 切換任一子列的勾選，父列賣出價與買進價、報酬率、收益同步重算，且**不發出任何網路請求**（以請求計數斷言）；回測請求的內容與本次改動前相同
+- [x] 寬視窗（> 1280px）：父列賣出均價位於「賣出價」欄，右緣與同欄其他列的賣出價一致（以實際渲染位置驗證），實際渲染色為 `#E6EDF5`
+- [x] 視窗寬 ≤ 1280px：父列價格欄上行為買進均價、下行為賣出均價，兩行右緣與同欄其他列一致；跨過 1280px 時即時換版、數字不變
+- [x] 「賣出價」表頭（含疊欄時的那一行）仍不可排序；「買進價」表頭的排序循環與指示圖示不變，父列仍以其顯示的買進均價排序
+- [x] 本次未新增任何顏色：父列賣出均價與其「—」的實際渲染色取自 `## Visual Style`，且在 `prefers-color-scheme: dark` 與 `light` 下完全相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2788,5 +2813,45 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Storyboard** (`docs/frontend/strategy`): steps 10–17 re-drawn. 緯創 (buys on the mockup's latest day, 08-30) used to be the hidden no-sell-date row; it is now a normal row sold on 08-30 at 118.50 (`-0.58%` / `-691`), unticked by the 2% box from step 10 on, and the hide box is drawn disabled. Counts and totals follow: step 10「另 6 筆未勾選」「另 3 筆已隱藏」, step 15 all-ticked totals 4,174,937 / +1.06% / +44,215. `SELF-CHECK PASS — 17/17`.
 
 **Housekeeping**: 8081 and 5174 stopped; 8080 / 5173 never touched. No sync or backfill triggered. `data/real-trades.csv` not modified (the backend read a scratch copy). Built and verified by the `/code` worker itself, without a nested `frontend` agent.
+
+**Left unchecked**: none.
+
+### Increment 36 — 2026-10-11
+
+**Scope**: the 10 criteria under「父列的賣出均價」. User decision of 2026-10-11 (原文「賣出價要標記上」): a multi-buy-date parent row's 賣出價 is no longer always「—」; it shows the average sell price of the same entries the parent's 買進價 averages. Frontend only — no endpoint, request or response changed.
+
+**Formula as built**: `賣出均價 = Σ sellPrice ÷ n` and `買進均價 = Σ buyPrice ÷ n`, over the stock's entries that are ticked and backtestable (`sellDate` not `null`), `n` = how many of them. Both are raw trade prices (no fee, no tax), rounded half-up to 2 decimals. With no such entry both cells are「—」(`#6B7C90`).
+
+**Files changed**: `develop/frontend/src/pages/StrategyTab.tsx` — `computeParentAggregate` returns `avgSellPrice` next to `avgBuyPrice`; the two parent cells (the 賣出價 column when wide, the lower line of the stacked price cell at ≤ 1280px) render it. No CSS change, no new colour.
+
+**Decisions the requirement did not state**:
+- **Fees and tax are in neither average.** The existing parent 買進價 was already the mean of raw `buyPrice` (the buy fee only enters `cost`, the 報酬率 denominator), so the sell average is the mean of raw `sellPrice`. The spec now states how the pair reconciles with the row's 收益: `(賣出均價 − 買進均價) × lotSize × n − Σ(buyFee + sellFee + sellTax) = 父列收益`, exact on unrounded averages, within `0.01 × lotSize × n` 元 on the displayed ones.
+- **Half-up rounding, applied to both averages.** The parent 買進價 was `toFixed(2)` on a binary float, which rounds a true half either way (16.275 → `16.27`). Both averages are now summed in integer 分 and rounded half-up, so they follow one rule. This can move an existing parent 買進價 by 0.01 in exactly those tie cases, and the 買進價 sort now compares that rounded value.
+- **The buy-price formula in the contract table was missing its divisor** (`buyPrice × lotSize 的總和 ÷ lotSize`, which is a sum, under the label「成本加權均價」). Reworded to `Σ buyPrice ÷ 計入筆數`, which is what was built (Increment 12 already records the divisor as `lotSize × 已勾選且可回測筆數`).
+- **Colour**: the sell average is `#E6EDF5`, the same as the parent 買進價, including on a half-selected parent; `## Visual Style` gains no hex, its「父列賣出價的「—」」row became two rows (the number, and the「—」).
+- **賣出價 stays unsortable**; a fallback entry (`sellPrice = buyPrice`) is an ordinary entry in both averages.
+
+**Already-checked criteria reworded** (kept `[x]`; each still states only what was verified at the time):
+- 命中彙總表 → 父列的合計:「父列賣出價恆顯示 `#6B7C90` 的「—」，且與同欄其他列的賣出價同樣靠右對齊…」→「父列的賣出價儲存格與同欄其他列的賣出價同樣靠右對齊…；該檔沒有任何已勾選且可回測的筆時，它顯示 `#6B7C90` 的「—」」.
+- 視窗寬 ≤ 1280px 日期與價格疊欄:「…價格欄上行為成本加權均價、下行為弱化色「—」」→「…價格欄上行為買進均價、下行為父列的賣出價（該檔沒有任何已勾選且可回測的筆時兩行皆為弱化色「—」）」.
+
+Contract prose rewritten in place:「父列在摺疊時顯示什麼」(table rows 買進價／賣出價／報酬率／收益, the new 2026-10-11 paragraph, the no-entries paragraph), the ≤ 1280px parent bullet, the sort bullet's wording of the buy average, the backtest row of `### API 整合` (`sellPrice` added to the fields used for the parent aggregate), the `## Visual Style` row above, and the frontmatter `requirement`.
+
+**Live verification** — `npm run build` clean (tsc + vite). Headless Chromium (Playwright) against `npm run dev -- --port 5174` with `API_TARGET=http://localhost:8081`, the worker backend on 8081 (startup sync/catch-up jobs disabled), the real database. Flow: 策略 tab → tick 上漲支撐／箱型突破／累積上漲 with their defaults → 起始週 back to 2026 第 37 週 →「實際區間 2026-09-07 ~ 2026-10-11」→ 開始掃描 (全市場) → automatic 回測. Params line「箱型突破（標準）・上漲支撐（標準・確認 2 日）・累積上漲（20 日）」; 487 檔, backtest response 753 items, `lotSize` 1000, none with `sellDate: null`; **259 parent rows**. 取消全選 on then off, so every entry is ticked and none hidden.
+
+1. Hand-computed from the response's child `sellPrice` (mean in integer 分, half-up — not the app's code) vs. the screen, **all 259 parents equal** for both 賣出價 and 買進價. E.g. `2033 佳大` [56.30, 56.30] → `56.30` (buy [28.15, 27.30] → `27.73`); `2466 冠西電` [180.50, 180.50] → `180.50` (buy `103.25`); `2305 全友` [70.00, 70.00] → `70.00` (buy `34.98`); `2034 允強` [24.30, 24.70, 24.70] → `24.57`; `3002 歐格` [20.00, 20.00, 21.10] → `20.37`; `3686 達能` [16.00, 16.55, 16.55] → `16.37`.
+2. Same entries — unticking one child (`3311` 09-14, `1459` 10-01, `3044` 09-14) changes both cells to the mean of the rest, e.g. `1459 聯發` buy `18.65` → `20.55`, sell `22.60`, 收益 `7,650` → `1,922`, 報酬率 `20.48%` → `9.34%`; the parent is half-selected and its sell cell is still `rgb(230, 237, 245)`.
+3. Half-up — `3686 達能` with only 10-01 and 09-24 ticked: sell (16.00 + 16.55) ÷ 2 = 16.275 → screen `16.28` (plain `toFixed` gives `16.27`); buy `15.78`. `1305 華夏` buy (12.90 + 12.45) ÷ 2 = 12.675 → `12.68`.
+4. Reconciliation, all 259 parents: `Σ(sellPrice − buyPrice) × 1000 − Σ(buyFee + sellFee + sellTax)` equals `Σ profit` and the 收益 on screen exactly; from the two displayed averages the difference is within `10 × n` 元; 報酬率 on screen = `Σ profit ÷ Σ cost × 100`. E.g. `3044 健鼎`: (585.00 − 506.50) × 1000 × 2 = 157,000 − 6,619 = 150,381 = 收益, `14.82%`; `3296 勝德` (3 entries): exact 10,850 − 523 = 10,327 = 收益, from the displayed `30.95`／`27.33` 10,860 − 523 = 10,337 (10 off, limit 30).
+5. All children unticked (`3311`, `1459`, `3044`): 買進價 and 賣出價 both「—」in `rgb(107, 124, 144)`, 報酬率／收益「—」too, no `0.00`.
+6. No request — 18 requests before the child toggles, 18 after; also unchanged by sorting and by the layout switch. The backtest request body is `{items:[{stockId, buyDate}]}` and its 753 items are exactly the scan's distinct `(stockId, buyDate)` pairs.
+7. Wide (1600px): the text right edge of every parent's sell average is `1283.48`, the same as every other row's 賣出價 and as the「—」of a fully-unticked parent (td right edge `1299.48` = the header's); every `<td>` is `display: table-cell` and each row has one `top`; colour `rgb(230, 237, 245)`.
+8. 1280px: header「買進價 ↕／賣出價」; all 259 parents show 買進均價 above and 賣出均價 below with the same numbers as wide; both lines' right edge `995.41`, the same as every other row's; body cells line up with the header cells; no horizontal page overflow; a fully-unticked parent shows「—」on both lines in `rgb(107, 124, 144)`. At 1281px the four columns return with the same numbers.
+9. Sorting — 買進價 header cycles `▼` → `▲` → `↕`, top-level rows (parents by their displayed average) in non-increasing then non-decreasing order; the 賣出價 header has `cursor: auto` and no icon, clicking it changes nothing; in the stacked header only the「買進價」line is a pointer.
+10. `prefers-color-scheme: light` vs `dark`, wide and ≤ 1280px, with one parent fully unticked: the computed colours of every parent's price cells are identical, and only `rgb(230, 237, 245)` and `rgb(107, 124, 144)` occur.
+
+**Storyboard** (`docs/frontend/strategy`): steps 11, 12, 13, 15, 16, 17 — 台積電's parent 賣出價 is now `1,185.00` (its three children all sell at 1,185.00) instead of「—」; step 14 (everything unticked) keeps「—」. Captions of steps 11, 13, 14 and row 13 of the group's API table follow. `SELF-CHECK PASS — 17/17`.
+
+**Housekeeping**: 8081 and 5174 stopped; 8080 / 5173 never touched. No sync or backfill triggered; scan and backtest write nothing, so there is no test data to clean up. `data/real-trades.csv` not modified (the backend read a scratch copy). Built and verified by the `/code` worker itself, without a nested `frontend` agent.
 
 **Left unchecked**: none.

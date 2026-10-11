@@ -31,7 +31,7 @@
 | 10 | 自動回測完成 | —（不發請求） | 第 9 步的回測回應抵達，填入表格右側六欄、標題右側總成本／總報酬率／總收益三個標籤與標題列下方五個批次勾選框；初始勾選狀態為「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上 → 僅選取全符合」五步的結果，初始排序即報酬率降冪。買進日就是該檔最新交易日的筆（緯創）在回應裡以買進日的開盤價賣出（`sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`），有賣出日所以留在表上；回應沒有任何 `sellDate` 為 `null` 的筆，「隱藏資料不齊」因此 disabled 未勾選。這些預設不發出任何額外請求 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 11 | 取消勾選「取消買進價高於 500 元」 | —（不發請求） | 被它隱藏的筆依回應各筆的 `buyPrice` 一次勾回並重新顯示，金額輸入恢復可編輯；報酬率框不追溯這些回來的筆，排序維持降冪；純前端 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 12 | 點展開鈕 | —（不發請求） | 展開狀態純前端；該檔各買進日的數字在第 10 步的回應裡已經全部拿到了，子列依同一欄同方向排序 | [strategy-backtest](../backend/strategy-backtest.md) |
-| 13 | 點選某一筆的列（等同點其勾選框） | —（不發請求） | 勾選狀態純前端，父列合計與三個總計就地重算、列的位置不因合計改變而重排；回應已含每筆 `buyPrice`／`cost`／`profit` 與 `lotSize`，不需再打一次端點 | [strategy-backtest](../backend/strategy-backtest.md) |
+| 13 | 點選某一筆的列（等同點其勾選框） | —（不發請求） | 勾選狀態純前端，父列合計與三個總計就地重算、列的位置不因合計改變而重排；回應已含每筆 `buyPrice`／`sellPrice`／`cost`／`profit` 與 `lotSize`，不需再打一次端點 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 14 | 勾選「取消全選」 | —（不發請求） | 一次取消全部筆的勾選並把隱藏的筆全部顯示，其餘批次框隨之變為未勾選，父列合計與三個總計就地重算為「—」；純前端 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 15 | 取消勾選「取消全選」 | —（不發請求） | 全部的筆一次勾回，總計回到全勾時的值（等於回應的 `totalCost`／`totalReturnPercent`／`totalProfit`） | [strategy-backtest](../backend/strategy-backtest.md) |
 | 16 | 勾選「僅選取全符合」 | —（不發請求） | 以**股票**為單位重算勾選：未被三個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**（因此不多出「另 K 筆已隱藏」那一行）；純前端 | [strategy-scan](../backend/strategy-scan.md) |
