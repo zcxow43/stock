@@ -17,8 +17,9 @@ const MALFORMED_LOAD_MESSAGE = '交易紀錄檔的欄位名列不正確，請修
 const MALFORMED_ADD_MESSAGE = '交易紀錄檔的欄位名列不正確，這一筆沒有寫入'
 const INVALID_TARGET_MESSAGE = '目標賣價必須大於 0，最多兩位小數'
 const NOT_FOUND_MESSAGE = '這一筆已經不存在了'
-/** 不統計 + 代號/名稱 + 買進日 + 買進價 + 股數 + 現價日 + 現價 + 目標賣價 + 成本 + 未實現損益 + 報酬率 + 刪除 */
-const COLUMN_COUNT = 12
+/** 代號/名稱 + 買進日 + 買進價 + 股數 + 現價日 + 現價 + 目標賣價 + 成本 + 未實現損益 + 報酬率 + 刪除;
+ * 設定模式 adds the leading 不統計 column. */
+const BASE_COLUMN_COUNT = 11
 
 function formatMoney(value: number): string {
   return value.toLocaleString('en-US')
@@ -172,6 +173,9 @@ export default function RealTradeTab() {
   // error to show under that row. Only the changed control is disabled.
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+  // 設定模式 — pure front-end state: never sent anywhere, never stored, so a reload is always
+  // back in display mode. Only the 完成 button turns it off; refetches leave it alone.
+  const [settingsMode, setSettingsMode] = useState(false)
 
   const stockIdRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -360,6 +364,9 @@ export default function RealTradeTab() {
   }
 
   const items = data?.items ?? []
+  // 不統計 rows go last in both modes; each group keeps the response's relative order.
+  const orderedItems = [...items.filter((item) => !item.excluded), ...items.filter((item) => item.excluded)]
+  const columnCount = BASE_COLUMN_COUNT + (settingsMode ? 1 : 0)
   const skippedLines = data?.skippedLines ?? []
   const excludedCount = items.filter((item) => item.excluded).length
   // Totals are the backend's; the only decision made here is that "nothing counted" (empty
@@ -477,6 +484,17 @@ export default function RealTradeTab() {
                   {hasTotals && data?.totalReturnPercent != null ? formatSignedPercent(data.totalReturnPercent) : '—'}
                 </span>
               </div>
+              {items.length > 0 ? (
+                // Leaving 設定模式 while a 目標賣價 is being edited needs nothing extra: pressing
+                // the button moves focus off the field, and that blur commits it.
+                <button
+                  type="button"
+                  className="sl-btn sl-btn-primary"
+                  onClick={() => setSettingsMode((on) => !on)}
+                >
+                  {settingsMode ? '完成' : '設定'}
+                </button>
+              ) : null}
             </div>
             {data ? (
               <div className="rt-fee-note">
@@ -498,7 +516,7 @@ export default function RealTradeTab() {
               <table className="sl-table rt-table">
                 <thead>
                   <tr>
-                    <th className="rt-center">不統計</th>
+                    {settingsMode ? <th className="rt-center">不統計</th> : null}
                     <th>代號 / 名稱</th>
                     <th>買進日</th>
                     <th className="sl-r">買進價</th>
@@ -513,22 +531,27 @@ export default function RealTradeTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item: RealTradeItem) => {
+                  {orderedItems.map((item: RealTradeItem) => {
                     const stale = item.currentDate != null && item.currentDate < data.asOfDate
                     const rowError = rowErrors[item.id]
+                    const rowClass = [item.excluded ? 'rt-row-excluded' : '', flashId === item.id ? 'rt-row-flash' : '']
+                      .filter(Boolean)
+                      .join(' ')
                     return (
                       <Fragment key={item.id}>
-                      <tr className={flashId === item.id ? 'rt-row-flash' : undefined}>
-                        <td className="rt-center">
-                          <input
-                            type="checkbox"
-                            className="rt-exclude-box"
-                            aria-label="不統計"
-                            checked={item.excluded}
-                            disabled={pending.has(`${item.id}:excluded`)}
-                            onChange={() => handleToggleExcluded(item)}
-                          />
-                        </td>
+                      <tr className={rowClass || undefined}>
+                        {settingsMode ? (
+                          <td className="rt-center">
+                            <input
+                              type="checkbox"
+                              className="rt-exclude-box"
+                              aria-label="不統計"
+                              checked={item.excluded}
+                              disabled={pending.has(`${item.id}:excluded`)}
+                              onChange={() => handleToggleExcluded(item)}
+                            />
+                          </td>
+                        ) : null}
                         <td>
                           <div className="rt-stock-cell">
                             <span className="sl-code">{item.stockId}</span>
@@ -544,13 +567,19 @@ export default function RealTradeTab() {
                         <td className={`sl-r${item.currentPrice == null ? ' sl-muted' : ''}`}>
                           {item.currentPrice != null ? formatPrice(item.currentPrice) : '—'}
                         </td>
-                        <td className="sl-r">
-                          <TargetSellPriceInput
-                            value={item.targetSellPrice}
-                            disabled={pending.has(`${item.id}:target`)}
-                            onCommit={(raw, badInput) => handleTargetCommit(item, raw, badInput)}
-                          />
-                        </td>
+                        {settingsMode ? (
+                          <td className="sl-r">
+                            <TargetSellPriceInput
+                              value={item.targetSellPrice}
+                              disabled={pending.has(`${item.id}:target`)}
+                              onCommit={(raw, badInput) => handleTargetCommit(item, raw, badInput)}
+                            />
+                          </td>
+                        ) : (
+                          <td className={`sl-r${item.targetSellPrice == null ? ' sl-muted' : ''}`}>
+                            {item.targetSellPrice != null ? formatPrice(item.targetSellPrice) : '—'}
+                          </td>
+                        )}
                         <td className="sl-r">{formatMoney(item.cost)}</td>
                         <td
                           className={`sl-r ${item.unrealizedProfit != null ? gainClass(item.unrealizedProfit) : 'sl-muted'}`}
@@ -575,7 +604,7 @@ export default function RealTradeTab() {
                       </tr>
                       {rowError ? (
                         <tr className="rt-row-error">
-                          <td colSpan={COLUMN_COUNT}>
+                          <td colSpan={columnCount}>
                             <div className="rt-row-error-msg">{rowError}</div>
                           </td>
                         </tr>

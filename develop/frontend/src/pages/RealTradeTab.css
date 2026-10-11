@@ -193,6 +193,13 @@
   background: #1d2a38;
 }
 
+/* 不統計 rows — neutral grey across the whole row, in both modes. The :hover selector is
+   listed too so the grey holds under the pointer instead of turning into the hover color. */
+.rt-table tbody tr.rt-row-excluded td,
+.rt-table tbody tr.rt-row-excluded:hover td {
+  background: #2b3036;
+}
+
 /* 被略過的 CSV 行 — error palette. */
 .rt-skipped {
   list-style: none;
