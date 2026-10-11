@@ -1,0 +1,65 @@
+/* 策略設定清單 — fixed dark palette per specs/frontend/strategy.md `## Visual Style`.
+   Literal hex only; must never shift with prefers-color-scheme. Buttons reuse `.sl-btn`. */
+
+.scs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 640px;
+}
+
+.scs-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 12px;
+  background: #16202c;
+  border: 1px solid #26333f;
+  border-radius: 8px;
+  cursor: grab;
+}
+
+.scs-row-dragging {
+  opacity: 0.6;
+}
+
+/* 落點指示線：畫在兩列之間的空隙裡，不佔版面，拖拉途中列不會跳動。 */
+.scs-row-drop-before {
+  box-shadow: 0 -4px 0 -1px #3e8fd8;
+}
+
+.scs-row-drop-after {
+  box-shadow: 0 4px 0 -1px #3e8fd8;
+}
+
+.scs-grip {
+  color: #93a4b8;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.scs-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e6edf5;
+}
+
+.scs-row-hidden .scs-name {
+  color: #6b7c90;
+}
+
+.scs-hidden-mark {
+  font-size: 12px;
+  color: #6b7c90;
+}
+
+.scs-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -26,7 +26,9 @@ import {
   type VolumeSurgeDetail,
 } from '../api/strategies'
 import { fetchSyncProgress, startBackfill, type ProgressResponse } from '../api/sync'
+import StrategyCardSettingsList from '../components/StrategyCardSettingsList'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { applyCardOrder, useStrategyCardSettings } from '../hooks/useStrategyCardSettings'
 import './StockListPage.css'
 
 /** Matches the backend's configured startup catch-up start date
@@ -912,7 +914,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [catalog, setCatalog] = useState<StrategyCatalogItem[]>([])
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
 
-  const [selectionOrder, setSelectionOrder] = useState<StrategyCode[]>([])
+  // Which cards are ticked. Membership only — the order strategies go out in is the card
+  // order (`scanStrategyCodes` below), never the order the boxes happened to be clicked in.
+  const [checkedStrategyCodes, setCheckedStrategyCodes] = useState<StrategyCode[]>([])
+  // 策略設定：隱藏與排序 — persisted per browser, keyed by strategy `code`. `settingsMode` is
+  // plain view state (never persisted): it only swaps the card grid for the settings list.
+  const [cardSettings, updateCardSettings] = useStrategyCardSettings()
+  const [settingsMode, setSettingsMode] = useState(false)
   const [selectedPresets, setSelectedPresets] = useState<Partial<Record<StrategyCode, PresetCode>>>({})
   // Per-card 漲幅門檻 input for the three sensitivity-driven cards only, kept as the raw
   // string the user typed so a partial entry (e.g. "2.") isn't clobbered mid-keystroke.
@@ -1218,8 +1226,49 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return () => controller.abort()
   }, [scope, debouncedStockSearch])
 
+  // Every strategy the API returned, in the user's order (hidden ones included — the
+  // settings list shows them); the option area draws only the ones not hidden. Codes the
+  // saved settings name but the API no longer returns drop out here.
+  const orderedCatalog = applyCardOrder(catalog, cardSettings.order)
+  const hiddenStrategyCodes = new Set(cardSettings.hidden)
+  const visibleCatalog = orderedCatalog.filter((s) => !hiddenStrategyCodes.has(s.code))
+  const anyStrategyHidden = visibleCatalog.length < orderedCatalog.length
+  // What a scan sends, and in what order: the ticked cards, in card display order. A hidden
+  // strategy has no card, so it can never be in here.
+  const scanStrategyCodes = visibleCatalog.map((s) => s.code).filter((code) => checkedStrategyCodes.includes(code))
+
+  /** Every change is written back whole and normalised to what the API currently returns,
+   * so stale codes (and a corrupted stored value) are overwritten by the first change. */
+  const saveCardSettings = (ordered: StrategyCatalogItem[], hidden: Set<string>) => {
+    const order = ordered.map((s) => s.code)
+    updateCardSettings({ order, hidden: order.filter((code) => hidden.has(code)) })
+  }
+
+  const moveStrategyCard = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= orderedCatalog.length || toIndex === fromIndex) return
+    const next = [...orderedCatalog]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    saveCardSettings(next, hiddenStrategyCodes)
+  }
+
+  /** 隱藏一個當下已勾選的策略時它同時變為未勾選；解除隱藏後回到未勾選、輸入值保留——
+   * the same thing as unticking and re-ticking a card, so no input state is touched. */
+  const toggleStrategyHidden = (code: string) => {
+    const hidden = new Set(hiddenStrategyCodes)
+    if (hidden.has(code)) {
+      hidden.delete(code)
+    } else {
+      hidden.add(code)
+      setCheckedStrategyCodes((codes) => codes.filter((c) => c !== code))
+    }
+    saveCardSettings(orderedCatalog, hidden)
+  }
+
+  const unhideAllStrategies = () => saveCardSettings(orderedCatalog, new Set())
+
   const toggleStrategy = (code: StrategyCode) => {
-    setSelectionOrder((order) => (order.includes(code) ? order.filter((c) => c !== code) : [...order, code]))
+    setCheckedStrategyCodes((codes) => (codes.includes(code) ? codes.filter((c) => c !== code) : [...codes, code]))
     const strategy = catalog.find((s) => s.code === code)
     // `params`／`paramGroups` initialization applies to ANY card that declares them,
     // regardless of whether the card ALSO has `presets` — 「params 同樣與卡片形狀無關」.
@@ -1342,7 +1391,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   }
 
   const buildScanPayload = (): ScanRequest => ({
-    strategies: selectionOrder.map((code): ScanStrategySelection => {
+    strategies: scanStrategyCodes.map((code): ScanStrategySelection => {
       const strategy = catalog.find((s) => s.code === code)
       if (isParamsDriven(strategy)) {
         // 這張卡片一律不送 preset — it has no sensitivity to name. Every param's current
@@ -1660,14 +1709,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       })
   }
 
-  const noStrategySelected = selectionOrder.length === 0
+  const noStrategySelected = scanStrategyCodes.length === 0
   const noStockSelected = scope === 'SELECTED' && selectedStocks.length === 0
-  const hasInvalidRisePercent = selectionOrder.some((code) => {
+  const hasInvalidRisePercent = scanStrategyCodes.some((code) => {
     const strategy = catalog.find((s) => s.code === code)
     if (isParamsDriven(strategy)) return false
     return isRisePercentInputInvalid(risePercentInputs[code] ?? '', SENSITIVITY_RISE_PERCENT_RANGE)
   })
-  const hasInvalidParams = selectionOrder.some((code) => {
+  const hasInvalidParams = scanStrategyCodes.some((code) => {
     // Checked for ANY selected strategy's own `params`, regardless of whether the card
     // also has `presets` — a presets-driven card with an empty `params` array (今 底底高／
     // 箱型突破) simply has nothing for `.some` below to find invalid, never because of a
@@ -2786,15 +2835,39 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
       {/* ---------- condition area ---------- */}
       <div className="st-condition">
-        <div className="st-section-label">策略</div>
+        <div className="st-strategy-head">
+          <div className="st-section-label">策略</div>
+          {/* 策略設定：隱藏與排序 — only once the catalogue is in (nothing to configure
+              before that). Secondary buttons: 開始掃描 stays the page's only primary one. */}
+          {catalogStatus === 'success' ? (
+            <div className="st-strategy-head-actions">
+              {settingsMode ? (
+                <button type="button" className="sl-btn" disabled={!anyStrategyHidden} onClick={unhideAllStrategies}>
+                  全部解除隱藏
+                </button>
+              ) : null}
+              <button type="button" className="sl-btn" onClick={() => setSettingsMode((on) => !on)}>
+                {settingsMode ? '完成' : '設定'}
+              </button>
+            </div>
+          ) : null}
+        </div>
         {catalogStatus === 'loading' ? (
           <div className="st-strategy-cards-loading">載入策略清單中…</div>
         ) : catalogStatus === 'error' ? (
           <div className="st-inline-error">策略清單載入失敗，請重新整理頁面</div>
+        ) : settingsMode ? (
+          <StrategyCardSettingsList
+            items={orderedCatalog.map((s) => ({ code: s.code, name: s.name, hidden: hiddenStrategyCodes.has(s.code) }))}
+            onMove={moveStrategyCard}
+            onToggleHidden={toggleStrategyHidden}
+          />
+        ) : visibleCatalog.length === 0 ? (
+          <div className="st-strategy-cards-empty">所有策略都已隱藏，請按「設定」解除隱藏</div>
         ) : (
           <div className="st-strategy-cards">
-            {catalog.map((strategy) => {
-              const selected = selectionOrder.includes(strategy.code)
+            {visibleCatalog.map((strategy) => {
+              const selected = checkedStrategyCodes.includes(strategy.code)
               const paramsDriven = isParamsDriven(strategy)
               // Shared by BOTH card shapes — `params`/`paramGroups` decide what to render
               // independently of whether this card also has `presets`

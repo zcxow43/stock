@@ -565,9 +565,30 @@
   gap: 14px;
 }
 
-.st-strategy-cards-loading {
+.st-strategy-cards-loading,
+.st-strategy-cards-empty {
   color: #6b7c90;
   font-size: 14px;
+}
+
+/* 「策略」標題列：左為區塊標籤，最右邊為「設定」（設定模式下為「全部解除隱藏」「完成」）。
+   The row carries the label's own outer margin so the gap to the cards stays what it was. */
+.st-strategy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 -6px;
+}
+
+.st-strategy-head .st-section-label {
+  margin: 0;
+}
+
+.st-strategy-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .st-strategy-card {

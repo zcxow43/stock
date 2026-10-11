@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序"
 depends_on: [stock-list]
 ---
 
@@ -24,7 +24,7 @@ depends_on: [stock-list]
 由上而下：
 
 1. **同步列** — 左側「最後同步：YYYY-MM-DD HH:mm」，右側「同步日 K 至今日」按鈕。
-2. **條件區** — 策略勾選卡片、股票範圍、區間選擇、「開始掃描」主要按鈕。**本頁沒有「回測」按鈕**：掃描成功且有命中時自動回測（見「掃描後自動回測」）。
+2. **條件區** — 策略勾選卡片（標題列最右邊有「設定」按鈕，見「策略設定：隱藏與排序」）、股票範圍、區間選擇、「開始掃描」主要按鈕。**本頁沒有「回測」按鈕**：掃描成功且有命中時自動回測（見「掃描後自動回測」）。
 3. **結果區** — 一張合併命中表格，不論勾了幾個策略。
 
 ### 條件區
@@ -36,7 +36,7 @@ depends_on: [stock-list]
 | `presets` 非空 | 底底高、箱型突破、上漲支撐 | 勾選框、策略名稱、靈敏度下拉（嚴格／標準／寬鬆，預設「標準」）、**漲幅門檻數字輸入**、**該條目 `params` 逐一畫出的輸入**（目前只有上漲支撐有一個：確認天數）、目前選定靈敏度的說明文字一行、**該條目 `paramGroups` 的每一個群組勾選框**（目前只有箱型突破有一個） |
 | `presets` 為空陣列、帶 `params` | 累積上漲、反彈、法人買賣超佔比、法人連續買超、法人買超強度排名、MACD 黃金交叉、KDJ 黃金交叉、站上均線、量多 | 勾選框、策略名稱、**依 `params` 逐一畫出的輸入**（數字輸入或複選勾選框，見下）、策略層級 `description` 的說明文字一行。**這種卡片沒有靈敏度下拉** |
 
-卡片共十二張，依 API 回應的順序排列，**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
+API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使用者在「設定」排定的順序排列**（見「策略設定：隱藏與排序」）；從未設定過時十二張全部顯示、依 API 回應的順序。**一列放不下時換行**，不得產生水平捲軸，也不得為了塞進一列而截斷卡片內的輸入。
 
 以 `code` 寫死（「如果是累積上漲就畫天數」）會讓下一個改成無靈敏度的型態必須再改一次前端；`presets` 是否為空是後端已經在回應裡表達的事實，照它畫即可。反彈就是這條規則的第一個實證：它從有靈敏度改成無靈敏度時，卡片的形狀應該自動跟著 API 變，前端不必為此改任何判斷。
 
@@ -124,6 +124,58 @@ depends_on: [stock-list]
   - 這個預設**不對應任何快捷鈕**（「近一個月」的起始週是約四週前那一週，不會等於上週），因此進頁時三個快捷鈕**都不呈選中**。按任一快捷鈕後依既有規則選中。
 - 起始週晚於結束週時前端即擋下，並在區間下方提示「起始週不可晚於結束週」，不送出請求。
 
+#### 策略設定：隱藏與排序
+
+條件區「策略」標題列的**最右邊**有一顆「設定」按鈕，次要按鈕樣式（本頁唯一的主要按鈕仍是「開始掃描」）。策略清單載入成功時才出現；載入中或載入失敗時沒有東西可設定，不顯示。
+
+按下後策略選項區進入**設定模式**：原本放卡片的位置換成一份**設定清單**，按鈕文字變成「完成」，其左邊多一顆「全部解除隱藏」；按「完成」回到卡片。
+
+- **設定模式是純前端的畫面狀態**，不呼叫任何 API、不持久化：進頁與重新整理後一律是卡片畫面。
+- **設定模式只換掉卡片那一塊**：股票範圍、區間、「開始掃描」、同步列與結果區照常顯示、照常可用。
+- **變更即時生效，沒有「儲存」按鈕**——「完成」只是離開設定模式。
+
+設定清單**一列一個策略，列出 `GET /api/strategies` 回應的全部策略（含已隱藏的）**，依目前的排列順序由上而下。每一列由左至右：
+
+| 項目 | 內容 |
+|---|---|
+| 拖拉把手 | 符號「⠿」，表示整列可以按住拖拉 |
+| 策略名稱 | 取自 API 的 `name`，前端不寫死。已隱藏的策略名稱改為弱化文字色，其後接一個「已隱藏」標記 |
+| 「上移」「下移」 | 兩顆按鈕，各把該列往上／往下移一格。第一列的「上移」與最後一列的「下移」為 disabled |
+| 「隱藏」／「解除隱藏」 | 一顆按鈕：顯示中的策略為「隱藏」，已隱藏的為「解除隱藏」 |
+
+設定清單不畫靈敏度與任何參數輸入——那些只在卡片上。
+
+**隱藏**
+
+- 被隱藏的策略**不出現在選項區**，視為未勾選，**不會被送進掃描請求**。
+- **隱藏一個當下已勾選的策略時，它同時變為未勾選。**
+- **解除隱藏後卡片回到選項區、狀態為未勾選；它的靈敏度與各格輸入保留隱藏前的值**——與「取消勾選再勾回」是同一件事，隱藏不另外重設輸入。（卡片上的輸入本來就不持久化，重新整理後照舊回到 API 給的預設。）
+- **「全部解除隱藏」**一次把所有已隱藏的策略顯示回來，全部為未勾選，**不改變順序**。沒有任何策略被隱藏時這顆按鈕為 disabled。
+- **全部策略都被隱藏時**，選項區原本放卡片的位置顯示一行弱化文字「所有策略都已隱藏，請按「設定」解除隱藏」，「設定」按鈕照常保留。此時沒有任何策略被勾選，「開始掃描」依既有規則為 disabled、旁邊提示「請至少勾選一個策略」，送不出請求。
+
+**排序**
+
+- **拖拉**：按住一列拖到另一列上放開，該列即移到那個位置。指標落在目標列的上半時插在它前面、下半時插在它後面；拖拉途中以一條 `#3E8FD8` 的橫線標出放開後會落在哪兩列之間，被拖的那一列降低透明度至 60%。在清單外放開或按 Esc 取消時順序不變。
+- **鍵盤可操作的替代方式**：每一列的「上移」「下移」是一般按鈕，可用 Tab 聚焦、Enter 或空白鍵觸發，每按一次移一格。**移動後鍵盤焦點留在同一個策略的同一顆按鈕上**，可以連按；該鈕因為到頂或到底而變成 disabled 時，焦點改落在同一列的另一顆。
+- **已隱藏的策略照樣留在清單裡、照樣可以排序**：它記著自己的位置，解除隱藏後卡片就出現在那個位置。
+- **這個順序決定兩件事**：
+  1. 選項區卡片的排列（由左至右、由上至下）。
+  2. **掃描請求 `strategies` 的順序**——依卡片顯示順序送出已勾選的策略，不再取決於使用者點勾選框的先後。後端依送入順序回 `results`（見 `specs/backend/strategy-scan.md`），因此「命中策略與訊號日」欄內各策略的先後、「本次採用參數」那一行、資料不足與待確認各行的先後，都跟著掃描當下的卡片順序。
+
+**已有掃描結果時改設定**（隱藏、解除隱藏、排序）：結果區**保留不動、不自動重掃**，與「改動條件而未重掃」同一條原則——眼前這份結果說明的是送出當時的條件。下一次按「開始掃描」才以新的卡片與順序送出。
+
+**儲存**
+
+- 隱藏與順序存在瀏覽器的 `localStorage`，鍵為 `stock.strategy.cardSettings`，值為 JSON：`{"order": ["<code>", …], "hidden": ["<code>", …]}`。**一律以策略 `code` 記，不存名稱**——名稱是 API 的文案，會改。`order` 是設定清單由上而下的全部策略（含已隱藏的），`hidden` 是其中被隱藏的。
+- **每一次變更當下就寫入**；重新整理、關掉分頁再開都還在。它只存在這個瀏覽器：換瀏覽器、清除網站資料後回到預設，後端完全不知道這份設定。
+- 這與頁面層級「只看上市普通股」刻意不持久化（見 `specs/frontend/stock-list.md`）並不衝突：那個勾選框決定掃描與同步的母體，重新整理後回到預設是為了不讓人忘記自己縮小過範圍；這裡存的只是卡片要不要畫、畫在哪，被隱藏的策略本來就不會被掃。
+- **讀取**（進頁、策略清單回來時套用一次）：
+  - 沒有這個鍵、`localStorage` 讀取時丟出例外、內容不是合法 JSON、或形狀不符（不是物件、`order` 或 `hidden` 不是字串陣列）——一律**視為沒有設定：全部顯示、依 API 回應的順序**。頁面不得因此壞掉或顯示錯誤；損壞的內容留在原處，等使用者下一次改設定時被覆寫。
+  - `order` 中 API 已不存在的 `code` 忽略；同一個 `code` 重複出現時只取第一次。
+  - API 有、`order` 裡沒有的策略（之後新增的型態）：**預設顯示、排在最後**，彼此之間依 API 回應的順序。
+  - `hidden` 中 API 已不存在的 `code` 忽略。
+- **寫入失敗**（儲存空間不可用或已滿）：不顯示錯誤，這一次變更在目前這一頁照樣生效，只是重新整理後不在。
+
 #### 掃描後自動回測
 
 **本頁沒有「回測」按鈕。** 按下「開始掃描」、掃描成功且命中至少一檔時，前端**立刻自動**送出 `POST /api/strategies/backtest`（請求內容見「API 整合」），使用者不需要再做任何動作。回測結果（買進／賣出、報酬率、收益）就是看命中清單時真正要的資訊；掃描完還得再按一次按鈕，等於每一次掃描都多一個必做的步驟。
@@ -165,7 +217,7 @@ depends_on: [stock-list]
 
 **買進日與訊號日本來就不同，十二個型態皆然。**「命中策略與訊號日」顯示型態成立的那一天，買進日欄顯示確認完成之後第一個真正買得到的交易日——同一列上兩個日期不一致是正確的，不得把買進日改回顯示訊號日。上漲支撐差距最大：訊號日是起漲日 D，買進日是 D+`confirmBars`+1。
 
-**「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。策略的排列順序與勾選順序一致。
+**「命中策略與訊號日」逐策略列出，不合併成單一日期。** 一檔同時命中兩個策略時，兩個型態的成立日往往不同（例如箱型突破 `2026-08-28`、底底高 `2026-08-25`），把它折成一個日期會丟掉「哪個型態是什麼時候成立的」這個判讀時真正需要的資訊。策略的排列順序與掃描請求 `strategies` 的順序一致，即掃描當下選項區卡片的顯示順序（由左至右、由上至下），**不是使用者點勾選框的先後**。
 
 **法人籌碼型態必須標出是哪一方達標。** 每一筆寫成「{策略名稱}（{達標方}） {signalDate}」，達標方依該筆 `detail.matchedInvestors` 決定，兩方都有時以「／」連接：
 
@@ -594,6 +646,8 @@ depends_on: [stock-list]
 | 狀態 | 呈現 |
 |---|---|
 | 初次進入（未掃描） | 結果區顯示「選擇策略與區間後開始掃描」，條件區可操作 |
+| 設定模式 | 按「設定」後：選項區的卡片換成設定清單（全部策略，含已隱藏的），按鈕文字為「完成」，其左為「全部解除隱藏」；頁面其餘部分照常。按「完成」回到卡片 |
+| 全部策略皆隱藏 | 選項區顯示「所有策略都已隱藏，請按「設定」解除隱藏」，「設定」按鈕保留；「開始掃描」disabled 並提示「請至少勾選一個策略」 |
 | 掃描中 | 「開始掃描」disabled 並顯示掃描中狀態；已有結果時保留並降低透明度至 60% |
 | 有結果、回測中 | 掃描成功、自動回測進行中：合併表格只有代號／名稱與命中策略與訊號日兩欄，**沒有勾選框欄**，也沒有回測六欄；展開鈕照常顯示且可展開，子列此時只顯示該買進日，以及落在這個買進日的策略與各自的訊號日；「開始掃描」右側顯示「回測中…」，「開始掃描」仍可按 |
 | 已回測 | 表格最左的勾選框欄、右側六欄、標題右側三個總計標籤與標題列下方靠右的四個批次勾選框同時出現；四個批次框中「隱藏資料不齊（無賣出日）」「取消買進價高於 [金額] 元」「僅選取報酬率 [n] % 以上」三者預設勾選（兩格數字輸入因此 disabled，高價組為空時價格框改為 disabled 未勾選），初始勾選狀態為「納入計算的勾選框」那四步的結果，「取消全選」依推導呈未勾選；往下捲動時三個總計浮在畫面頂端，「買進價」「報酬率」「收益」表頭可點選排序，**初始排序為報酬率降冪**；展開狀態維持使用者當下的收合狀態，不強制展開也不強制收合 |
@@ -616,7 +670,8 @@ depends_on: [stock-list]
 | 進頁、同步完成後 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `lastSyncedAt` 顯示最後同步時間 |
 | 進頁、更新清單完成後 | `GET /api/stocks?page=1&size=1` — 只取 `total` 顯示「共 N 檔」，`size=1` 是因為此處只要總數，不要清單內容 |
 | 按「更新股票清單」 | `POST /api/stocks/universe/import` — 無 body；回應的 `totalActiveCount` / `insertedCount` / `updatedCount` / `industryCount` / `uncategorizedStockCount` 組成完成摘要，`industrySourceStatus` 決定是否附加產業別未更新的警示 |
-| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`，站上均線為 `maPeriods`，量多為 `increasePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
+| 按「設定」、隱藏／解除隱藏、全部解除隱藏、排序、按「完成」 | **不呼叫任何 API**——隱藏與順序只讀寫瀏覽器的 `localStorage`，`GET /api/strategies` 的回應不因此改變 |
+| 按「開始掃描」 | `POST /api/strategies/scan` — body `strategies[]`（**只含未隱藏且已勾選的策略，依選項區卡片的顯示順序排列**；有靈敏度的型態送 `code` + `preset` + `risePercent`，另加該型態各選用群組的 `require<Group>`——箱型突破因此一律帶 `requireVolume`；無靈敏度的型態送 `code` + 其 `params` 列出且未被選用群組關閉的欄位，不送 `preset`——累積上漲為 `days` + `risePercent`，反彈依「選用參數群組」一節決定，法人買賣超佔比為 `investors` + `windowDays` + `ratioPercent`，法人連續買超為 `investors` + `buyDays`，法人買超強度排名為 `investors` + `windowDays` + `topN`，MACD 黃金交叉為 `fastPeriod` + `slowPeriod`，KDJ 黃金交叉為 `jThreshold`，站上均線為 `maPeriods`，量多為 `increasePercent`）、`stockIds`、`commonStocksOnly`（取自頁面層級設定，僅「全市場」時帶）、`startDate`（起始週的週一）、`endDate`（結束週的週日；結束週為本週時為今日） |
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
 | 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
@@ -741,6 +796,13 @@ depends_on: [stock-list]
 | 「實際區間」提示文字 | `#93A4B8` |
 | 次要按鈕背景／文字／邊框 | `#1B2836` / `#E6EDF5` / `#26333F` |
 | 次要按鈕 hover 背景 | `#223347` |
+| 「設定」／「完成」／「全部解除隱藏」／「上移」「下移」／「隱藏」「解除隱藏」按鈕 | 與次要按鈕同值：背景 `#1B2836`、文字 `#E6EDF5`、邊框 `#26333F`、hover 背景 `#223347`；disabled 與 Disabled 按鈕同值 `#16202C` / `#4A5866` |
+| 設定清單列背景／邊框 | `#16202C` / `#26333F`（與策略卡片同值） |
+| 設定清單策略名稱（顯示中／已隱藏） | `#E6EDF5` / `#6B7C90` |
+| 設定清單「已隱藏」標記文字 | `#6B7C90` |
+| 設定清單拖拉把手「⠿」 | `#93A4B8` |
+| 設定清單拖拉落點指示線 | `#3E8FD8` |
+| 「所有策略都已隱藏…」提示文字 | `#6B7C90`（與空狀態說明同值） |
 | 主要按鈕背景／文字 | `#3E8FD8` / `#FFFFFF` |
 | 主要按鈕 hover 背景 | `#58A3E8` |
 | Disabled 按鈕背景／文字 | `#16202C` / `#4A5866` |
@@ -881,7 +943,7 @@ depends_on: [stock-list]
 - [x] 不論勾選幾個策略，結果區只出現**一張**表格，標題為「命中彙總 — 共 N 檔」；畫面上不存在任何以單一策略為標題的結果區塊
 - [x] 只勾一個策略時同樣是這張表，不再顯示該策略自己的明細表
 - [x] 同一檔股票只出現一列，標題的「共 N 檔」為去重後的檔數，不等於各策略 `matchedCount` 的加總
-- [x] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期；策略順序與勾選順序一致
+- [x] 同時命中兩個策略的股票，其「命中策略與訊號日」欄逐一列出兩個策略各自的名稱與 `signalDate`，不折成單一日期；策略順序與掃描請求 `strategies` 的順序一致
 - [x] 表格依該檔各策略中最新的 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
 - [x] 回測完成後，命中彙總表的列本體為手指游標；回測前（無勾選框欄）為預設箭頭；兩者 hover 背景皆為 `#1D2A38`
 - [x] `insufficientData` 與 `pendingConfirm` 的標的不出現在表格中，改以表格下方逐策略各一行呈現，行首標明策略名稱，色碼 `#D9A441`
@@ -1323,6 +1385,33 @@ depends_on: [stock-list]
 - [x] 其餘十一個型態在命中策略與訊號日欄的寫法完全不變（法人籌碼型態的達標方、站上均線的達標均線照舊，其餘不加括號）
 - [x] 本次未新增任何顏色：幅度文字與策略名稱同為策略標籤文字 `#E6EDF5`、訊號日仍為 `#93A4B8`，不套漲跌色，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 - [x] 命中彙總表的欄位幾何不因括號變長而錯位：每個表身儲存格的左右邊界與其表頭一致、同一列共用同一個 `top`，頁面不出現水平捲軸
+
+### 策略設定：隱藏與排序
+
+- [x] 條件區「策略」標題列最右邊有一顆「設定」按鈕，次要按鈕樣式（背景 `#1B2836`、文字 `#E6EDF5`、邊框 `#26333F`）；全頁唯一的主要按鈕仍是「開始掃描」。策略清單載入中或載入失敗時不出現
+- [x] 按「設定」後選項區的卡片換成設定清單，按鈕文字變成「完成」、其左出現「全部解除隱藏」；按「完成」回到卡片、按鈕文字變回「設定」。切換不發任何請求；重新整理後一律是卡片畫面
+- [x] 設定模式下股票範圍、區間、「開始掃描」、同步列與結果區仍在畫面上且可操作
+- [x] 設定清單一列一個策略，列出 `GET /api/strategies` 回應的全部十二個（含已隱藏的），名稱取自 API；每列由左至右為拖拉把手「⠿」、策略名稱、「上移」「下移」、「隱藏」或「解除隱藏」；清單內沒有靈敏度下拉或參數輸入
+- [x] 按某一列的「隱藏」：該列名稱轉為弱化文字色 `#6B7C90` 並標「已隱藏」、按鈕變成「解除隱藏」；按「完成」後選項區不再有那張卡片，其餘卡片照原順序遞補，頁面不出現水平捲軸
+- [x] 隱藏一個當下已勾選的策略時它同時變為未勾選：隨後掃描送出的 `strategies[]` 不含該策略的 `code`
+- [x] 按「解除隱藏」後該卡片回到選項區原本的位置、狀態為未勾選；隱藏前改過的靈敏度與輸入值仍在（以隱藏前把某格改成非預設值驗證）
+- [x] 「全部解除隱藏」一次把所有已隱藏的策略顯示回來、全部未勾選、順序不變；沒有任何策略被隱藏時該按鈕 disabled
+- [x] 以真實的滑鼠拖拉把一列拖到另一列的上半部放開，該列移到目標列之前；拖到下半部放開則移到目標列之後；拖拉途中出現 `#3E8FD8` 的落點指示線；在清單外放開時順序不變
+- [x] 第一列的「上移」與最後一列的「下移」為 disabled；其餘每按一次移一格
+- [x] 只用鍵盤可完成排序：Tab 聚焦到「上移」／「下移」後以 Enter 或空白鍵觸發，移動後焦點仍在同一策略的同一顆按鈕上、可連按；該鈕因到頂或到底變成 disabled 時焦點落在同列另一顆
+- [x] 已隱藏的列同樣可以拖拉與上移／下移；解除隱藏後卡片出現在它在清單中的位置
+- [x] 選項區卡片的順序（由左至右、由上至下）等於設定清單中未隱藏策略由上而下的順序
+- [x] 掃描請求 `strategies[]` 的順序等於已勾選卡片的顯示順序，與點勾選框的先後無關：把第十二張拖到第一位、先勾另一張再勾它，送出的第一筆仍是它
+- [x] 「本次採用參數」那一行與「命中策略與訊號日」欄內各策略的先後跟著該次請求的順序
+- [x] 已有掃描結果時隱藏、解除隱藏或重排，結果區內容不變、不發出任何請求
+- [x] 隱藏與順序在每次變更當下寫入 `localStorage` 的 `stock.strategy.cardSettings`，內容為 `{"order":[…],"hidden":[…]}`、元素為策略 `code`；重新整理後選項區與設定清單皆與重新整理前相同
+- [x] 把該鍵改成非 JSON（`{oops`）、形狀不符（`{"order":"x"}`、`[]`、`null`）後重新整理：十二張卡片全部顯示、依 API 順序，頁面無錯誤訊息、console 無未捕捉的例外；之後再改一次設定即以合法內容覆寫
+- [x] `order`／`hidden` 內含 API 沒有的 `code`（如 `NOT_A_STRATEGY`）時被忽略；`order` 缺少某個 API 有的策略時，該策略顯示並排在最後
+- [x] `localStorage` 寫入丟出例外時（以覆寫 `Storage.prototype.setItem` 使其丟出驗證）頁面不顯示錯誤，隱藏與排序在目前這一頁照樣生效
+- [x] 全部十二個策略都隱藏後按「完成」：選項區顯示「所有策略都已隱藏，請按「設定」解除隱藏」（`#6B7C90`），「設定」按鈕仍在，「開始掃描」disabled 且旁邊為「請至少勾選一個策略」
+- [x] 設定清單一列放不下時不產生水平捲軸；視窗寬 1280px 與 1000px 下頁面 `scrollWidth` 等於 `clientWidth`
+- [x] 本次未新增任何顏色：按鈕、清單列、名稱、標記、把手、指示線與提示文字全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 未隱藏、未重排時（沒有儲存的設定），十二張卡片的版面、控制項與送出的每一筆內容與本次改動前相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2583,5 +2672,63 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Self-review of the diff**: `detail` may be absent (`if (!detail) return null`); `increasePercent` is rendered only when it is a number, so a malformed detail falls back to the bare name instead of printing `NaN`; no new effect, timer, listener or request.
 
 **Housekeeping**: no test data created, no sync or backfill triggered; `stock_daily_price` 252198 and `stock` 1391 before and after. 8081 and 5174 stopped; 8080 / 5173 never touched. Built and verified by the `/code` worker itself, without a nested `frontend` agent.
+
+**Left unchecked**: none.
+
+### Increment 34 — 2026-10-11
+
+**Scope**: the 24 criteria of `### 策略設定：隱藏與排序` — a 「設定」 button at the far right of the 策略 option area opens a settings list where each strategy can be hidden / unhidden, all unhidden at once, and reordered by drag or 上移／下移; the option area then draws only the visible cards in that order. All 24 ticked. Frontend only: no backend, DBA or API change (`GET /api/strategies` and `POST /api/strategies/scan` are untouched).
+
+**Decisions the requirement did not state** (each is written into the contract sections above):
+- **In-place settings mode, not a dialog** — the card grid is swapped for the list and the button reads 「完成」, the same 設定／完成 wording the 真實交易 tab uses. A dialog would have needed a backdrop colour this page's `## Visual Style` does not have.
+- **「設定」 is a secondary button** (this page keeps 開始掃描 as its only primary button), unlike 真實交易's primary 「設定」.
+- **Scan request order is now the card order, no longer the order the boxes were ticked in.** `strategies[]` = ticked cards in display order, so 本次採用參數, the strategies inside one buy date of 命中策略與訊號日, and the 待確認／資料不足 lines follow the card order. This changes already-built behaviour (was tick order); the one `- [x]` criterion that said 「與勾選順序一致」 was reworded to 「與掃描請求 `strategies` 的順序一致」, which is what it always verified. With no saved settings and cards ticked in API order the request is byte-identical to before (checked against the pre-change build, below).
+- **Unhide keeps the inputs** the card had before it was hidden (same as untick / re-tick); nothing about inputs is persisted.
+- **全部解除隱藏 does not reset the order.** There is no "reset order" control — not asked for.
+- **Storage**: `localStorage` key `stock.strategy.cardSettings`, value `{"order":[code…],"hidden":[code…]}`; any unreadable / malformed value (including a missing `hidden`) is treated as no settings and left in place until the next change overwrites it; a failed write is silent.
+- **Hidden rows stay in the list at their own position**, greyed with 「已隱藏」, and remain sortable.
+- **Changing settings never touches an existing scan result** and fires no request.
+- The settings list is capped at 640px wide so the buttons stay near the names; a dragged row is shown at 60% opacity.
+
+**Files changed**:
+- `develop/frontend/src/hooks/useStrategyCardSettings.ts` (new) — load / save with the fallback rules, `applyCardOrder` (unknown codes dropped, duplicates once, missing strategies appended in API order), and the hook that writes on every change.
+- `develop/frontend/src/components/StrategyCardSettingsList.tsx` + `.css` (new) — the list: native HTML5 drag-and-drop (no new package; insertion point computed over the whole list so the gaps between rows count), 上移／下移 with focus restored to the same button after the row moves, 隱藏／解除隱藏. Presentational: it reports moves and toggles, the order lives in `StrategyTab`.
+- `develop/frontend/src/pages/StrategyTab.tsx` — `selectionOrder` renamed `checkedStrategyCodes` (membership only); `orderedCatalog` / `visibleCatalog` / `scanStrategyCodes` derived each render; the 策略 header row with 設定／完成／全部解除隱藏; cards map over `visibleCatalog`; the all-hidden line. The card markup itself is not touched.
+- `develop/frontend/src/pages/StockListPage.css` — header row and the all-hidden line (shares the loading line's rule).
+- `docs/frontend/strategy*` — storyboard regenerated, 13 → 17 steps: 設定 button on every frame, four new frames (open settings → hide KDJ 黃金交叉 → drag 量多 to 7th → 完成, 11 cards), later frames show the 11 cards in the new order. `SELF-CHECK PASS — 17/17`.
+
+**Method**: worker backend (this run's jar) on 8081 with the three startup jobs off and `app.real-trade.csv-path` pointed at a scratch copy; Vite on 5174 (`API_TARGET=http://localhost:8081`); Chromium via Playwright, viewport 1500x1000, real database, default range 2026-09-28 ~ 2026-10-11. Drags are real pointer input (`mouse.down` → `mouse.move` → `mouse.up`, Chromium firing the native dragstart / dragover / drop), keyboard steps are real `Tab` / `Enter` / `Space` presses. "live" = nothing intercepted; the four intercepted checks are marked. For criterion 24 the pre-change frontend (`git archive HEAD`) was served on 5175 against the same backend. No tests written or run. 109 scripted checks, 0 failing at the end; 0 page errors, 0 console errors.
+
+**Verification per criterion**
+1. Button — live: one button 「設定」 in the 策略 header row, right edge 1451 = card grid right edge 1451, vertically inside the header row; `rgb(27, 40, 54)` / `rgb(230, 237, 245)` / border `rgb(38, 51, 63)`; the only visible `.sl-btn-primary` on the tab is 開始掃描. **Intercepted**: `GET /api/strategies` held back → 「載入策略清單中…」 and no button, appears once released; request aborted → 「策略清單載入失敗，請重新整理頁面」 and no button.
+2. Mode switch — live: buttons become `全部解除隱藏 (disabled)`, `完成`; cards gone, list shown; 完成 → `設定` and 12 cards; 0 requests across the toggles; reload while in settings mode lands on the cards.
+3. Rest of the page — live: 股票範圍 / 區間 / 開始掃描 / 同步列 / 結果區 all visible in settings mode; switched to 指定股票, added 2330 and ran a real scan from inside settings mode (`200`, body `{"strategies":[{"code":"MACD_GOLDEN_CROSS","fastPeriod":5,"slowPeriod":20}],"stockIds":["2330"],…}`), list still shown, result rendered below.
+4. List — live: 12 rows, names in API order (箱型突破, 底底高, 上漲支撐, 反彈, 累積上漲, 法人買賣超佔比, 法人連續買超, 法人買超強度排名, MACD 黃金交叉, KDJ 黃金交叉, 站上均線, 量多); row children `⠿` / name / `上移 下移 隱藏`; no `select` or `input` inside the list.
+5. Hide — live: row text `⠿ | 箱型突破 | 已隱藏 | 上移 | 下移 | 解除隱藏`, name `rgb(107, 124, 144)`; after 完成 11 cards, the other eleven in their order; `scrollWidth == clientWidth`.
+6. Hiding a ticked strategy — live: 箱型突破 and MACD ticked, 箱型突破 hidden, real scan body `strategies` = `[MACD_GOLDEN_CROSS]` only.
+7. Unhide — live: card back at position 1, unticked; after re-ticking, preset `STRICT` and 漲幅門檻 `2.5` (both set before hiding) still there.
+8. 全部解除隱藏 — live: three hidden (反彈, KDJ 黃金交叉, 量多) → one click → 0 hidden, order unchanged, button disabled again, stored `"hidden":[]`; the three cards unticked, MACD (never hidden) still ticked.
+9. Drag — live: 量多 (12th) dragged onto the upper half of the first row → mid-drag `{"dragging":"量多","indicatorOn":"箱型突破","indicatorClass":"scs-row-drop-before","boxShadow":"rgb(62, 143, 216) 0px -4px 0px -1px"}` → dropped → first. Dragged onto the lower half of 上漲支撐 → line above the row after it → lands right after 上漲支撐. Released outside the list → order unchanged, line gone on leaving, no leftover drag class. `Esc` mid-drag → dragging class and line cleared, order unchanged.
+10. End buttons — live: over all 12 rows, 上移 disabled only on the first, 下移 only on the last.
+11. Keyboard only — live: from 完成, 6 `Tab` presses reach the 3rd row's 上移; `Enter` → 2nd, focus still on that row's 上移; `Space` → 1st, 上移 disabled and focus on the same row's 下移; `Enter` ×2 → 3rd, focus on 下移; `Enter` ×9 → last, 下移 disabled and focus on 上移; `Enter` ×9 → back to 3rd.
+12. Hidden rows sortable — live: hidden 法人買賣超佔比 moved by 上移 and then by drag to 2nd, still marked hidden; cards = the other eleven; after 解除隱藏 its card is the 2nd card.
+13. Card order = list order — live: card names equal the visible rows top to bottom, and DOM order is reading order (each card either lower, or same top and further right, than the previous).
+14. Request order — live, full market: 量多 dragged to first; ticked 站上均線 → 箱型突破 → 量多; body `strategies` = `VOLUME_SURGE, BOX_BREAKOUT, MA_BREAKOUT`; the response's `results` come back in that order.
+15. Results follow it — live, same scan (「命中彙總 — 共 1036 檔」): 本次採用參數 `量多（量增 ≥ 50%）・箱型突破（標準）・站上均線（MA5・MA20・MA60）`; in the 850 displayed hit cells, all 137 same-buy-date neighbours are in request order (量多→箱型突破 8, 量多→站上均線 123, 箱型突破→站上均線 6, none reversed); 待確認 lines 量多, 箱型突破, 站上均線. Across different buy dates a cell still lists newest first — the existing rule, unchanged.
+16. Results untouched — live: with that result on screen, hid 站上均線, pressed 下移 on 箱型突破 and dragged 量多; `.st-results` text identical before / after, 0 requests.
+17. Persistence — live: stored `{"order":["HIGHER_LOWS","BOX_BREAKOUT","RISING_SUPPORT","REBOUND","CUMULATIVE_RISE","INSTITUTIONAL_NET_RATIO","VOLUME_SURGE","INSTITUTIONAL_CONSECUTIVE_BUY","INSTITUTIONAL_STRENGTH_RANK","MACD_GOLDEN_CROSS","KDJ_GOLDEN_CROSS","MA_BREAKOUT"],"hidden":["MA_BREAKOUT"]}`; after reload the 11 cards and the 12 rows (order and hidden mark) are identical to before.
+18. Corrupted value — live, each written to the key and reloaded: `{oops`, `{"order":"x"}`, `[]`, `null`, `{"order":["VOLUME_SURGE"]}`, `{"order":[1,2],"hidden":[]}`, `""` → 12 cards in API order, no error box, 0 page errors, 0 console errors, value left as written. On top of `{oops`, hiding one strategy stored `{"order":[…12 API codes…],"hidden":["RISING_SUPPORT"]}`.
+19. Unknown / missing codes — live: `{"order":["NOT_A_STRATEGY","VOLUME_SURGE","BOX_BREAKOUT","VOLUME_SURGE","KDJ_GOLDEN_CROSS"],"hidden":["NOT_A_STRATEGY","KDJ_GOLDEN_CROSS"]}` → rows 量多, 箱型突破, KDJ 黃金交叉 (hidden), then the nine not named, in API order; cards = those minus KDJ.
+20. Write throws — live with `Storage.prototype.setItem` replaced by a thrower: hide + 上移 still applied on the page, no error box, 0 exceptions, key still absent; reload → defaults. Also `getItem` throwing from page start → 12 cards, API order, 0 exceptions.
+21. All hidden — live: 12 rows all marked; after 完成 the option area reads 「所有策略都已隱藏，請按「設定」解除隱藏」 in `rgb(107, 124, 144)`, 設定 still there, 開始掃描 disabled, hint 「請至少勾選一個策略」, a forced click sends nothing; 全部解除隱藏 brings 12 back.
+22. Widths — live at 1500 / 1280 / 1000 / 480: `scrollWidth == clientWidth` in settings mode and in card mode, and no row's content overflows it (rows wrap).
+23. Colours — live under `colorScheme` dark (`prefers-color-scheme: dark` true) and light (false): 設定 normal / hover, 完成, 全部解除隱藏 enabled / disabled, row background / border (shown and hidden), name shown / hidden, 已隱藏, ⠿, 上移 disabled, 下移, 隱藏, 解除隱藏, drop line, all-hidden line — every value identical in both; the 10 distinct colours used are all in `## Visual Style`: `#1B2836 #E6EDF5 #26333F #223347 #16202C #4A5866 #6B7C90 #93A4B8 #3E8FD8 #0F1620`.
+24. Unchanged by default — live against the pre-change build on 5175, no stored settings: card grid `outerHTML` identical untouched (11150 chars) and with all 12 ticked (11095 chars); every card has the same x, the same y relative to the first card, the same width and height; the scan body with all 12 ticked (**intercepted** — captured and aborted, so no twelve-strategy scan was run twice) is identical, twelve entries in API order. One difference outside the cards: the 策略 header row is now as tall as its button (32px, was 19px), so the grid starts 13px lower.
+
+**Build / lint**: `npm run build` clean (tsc + vite). `npm run lint`: only the pre-existing `react(set-state-in-effect)` warning in `StrategyTab.tsx`, not in this diff. `package.json` / `package-lock.json` untouched (`npm ci`).
+
+**Self-review of the diff** (code-quality): the two `catch` blocks in the storage hook swallow on purpose and say why — the spec defines both failures as "carry on with defaults / in memory"; no timer, listener or request added; drag state is cleared on `dragend`, which also fires on cancel; every handler reads the order from the current render, and React flushes between discrete events, which the 9-presses-in-a-row keyboard run exercises; nothing is recomputed per row beyond a 12-element pass.
+
+**Housekeeping**: no test data created, no sync or backfill triggered; `stock` 1391 and `stock_daily_price` 252198 before and after. `data/real-trades.csv` not modified (the backend read a scratch copy). The worker backend logged 56 `ClientAbortException`s, all from the check script reloading the page or closing a browser context while a GET was still being written; no other error. 8081, 5174 and 5175 stopped; 8080 / 5173 never touched. Built and verified by the `/code` worker itself, without a nested `frontend` agent.
 
 **Left unchecked**: none.
