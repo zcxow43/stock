@@ -11,9 +11,10 @@ import java.time.LocalDate;
  * the request; the response never carries a `signalDate` field (specs/backend/strategy-backtest.md,
  * "買進日由請求指定，本端點不推算").
  *
- * <p>`buyFee`/`cost` are present whenever `buyPrice` is non-null, even when there is no sell date
- * yet (a buy still costs a fee the moment it happens); `sellFee`/`sellTax`/`profit`/`returnPercent`
- * are present only when `sellDate` is non-null (specs/backend/strategy-backtest.md, "交易成本").
+ * <p>`buyPrice` and `sellDate` are always both present or both null: an item that could be bought
+ * always gets a sell — when no later trading day exists it is sold at the buy day's own open, so
+ * `sellDate` equals `buyDate` and `sellPrice` equals `buyPrice` (specs/backend/strategy-backtest.md,
+ * "窗口為空時的退路"). The fee/tax/cost/profit/returnPercent fields follow the same all-or-nothing rule.
  */
 public class BacktestResultItemDto {
 

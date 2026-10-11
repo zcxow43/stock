@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）"
 depends_on: [stock-list]
 ---
 
@@ -206,7 +206,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 命中策略與訊號日 | 該檔命中的每一個策略，逐一列出「{策略名稱} {signalDate}」，以 `・` 分隔 | 一律 |
 | 買進日 | 該筆的 `buyDate`——掃描回應各筆回報的進場日，回測回應原樣帶回。十二個型態一律為**確認完成日之後的下一個交易日**（上漲支撐為 D+`confirmBars`+1，其餘十一個型態為訊號日的下一個交易日；見 `specs/backend/strategy-scan.md`） | 回測後 |
 | 買進價 | 回測回應該筆的 `buyPrice`，即**買進日的開盤價**，兩位小數 | 回測後 |
-| 賣出日 | 回測回應該筆的 `sellDate` | 回測後 |
+| 賣出日 | 回測回應該筆的 `sellDate`；買進日就是該檔最新一個交易日時它等於買進日（見「買進日即最新交易日的筆」） | 回測後 |
 | 賣出價 | 回測回應該筆的 `sellPrice`，兩位小數 | 回測後 |
 | 報酬率 | 回測回應該筆的 `returnPercent`，兩位小數加 `%` | 回測後 |
 | 收益 | 回測回應該筆的 `profit`（已扣手續費與證交稅，見 `specs/backend/strategy-backtest.md` 的「交易成本」），千分位、不帶小數 | 回測後 |
@@ -437,7 +437,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 
 批次勾選框列的第二個，標示為「取消買進價高於 [金額] 元」，**金額是標示中間的一格數字輸入**，進頁時預設 `500`。**打勾代表「買進價高於這個金額的筆目前已取消勾選並被隱藏」**。
 
-**作用範圍（以下稱「高價組」）**：`buyPrice` **大於**輸入金額的每一**筆**——單筆列與每一個子列各自判斷，包含摺疊中的子列與無法回測（`sellDate` 為 `null`）但 `buyPrice` 有值的筆。`buyPrice` 為 `null` 的筆不屬於高價組。
+**作用範圍（以下稱「高價組」）**：`buyPrice` **大於**輸入金額的每一**筆**——單筆列與每一個子列各自判斷，包含摺疊中的子列。`buyPrice` 為 `null` 的筆（無法回測）不屬於高價組。
 
 - **不含等於**：金額 `500` 時，`buyPrice` 恰為 `500.00` 的筆**不**屬於高價組。標示文字因此寫「高於」而不寫「以上」——中文的「以上」通常包含本數，寫成「以上」會讓使用者以為 500 元那筆也會被取消。
 - **逐筆判斷，不看父列均價**：一檔兩筆買進價分別為 480 與 520 時，只有 520 那筆屬於高價組；取消後父列依既有連動規則呈**半選**。父列的成本加權均價只是顯示用的合計，拿它判斷會讓一筆 480 元的部位被一起取消。
@@ -517,7 +517,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 
 批次勾選框列的第五個（最右）。**打勾代表「沒有賣出日的筆目前被隱藏」**。
 
-**作用範圍（以下稱「資料不齊組」）**：回測回應中 `sellDate` 為 `null` 的每一**筆**——逐筆判斷，包含子列、摺疊中的子列，以及 `buyPrice` 也為 `null` 的筆。
+**作用範圍（以下稱「資料不齊組」）**：回測回應中 `sellDate` 為 `null` 的每一**筆**——逐筆判斷，包含子列與摺疊中的子列。這些是買進日當天沒有成交價（無資料列，或開盤價為 `0`）而買不進去的筆，`buyPrice` 同樣為 `null`（見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）。**買進日就是該檔最新一個交易日的筆不屬於本組**：它有賣出日（見「買進日即最新交易日的筆」）。
 
 | 操作 | 結果 |
 |---|---|
@@ -525,9 +525,9 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 取消勾選 | 資料不齊組的每一筆重新顯示 |
 
 - **只隱藏，不改變任何一筆的勾選狀態**：這些筆沒有賣出日，本來就不計入三個總計，取消它們的勾選不會改變任何數字；只做隱藏，使用者取消這個框時看到的勾選狀態就是他自己留下的。
-- **每次回測成功時預設勾選**（含「重試回測」成功）：資料不齊的筆一開始就是藏著的。它們沒有結果可看（例如買進日就是今天），全市場掃描時會把有數字的列擠到下面。
+- **每次回測成功時預設勾選**（含「重試回測」成功）：資料不齊的筆一開始就是藏著的。它們沒有結果可看（買進日那天該檔沒有成交價），留在表上只會把有數字的列擠到下面。
 - **記住的開關**，與價格框同一原則；「取消全選」被點時（不論勾選或取消勾選）它變為未勾選，這些筆重新顯示。
-- **資料不齊組為空時 disabled（未勾選）**。
+- **資料不齊組為空時 disabled（未勾選）**。這是最常見的情形：正常流程下每一筆的買進日都有成交價，資料不齊組只在行情資料於掃描後被改動、或買進日該檔沒有成交時才非空。
 - 「另 N 筆尚無可賣出交易日，未計入」照常顯示，N 不因隱藏而改變——隱藏不改變它們未計入的事實。
 - **與列勾選框同生同滅**；重新掃描時移除，下一次回測成功時再以勾選出現。
 - 切換它完全在前端完成，**不重新呼叫任何端點**。
@@ -549,7 +549,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 總報酬率 | `總收益 ÷ 總成本 × 100` | 兩位小數加 `%` |
 | 總收益（每筆 1 張） | 已勾選且可回測的各**筆** `profit` 總和（含展開後的子筆） | 千分位、不帶小數 |
 
-三個標籤的涵蓋範圍一律是**已勾選且可回測**的筆——一檔多筆時算的是它展開後的各子筆，不是父列一筆。`lotSize`、各筆 `cost` 與兩個費率皆取自回應，前端不寫死 `1000`、不自行計算手續費或證交稅。**無法回測的筆不計入總成本**，即使它有買進價：它沒有收益可以對應，把它的成本放進分母會讓總報酬率被一筆沒賣出的部位稀釋。**摺疊狀態不影響總計**：一筆有沒有計入只看它自己的勾選框，與父列當下是展開還是收合無關。**排序也不影響總計。**
+三個標籤的涵蓋範圍一律是**已勾選且可回測**的筆——一檔多筆時算的是它展開後的各子筆，不是父列一筆。`lotSize`、各筆 `cost` 與兩個費率皆取自回應，前端不寫死 `1000`、不自行計算手續費或證交稅。**無法回測的筆（`sellDate` 為 `null`）不計入三個總計**：它沒有成本也沒有收益可以對應。買進日即最新交易日的筆有賣出日，是可回測的筆，勾選時照常計入。**摺疊狀態不影響總計**：一筆有沒有計入只看它自己的勾選框，與父列當下是展開還是收合無關。**排序也不影響總計。**
 
 **三個標籤必須用同一個涵蓋範圍。** 總成本若改成固定顯示回應的 `totalCost`、不隨勾選變動，使用者勾掉幾檔後拿「總收益 ÷ 總成本」驗算，得到的數字就會和畫面上的總報酬率對不起來。
 
@@ -569,11 +569,27 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 
 **漲跌色一律沿用全站規則**：報酬率與收益為正值時上漲色 `#E04B45`、負值下跌色 `#16A75C`、為 `0` 時次要文字色 `#93A4B8`。總報酬率與總收益兩個標籤同此規則。**總成本不是漲跌值，不套漲跌色**，恆為主要文字色 `#E6EDF5`——成本永遠是正數，套上紅色會被讀成「賺錢」。**這指的是畫面上實際呈現的顏色**，不是儲存格上有沒有掛對應的樣式類別——表格儲存格的預設文字色若以更高的權重宣告，會把漲跌色蓋回主要文字色 `#E6EDF5`，類別掛對了畫面照樣是白字。驗收一律以實際渲染出的顏色為準。
 
-**無法回測的標的仍屬於命中清單**。顯示時其賣出日／賣出價／報酬率／收益四欄皆為弱化色 `#6B7C90` 的「—」（回應中這四個欄位為 `null`，見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）；買進日照常顯示該筆的買進日，買進價在回應的 `buyPrice` 為 `null` 時同樣顯示「—」。它們**預設由「隱藏資料不齊（無賣出日）」隱藏**，取消勾選該框即出現。**隱藏不等於從結果中移除**：「共 N 檔」照算，並以「另 K 筆已隱藏」說明表上少了多少列——拿掉它們卻不說，會讓命中檔數與表格列數對不起來。
+##### 買進日即最新交易日的筆
+
+買進日就是該檔最新一個交易日時，其後還沒有任何可賣出的交易日。回測對這種筆**以買進日的開盤價賣出**（`specs/backend/strategy-backtest.md` 的「窗口為空時的退路」），回應中它的 `sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`，`returnPercent` 與 `profit` 為只含手續費與證交稅的負值（約 `−0.58%`）。這是使用者 2026-10-11 的決定：在此之前這種筆沒有賣出日、預設被「隱藏資料不齊（無賣出日）」藏起來，最新的那一批命中因此從表上消失。
+
+**畫面把它當成一筆普通的可回測筆，不做任何特殊處理：**
+
+- **六欄照回應顯示**：買進日欄與賣出日欄是同一天，買進價與賣出價是同一個數字，報酬率與收益是負值、套下跌色 `#16A75C`。四欄都有數字，沒有「—」。
+- **不加任何標記、圖示或說明文字。** 同一列上兩個相同的日期與兩個相同的價格，已經說明了它是當天買、當天以同價賣；前端也不自行判斷「這一筆是不是退路」，一律原樣顯示回應的欄位。
+- **不屬於資料不齊組**：不被「隱藏資料不齊（無賣出日）」隱藏，不計入「另 N 筆尚無可賣出交易日，未計入」。
+- **照常受其餘批次框影響**，與任何一筆可回測的筆相同：買進價高於門檻時被「取消買進價高於 N 元」取消勾選並隱藏；報酬率低於門檻時被「僅選取報酬率 n% 以上」取消勾選（不隱藏）；所屬股票非全符合時被「僅選取全符合」取消勾選（不隱藏）。
+- **因此在預設狀態下它出現在表上，但未勾選、整列反灰**：報酬率門檻預設 `2`，它的報酬率是負的，回測成功當下就被第 4 步取消勾選，計入「另 M 筆未勾選，未計入」而不計入三個總計。手動勾回它、或取消勾選報酬率框，它的 `cost` 與 `profit` 就計入總計。
+- **排序時它是一個普通的數值**，不是「—」：依買進價、報酬率、收益排序時落在它的數值應在的位置。
+- **一檔多筆時它是一個普通的子列**，父列逐行日期照常列出它的買進日與賣出日（同一天）。
+
+##### 無法回測的標的與未計入的說明
+
+**無法回測的標的仍屬於命中清單**。無法回測指回應中 `buyPrice` 與 `sellDate` 皆為 `null` 的筆——買進日當天沒有成交價（見 `specs/backend/strategy-backtest.md` 的「無法回測的標的」）。顯示時其買進價／賣出日／賣出價／報酬率／收益五欄皆為弱化色 `#6B7C90` 的「—」，買進日照常顯示該筆的買進日。它們**預設由「隱藏資料不齊（無賣出日）」隱藏**，取消勾選該框即出現。**隱藏不等於從結果中移除**：「共 N 檔」照算，並以「另 K 筆已隱藏」說明表上少了多少列——拿掉它們卻不說，會讓命中檔數與表格列數對不起來。
 
 **總計標籤必須說出有幾檔沒算進去，以及為什麼。** 未計入的原因有兩種，兩者的意義不同，必須分開陳述——一個是系統算不出來，一個是使用者自己排除的：
 
-- 有筆無法回測時（回應中 `sellDate` 為 `null`），加一行「另 N 筆尚無可賣出交易日，未計入」。
+- 有筆無法回測時（回應中 `sellDate` 為 `null`），加一行「另 N 筆尚無可賣出交易日，未計入」。N 只數 `sellDate` 為 `null` 的筆；買進日即最新交易日的筆有賣出日，不在其中。
 - 有筆被取消勾選時，加一行「另 M 筆未勾選，未計入」。
 - 有筆被隱藏時，另加一行「另 K 筆已隱藏」。這一行說的是「表上看不到」，與前兩行說的「不計入」是不同的事，各自計數：一筆可以同時出現在「未勾選」與「已隱藏」兩行。
 
@@ -1412,6 +1428,18 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 設定清單一列放不下時不產生水平捲軸；視窗寬 1280px 與 1000px 下頁面 `scrollWidth` 等於 `clientWidth`
 - [x] 本次未新增任何顏色：按鈕、清單列、名稱、標記、把手、指示線與提示文字全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 - [x] 未隱藏、未重排時（沒有儲存的設定），十二張卡片的版面、控制項與送出的每一筆內容與本次改動前相同
+
+### 買進日即最新交易日的筆
+
+- [x] 以一次命中落在最新交易日的真實掃描驗證：買進日為該檔最新一個交易日、買進價不高於價格門檻的筆，回測完成後在「隱藏資料不齊（無賣出日）」維持預設狀態下**出現在表上**
+- [x] 該筆的買進日與賣出日顯示為同一天、買進價與賣出價顯示為同一個數字，四欄皆為數字而非「—」，值等於回測回應該筆的 `buyDate`／`sellDate`／`buyPrice`／`sellPrice`
+- [x] 該筆的報酬率與收益顯示回應的負值；勾選時實際渲染為下跌色 `#16A75C`，未勾選時隨整列為 `#6B7C90`
+- [x] 回測成功當下該筆**未勾選、整列反灰、不隱藏**（被預設勾選的「僅選取報酬率 [2] % 以上」取消），計入「另 M 筆未勾選，未計入」，不計入三個總計
+- [x] 該筆不計入「另 N 筆尚無可賣出交易日，未計入」；回測回應沒有任何 `sellDate` 為 `null` 的筆時，該行不顯示，「隱藏資料不齊（無賣出日）」為 disabled 且未勾選
+- [x] 手動勾回該筆後，三個總計就地含入它的 `cost` 與 `profit`，不重新呼叫任何端點
+- [x] 取消全部批次框使每一筆皆勾選且無隱藏時，畫面上的總成本／總報酬率／總收益等於回應的 `totalCost`／`totalReturnPercent`／`totalProfit`（回應的彙總已含這種筆）
+- [x] 該筆列上沒有任何額外的標記、圖示或說明文字，與其他可回測筆的列結構相同
+- [x] 回應中 `sellDate` 為 `null` 的筆（以攔截回測回應注入一筆驗證）仍由「隱藏資料不齊（無賣出日）」預設隱藏、仍計入「另 N 筆尚無可賣出交易日，未計入」，取消勾選該框後出現且五欄為 `#6B7C90` 的「—」
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -2730,5 +2758,35 @@ Total test count rose from 362 (Increment 18's own tail) to 363 — exactly one 
 **Self-review of the diff** (code-quality): the two `catch` blocks in the storage hook swallow on purpose and say why — the spec defines both failures as "carry on with defaults / in memory"; no timer, listener or request added; drag state is cleared on `dragend`, which also fires on cancel; every handler reads the order from the current render, and React flushes between discrete events, which the 9-presses-in-a-row keyboard run exercises; nothing is recomputed per row beyond a 12-element pass.
 
 **Housekeeping**: no test data created, no sync or backfill triggered; `stock` 1391 and `stock_daily_price` 252198 before and after. `data/real-trades.csv` not modified (the backend read a scratch copy). The worker backend logged 56 `ClientAbortException`s, all from the check script reloading the page or closing a browser context while a GET was still being written; no other error. 8081, 5174 and 5175 stopped; 8080 / 5173 never touched. Built and verified by the `/code` worker itself, without a nested `frontend` agent.
+
+**Left unchecked**: none.
+
+### Increment 35 — 2026-10-11
+
+**Scope**: the 9 criteria under「買進日即最新交易日的筆」. The backend now sells an item whose buy date is the stock's latest trading day at that day's open (`specs/backend/strategy-backtest.md`「窗口為空時的退路」), so the item has a `sellDate` and is no longer part of the 資料不齊組.
+
+**Files changed**: `develop/frontend/src/api/strategies.ts` and `develop/frontend/src/pages/StrategyTab.tsx` — comments only (the `BacktestResultItem` field docs and the 高價組 comment described the old「has a buy price but no sell date」case). **No behaviour code changed**: every rule on this screen — the 資料不齊組, the「尚無可賣出交易日」count, the totals, the dash rendering — was already keyed on `sellDate === null`, so the new rows fall on the normal path by themselves.
+
+**Decisions the requirement did not state**:
+- **No marker, icon or note on these rows**, and the frontend does not detect the fallback at all; it renders the response as is. Two identical dates and two identical prices on one row already say what happened, and the backend adds no flag field (see that spec).
+- **The copy「另 N 筆尚無可賣出交易日，未計入」and the label「隱藏資料不齊（無賣出日）」are unchanged.** They now only ever apply to items that could not be bought on the buy date (no price row, or an open of 0), which a normal scan does not produce — so the line is normally absent and the box normally disabled.
+- **These rows start unchecked**, because the default「僅選取報酬率 [2] % 以上」unticks any row below 2% and theirs is about −0.58%. That is the existing rule applied unchanged, not a new one; they are on the table, greyed, and one click ticks them back.
+- Two already-checked criteria now describe a case that can no longer occur and were left as they are (not contradicted, just vacuous):「無法回測的筆…不計入總成本，即使其 `buyPrice` 有值」and the「無法回測但有買進價的筆」clause of the 高價組 criterion. No checked criterion in this spec was reworded.
+
+**Live verification** — `npm run build` clean (tsc + vite). Headless Chromium (Playwright) against `npm run dev -- --port 5174` with `API_TARGET=http://localhost:8081`, the worker backend on 8081, the real database. Flow: 策略 tab → tick MACD 黃金交叉 → 開始掃描 with the default range (上週～本週, 全市場) → automatic 回測. Scan: 347 hits, buy dates 2026-09-30 … 2026-10-08; 42 of them buy on 2026-10-08, the latest trading day. Backtest response: 347 items, `backtestedCount` 347, 42 with `sellDate === buyDate`, none with `sellDate: null`; `totalCost` 84091947, `totalReturnPercent` -1.65, `totalProfit` -1385801.
+
+1. Visible with the hide box in its default state — the 40 fallback items whose `buyPrice` ≤ 500 are all on the table (40/40); the other 2 are above 500 and hidden by the price box like any other row. Before this change all 42 were hidden.
+2. Same day, same price, no dash — for all 40, 買進日 = 賣出日 = `2026-10-08`, 買進價 = 賣出價, and the four cells equal the response's `buyDate`／`sellDate`／`buyPrice`／`sellPrice`.
+3. Negative values, real colours — 報酬率／收益 equal the response (e.g. `1104`: `-0.58%` / `-156`). Ticked: computed colour `rgb(22, 167, 92)` = `#16A75C` on both cells. Unticked: `rgb(107, 124, 144)` = `#6B7C90`.
+4. Start unchecked, greyed, not hidden — all 40 have an unticked checkbox and `st-row-unchecked`; the note reads「另 277 筆未勾選，未計入」, 277 = every item with `buyPrice` > 500 or `returnPercent` < 2, which includes all 42.
+5. No「尚無可賣出交易日」line;「另 25 筆已隱藏」= exactly the items above 500;「隱藏資料不齊（無賣出日）」is `disabled` and unchecked.
+6. Ticking one back — clicking the `1104` row (cost 26738, profit -156): 總成本 6,428,692 → 6,455,430 (+26,738), 總收益 541,502 → 541,346 (−156), 總報酬率 8.42% → 8.39%; no `/api` request fired.
+7. All ticked, nothing hidden (取消全選 on, then off) — 347 rows shown, all ticked; totals `84,091,947` / `-1.65%` / `-1,385,801`, equal to the response's `totalCost`／`totalReturnPercent`／`totalProfit`; only the「收益已扣…」line remains under the totals; no `/api` request fired.
+8. No extra markup — a fallback row has the same 10 cells and the same child-element structure as a normal row.
+9. `sellDate: null` still handled — **intercepted**: the real backtest response with one item (`2546` / 2026-10-07) rewritten to all-`null`. It is hidden on arrival, the hide box is ticked and enabled, the notes read「另 1 筆尚無可賣出交易日，未計入」and「另 26 筆已隱藏」. Unticking the box shows the row: 買進日 `2026-10-07`, the other five cells「—」in `rgb(107, 124, 144)`; the「尚無可賣出交易日」line is unchanged.
+
+**Storyboard** (`docs/frontend/strategy`): steps 10–17 re-drawn. 緯創 (buys on the mockup's latest day, 08-30) used to be the hidden no-sell-date row; it is now a normal row sold on 08-30 at 118.50 (`-0.58%` / `-691`), unticked by the 2% box from step 10 on, and the hide box is drawn disabled. Counts and totals follow: step 10「另 6 筆未勾選」「另 3 筆已隱藏」, step 15 all-ticked totals 4,174,937 / +1.06% / +44,215. `SELF-CHECK PASS — 17/17`.
+
+**Housekeeping**: 8081 and 5174 stopped; 8080 / 5173 never touched. No sync or backfill triggered. `data/real-trades.csv` not modified (the backend read a scratch copy). Built and verified by the `/code` worker itself, without a nested `frontend` agent.
 
 **Left unchecked**: none.

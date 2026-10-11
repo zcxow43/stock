@@ -2113,9 +2113,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // ---------- 「取消買進價高於 N 元」勾選框 ----------
   const priceThresholdInvalid = isPriceThresholdInputInvalid(priceThresholdInput)
   const priceThresholdAmount = priceThresholdInvalid ? null : Number(priceThresholdInput)
-  // 高價組：`buyPrice` 嚴格大於金額的每一筆——單筆列與每一個子列各自判斷，包含摺疊中的子列
-  // 與無法回測（`sellDate` 為 null）但 `buyPrice` 有值的筆；`buyPrice` 為 null 的筆一律不
-  // 屬於高價組。與回測剛完成時的預設初始化共用 `computeHighPriceGroupKeys`（見
+  // 高價組：`buyPrice` 嚴格大於金額的每一筆——單筆列與每一個子列各自判斷，包含摺疊中的子列；
+  // `buyPrice` 為 null 的筆（無法回測）一律不屬於高價組。與回測剛完成時的預設初始化共用 `computeHighPriceGroupKeys`（見
   // `applyBacktestDefaults`），不看父列的成本加權均價——「逐筆判斷，不看父列均價」。
   const highPriceGroupKeys = computeHighPriceGroupKeys(allItemKeys, backtestItemsByKey, priceThresholdAmount)
   // 高價組為空、或金額本身不合法時 disabled（未勾選）——沒有東西可以作用，或連範圍都算不出來。

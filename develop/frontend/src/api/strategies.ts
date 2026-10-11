@@ -413,11 +413,14 @@ export interface BacktestResultItem {
   /** Echoed verbatim from the request's own `buyDate` — the response never carries a
    * `signalDate` field (specs/backend/strategy-backtest.md「回應不含 signalDate」). */
   buyDate: string
-  /** `null` when the buy date itself has no price row (see
-   * specs/backend/strategy-backtest.md「無法回測的標的」). */
+  /** `null` when the stock could not be bought on the buy date — no price row that day, or an
+   * open of 0 (specs/backend/strategy-backtest.md「無法回測的標的」). The item stays in `items`
+   * and must still render, just with dashes. */
   buyPrice: number | null
-  /** `null` when the stock has no sellable trading day after its buy date — it stays
-   * in `items` and must still render, just with dashes, per the same spec section. */
+  /** `null` exactly when `buyPrice` is `null`. When the buy date is the stock's latest trading
+   * day there is no later day to sell on, and the backend sells at the buy day's own open:
+   * `sellDate === buyDate`, `sellPrice === buyPrice`, a small negative return that is fees and
+   * tax only (同一份 spec「窗口為空時的退路」). The frontend renders that like any other item. */
   sellDate: string | null
   sellPrice: number | null
   /** `profit ÷ cost × 100`, already net of trading cost — the frontend never derives this
@@ -427,8 +430,7 @@ export interface BacktestResultItem {
    * when unbacktestable. The frontend renders this value as-is; it must never recompute a
    * gross `(sellPrice − buyPrice) × lotSize` figure itself. */
   profit: number | null
-  /** Buy-side brokerage fee (元); present whenever `buyPrice` is non-null, independent of
-   * whether a sell day was found. */
+  /** Buy-side brokerage fee (元); present whenever `buyPrice` is non-null. */
   buyFee: number | null
   /** Sell-side brokerage fee (元); `null` whenever `sellDate` is `null`. */
   sellFee: number | null

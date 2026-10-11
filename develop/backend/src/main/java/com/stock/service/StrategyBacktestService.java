@@ -113,32 +113,36 @@ public class StrategyBacktestService {
             BigDecimal buyPrice = findBuyPrice(rows, item.getBuyDate());
             resultItem.setBuyPrice(buyPrice);
 
+            // A null buyPrice (no row that day, or a 0 open) is the only way an item ends up
+            // unbacktestable: every item that could be bought gets a full result.
             if (buyPrice != null) {
-                // buyFee/cost exist the moment there is a buyPrice at all — a buy has already cost
-                // a fee even when no sell day exists yet (specs/backend/strategy-backtest.md,
-                // "buyFee 與 cost 是「買進日」發生了什麼，不是「賣出日」發生了什麼").
                 BigDecimal buyFee = TradingCostCalculator.fee(buyPrice, LOT_SIZE);
                 BigDecimal cost = TradingCostCalculator.cost(buyPrice, LOT_SIZE, buyFee);
                 resultItem.setBuyFee(buyFee);
                 resultItem.setCost(cost);
 
                 SellPick pick = findSellPick(rows, item.getBuyDate());
-                if (pick != null) {
-                    BigDecimal sellFee = TradingCostCalculator.fee(pick.openPrice, LOT_SIZE);
-                    BigDecimal sellTax = TradingCostCalculator.tax(pick.openPrice, LOT_SIZE);
-                    BigDecimal profit = TradingCostCalculator.profit(pick.openPrice, LOT_SIZE, sellFee, sellTax, cost);
-                    BigDecimal returnPercent = TradingCostCalculator.returnPercent(profit, cost);
-                    resultItem.setSellDate(pick.tradeDate);
-                    resultItem.setSellPrice(pick.openPrice);
-                    resultItem.setSellFee(sellFee);
-                    resultItem.setSellTax(sellTax);
-                    resultItem.setReturnPercent(returnPercent);
-                    resultItem.setProfit(profit);
-
-                    totalCost = totalCost.add(cost);
-                    totalProfit = totalProfit.add(profit);
-                    backtestedCount++;
+                if (pick == null) {
+                    // Empty sell window (the buy day is the stock's last traded day): sell at the
+                    // last traded day's open, which is the buy day itself — sellDate == buyDate,
+                    // sellPrice == buyPrice. A fallback for an empty window only, never a floor
+                    // under a real pick (specs/backend/strategy-backtest.md, "窗口為空時的退路").
+                    pick = new SellPick(item.getBuyDate(), buyPrice);
                 }
+                BigDecimal sellFee = TradingCostCalculator.fee(pick.openPrice, LOT_SIZE);
+                BigDecimal sellTax = TradingCostCalculator.tax(pick.openPrice, LOT_SIZE);
+                BigDecimal profit = TradingCostCalculator.profit(pick.openPrice, LOT_SIZE, sellFee, sellTax, cost);
+                BigDecimal returnPercent = TradingCostCalculator.returnPercent(profit, cost);
+                resultItem.setSellDate(pick.tradeDate);
+                resultItem.setSellPrice(pick.openPrice);
+                resultItem.setSellFee(sellFee);
+                resultItem.setSellTax(sellTax);
+                resultItem.setReturnPercent(returnPercent);
+                resultItem.setProfit(profit);
+
+                totalCost = totalCost.add(cost);
+                totalProfit = totalProfit.add(profit);
+                backtestedCount++;
             }
             resultItems.add(resultItem);
         }
@@ -234,8 +238,8 @@ public class StrategyBacktestService {
 
     /**
      * The buy day's own OPEN price, or null when that stock has no row for that exact trade date
-     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 2) or when that row's open is not
-     * positive (case 3 — a 0 means the stock did not trade that day, not that it was worth 0; see
+     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 1) or when that row's open is not
+     * positive (case 2 — a 0 means the stock did not trade that day, not that it was worth 0; see
      * "價格為 0 的日子不是行情"). The check and the returned price are both the OPEN column — the
      * close price is irrelevant here even when it is itself 0 or non-zero (specs/backend/
      * strategy-backtest.md, "買進價改為買進日開盤價"). Returning null for the 0 case is what keeps
@@ -261,7 +265,8 @@ public class StrategyBacktestService {
      * the batched query), and the earliest trade date it occurs on. `rows` is ascending by
      * trade_date, so only updating on a strictly-greater open keeps the first (earliest) occurrence
      * of a tied maximum — specs/backend/strategy-backtest.md, "同值取最早". Returns null when no
-     * trading day with a real (positive) open exists after buyDate (case 1 of "無法回測的標的").
+     * trading day with a real (positive) open exists after buyDate — the empty window the caller
+     * resolves with "窗口為空時的退路".
      */
     private SellPick findSellPick(List<StockDailyPrice> rows, LocalDate buyDate) {
         BigDecimal maxOpen = null;

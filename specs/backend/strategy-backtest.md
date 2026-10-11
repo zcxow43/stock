@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略命中回測 API"
-requirement: "策略掃描結果回測：以每一筆命中的進場日（`buyDate`，由掃描回報＝確認完成日之後的下一個交易日；上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日）**開盤**買進，其後至今日之間以最高開盤價賣出，收益與報酬率扣除買賣手續費（0.1425%，不打折、無最低）與證交稅（0.3%，賣出時），逐筆回報買進日／買進價／賣出日／賣出價／成本／報酬率／收益，加上彙總總報酬率與總收益。一檔股票每有一個相異買進日就是獨立的一筆（各 1 張、各自計入彙總），同一買進日不得重複送出"
+requirement: "策略掃描結果回測：以每一筆命中的進場日（`buyDate`，由掃描回報＝確認完成日之後的下一個交易日；上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日）**開盤**買進，其後至今日之間以最高開盤價賣出，收益與報酬率扣除買賣手續費（0.1425%，不打折、無最低）與證交稅（0.3%，賣出時），逐筆回報買進日／買進價／賣出日／賣出價／成本／報酬率／收益，加上彙總總報酬率與總收益。一檔股票每有一個相異買進日就是獨立的一筆（各 1 張、各自計入彙總），同一買進日不得重複送出；賣出窗口內沒有任何可賣出的交易日時（買進日就是該檔最新一個交易日），不再是無法回測，改以該檔最後一個交易日（此時即買進日）的開盤價作為賣出價、該日為賣出日，照常扣費稅並計入彙總（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）"
 depends_on: [strategy-scan, stock-price-ingestion]
 ---
 
@@ -26,8 +26,8 @@ depends_on: [strategy-scan, stock-price-ingestion]
 | 買進日 | 請求中該筆的 `buyDate`——掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+`confirmBars`+1，其餘十一個型態為訊號日的下一個交易日，見 `specs/backend/strategy-scan.md`） |
 | 買進價 | 買進日的**開盤價** |
 | 賣出窗口 | 買進日的**次一交易日**起，至今日為止（含今日） |
-| 賣出價 | 賣出窗口內**最高的開盤價** |
-| 賣出日 | 該最高開盤價**第一次出現**的交易日 |
+| 賣出價 | 賣出窗口內**最高的開盤價**；窗口內沒有任何可賣出的交易日時，為該檔**最後一個交易日的開盤價**（見「窗口為空時的退路」） |
+| 賣出日 | 該最高開盤價**第一次出現**的交易日；窗口為空時為該檔最後一個交易日，即買進日 |
 | 部位 | **每一筆**固定 1 張＝ 1,000 股；一檔有幾個相異買進日就有幾筆，各佔 1 張 |
 | 交易成本 | 買進與賣出各收手續費、賣出另收證交稅，算法見下方「交易成本」 |
 | 成本 | `買進價 × 1000 ＋ 買進手續費` |
@@ -58,9 +58,27 @@ depends_on: [strategy-scan, stock-price-ingestion]
 
 #### 賣出窗口為什麼從次一交易日起
 
-因為買進日的開盤價**就是買進價本身**。「買進日直至今日找最高的開盤價」若照字面把買進日自己的開盤也納入，當它恰好是窗口最高值時，就會出現「以同一個價格、在同一個瞬間買進又賣出」——一筆不存在的交易，其報酬率必為負（只付掉三次費稅），畫面上卻長得像一次真的出場。窗口從次一交易日起，是這個買進價選擇的直接後果，不是額外的保守設定。
+因為買進日的開盤價**就是買進價本身**。窗口若把買進日自己也納入，只要它恰好是區間內最高的開盤價，賣出日就會被選成買進日——即使其後還有好幾個可以賣出的交易日，這一筆仍會顯示成「以同一個價格、在同一個瞬間買進又賣出」，把買進之後真正發生過的走勢整段蓋掉。窗口從次一交易日起，保證的是：**只要買進之後還有任何一個可賣出的交易日，賣出日就一定落在買進日之後。**
 
-**這條規則有一個必然的副作用：買進日就是最後一個交易日時，該檔沒有任何可賣出的日子。** 這不是錯誤，處置見下方「無法回測的標的」。
+買進日就是該檔最後一個交易日時，窗口是空的。此時不是無法回測，處置見下一節。
+
+#### 窗口為空時的退路：以最後一個交易日的開盤價賣出
+
+賣出窗口內**沒有任何可賣出的交易日**（開盤價大於 `0` 的列）時——買進日就是該檔最新的一列，或其後的列開盤價全為 `0`——該筆以該檔**最後一個交易日的開盤價**賣出：
+
+| 項目 | 規則 |
+|---|---|
+| 最後一個交易日 | 該檔在**買進日當天或之後**、至今日為止，開盤價大於 `0` 的最新一列。窗口為空時，這一列必然就是買進日自己 |
+| 賣出日 | 那一天，即 `sellDate` 等於 `buyDate` |
+| 賣出價 | 那一天的開盤價，即 `sellPrice` 等於 `buyPrice` |
+| 費稅、成本、收益、報酬率 | 照「交易成本」計算，與其他筆完全相同 |
+| 彙總 | 照常計入 `backtestedCount`、總成本、總收益、總報酬率 |
+
+- **這是使用者 2026-10-11 的決定**（原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」），是在看過上一節「同一瞬間買進又賣出」的顧慮之後做的取捨。在此之前這種筆的 `sellDate` 為 `null`、屬於無法回測，畫面預設把無賣出日的筆藏起來——於是買進日落在最新一個交易日的命中，也就是最新的那一批訊號，正好全部從表上消失。
+- **代價是這一筆的報酬率不代表任何價格變動。** 買賣同價，收益必為負，報酬率約 `−0.58%`，全部是兩次手續費與一次證交稅（見「交易成本」的買賣同價例）。它會計入彙總，把總報酬率往下拉一點。
+- **退路只在窗口為空時啟用，不是賣出價的下限。** 窗口內只要有一個可賣出的交易日，就照一般規則取窗口內的最高開盤價，即使它低於買進價；不得因為「賣在買進價虧得比較少」而改用退路——那等於把負值夾住（見下一節）。
+- **退路的結果是暫時的。** 該檔多出一個交易日之後，同一筆再回測就回到一般規則，賣出日與報酬率隨之改變。本端點不落地、每次重算，所以不需要任何更正機制。
+- **回應不另加欄位標示退路。** 一般規則的窗口不含買進日，`sellDate` 等於 `buyDate` 因此只會出現在退路——這兩個既有欄位已經完整說明了這一筆是怎麼賣的。再加一個布林欄位，只是把同一件事存兩份。
 
 #### 賣出價低於買進價是正常結果，不得夾住
 
@@ -81,7 +99,7 @@ depends_on: [strategy-scan, stock-price-ingestion]
 - **三項各自捨去後再相加**，不是先加總再捨去——券商與證交稅都是逐項計收、逐項捨去。
 - **須以精確的十進位運算，不得用二進位浮點數。** `200.00 × 1000 × 0.1425%` 恰為 `285`，浮點數可能算成 `284.999…` 再被捨去成 `284`，少了 1 元且無從解釋。
 - **成本含買進手續費。** 報酬率的分母是「買進這一筆實際付出去的錢」，只用成交金額當分母，會讓報酬率與收益在同一列上無法互相驗算。
-- **賣出價等於買進價時收益為負**（例：買賣皆 1,150 元，收益 `−6,726`），不是 `0`——平盤出場仍要付兩次手續費與一次證交稅。與「負值必須如實回報」是同一條原則。
+- **賣出價等於買進價時收益為負**（例：買賣皆 1,150 元，收益 `−6,726`），不是 `0`——平盤出場仍要付兩次手續費與一次證交稅。與「負值必須如實回報」是同一條原則。「窗口為空時的退路」賣出的每一筆都是這種情形。
 - 回應帶回兩個費率（`feeRatePercent`、`taxRatePercent`），讓呼叫端不必自己知道這個約定就能說明收益扣了什麼，理由與 `lotSize` 相同。
 
 ### 彙總
@@ -98,21 +116,21 @@ depends_on: [strategy-scan, stock-price-ingestion]
 
 ### 無法回測的標的
 
-三種情形下該筆無法產生回測結果：
+兩種情形下該筆無法產生回測結果，兩者都是**買不進去**：
 
-1. **買進日之後沒有任何交易日的資料**（買進日就是該檔最新的一列，或其後區間內無列）——沒有可賣出的開盤價。
-2. **買進日當天在 `stock_daily_price` 沒有該檔的列**——買不進去。這在正常流程下不該發生（進場日本來就是從這張表算出來的），但行情資料可能在掃描之後被改動，因此必須處理而不是假設它不會發生。
+1. **買進日當天在 `stock_daily_price` 沒有該檔的列**。這在正常流程下不該發生（進場日本來就是從這張表算出來的），但行情資料可能在掃描之後被改動，因此必須處理而不是假設它不會發生。
+2. **買進日當天的開盤價為 `0`**——該日該檔實際沒有成交，行情以 `0` 記錄（見下方「價格為 `0` 的日子不是行情」）。買不進去，且報酬率的分母為 `0`、算不出來。
 
-3. **買進日當天的開盤價為 `0`**——該日該檔實際沒有成交，行情以 `0` 記錄（見下方「價格為 `0` 的日子不是行情」）。買不進去，且報酬率的分母為 `0`、算不出來。
+兩種情形一律：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` **皆為 `null`**，該筆**照常出現在回應的 `items` 中**，但**完全不計入總成本與總收益**。
 
-三種情形一律：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` **皆為 `null`**（情形 1 的 `buyPrice` 有值，見下方契約），該檔**照常出現在回應的 `items` 中**，但**完全不計入總成本與總收益**。
+**買得進去的筆一律有回測結果。** 買進日之後沒有任何可賣出的交易日**不是**無法回測，而是依「窗口為空時的退路」以買進日的開盤價賣出。因此 `buyPrice` 與 `sellDate` 永遠同時有值或同時為 `null`。
 
 #### 價格為 `0` 的日子不是行情
 
 `stock_daily_price` 中存在成交價欄位為 `0` 的列（2026-09-12 實測：1,044 列、63 檔）——那是「該日這檔沒有成交」的記錄方式，不是「它那天值 0 元」。因此：
 
-- **買進日開盤價為 `0` 時，該筆無法回測**（上表情形 3）。以 `0` 當買進價會讓報酬率的分母為零；真的去除，得到的是一次 `500`，而不是一個數字。
-- **賣出窗口內開盤價為 `0` 的列不列入賣出候選。** 買不到也賣不掉的日子不該被選成賣出日；若窗口內沒有任何開盤價大於 `0` 的列，等同「沒有可賣出的交易日」（情形 1）。
+- **買進日開盤價為 `0` 時，該筆無法回測**（上述情形 2）。以 `0` 當買進價會讓報酬率的分母為零；真的去除，得到的是一次 `500`，而不是一個數字。
+- **賣出窗口內開盤價為 `0` 的列不列入賣出候選。** 買不到也賣不掉的日子不該被選成賣出日；若窗口內沒有任何開盤價大於 `0` 的列，窗口即為空，適用「窗口為空時的退路」。
 - 這條規則對停牌日是自然一致的：停牌日在本表沒有列（見 `specs/backend/stock-price-ingestion.md` 的「不得補零」），而這些 `0` 列是另一種來源寫進來的同一件事——沒有成交。兩者都不該成為買點或賣點。
 
 **不得改用「把 `0` 當成前一日收盤」之類的補值來繞過。** 那會憑空製造一筆沒有發生過的交易，且補出來的報酬率無從驗算。
@@ -146,10 +164,14 @@ Request：
 {
   "items": [
     { "stockId": "2330", "buyDate": "2026-08-27" },
-    { "stockId": "2317", "buyDate": "2026-08-25" }
+    { "stockId": "2330", "buyDate": "2026-09-02" },
+    { "stockId": "2317", "buyDate": "2026-09-10" },
+    { "stockId": "2603", "buyDate": "2026-09-08" }
   ]
 }
 ```
+
+下方回應即這份請求的結果：第三筆的買進日是 2317 最新的一個交易日，依退路以買進價賣出；第四筆在買進日沒有成交價，無法回測。
 
 | 欄位 | 型別 | 必填 | 說明 |
 |---|---|---|---|
@@ -187,10 +209,10 @@ Response `200`：
   "lotSize": 1000,
   "feeRatePercent": 0.1425,
   "taxRatePercent": 0.3,
-  "totalCost": 2333319,
-  "totalProfit": 70995,
-  "totalReturnPercent": 3.04,
-  "backtestedCount": 2,
+  "totalCost": 2549126,
+  "totalProfit": 69735,
+  "totalReturnPercent": 2.74,
+  "backtestedCount": 3,
   "items": [
     {
       "stockId": "2330",
@@ -222,12 +244,25 @@ Response `200`：
       "stockId": "2317",
       "buyDate": "2026-09-10",
       "buyPrice": 215.50,
+      "sellDate": "2026-09-10",
+      "sellPrice": 215.50,
+      "buyFee": 307,
+      "sellFee": 307,
+      "sellTax": 646,
+      "cost": 215807,
+      "returnPercent": -0.58,
+      "profit": -1260
+    },
+    {
+      "stockId": "2603",
+      "buyDate": "2026-09-08",
+      "buyPrice": null,
       "sellDate": null,
       "sellPrice": null,
-      "buyFee": 307,
+      "buyFee": null,
       "sellFee": null,
       "sellTax": null,
-      "cost": 215807,
+      "cost": null,
       "returnPercent": null,
       "profit": null
     }
@@ -247,12 +282,12 @@ Response `200`：
 | `backtestedCount` | int | 實際計入彙總的**筆數**，即 `sellDate` 非 `null` 的筆數。它與 `items` 長度的差就是無法回測的筆數 |
 | `items[].buyDate` | date | 該筆的買進日，原樣帶回請求中的 `buyDate`；回應不含 `signalDate` |
 | `items[].buyPrice` | number \| null | 買進日開盤價，即**買進價**；買進日無該檔資料或開盤價為 `0` 時為 `null` |
-| `items[].sellDate` | date \| null | 最高開盤價第一次出現的交易日；無法回測時為 `null` |
-| `items[].sellPrice` | number \| null | 賣出窗口內的最高開盤價；無法回測時為 `null` |
+| `items[].sellDate` | date \| null | 最高開盤價第一次出現的交易日；賣出窗口為空時等於 `buyDate`（見「窗口為空時的退路」）；無法回測時為 `null` |
+| `items[].sellPrice` | number \| null | 賣出窗口內的最高開盤價；賣出窗口為空時等於 `buyPrice`；無法回測時為 `null` |
 | `items[].buyFee` | int \| null | 買進手續費（元）；`buyPrice` 為 `null` 時為 `null` |
 | `items[].sellFee` | int \| null | 賣出手續費（元）；`sellDate` 為 `null` 時為 `null` |
 | `items[].sellTax` | int \| null | 證交稅（元）；`sellDate` 為 `null` 時為 `null` |
-| `items[].cost` | int \| null | 成本＝`buyPrice × lotSize ＋ buyFee`（元）；`buyPrice` 為 `null` 時為 `null`。`buyPrice` 有值但無法賣出的筆照樣回報，但不計入 `totalCost` |
+| `items[].cost` | int \| null | 成本＝`buyPrice × lotSize ＋ buyFee`（元）；`buyPrice` 為 `null` 時為 `null` |
 | `items[].returnPercent` | number \| null | `profit ÷ cost × 100`，兩位小數；**可為負值**；無法回測時為 `null` |
 | `items[].profit` | int \| null | 扣除手續費與證交稅後的收益（元）；**可為負值**；無法回測時為 `null` |
 
@@ -276,9 +311,10 @@ Response `200`：
 2. 取今日（台北日曆日）為 `asOfDate`。
 3. 以整份標的清單為條件，批次取得所需價格：各筆買進日的 `open_price`，以及各筆 `(買進日, asOfDate]` 區間內的 `open_price` 與其 `trade_date`。
 4. 逐筆計算（一筆＝一個 `(stockId, buyDate)`，同一檔的多筆各自獨立計算，彼此不影響）：
-   - 買進日無開盤價（或開盤價為 `0`） → `buyPrice` 為 `null`，該檔其餘欄位皆 `null`，不計入彙總。
-   - 賣出窗口內無任何列 → `buyPrice` 有值，其餘欄位 `null`，不計入彙總。
-   - 否則取窗口內 `open_price` 的最大值為 `sellPrice`，其**最早**出現的 `trade_date` 為 `sellDate`，依「回測規則」與「交易成本」算出 `sellFee`／`sellTax`／`returnPercent`／`profit`，計入彙總。`buyPrice` 有值的筆一律算出 `buyFee` 與 `cost`。
+   - 買進日無開盤價（或開盤價為 `0`） → `buyPrice` 為 `null`，該筆其餘欄位皆 `null`，不計入彙總。
+   - 賣出窗口內有開盤價大於 `0` 的列 → 取其中 `open_price` 的最大值為 `sellPrice`，其**最早**出現的 `trade_date` 為 `sellDate`。
+   - 賣出窗口內沒有任何開盤價大於 `0` 的列（無列，或全為 `0`） → 退路：`sellDate` 為買進日、`sellPrice` 為 `buyPrice`。
+   - 後兩種情形皆依「回測規則」與「交易成本」算出 `buyFee`／`cost`／`sellFee`／`sellTax`／`returnPercent`／`profit`，計入彙總。退路不需要任何額外查詢——買進日那一列本來就在第 3 步取得的資料裡。
 5. 彙總 `totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount`，依請求順序組出 `items`。
 
 **本端點不寫入任何資料表**，也不建立任何 `stock_sync_progress` 列——它是同步的純讀取運算，沒有進度可追蹤，也沒有併發鎖需要持有。
@@ -289,7 +325,7 @@ Response `200`：
 |---|---|
 | 買進價 | `stock_daily_price.open_price`，`stock_id` = 該檔、`trade_date` = 買進日 |
 | 賣出價候選 | `stock_daily_price.open_price`，`stock_id` = 該檔、`trade_date` 介於買進日之後與 `asOfDate` 之間 |
-| 賣出日 | 上述最大 `open_price` 所在列的 `trade_date`，同值取最早 |
+| 賣出日 | 上述最大 `open_price` 所在列的 `trade_date`，同值取最早；無任何候選時為買進日，賣出價即買進價 |
 | 代號存在性 | `stock`（見 `specs/dba/stock.md`）；**不篩 `is_active`**，已下市股票照常可回測，與掃描允許指定已下市股票一致 |
 
 停牌日在 `stock_daily_price` 中不存在列（見 `specs/backend/stock-price-ingestion.md` 的「不得補零」），因此自然不會成為賣出日，不需要額外排除。
@@ -307,8 +343,8 @@ Response `200`：
 - [x] 停牌造成的缺列不會成為 `sellDate`（該日在 `stock_daily_price` 無列，自然不在候選中）
 - [x] **買進日開盤價為 `0` 時該筆無法回測**：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，**不得回 `500`**（不得對 `0` 做除法）
 - [x] 賣出窗口內開盤價為 `0` 的列**不列入賣出候選**：以一組「窗口內僅有的高開盤價那天為 `0`」的構造資料驗證，`sellDate` 不是那一天
-- [x] 賣出窗口內所有開盤價皆為 `0` 時，視同無可賣出交易日：`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null` 而 `buyPrice` 有值
-- [x] 上述三種情形皆**不計入** `totalCost`／`totalProfit`／`backtestedCount`，且該筆仍留在 `items` 中
+- [x] 賣出窗口內所有開盤價皆為 `0` 時，視同賣出窗口為空，適用「窗口為空時的退路」：`sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`
+- [x] 買進日開盤價為 `0` 的筆**不計入** `totalCost`／`totalProfit`／`backtestedCount`，且該筆仍留在 `items` 中；賣出窗口內開盤價全為 `0` 的筆依退路照常計入
 
 ### 彙總
 - [x] `totalCost` 等於各可回測筆 `cost`（含買進手續費）的總和
@@ -318,10 +354,10 @@ Response `200`：
 - [x] `backtestedCount` 等於 `sellDate` 非 `null` 的筆數；清單中含無法回測標的時，它小於 `items` 的長度
 
 ### 無法回測的標的
-- [x] 買進日為該檔最新一個交易日時：`buyPrice` 有值，`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200` 而非錯誤
-- [x] 買進日在 `stock_daily_price` 無該檔列時：`buyPrice` 亦為 `null`，其餘同上，回應為 `200`
-- [x] 上述兩種標的**仍出現在 `items` 中**，未被從回應裡移除
-- [x] 上述兩種標的**不計入** `totalCost` 與 `totalProfit`：以「一檔可回測 + 一檔不可回測」的清單驗證，`totalCost` 等於可回測那一檔單獨回測時的值
+- [x] 買進日為該檔最新一個交易日時：`buyPrice` 有值，回應為 `200` 而非錯誤；該筆依「窗口為空時的退路」以買進日開盤價賣出，不再是無法回測
+- [x] 買進日在 `stock_daily_price` 無該檔列時：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`
+- [x] 無法回測的標的（買進日無該檔列）**仍出現在 `items` 中**，未被從回應裡移除
+- [x] 無法回測的標的**不計入** `totalCost` 與 `totalProfit`：以「一檔可回測 + 一檔不可回測」的清單驗證，`totalCost` 等於可回測那一檔單獨回測時的值
 - [x] 清單中全部標的皆無法回測時：`totalCost` 與 `totalProfit` 為 `0`，`totalReturnPercent` 為 **`null`**（不是 `0`），`backtestedCount` 為 `0`
 
 ### 契約與驗證
@@ -352,7 +388,7 @@ Response `200`：
 - [x] 無最低手續費：買賣皆 `10.00` 時 `buyFee` 與 `sellFee` 皆為 `14`（不被墊高為 `20`）、`profit` `−58`、`returnPercent` `−0.58`
 - [x] 賣出價等於買進價（皆 `1150.00`）時 `profit` 為 `−6726`、`returnPercent` 為 `−0.58`，不是 `0`
 - [x] 回應帶 `feeRatePercent: 0.1425`、`taxRatePercent: 0.3`；每筆帶 `buyFee`／`sellFee`／`sellTax`／`cost`
-- [x] 買進日為最新交易日（無可賣出日）的筆：`buyFee` 與 `cost` 有值、`sellFee`／`sellTax`／`profit`／`returnPercent` 為 `null`，且其 `cost` 不計入 `totalCost`；`buyPrice` 為 `null` 的筆 `buyFee`／`sellFee`／`sellTax`／`cost` 皆為 `null`
+- [x] 買進日為最新交易日（賣出窗口為空）的筆：`buyFee` 與 `cost` 有值，`sellFee`／`sellTax`／`profit`／`returnPercent` 依退路同樣有值，其 `cost` 計入 `totalCost`；`buyPrice` 為 `null` 的筆 `buyFee`／`sellFee`／`sellTax`／`cost` 皆為 `null`
 - [x] 兩筆（`1150→1205`、`1180→1210`）一起回測：`totalCost` `2333319`、`totalProfit` `70995`、`totalReturnPercent` `3.04`
 
 ### 效能
@@ -370,10 +406,21 @@ Response `200`：
 - [x] `cost`／`buyFee`／`profit`／`returnPercent` 全部依新的 `buyPrice` 重算，算式本身不變（`cost = buyPrice × 1000 + buyFee`）
 - [x] 買進日**開盤價**為 `0`（收盤價不為 `0`）時該筆無法回測：`buyPrice` 為 `null`，回應 `200`、不計入彙總——判斷的是開盤價，不是收盤價
 - [x] 買進日開盤價 > `0` 但收盤價為 `0` 時該筆**照常回測**，`buyPrice` 為該開盤價
-- [x] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
-- [x] 買進日只有一列且其後無列時仍為「無法回測」：`buyPrice` 有值（開盤價）、`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null`，不計入彙總
+- [x] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：窗口內有可賣出的交易日時，買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
+- [x] 買進日只有一列且其後無列時：`buyPrice` 有值（開盤價），依「窗口為空時的退路」`sellDate` 為買進日、`sellPrice` 等於該開盤價，計入彙總
 - [x] 價格查詢仍為批次、次數不隨檔數線性增加；買進價與賣出候選同取自 `open_price`，不再另查 `close_price`
 - [x] 交易成本的三項算法、費率與捨去規則完全未變，只是代入的 `buyPrice` 改為開盤價
+
+### 窗口為空時的退路
+
+- [x] 買進日為該檔最新一個交易日（其後至今日無任何列）時：回應 `200`，`sellDate` 等於 `buyDate`，`sellPrice` 等於 `buyPrice`（買進日的開盤價），`sellFee`／`sellTax`／`profit`／`returnPercent` 皆有值、不為 `null`
+- [x] 該筆的數字照「交易成本」計算：以一筆真實資料手算驗證 `buyFee`／`sellFee`／`sellTax`／`cost`／`profit`／`returnPercent` 逐項相符，`profit` 與 `returnPercent` 為負
+- [x] 該筆計入彙總：單獨回測該筆時 `backtestedCount` 為 `1`、`totalCost` 等於其 `cost`、`totalProfit` 等於其 `profit`、`totalReturnPercent` 等於其 `returnPercent`（不是 `null`）
+- [x] 賣出窗口內有列、但開盤價全為 `0` 時同樣適用退路：`sellDate` 等於 `buyDate`，不是那些 `0` 列的日期
+- [x] 賣出窗口內有可賣出的交易日時結果與改動前完全相同：一筆其後有列的真實 `(stockId, buyDate)`，回應與改動前逐位元組相同
+- [x] 退路不是賣出價的下限：窗口內最高開盤價低於買進價時，`sellDate` 仍晚於 `buyDate`、`sellPrice` 仍為窗口內最高開盤價，不改用買進價
+- [x] 買進日無該檔列、買進日開盤價為 `0` 兩種情形維持無法回測：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 皆為 `null`，不計入彙總
+- [x] 回應的欄位集合不變：退路筆與一般筆有同一組欄位，未新增任何標示退路的欄位
 
 ---
 ## Execution Result
@@ -584,3 +631,44 @@ Response `200`：
 - Criteria verified live this increment (checked off above): L300, L308, L363, L369, L370, L371, L372, L373, L374, L375, L376 — all 11 of the criteria that were `- [ ]` at the start of this increment, all directly exercised against the running app and the real database.
 
 - Anything NOT independently re-verified, and why: none — every previously-unchecked box in this increment's scope was exercised live. The other, already-checked boxes elsewhere in the spec were not re-run (out of scope for an increment; the rename/formula/batching/validation logic they cover was untouched by this diff, confirmed by the fact that the only production-code change was the single `getClosePrice()` → `getOpenPrice()` swap plus javadoc).
+
+### Increment 7 — 2026-10-11
+- Status: DONE
+
+- Scope: 賣出窗口為空時的退路。買進日就是該檔最新一個交易日（或其後的列開盤價全為 `0`）時，不再回 `sellDate: null`，改以買進日的開盤價賣出（`sellDate` = `buyDate`、`sellPrice` = `buyPrice`），照常扣費稅並計入彙總。使用者 2026-10-11 的決定，原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」。
+
+- Files changed:
+  - `develop/backend/src/main/java/com/stock/service/StrategyBacktestService.java` — 逐筆計算中，`findSellPick` 回 `null`（窗口內無開盤價 > 0 的列）時改以 `(buyDate, buyPrice)` 作為賣出點，其後的費稅／收益／報酬率計算與彙總累加不再包在 `pick != null` 之內；`findSellPick` 本身、`findBuyPrice`、驗證與批次查詢未動。註解同步改寫。
+  - `develop/backend/src/main/java/com/stock/dto/BacktestResultItemDto.java` — 只改類別註解（`buyPrice` 與 `sellDate` 同時有值或同時為 `null`）。欄位未增減。
+
+- Decisions the requirement did not state:
+  - **回應不加「這一筆是用退路賣的」欄位。** 一般規則的窗口不含買進日，`sellDate` 等於 `buyDate` 只會出現在退路，兩個既有欄位已足以辨識；理由寫在 Requirements「窗口為空時的退路」。
+  - **「最後一個交易日」定義為買進日當天或之後、開盤價 > `0` 的最新一列**；窗口為空時它必然是買進日自己，所以實作直接取買進日與買進價，不另外查詢。
+  - **窗口內有列但開盤價全為 `0` 也走退路**（既有規則本來就把這種情形視同沒有可賣出的交易日）。
+  - **退路不是賣出價的下限**：窗口內有可賣出的交易日時，即使最高開盤價低於買進價也照原規則，不改用買進價。
+  - 「無法回測的標的」由三種情形改為兩種（買進日無列、買進日開盤價為 `0`），兩者 `buyPrice` 皆為 `null`；回應範例改為四筆（含一筆退路、一筆無法回測）。
+
+- Already-checked criteria reworded (text only; none deleted, none unchecked), each because it stated the superseded 「窗口為空 → `null`」 rule:
+  1. 回測規則「賣出窗口內所有開盤價皆為 `0` 時…」— 原：`sellDate`／`sellPrice`／`returnPercent`／`profit` 為 `null` 而 `buyPrice` 有值；改：視同窗口為空、適用退路，`sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`。
+  2. 回測規則「上述三種情形皆不計入…」— 改為只指買進日開盤價為 `0` 的筆不計入；窗口內開盤價全為 `0` 的筆依退路照常計入。
+  3. 無法回測的標的「買進日為該檔最新一個交易日時…」— 原：`sellDate` 等四欄皆為 `null`；改：回應 `200`，該筆依退路以買進日開盤價賣出，不再是無法回測。
+  4. 無法回測的標的「買進日在 `stock_daily_price` 無該檔列時…其餘同上」— 「其餘同上」指向第 3 條的舊內容，改為逐欄寫明皆為 `null`（行為未變）。
+  5. 無法回測的標的「上述兩種標的仍出現在 `items` 中」— 主詞改為「無法回測的標的（買進日無該檔列）」（行為未變）。
+  6. 無法回測的標的「上述兩種標的不計入 `totalCost` 與 `totalProfit`…」— 主詞改為「無法回測的標的」；最新交易日的筆現在計入。
+  7. 交易成本「買進日為最新交易日（無可賣出日）的筆…」— 原：`sellFee`／`sellTax`／`profit`／`returnPercent` 為 `null` 且 `cost` 不計入 `totalCost`；改：四者依退路有值、`cost` 計入 `totalCost`。
+  8. 買進價改為買進日開盤價「賣出窗口仍自買進日的次一交易日起…」— 加上前提「窗口內有可賣出的交易日時」。
+  9. 買進價改為買進日開盤價「買進日只有一列且其後無列時仍為「無法回測」…」— 改：依退路 `sellDate` 為買進日、`sellPrice` 等於該開盤價，計入彙總。
+
+- Live verification（`mvn -q -o -DskipTests package` 兩次：改動前的 jar 作為對照、改動後的 jar；各以 `java -jar` 啟動於 8081，連真實資料庫 `stock`，啟動時的主檔同步／日 K 補齊／法人補齊三個開關皆關閉；`asOfDate` 2026-10-11，全市場最新交易日 2026-10-08）：
+  - **最新交易日的筆**：`2466`／`2026-10-08`（該檔最新一列，`open_price` 180.50）。改動前：`sellDate: null`、`backtestedCount: 0`、`totalReturnPercent: null`。改動後：`{"buyPrice":180.50,"sellDate":"2026-10-08","sellPrice":180.50,"buyFee":257,"sellFee":257,"sellTax":541,"cost":180757,"returnPercent":-0.58,"profit":-1055}`，`totalCost` 180757、`totalProfit` -1055、`totalReturnPercent` -0.58、`backtestedCount` 1。手算：`floor(180500×0.001425)=257`、`floor(180500×0.003)=541`、`cost=180500+257=180757`、`profit=180500−257−541−180757=−1055`、`−1055÷180757×100=−0.5837→−0.58`，逐項相符。
+  - **窗口非空的筆逐位元組相同**：`2466`／`2026-10-07`（賣 10-08 180.50，+8.76%）、`2330`／`2026-09-23`（賣 10-06 2575.00，+3.43%）、`1108`／`2026-10-07` 三筆一次送出，改動前後兩份回應 `cmp` 相同（sha256 前綴同為 `61a9ced1b6f2e91ce4b4`）。
+  - **退路不是下限**：`1108`／`2026-10-07` 買 11.15，其後唯一一列 10-08 開盤 11.10 低於買進價，回應仍為 `sellDate` 2026-10-08、`sellPrice` 11.10、`returnPercent` -1.01，未改用買進價。
+  - **仍無法回測**：`2466`／`2026-10-10`（無列、其後也無列）、`2466`／`2026-10-04`（無列、其後有列）、`1538`／`2026-09-04`（`open_price` 0.00）三筆九個欄位皆 `null`、`backtestedCount` 0、`totalReturnPercent` `null`，回應與改動前 `cmp` 相同。
+  - **七筆混合**：`backtestedCount` 4、`totalCost` 2835683（＝改動前三筆 2654926 ＋ 180757）、`totalProfit` 98379（＝99434 − 1055）、`totalReturnPercent` 3.47，`items` 順序與請求一致。
+  - **窗口內開盤價全為 `0`**：暫時建立 `ZZBT1`（`is_active = 0`；10-05 開盤 50.00，10-06、10-07 開盤 0.00），`buyDate` 2026-10-05 → `sellDate` 2026-10-05、`sellPrice` 50.00、`buyFee`／`sellFee` 71、`sellTax` 150、`cost` 50071、`profit` -292、`returnPercent` -0.58（手算相符）。驗完即刪除，`ZZBT%` 在 `stock`／`stock_daily_price` 皆為 0 列。
+  - **欄位集合不變**：退路筆與一般筆同為 `stockId`／`buyDate`／`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 十一個欄位。
+  - 資料表列數前後一致：`stock` 1391、`stock_daily_price` 252198、`stock_sync_progress` 2766。未觸發任何同步或回補；8081 已停止，8080 未碰。
+
+- Self-review: 退路只在 `buyPrice != null` 的分支內建立，`pick` 之後不可能為 `null`；`cost` 恆為正，報酬率不會除以零；未新增查詢、狀態或例外路徑。由 `/code` worker 直接實作與驗證，未另派 `backend` agent。
+
+- Left unchecked: none.
