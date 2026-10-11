@@ -150,7 +150,7 @@ public class InstitutionalStrengthRankDetector implements InstitutionalPatternDe
         Map<LocalDate, Map<String, Integer>> foreignRank = rankByDate(foreignCandidates, topN);
         Map<LocalDate, Map<String, Integer>> trustRank = rankByDate(trustCandidates, topN);
 
-        // Pass 3: collapse each stock to its most recent hit-with-buyDate (or pendingConfirm).
+        // Pass 3: collapse each stock to its first hit in the range (or pendingConfirm).
         Map<String, PatternDetectionOutcome> outcomes = new LinkedHashMap<>();
         for (String stockId : targetIds) {
             List<StockDailyPrice> bars = priceSeriesByStock.getOrDefault(stockId, List.of());
@@ -161,9 +161,9 @@ public class InstitutionalStrengthRankDetector implements InstitutionalPatternDe
                 continue;
             }
 
-            LocalDate lastSignalDate = null;
-            LocalDate lastBuyDate = null;
-            InstitutionalStrengthRankDetailDto lastDetail = null;
+            LocalDate firstSignalDate = null;
+            LocalDate firstBuyDate = null;
+            InstitutionalStrengthRankDetailDto firstDetail = null;
             boolean anyUnresolvedMatch = false;
 
             for (InstitutionalWindowMath.DayWindow dw : windows) {
@@ -192,17 +192,18 @@ public class InstitutionalStrengthRankDetector implements InstitutionalPatternDe
                     continue;
                 }
                 if (dw.barIndex + 1 < bars.size()) {
-                    lastSignalDate = dw.date;
-                    lastBuyDate = bars.get(dw.barIndex + 1).getTradeDate();
-                    lastDetail = new InstitutionalStrengthRankDetailDto(dw.windowStartDate, dw.volumeShares, matched,
+                    firstSignalDate = dw.date;
+                    firstBuyDate = bars.get(dw.barIndex + 1).getTradeDate();
+                    firstDetail = new InstitutionalStrengthRankDetailDto(dw.windowStartDate, dw.volumeShares, matched,
                             foreignDetail, trustDetail);
+                    break; // the first hit in the range is the one reported (spec: 收斂)
                 } else {
                     anyUnresolvedMatch = true;
                 }
             }
 
-            if (lastSignalDate != null) {
-                outcomes.put(stockId, PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail));
+            if (firstSignalDate != null) {
+                outcomes.put(stockId, PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail));
             } else {
                 outcomes.put(stockId, PatternDetectionOutcome.noMatch(anyUnresolvedMatch));
             }

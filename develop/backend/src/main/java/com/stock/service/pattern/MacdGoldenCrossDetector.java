@@ -186,9 +186,9 @@ public class MacdGoldenCrossDetector implements PatternDetector {
                 bars, null, fastPeriod, slowPeriod);
 
         boolean anyJudged = false;
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        MacdGoldenCrossDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        MacdGoldenCrossDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = MIN_TRADING_DAYS_BEFORE_D; i < bars.size(); i++) {
@@ -211,21 +211,22 @@ public class MacdGoldenCrossDetector implements PatternDetector {
                     anyUnresolvedMatch = true;
                     continue;
                 }
-                lastSignalDate = tradeDate;
-                lastBuyDate = buyDate;
-                lastDetail = new MacdGoldenCrossDetailDto(
+                firstSignalDate = tradeDate;
+                firstBuyDate = buyDate;
+                firstDetail = new MacdGoldenCrossDetailDto(
                         indicatorRows.get(i).getDif().setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         indicatorRows.get(i).getDea().setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         osc.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         prevOsc.setScale(DETAIL_SCALE, RoundingMode.HALF_UP));
+                break; // the first hit in the range is the one reported (spec: 收斂)
             }
         }
 
         if (!anyJudged) {
             return PatternDetectionOutcome.insufficientData();
         }
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

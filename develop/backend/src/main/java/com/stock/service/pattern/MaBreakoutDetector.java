@@ -122,9 +122,9 @@ public class MaBreakoutDetector implements PatternDetector {
         List<Integer> selected = resolveSelected(selection);
 
         boolean anyJudged = false;
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        MaBreakoutDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        MaBreakoutDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = 1; i < bars.size(); i++) {
@@ -170,15 +170,16 @@ public class MaBreakoutDetector implements PatternDetector {
                 anyUnresolvedMatch = true;
                 continue;
             }
-            lastSignalDate = tradeDate;
-            lastBuyDate = buyDate;
-            lastDetail = new MaBreakoutDetailDto(scale(close), scale(prevClose), matched,
+            firstSignalDate = tradeDate;
+            firstBuyDate = buyDate;
+            firstDetail = new MaBreakoutDetailDto(scale(close), scale(prevClose), matched,
                     scale(ma[0]), scale(ma[1]), scale(ma[2]),
                     scale(prevMa[0]), scale(prevMa[1]), scale(prevMa[2]));
+            break; // the first hit in the range is the one reported (spec: 收斂)
         }
 
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         if (!anyJudged) {
             return PatternDetectionOutcome.insufficientData();
