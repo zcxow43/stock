@@ -23,6 +23,7 @@ import {
   type StrategyNumberParam,
   type StrategyParam,
   type StrategyResult,
+  type VolumeSurgeDetail,
 } from '../api/strategies'
 import { fetchSyncProgress, startBackfill, type ProgressResponse } from '../api/sync'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -474,6 +475,21 @@ function hasMatchedPeriods(detail: StrategyDetail): detail is MaBreakoutDetail {
   return 'matchedPeriods' in detail
 }
 
+/** A hit whose `detail` carries its own `increasePercent` is a volume hit (today only
+ * `VOLUME_SURGE`) — detected structurally off the response shape, like the two checks above,
+ * never by strategy `code`. This is the hit's ACTUAL surge, not the threshold: the threshold
+ * of the same name lives one level up, on the strategy's `results` entry. */
+function hasIncreasePercent(detail: StrategyDetail): detail is VolumeSurgeDetail {
+  return 'increasePercent' in detail
+}
+
+/** 「量多必須標出這一筆實際多了多少」— the bracket of「量多（+67.45%） {signalDate}」: fixed two
+ * decimals, never trimmed (`50` -> `+50.00%`), always `+` (a hit is never below its threshold,
+ * and the threshold's floor is 0). */
+function formatSurgePercent(value: number): string {
+  return `+${value.toFixed(2)}%`
+}
+
 /** Only `INSTITUTIONAL_NET_RATIO`'s `foreign`/`trust` carry a `direction` — the other two
  * institutional detail shapes don't have the field at all. Detected structurally via `in`
  * (again, off the response shape, not off a strategy code). */
@@ -499,8 +515,8 @@ function institutionalMatchLabel(detail: InstitutionalDetail): string {
 interface UnionHit {
   strategyCode: StrategyCode
   signalDate: string
-  /** Only carried for institutional hits — feeds `institutionalMatchLabel`. Absent for the
-   * five price-pattern strategies, which never need it for「命中策略與訊號日」. */
+  /** The hit's own judgement detail — feeds the bracket in「命中策略與訊號日」(`unionHitLabel`:
+   * 法人達標方、達標均線、量多的實際量增幅度). Unused for patterns that carry no bracket. */
   detail?: StrategyDetail
 }
 
@@ -1873,6 +1889,25 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return name
   }
 
+  /** The bracket of「{策略名稱}（{標示}） {signalDate}」— 法人籌碼型態的達標方、站上均線的達標
+   * 均線、量多的實際量增幅度; `null` (no bracket) for every other pattern. Decided purely by
+   * the shape of this hit's own `detail`, never by `strategyCode`. Collapsed rows, parent rows
+   * and expanded child rows all go through `renderUnionHits`, so they share this format. */
+  const unionHitLabel = (hit: UnionHit): string | null => {
+    const detail = hit.detail
+    if (!detail) return null
+    if (hasMatchedInvestors(detail)) return institutionalMatchLabel(detail)
+    if (hasMatchedPeriods(detail)) {
+      return sortByOptionOrder(hit.strategyCode, detail.matchedPeriods ?? [])
+        .map((c) => multiSelectOptionName(hit.strategyCode, c))
+        .join('／')
+    }
+    if (hasIncreasePercent(detail) && typeof detail.increasePercent === 'number') {
+      return formatSurgePercent(detail.increasePercent)
+    }
+    return null
+  }
+
   const renderUnionHits = (hits: UnionHit[]) => {
     const nodes: ReactNode[] = []
     hits.forEach((hit, idx) => {
@@ -1881,17 +1916,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           ・
         </span>,
       )
-      // 法人籌碼型態必須標出是哪一方達標 — 「{策略名稱}（{達標方}） {signalDate}」，展開後的子列
-      // 沿用同一份 renderUnionHits 因此自動採同一格式。Decided purely by whether this hit's
-      // own `detail` carries `matchedInvestors`, never by `strategyCode`.
-      const matchLabel =
-        hit.detail && hasMatchedInvestors(hit.detail)
-          ? institutionalMatchLabel(hit.detail)
-          : hit.detail && hasMatchedPeriods(hit.detail)
-            ? sortByOptionOrder(hit.strategyCode, hit.detail.matchedPeriods ?? [])
-                .map((c) => multiSelectOptionName(hit.strategyCode, c))
-                .join('／')
-            : null
+      const matchLabel = unionHitLabel(hit)
       nodes.push(
         <span key={`${hit.strategyCode}-${idx}`} className="st-union-tag">
           <span className="st-union-tag-name">

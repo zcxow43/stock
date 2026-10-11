@@ -234,9 +234,10 @@ export interface MaBreakoutDetail {
 }
 
 /** `VOLUME_SURGE`'s judgement detail — signal-day volume vs the average of the prior 5
- * trading days, plus the same figures for the day before. Not rendered anywhere in the merged
- * table (「判定明細…不在本表呈現」) — modeled so `item.detail` matches the wire contract
- * (specs/backend/strategy-scan.md「量開始變多 VOLUME_SURGE」). */
+ * trading days, plus the same figures for the day before. Only `increasePercent` is rendered
+ * (the「命中策略與訊號日」bracket,「量多（+67.45%） {signalDate}」); the rest is modeled so
+ * `item.detail` matches the wire contract
+ * (specs/backend/strategy-scan.md「量多 VOLUME_SURGE」). */
 export interface VolumeSurgeDetail {
   volume: number
   averageVolume: number

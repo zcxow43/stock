@@ -14,7 +14,7 @@
 
 | 步驟 | 觸發 | 後端 API | 用途 | 契約 |
 |---|---|---|---|---|
-| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲／三個法人籌碼型態／MACD／KDJ 的參數定義（含外資／投信複選、MACD 短期 EMA 須小於長期 EMA 的 `lessThan` 限制、KDJ 無單位且可為負的 J 門檻）；目錄共十二筆，第十二筆「量開始變多」以 `params` 的一筆數字參數 `increasePercent`（「量增門檻」、單位 %、預設 50、範圍 0～1000）廣告它唯一的輸入；站上均線以 `params` 的 `maPeriods` 複選廣告 MA5／MA20／MA60（預設全選、至少一個），與法人的 `investors` 走同一套 `type: multiSelect` 機制；卡片上的群組勾選框取自各條目的 `paramGroups`——反彈的 `rise`（另外要求反彈漲幅）與箱型突破的 `volume`（要求量增，預設開啟、不轄任何參數） | [strategy-scan](../backend/strategy-scan.md) |
+| 1 | 進頁載入 | `GET /api/strategies` | 取策略清單、靈敏度選項與說明文字，以及反彈／累積上漲／三個法人籌碼型態／MACD／KDJ 的參數定義（含外資／投信複選、MACD 短期 EMA 須小於長期 EMA 的 `lessThan` 限制、KDJ 無單位且可為負的 J 門檻）；目錄共十二筆，第十二筆「量多」以 `params` 的一筆數字參數 `increasePercent`（「量增門檻」、單位 %、預設 50、範圍 0～1000）廣告它唯一的輸入；站上均線以 `params` 的 `maPeriods` 複選廣告 MA5／MA20／MA60（預設全選、至少一個），與法人的 `investors` 走同一套 `type: multiSelect` 機制；卡片上的群組勾選框取自各條目的 `paramGroups`——反彈的 `rise`（另外要求反彈漲幅）與箱型突破的 `volume`（要求量增，預設開啟、不轄任何參數） | [strategy-scan](../backend/strategy-scan.md) |
 | 1 | 進頁載入 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 取 `lastSyncedAt` 顯示最後同步時間 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 1 | 進頁載入 | `GET /api/stocks?page=1&size=1` | 只取 `total` 顯示常駐的「共 N 檔」 | [stock-catalog](../backend/stock-catalog.md) |
 | 2 | 按「更新股票清單」 | `POST /api/stocks/universe/import` | **此端點即是向交易所抓取上市股票清單的起點**，同時匯入官方產業別 | [stock-universe-import](../backend/stock-universe-import.md) |

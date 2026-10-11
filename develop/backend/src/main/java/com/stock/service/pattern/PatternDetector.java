@@ -203,7 +203,7 @@ public interface PatternDetector {
     }
 
     /** Inclusive bounds/default for `increasePercent` — meaningful only when
-     *  {@link #acceptsIncreasePercent()} is true; see specs/backend/strategy-scan.md, "量開始變多". */
+     *  {@link #acceptsIncreasePercent()} is true; see specs/backend/strategy-scan.md, "量多". */
     default BigDecimal getIncreasePercentMin() {
         return BigDecimal.ZERO;
     }

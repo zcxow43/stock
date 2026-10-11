@@ -25,7 +25,7 @@ import java.util.List;
  * strategy-scan.md, "技術指標型態".
  *
  * <p>VOLUME_SURGE echoes `increasePercent` (the threshold actually used) and no `preset` — see
- * specs/backend/strategy-scan.md, "量開始變多".
+ * specs/backend/strategy-scan.md, "量多".
  *
  * <p>BOX_BREAKOUT and RISING_SUPPORT are the two exceptions to "`preset` and a parameter field never
  * coexist": BOX_BREAKOUT echoes `requireVolume` and RISING_SUPPORT echoes `confirmBars` (both the

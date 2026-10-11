@@ -16,7 +16,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * VOLUME_SURGE — specs/backend/strategy-scan.md, "量能型態" / "量開始變多". Trading day D is the first day
+ * VOLUME_SURGE — specs/backend/strategy-scan.md, "量能型態" / "量多". Trading day D is the first day
  * volume surges: {@code volume(D) >= baseline(D) * (1 + increasePercent/100)} where baseline(D) is the
  * mean volume of the 5 trading days before D (D itself excluded), AND D-1 does not satisfy the same
  * rule against its own baseline (D-2..D-6). Price is never looked at. A baseline of 0 means "not
@@ -53,7 +53,7 @@ public class VolumeSurgeDetector implements PatternDetector {
 
     @Override
     public String getName() {
-        return "量開始變多";
+        return "量多";
     }
 
     @Override

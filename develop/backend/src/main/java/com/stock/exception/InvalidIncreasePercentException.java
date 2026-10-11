@@ -2,7 +2,7 @@ package com.stock.exception;
 
 /**
  * VOLUME_SURGE's `increasePercent` falls outside [0, 1000], or carries more than one decimal digit
- * — see specs/backend/strategy-scan.md, "量開始變多" and 驗證與錯誤.
+ * — see specs/backend/strategy-scan.md, "量多" and 驗證與錯誤.
  */
 public class InvalidIncreasePercentException extends RuntimeException {
 

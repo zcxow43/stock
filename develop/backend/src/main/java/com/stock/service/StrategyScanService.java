@@ -318,7 +318,7 @@ public class StrategyScanService {
     /**
      * `increasePercent` (VOLUME_SURGE only): rejected with PARAM_NOT_APPLICABLE for every other
      * detector; otherwise range/one-decimal validated against the detector's own bounds — see
-     * specs/backend/strategy-scan.md, "量開始變多" and 驗證與錯誤.
+     * specs/backend/strategy-scan.md, "量多" and 驗證與錯誤.
      */
     private void validateIncreasePercent(StrategySelectionDto selection, PatternDetector detector) {
         String code = selection.getCode();
