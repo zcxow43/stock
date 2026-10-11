@@ -153,9 +153,9 @@ public class BoxBreakoutDetector implements PatternDetector {
             return PatternDetectionOutcome.insufficientData();
         }
 
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        BoxBreakoutDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        BoxBreakoutDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = preCount; i < bars.size(); i++) {
@@ -233,18 +233,19 @@ public class BoxBreakoutDetector implements PatternDetector {
                     : BigDecimal.valueOf(d.getVolume()).divide(avgVolume, CALC_SCALE, RoundingMode.HALF_UP)
                             .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
-            lastSignalDate = d.getTradeDate();
-            lastBuyDate = buyDate;
-            lastDetail = new BoxBreakoutDetailDto(
+            firstSignalDate = d.getTradeDate();
+            firstBuyDate = buyDate;
+            firstDetail = new BoxBreakoutDetailDto(
                     boxHigh.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     boxLow.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     d.getClosePrice().setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     breakoutPercentActual,
                     volumeRatio);
+            break; // the first hit in the range is the one reported (spec: 收斂)
         }
 
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

@@ -170,9 +170,9 @@ public class RisingSupportDetector implements PatternDetector {
             return PatternDetectionOutcome.insufficientData();
         }
 
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        RisingSupportDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        RisingSupportDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = preCount; i < bars.size(); i++) {
@@ -242,18 +242,19 @@ public class RisingSupportDetector implements PatternDetector {
             BigDecimal risePercentActual = riseRatio.multiply(BigDecimal.valueOf(100))
                     .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
-            lastSignalDate = d.getTradeDate();
-            lastBuyDate = buyDate;
-            lastDetail = new RisingSupportDetailDto(
+            firstSignalDate = d.getTradeDate();
+            firstBuyDate = buyDate;
+            firstDetail = new RisingSupportDetailDto(
                     supportClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     dClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     risePercentActual,
                     priorHighClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                     confirmCloses);
+            break; // the first hit in the range is the one reported (spec: 收斂)
         }
 
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

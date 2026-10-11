@@ -148,9 +148,9 @@ public class KdjGoldenCrossDetector implements PatternDetector {
                 IndicatorCalculationService.DEFAULT_SLOW_PERIOD);
 
         boolean anyJudged = false;
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        KdjGoldenCrossDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        KdjGoldenCrossDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = MIN_TRADING_DAYS_BEFORE_D; i < bars.size(); i++) {
@@ -180,23 +180,24 @@ public class KdjGoldenCrossDetector implements PatternDetector {
                     anyUnresolvedMatch = true;
                     continue;
                 }
-                lastSignalDate = tradeDate;
-                lastBuyDate = buyDate;
-                lastDetail = new KdjGoldenCrossDetailDto(
+                firstSignalDate = tradeDate;
+                firstBuyDate = buyDate;
+                firstDetail = new KdjGoldenCrossDetailDto(
                         k.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         d.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         j.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         prevK.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         prevD.setScale(DETAIL_SCALE, RoundingMode.HALF_UP),
                         prevJ.setScale(DETAIL_SCALE, RoundingMode.HALF_UP));
+                break; // the first hit in the range is the one reported (spec: 收斂)
             }
         }
 
         if (!anyJudged) {
             return PatternDetectionOutcome.insufficientData();
         }
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

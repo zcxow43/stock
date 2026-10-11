@@ -130,9 +130,9 @@ public class VolumeSurgeDetector implements PatternDetector {
         BigDecimal multiplier = PERCENT_BASE.add(resolveIncreasePercent(selection));
 
         boolean anyJudged = false;
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        VolumeSurgeDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        VolumeSurgeDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int i = MIN_TRADING_DAYS_BEFORE_D; i < bars.size(); i++) {
@@ -161,17 +161,18 @@ public class VolumeSurgeDetector implements PatternDetector {
             }
             long volume = bars.get(i).getVolume();
             long prevVolume = bars.get(i - 1).getVolume();
-            lastSignalDate = tradeDate;
-            lastBuyDate = buyDate;
-            lastDetail = new VolumeSurgeDetailDto(volume, averageOf(sum), increaseOf(volume, sum),
+            firstSignalDate = tradeDate;
+            firstBuyDate = buyDate;
+            firstDetail = new VolumeSurgeDetailDto(volume, averageOf(sum), increaseOf(volume, sum),
                     prevVolume, averageOf(prevSum), increaseOf(prevVolume, prevSum));
+            break; // the first hit in the range is the one reported (spec: 收斂)
         }
 
         if (!anyJudged) {
             return PatternDetectionOutcome.insufficientData();
         }
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

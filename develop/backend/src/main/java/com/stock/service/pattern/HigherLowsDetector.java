@@ -22,7 +22,7 @@ import java.util.Map;
  * below the MA5 of every one of the `swingBars` trading days on both sides; a day without a defined
  * MA5 (fewer than 5 bars behind it) never participates. Among the swing lows found within the
  * scanned range, a hit is any run of `requiredRises` consecutive rises each meeting `risePercent`
- * — compared on MA5 values, never on raw lows; when several such runs exist, the latest-dated one
+ * — compared on MA5 values, never on raw lows; when several such runs exist, the earliest-dated one
  * whose `buyDate` (the trading day after it) is already resolvable is reported — see
  * specs/backend/strategy-scan.md, "進場日（buyDate）". Raw lows are reported in the detail purely for
  * reference.
@@ -179,7 +179,7 @@ public class HigherLowsDetector implements PatternDetector {
 
         // Every k whose run of qualifying rises reaches requiredRises is itself an independent
         // candidate hit (specs/backend/strategy-scan.md, "存在連續 requiredRises 段遞增") — collected in
-        // chronological order so the loop below can prefer the latest one that also has a buyDate.
+        // chronological order so the loop below reports the earliest one (which is also the first to have a buyDate).
         List<Integer> qualifyingEnds = new ArrayList<>();
         int currentRun = 0;
         for (int k = 1; k < swingLows.size(); k++) {
@@ -201,9 +201,9 @@ public class HigherLowsDetector implements PatternDetector {
             return PatternDetectionOutcome.noMatch(false);
         }
 
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        HigherLowsDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        HigherLowsDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int end : qualifyingEnds) {
@@ -220,13 +220,14 @@ public class HigherLowsDetector implements PatternDetector {
                 lows.add(new LowPointDto(s.tradeDate, s.ma5.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                         s.low.setScale(PRICE_SCALE, RoundingMode.HALF_UP)));
             }
-            lastSignalDate = endLow.tradeDate;
-            lastBuyDate = buyDate;
-            lastDetail = new HigherLowsDetailDto(lows);
+            firstSignalDate = endLow.tradeDate;
+            firstBuyDate = buyDate;
+            firstDetail = new HigherLowsDetailDto(lows);
+            break; // the first hit in the range is the one reported (spec: 收斂)
         }
 
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         return PatternDetectionOutcome.noMatch(anyUnresolvedMatch);
     }

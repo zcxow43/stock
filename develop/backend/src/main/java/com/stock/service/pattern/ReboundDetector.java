@@ -170,9 +170,9 @@ public class ReboundDetector implements PatternDetector {
         // S can still land within [startDate, endDate] — see requiredLookbackTradingDays above.
         int tRangeStart = requireRise ? Math.max(0, startIdx - riseDays) : startIdx;
 
-        LocalDate lastSignalDate = null;
-        LocalDate lastBuyDate = null;
-        ReboundDetailDto lastDetail = null;
+        LocalDate firstSignalDate = null;
+        LocalDate firstBuyDate = null;
+        ReboundDetailDto firstDetail = null;
         boolean anyUnresolvedMatch = false;
 
         for (int t = tRangeStart; t <= endIdx; t++) {
@@ -276,17 +276,18 @@ public class ReboundDetector implements PatternDetector {
                 continue;
             }
 
-            if (lastSignalDate == null || !signalDate.isBefore(lastSignalDate)) {
-                lastSignalDate = signalDate;
-                lastBuyDate = buyDate;
-                lastDetail = new ReboundDetailDto(peakDate, peak.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
+            // troughs are walked in order but their S dates are not monotonic: keep the earliest S.
+            if (firstSignalDate == null || signalDate.isBefore(firstSignalDate)) {
+                firstSignalDate = signalDate;
+                firstBuyDate = buyDate;
+                firstDetail = new ReboundDetailDto(peakDate, peak.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                         bars.get(t).getTradeDate(), tClose.setScale(PRICE_SCALE, RoundingMode.HALF_UP),
                         dropPercentActual, risePercentActual);
             }
         }
 
-        if (lastSignalDate != null) {
-            return PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail);
+        if (firstSignalDate != null) {
+            return PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail);
         }
         // "已達標就命中、不等窗口跑滿" means an unmet rebound window is simply a miss; anyUnresolvedMatch
         // (a rebound that WAS met but has no next trading day yet) is the only source of pendingConfirm.

@@ -97,9 +97,9 @@ public class InstitutionalConsecutiveBuyDetector implements InstitutionalPattern
                 continue;
             }
 
-            LocalDate lastSignalDate = null;
-            LocalDate lastBuyDate = null;
-            InstitutionalConsecutiveBuyDetailDto lastDetail = null;
+            LocalDate firstSignalDate = null;
+            LocalDate firstBuyDate = null;
+            InstitutionalConsecutiveBuyDetailDto firstDetail = null;
             boolean anyUnresolvedMatch = false;
 
             for (InstitutionalWindowMath.DayWindow dw : windows) {
@@ -120,17 +120,18 @@ public class InstitutionalConsecutiveBuyDetector implements InstitutionalPattern
                     continue;
                 }
                 if (dw.barIndex + 1 < bars.size()) {
-                    lastSignalDate = dw.date;
-                    lastBuyDate = bars.get(dw.barIndex + 1).getTradeDate();
-                    lastDetail = new InstitutionalConsecutiveBuyDetailDto(dw.windowStartDate, matched, foreignDetail,
+                    firstSignalDate = dw.date;
+                    firstBuyDate = bars.get(dw.barIndex + 1).getTradeDate();
+                    firstDetail = new InstitutionalConsecutiveBuyDetailDto(dw.windowStartDate, matched, foreignDetail,
                             trustDetail);
+                    break; // the first hit in the range is the one reported (spec: 收斂)
                 } else {
                     anyUnresolvedMatch = true;
                 }
             }
 
-            if (lastSignalDate != null) {
-                outcomes.put(stockId, PatternDetectionOutcome.hit(lastSignalDate, lastBuyDate, lastDetail));
+            if (firstSignalDate != null) {
+                outcomes.put(stockId, PatternDetectionOutcome.hit(firstSignalDate, firstBuyDate, firstDetail));
             } else {
                 outcomes.put(stockId, PatternDetectionOutcome.noMatch(anyUnresolvedMatch));
             }
