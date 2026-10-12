@@ -276,3 +276,25 @@
 .page-strategy .setrow.hid .snm { color:#6B7C90; }
 .page-strategy .setrow .stag2 { color:#6B7C90; font-size:12px; }
 .page-strategy .setrow .sact { margin-left:auto; display:flex; align-items:center; gap:6px; }
+
+/* ---- 月營收模式 ---- */
+/* mview：往下捲過策略卡片後的畫面，條件區只剩「股票範圍」以下，版面留給月營收統計表 */
+.page-strategy.mview .topbar, .page-strategy.mview .head, .page-strategy.mview .pageopt,
+.page-strategy.mview .tabs, .page-strategy.mview .syncbar, .page-strategy.mview .condhead,
+.page-strategy.mview .cards { display:none; }
+.page-strategy.mview .cond { padding:10px 16px; margin-bottom:12px; }
+.page-strategy.mview .condrow { margin-bottom:6px; }
+.page-strategy.mview .mmonths { margin:4px 0 10px; }
+.page-strategy .mhint { font-size:12px; color:#93A4B8; }
+.page-strategy .mres h3 { margin:0 0 4px; }
+.page-strategy .mnote { color:#93A4B8; font-size:12px; margin:2px 0 8px; }
+.page-strategy .mnote.mfee { margin:8px 0 0; }
+.page-strategy .mstat thead th { padding:8px 16px; }
+.page-strategy .mstat tbody td { padding:7px 16px; font-size:13px; color:#E6EDF5; }
+.page-strategy .mstat tbody td.rng { color:#93A4B8; font-variant-numeric:tabular-nums; }
+.page-strategy .mstat tbody td.wait { color:#93A4B8; text-align:right; }
+.page-strategy .mstat tbody td.none { color:#6B7C90; }
+.page-strategy .mstat tbody td.cost { color:#E6EDF5; }
+.page-strategy .mstat tbody td.up { color:#E04B45; }
+.page-strategy .mstat tbody td.down { color:#16A75C; }
+.page-strategy .mstat tbody td.flat { color:#93A4B8; }
