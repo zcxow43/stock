@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "策略型態掃描分頁"
 requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）；一檔多筆的父列賣出價不再恆為「—」，改顯示與父列買進價同一批筆（已勾選且可回測）的賣出均價，兩個均價皆為未含費稅的成交價（2026-10-11，使用者原文「賣出價要標記上」）；股票範圍新增第三個選項「月營收」：不選區間，統計今日所在月份與其前三個日曆月（今日在 10 月即 7、8、9、10 月），每個月依序算五段（第一週→第二週、第二週→第三週、第三週→第四週、第四週→第五週、第一週→月最末週），一週屬於其週一所在的月份，該月沒有第五週或起始週還沒到的段跳過，結束週是本週或更晚的段算到今日為止；每一段各掃描並回測一次全市場，結果區改為「月營收統計」表，每段只列總成本、總報酬率、總收益，三個總計只排除買進價高於 500 元的筆，不套用其餘批次條件（2026-10-12）"
 depends_on: [stock-list]
@@ -1595,31 +1595,31 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 
 ### 月營收模式
 
-- [ ] 股票範圍有三個互斥選項，由左至右為「全市場」「指定股票」「月營收」，預設仍為「全市場」
-- [ ] 選「月營收」時兩個週選擇、三個快捷鈕與「實際區間」那一行都不顯示，原位置顯示「統計月份：…」；切回「全市場」或「指定股票」時區間列回復，起、迄週為切換前的值
-- [ ] 統計月份為今日所在月份與其前三個日曆月、由舊到新：今日 2026-10-12 時顯示「統計月份：2026-07、2026-08、2026-09、2026-10」；今日 2027-01-05 時為 2026-10、2026-11、2026-12、2027-01
-- [ ] 一週屬於其週一所在的月份：2026-10 的第一週為 10/05–10/11、第四週為 10/26–11/01、沒有第五週；09/28–10/04 是 2026-09 的第四週；2026-08 有五週，第五週為 08/31–09/06
-- [ ] 今日 2026-10-12 按「開始掃描」時恰好送出 16 段，各段的 `startDate`／`endDate` 與「月營收模式」一節的 16 列表格逐列相同、順序相同
-- [ ] 沒有第五週的月份不送「第四週 → 第五週」那一段（2026-07、2026-09、2026-10），該段也不出現在表上
-- [ ] 起始週晚於本週的段不送、不出現在表上：今日 2026-10-12 時 2026-10 沒有「第三週 → 第四週」那一列（起始週 10/19 還沒到）
-- [ ] 結束週為本週或本週之後的段照樣送出、`endDate` 為今日：今日 2026-10-12 時 2026-10「第一週 → 第二週」送 `2026-10-05`／`2026-10-12`、「第二週 → 第三週」送 `2026-10-12`／`2026-10-12`、「第一週 → 月最末週」送 `2026-10-05`／`2026-10-12`；任何一段的 `startDate` 與 `endDate` 都不晚於今日
-- [ ] 日期範圍相同的兩段各自一列、各自送出一次掃描：今日 2026-10-12 時 2026-10 的「第一週 → 第二週」與「第一週 → 月最末週」兩列都在表上，兩列的三個總計相同
-- [ ] 每一段的掃描請求不帶 `stockIds`、帶頁面層級「只看上市普通股」當下的 `commonStocksOnly`，`strategies` 與同一組卡片在「全市場」下送出的內容逐欄相同
-- [ ] 一次只跑一段：下一段的掃描請求在前一段的回測回應（或零命中的掃描回應、或失敗）之後才發出（以請求序列斷言）
-- [ ] 命中 ≥ 1 筆的段送出回測，`items[]` 為該段全部命中依 `(stockId, buyDate)` 去重後的每一筆；零命中的段不送回測
-- [ ] 每一列的總成本／總收益等於該段回測回應中 `sellDate` 不為 `null` 且 `buyPrice` ≤ `500` 各筆的 `cost`／`profit` 總和，總報酬率等於 `總收益 ÷ 總成本 × 100` 四捨五入至小數第二位：以一次真實統計的至少三列，用回測回應手算後與畫面逐一相符
-- [ ] `buyPrice` 恰為 `500.00` 的筆計入、`500.01` 的筆不計入（以攔截回測回應注入這兩筆驗證）
-- [ ] 報酬率低於 2% 或為負的筆、所屬股票非全符合的筆照樣計入：同一份回測回應套用「僅選取報酬率 2% 以上」後的手算結果與畫面**不同**，只排除高於 500 元的手算結果與畫面相同
-- [ ] 沒有任何一筆計入的列（零命中、全部高於 500 元、或全部無法回測）三格皆顯示 `#6B7C90` 的「—」，不顯示 `0`
-- [ ] 結果區標題為「月營收統計」，其下一行「買進價高於 500 元的筆不計入」，表格欄位依序為月份、週段、實際區間、總成本（每筆 1 張）、總報酬率、總收益（每筆 1 張）
-- [ ] 月營收統計的結果區沒有命中彙總表、勾選框欄、批次勾選框列、「本次採用參數」那一行、資料不足與待確認各行，往下捲動時沒有浮動總計
-- [ ] 統計進行中「開始掃描」為 disabled、右側顯示「統計中 {已完成段數}／{總段數}」；已完成的列有三個總計，正在跑的列為「統計中…」，其餘為「等待中」；全部結束後按鈕恢復可按、該文字消失
-- [ ] 某一段失敗時（攔截使第 3 段的掃描回 `500`）該列顯示 `#F09A94` 的「失敗」，第 4 段起照常送出並完成
-- [ ] 總成本與總收益為千分位不帶小數、總報酬率為兩位小數加 `%`；總報酬率與總收益正值實際渲染為 `#E04B45`、負值 `#16A75C`、`0` 為 `#93A4B8`，總成本恆為 `#E6EDF5`
-- [ ] 任何一段的回測回應到達後，表格下方顯示「收益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%」，兩個費率等於回測回應的值
-- [ ] 統計完成後切換股票範圍或改動卡片而未重掃時，月營收統計表維持不變
-- [ ] 股票範圍為「全市場」或「指定股票」時，送出的請求與結果區的畫面與本次改動前相同
-- [ ] 本次未新增任何顏色：新增的文字與表格全部取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 股票範圍有三個互斥選項，由左至右為「全市場」「指定股票」「月營收」，預設仍為「全市場」
+- [x] 選「月營收」時兩個週選擇、三個快捷鈕與「實際區間」那一行都不顯示，原位置顯示「統計月份：…」；切回「全市場」或「指定股票」時區間列回復，起、迄週為切換前的值
+- [x] 統計月份為今日所在月份與其前三個日曆月、由舊到新：今日 2026-10-12 時顯示「統計月份：2026-07、2026-08、2026-09、2026-10」；今日 2027-01-05 時為 2026-10、2026-11、2026-12、2027-01
+- [x] 一週屬於其週一所在的月份：2026-10 的第一週為 10/05–10/11、第四週為 10/26–11/01、沒有第五週；09/28–10/04 是 2026-09 的第四週；2026-08 有五週，第五週為 08/31–09/06
+- [x] 今日 2026-10-12 按「開始掃描」時恰好送出 16 段，各段的 `startDate`／`endDate` 與「月營收模式」一節的 16 列表格逐列相同、順序相同
+- [x] 沒有第五週的月份不送「第四週 → 第五週」那一段（2026-07、2026-09、2026-10），該段也不出現在表上
+- [x] 起始週晚於本週的段不送、不出現在表上：今日 2026-10-12 時 2026-10 沒有「第三週 → 第四週」那一列（起始週 10/19 還沒到）
+- [x] 結束週為本週或本週之後的段照樣送出、`endDate` 為今日：今日 2026-10-12 時 2026-10「第一週 → 第二週」送 `2026-10-05`／`2026-10-12`、「第二週 → 第三週」送 `2026-10-12`／`2026-10-12`、「第一週 → 月最末週」送 `2026-10-05`／`2026-10-12`；任何一段的 `startDate` 與 `endDate` 都不晚於今日
+- [x] 日期範圍相同的兩段各自一列、各自送出一次掃描：今日 2026-10-12 時 2026-10 的「第一週 → 第二週」與「第一週 → 月最末週」兩列都在表上，兩列的三個總計相同
+- [x] 每一段的掃描請求不帶 `stockIds`、帶頁面層級「只看上市普通股」當下的 `commonStocksOnly`，`strategies` 與同一組卡片在「全市場」下送出的內容逐欄相同
+- [x] 一次只跑一段：下一段的掃描請求在前一段的回測回應（或零命中的掃描回應、或失敗）之後才發出（以請求序列斷言）
+- [x] 命中 ≥ 1 筆的段送出回測，`items[]` 為該段全部命中依 `(stockId, buyDate)` 去重後的每一筆；零命中的段不送回測
+- [x] 每一列的總成本／總收益等於該段回測回應中 `sellDate` 不為 `null` 且 `buyPrice` ≤ `500` 各筆的 `cost`／`profit` 總和，總報酬率等於 `總收益 ÷ 總成本 × 100` 四捨五入至小數第二位：以一次真實統計的至少三列，用回測回應手算後與畫面逐一相符
+- [x] `buyPrice` 恰為 `500.00` 的筆計入、`500.01` 的筆不計入（以攔截回測回應注入這兩筆驗證）
+- [x] 報酬率低於 2% 或為負的筆、所屬股票非全符合的筆照樣計入：同一份回測回應套用「僅選取報酬率 2% 以上」後的手算結果與畫面**不同**，只排除高於 500 元的手算結果與畫面相同
+- [x] 沒有任何一筆計入的列（零命中、全部高於 500 元、或全部無法回測）三格皆顯示 `#6B7C90` 的「—」，不顯示 `0`
+- [x] 結果區標題為「月營收統計」，其下一行「買進價高於 500 元的筆不計入」，表格欄位依序為月份、週段、實際區間、總成本（每筆 1 張）、總報酬率、總收益（每筆 1 張）
+- [x] 月營收統計的結果區沒有命中彙總表、勾選框欄、批次勾選框列、「本次採用參數」那一行、資料不足與待確認各行，往下捲動時沒有浮動總計
+- [x] 統計進行中「開始掃描」為 disabled、右側顯示「統計中 {已完成段數}／{總段數}」；已完成的列有三個總計，正在跑的列為「統計中…」，其餘為「等待中」；全部結束後按鈕恢復可按、該文字消失
+- [x] 某一段失敗時（攔截使第 3 段的掃描回 `500`）該列顯示 `#F09A94` 的「失敗」，第 4 段起照常送出並完成
+- [x] 總成本與總收益為千分位不帶小數、總報酬率為兩位小數加 `%`；總報酬率與總收益正值實際渲染為 `#E04B45`、負值 `#16A75C`、`0` 為 `#93A4B8`，總成本恆為 `#E6EDF5`
+- [x] 任何一段的回測回應到達後，表格下方顯示「收益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%」，兩個費率等於回測回應的值
+- [x] 統計完成後切換股票範圍或改動卡片而未重掃時，月營收統計表維持不變
+- [x] 股票範圍為「全市場」或「指定股票」時，送出的請求與結果區的畫面與本次改動前相同
+- [x] 本次未新增任何顏色：新增的文字與表格全部取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -3010,3 +3010,58 @@ Contract prose rewritten in place:「父列在摺疊時顯示什麼」(table row
 **Housekeeping**: 8081 and 5174 stopped; 8080 / 5173 never touched. No sync or backfill triggered; scan and backtest write nothing, so there is no test data to clean up. `data/real-trades.csv` not modified (the backend read a scratch copy). Built and verified by the `/code` worker itself, without a nested `frontend` agent.
 
 **Left unchecked**: none.
+
+### Increment 37 — 2026-10-12
+
+**Scope**: the 25 criteria under「月營收模式」: third stock-scope radio 「月營收」, the 統計月份 line in place of the 區間 row, the per-month 週段 segments, one scan → backtest per segment run strictly in sequence, the three totals per row, and the 月營收統計 table in the result area. Frontend only; no endpoint, request field or response changed.
+
+**Files changed**
+- `develop/frontend/src/pages/StrategyTab.tsx` — `scope` is now `'ALL' | 'SELECTED' | 'MONTHLY'`; new module-level pure functions `monthlyRevenueMonths(now)`, `mondaysOfMonth`, `buildMonthlySegments(now)` (months, Nth-Monday weeks, segment list, skip rules, endDate clipped to `now`) and `computeMonthlyTotals(backtestResponse)`; `runMonthly` (the sequential run); `renderMonthlyTable`; `clearBacktestState` extracted unchanged from the top of `runScan` so both runs reset the same state; scope radio, 區間 row switch, 「統計中 k／N」 hint, result-area switch.
+- `develop/frontend/src/pages/StockListPage.css` — appended `.st-month-hint`, `.st-monthly-note`, `.st-monthly-range`, `.st-monthly-pending`, `.st-monthly-failed`, `.st-monthly-fee`; every colour is a literal from `## Visual Style` (`#93a4b8`, `#f09a94`); everything else reuses existing classes (`st-result-block`, `st-result-title`, `sl-table`, `sl-r`, `sl-up`/`sl-down`/`sl-neutral`/`sl-muted`, `st-backtest-hint`, `st-uncounted-note(s)`).
+- `develop/frontend/src/api/strategies.ts` — not changed (`scanStrategies`／`backtestStrategies` already take an `AbortSignal`).
+
+**Decisions the requirement did not state**
+- "Today" is the existing `today()` (browser local day), the same call the 區間 default uses, so a mocked browser clock moves it. `buildMonthlySegments` takes the day as an argument.
+- The `strategies` array is built once at click time (via `buildScanPayload()`, the same builder 全市場 uses), and `commonStocksOnly` is the page-level checkbox's value at that same moment; both are reused unchanged for all 16 segments, so editing a card or toggling the checkbox mid-run affects the next run, not this one. In 月營收 mode `buildScanPayload` sends `commonStocksOnly` for any scope except 指定股票 (was: only for 全市場).
+- 月營收 mode ignores `dateInvalid` for `canScan` (the hidden week pickers may hold start > end); 「開始掃描」 is also disabled while a 月營收 run is going, whatever the scope radio shows.
+- The 「區間」 section label is dropped together with the row in 月營收 mode; only the 「統計月份：…」 line (class `st-range-hint`, same colour as 「實際區間」) remains. The week range state is kept, so switching back restores it.
+- Starting a 月營收 run clears the normal scan/backtest state; starting a 全市場／指定股票 scan clears the 月營收統計 table. The fee line shows the rates of the most recent backtest response.
+- A thrown error of any kind inside a segment (HTTP error, network error, non-JSON body) marks that row 「失敗」; an unmount aborts the in-flight request and stops the loop. The run is `void runMonthly()` — everything that can reject is inside its `try`.
+- Row totals: `returnPercent` uses the same `Math.round(x*100*100)/100` as the existing totals; a covered row whose total cost is not positive would show 「—」 for the rate only (cannot occur with real data).
+
+**Live verification** — `npm run build` clean (tsc + vite); `npm run lint` shows only the pre-existing `react(set-state-in-effect)` warning (StrategyTab.tsx:1333, not in this diff). Headless Chromium (Playwright) against `npm run dev -- --port 5174` (`API_TARGET=http://localhost:8081`), worker backend on 8081, real database, system day 2026-10-12. Scripts and captured output are in `/private/tmp/claude-1966623317/-Users-phisnu-liao-Desktop-phisnu-code-stock/013adebc-a9de-48e1-bd9a-94ad63455879/scratchpad/w1/`: `verify-main.mjs` (+ `.log`, `run1-*.json`, `run2-requests.json`, `run1-final.png`), `verify-intercept.mjs` (+ `.log`, `intercept-*.json`, `fabricated-light.png`/`-dark.png`), `verify-clock.mjs` (+ `.log`), `verify-regression.mjs` (+ `.log`), `lib.mjs`. Real run: cards MACD 黃金交叉 (5/20) + 量多 (50%); 16 scans, 15 backtests, 19.4 s; the baseline 全市場 scan of the same cards sent `strategies` = `[{"code":"MACD_GOLDEN_CROSS","fastPeriod":5,"slowPeriod":20},{"code":"VOLUME_SURGE","increasePercent":50}]`.
+
+1. Radios — 全市場／指定股票／月營收 in that order, checked flags `[true,false,false]` on load.
+2. 區間 row — start week stepped back once (`2026 第 40 週（09/28–10/04）`, 實際區間 `2026-09-28 ~ 2026-10-12`); on 月營收: 0 `.st-week-select`, 0 `.st-shortcut`, 0 `.st-date-range`, no 「實際區間」 text, one line 「統計月份：2026-07、2026-08、2026-09、2026-10」; after 月營收 → 指定股票 → 全市場 the caption and 實際區間 line are identical to before.
+3. 統計月份 — real day 2026-10-12: 2026-07、2026-08、2026-09、2026-10; `context.clock.setFixedTime(2027-01-05T10:00+08:00)` (browser reports 2027-1-5, Asia/Taipei): 「統計月份：2026-10、2026-11、2026-12、2027-01」; also 2026-10-14: same four months as 2026-10-12.
+4. Week rules — table rows show 2026-09 第三週 → 第四週 = `2026-09-21 ~ 2026-10-04` (09/28–10/04 is 9 月第四週), 2026-08 第四週 → 第五週 = `2026-08-24 ~ 2026-09-06` (第五週 = 08/31–09/06), 2026-10 第一週 starts `2026-10-05`; 2026-10 has no 第五週 row. Also hand-derived list for 2027-01-05 (15 segments: 10 月 4, 11 月 5 incl. 第五週 11/23–12/06, 12 月 4, 1 月 2) equals the 15 scan bodies and 15 rows, in order.
+5. 16 segments — exactly 16 `POST /api/strategies/scan`; `startDate`／`endDate` equal the spec table row by row (0 mismatches), and the 16 table rows' 月份／週段／實際區間 equal it too.
+6. 第四週 → 第五週 — only for 2026-08 in requests and table (`["2026-08"]`).
+7. 2026-10 rows — exactly 第一週 → 第二週, 第二週 → 第三週, 第一週 → 月最末週; no request has `startDate` 2026-10-19.
+8. Dates not after today — all 32 dates ≤ 2026-10-12; the three 2026-10 requests are (10-05, 10-12), (10-12, 10-12), (10-05, 10-12). With the clock at 2026-10-14 they are (10-05, 10-14), (10-12, 10-14), (10-05, 10-14).
+9. Identical ranges — two scans with (2026-10-05, 2026-10-12); both rows present with identical totals `41,592,232 | -0.05% | -20,555`.
+10. Scan body — all 16: no `stockIds`, `commonStocksOnly: true` (page checkbox checked), `strategies` deep-equal to the 全市場 scan's. Second full run after unchecking 「只看上市普通股」: 16 scans with `commonStocksOnly: false`, `strategies` deep-equal to the (also `false`) 全市場 scan.
+11. Sequencing — 31 requests in order `sbsbsbsbsbsbsbsbsbsbsbsbsbsbssb` (segment 15 has no backtest); each request's CDP arrival sequence is after the previous request's `requestfinished` (0 violations); max 1 request in flight. (Wall-clock stamps taken in Node were skewed by async body reads and were not used.)
+12. Backtest items — for all 15 backtests `items[]` = the segment's distinct `(stockId, buyDate)` pairs, no duplicates; the one zero-hit segment (2026-10-12 ~ 2026-10-12) sent no backtest. Fabricated: 6 hits (A@d1 by two strategies, A@d2) → 5 items; scan 500 and zero-hit segments send no backtest; 14 backtests for 16 segments.
+13. Hand computation (independent code over the captured backtest responses, all 16 rows match the screen). Row 1, 2026-07 第一週 → 第二週 (465 items, 444 covered): Σcost 27,142,561, Σprofit 2,904,274, 2,904,274 ÷ 27,142,561 × 100 = 10.70% — screen `27,142,561 | 10.70% | 2,904,274`. Row 2, 2026-07 第二週 → 第三週 (510, 480): 27,610,783 / 3,757,929 / 13.61% — screen identical. Row 3, 2026-07 第三週 → 第四週 (585, 550): 29,831,806 / 5,477,064 / 18.36% — screen identical. Row 15 (zero hits): `— | — | —`.
+14. 500.00／500.01 — fabricated response: A buyPrice 500.00 (cost 500,000, profit 10,000) counted, B buyPrice 500.01 (cost 500,010, profit 99,999) not, C `sellDate: null` not, D (−3%, 400) counted, A@d2 counted → screen `1,000,000 | 0.30% | 3,000` (would be `1,500,010` with B).
+15. ≥2% filter — real run: for 15 of 15 backtested rows the 「報酬率 ≥ 2%」 hand result differs from the screen (e.g. row 1 → 16,865,747 / 3,112,602 / 18.46% vs screen 27,142,561 / 2,904,274 / 10.70%), and the 「only exclude > 500」 hand result equals the screen in all 15. Fabricated: ≥2% gives `600,000 | 2.50% | 15,000`, screen `1,000,000 | 0.30% | 3,000`.
+16. 「—」 — zero hits (real, and fabricated row 6), all buyPrice > 500 (fabricated row 2), all `sellDate: null` (fabricated row 4): three cells each `—`, computed `rgb(107, 124, 144)`, no `0`.
+17. Result area text — title 「月營收統計」, note 「買進價高於 500 元的筆不計入」, headers 月份／週段／實際區間／總成本（每筆 1 張）／總報酬率／總收益（每筆 1 張).
+18. Nothing else — no `.st-union-table`, `.st-checkbox-col`, row checkbox, `.st-batch-controls`, `.st-params-line`, `.st-floating-totals`, `.st-backtest-totals`, `.st-sortable`, `tr.sl-row`, no 資料不足／待確認 text — checked at the top and after scrolling to the bottom (page scrolled; floating copy never appears). Right after clicking 「開始掃描」 the old hits table is gone and 16 rows are listed.
+19. Mid-run — polled snapshots saw 「統計中 0／16」 … 「統計中 15／16」 with the button `disabled`; e.g. at 5／16: five rows with totals, one 「統計中…」, ten 「等待中」. Fabricated hold (scan #3 delayed): 「統計中 2／16」, rows 1–2 with totals, row 3 「統計中…」, rows 4–16 「等待中」; while segment 1's backtest was pending: 「統計中 0／16」, row 1 「統計中…」. End state: button enabled, hint gone, no 「等待中」／「統計中…」 left. Clicking 全市場 mid-run did not interrupt it: 區間 row came back, the table stayed, the button stayed disabled with 「統計中 2／16」, the run reached 16 scans.
+20. Failure — scan #3 answered HTTP 500: row 3 = 「失敗」 (`colSpan` 3), computed `rgb(240, 154, 148)`; scans #4–#16 were sent (16 scans) and all rows 4–16 finished. A backtest answered 500 (row 7) also shows 「失敗」 in `rgb(240, 154, 148)` and the run continued.
+21. Formats and colours — real run: every amount matches `^-?\d{1,3}(,\d{3})*$`, every rate `^-?\d+\.\d{2}%$`; 總成本 `rgb(230, 237, 245)`; positive rate/profit `rgb(224, 75, 69)`, negative `rgb(22, 167, 92)`. Fabricated: profit 0 → `100,000 | 0.00% | 0` with rate and profit `rgb(147, 164, 184)`; `3,000,000 | 4.12% | 123,457` red; `2,500,000 | -5.50% | -137,500` green.
+22. Fee line — real: 「收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%」, equal to the response's `feeRatePercent` 0.1425 / `taxRatePercent` 0.3. Fabricated (0.2 / 0.35): absent while segment 1's backtest was pending, then 「收益已扣手續費 0.2%（買賣各一次）與證交稅 0.35%」; colour `rgb(147, 164, 184)`.
+23. After completion — clicking 全市場, 指定股票, 月營收, changing MACD 短期 EMA to 7 and unticking 量多: `.st-results` innerHTML identical to before each time; 0 new requests.
+24. 全市場／指定股票 — 全市場: body keys exactly `strategies, startDate, endDate, commonStocksOnly`, 命中彙總 — 共 105 檔 with checkbox column, batch row, 「本次採用參數」 line, totals, auto backtest (1 request). 指定股票 (stock 2108, a real hit): body has `stockIds: ["2108"]`, no `commonStocksOnly`, `startDate` 2026-10-05, `endDate` 2026-10-12, 命中彙總 — 共 1 檔 with 1 auto backtest. A 全市場 scan after a 月營收 run replaces the 月營收統計 table with the normal hits table. The change on this path is the diff itself: `clearBacktestState` is the old block moved verbatim, and `commonStocksOnly` stays `undefined` for 指定股票.
+25. Colours light vs dark — `colorScheme: 'light'` and `'dark'` emulated, sampled idle, mid-run, end and with 月營收 reselected (radio label, 統計月份 line, 統計中 hint, block, title, note, 表頭, month/range/pending/failed/dash/cost/up/down/zero cells, fee line): all identical between the two schemes; the 9 distinct values are `#93A4B8 #16202C #26333F #E6EDF5 #1B2836 #6B7C90 #E04B45 #F09A94 #16A75C`, all in `## Visual Style`.
+- Table geometry (final state, 16 rows): every `<td>`/`<th>` is `display: table-cell` and none carries a layout class; each body cell's left/right equals its header cell's (the merged cell spans header 4–6); each row has one `top`.
+
+**Left unchecked**: none from the 25; no criterion was verified only by reasoning. Not exercised: a stored `localStorage` card order other than the default, and the ≤ 1280px layout (the new table has no stacked variant).
+
+**Re-check by the `/dev` executor** (separate script `caller-check.mjs` in the same scratch directory, different card: 累積上漲 20 日／15%, the 16-row table parsed out of this spec file instead of typed in): 16 scans whose `startDate`／`endDate` and the 16 table rows equal the spec table in order; no `stockIds`, `commonStocksOnly: true`, `strategies` equal to the 全市場 scan's `[{"code":"CUMULATIVE_RISE","days":20,"risePercent":15}]`; request order `sbsbsbsbsbsbsbsbsbsbsbsbsbsbssb` with each request issued after the previous one finished; each of the 15 backtests' `items[]` equals that segment's distinct `(stockId, buyDate)` pairs; all 16 rows equal the hand computation over `sellDate` not `null` and `buyPrice` ≤ 500 — 2026-07 第一週 → 第二週 (67 items, 63 covered, 4 above 500) `6,020,184 | 9.32% | 561,018`; 第二週 → 第三週 (49, 40, 9) `3,871,942 | 23.66% | 916,061`; 第三週 → 第四週 (38, 30, 8) `2,893,103 | 21.42% | 619,631`; the two `2026-10-05 ~ 2026-10-12` rows both `16,460,867 | 1.56% | 257,437`; the ≥ 2% filter gives a different 總收益 in 15 of 15 backtested rows. `verify-intercept.mjs`, `verify-clock.mjs` and `verify-regression.mjs` re-run afterwards: 15／12／4 PASS, 0 FAIL. `npm run build` clean.
+
+**Housekeeping**: 8081 and 5174 stopped after the run; 8080 / 5173 never touched. Scan and backtest write nothing, so there is no test data to clean up; no sync, import or backfill endpoint was called. `data/real-trades.csv` not modified (the backend read a scratch copy). `docs/frontend/strategy` (storyboard) not updated — not part of these criteria.
+
+**One mistake during setup, recorded as it happened**: the worker backend's first launch on 8081 (16:36:12) passed the two startup switches through `-Dspring-boot.run.jvmArguments`, which `develop/backend/pom.xml`'s own `<jvmArguments>` overrides, so both startup jobs ran once against the shared database before the process was killed. What that run did: one TWSE daily-snapshot request (stock master sync, "1364 stocks upserted", 0 rows of `stock` with a changed `updated_at`); the price catch-up found nothing to fetch (`stock_daily_price` 0 rows changed, `PRICE_BACKFILL` progress rows untouched); the indicator rebuild rewrote the 1,385 `INDICATOR_REBUILD` progress rows' timestamps (`stock_daily_indicator` 0 rows changed); the institutional-trade catch-up called TWSE T86 and **inserted the 1,334 rows of `stock_institutional_trade` for trade date 2026-10-12** (real source data, the same rows the integration backend's own catch-up would write; not deleted). The second launch used environment variables plus `--app.*.enabled=false` program arguments and logged both jobs as disabled; everything verified above ran on that second process.

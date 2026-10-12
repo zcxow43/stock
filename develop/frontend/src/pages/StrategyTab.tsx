@@ -679,6 +679,111 @@ function computeBacktestTotals(result: BacktestResponse, checkedItemKeys: Set<st
   return { includedCount, totalCost, totalProfit, totalReturnPercent, uncountedNoSellDate, uncountedUnchecked }
 }
 
+/** 月營收模式 — one 週段 of one month: the (起始週, 結束週) pair resolved to the two dates the
+ * scan request carries (specs/frontend/strategy.md「月營收模式」). */
+interface MonthlySegment {
+  /** `YYYY-MM` */
+  month: string
+  /** 「第一週 → 第二週」… 「第一週 → 月最末週」 — the label the table shows. */
+  label: string
+  startDate: string
+  endDate: string
+}
+
+/** The three totals of one segment; `null` (instead of an object) means nothing was covered. */
+interface MonthlyTotals {
+  totalCost: number
+  totalProfit: number
+  /** `null` only when `totalCost` is not positive, so the rate cannot be formed. */
+  returnPercent: number | null
+}
+
+type MonthlyRowStatus = 'waiting' | 'running' | 'done' | 'failed'
+interface MonthlyRow {
+  segment: MonthlySegment
+  status: MonthlyRowStatus
+  totals: MonthlyTotals | null
+}
+
+/** 「買進價高於 500 元的筆不計入」 — the fixed amount of the 月營收 mode (no input for it). */
+const MONTHLY_PRICE_CAP = 500
+const MONTHLY_MONTH_COUNT = 4
+
+/** Which of a month's Mondays each of the five fixed 週段 starts and ends on; `'last'` is the
+ * month's last Monday (月最末週), `4` (第五週) only exists in a five-Monday month. */
+const MONTHLY_WEEK_PAIRS: { from: number; to: number | 'last'; label: string }[] = [
+  { from: 0, to: 1, label: '第一週 → 第二週' },
+  { from: 1, to: 2, label: '第二週 → 第三週' },
+  { from: 2, to: 3, label: '第三週 → 第四週' },
+  { from: 3, to: 4, label: '第四週 → 第五週' },
+  { from: 0, to: 'last', label: '第一週 → 月最末週' },
+]
+
+/** 統計月份 — the month `now` is in plus the three calendar months before it, oldest first. */
+function monthlyRevenueMonths(now: Date): { year: number; monthIndex: number; text: string }[] {
+  return Array.from({ length: MONTHLY_MONTH_COUNT }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (MONTHLY_MONTH_COUNT - 1 - i), 1)
+    return { year: d.getFullYear(), monthIndex: d.getMonth(), text: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}` }
+  })
+}
+
+/** Every Monday that falls inside the month — 「一週屬於它的週一所在的那個月」, so the N-th Monday
+ * starts the month's N-th week and the last Monday starts its 月最末週. */
+function mondaysOfMonth(year: number, monthIndex: number): Date[] {
+  const firstWeekday = new Date(year, monthIndex, 1).getDay() || 7 // Mon=1 … Sun=7
+  const result: Date[] = []
+  for (let d = new Date(year, monthIndex, 1 + ((8 - firstWeekday) % 7)); d.getMonth() === monthIndex; d = shiftDays(d, 7)) {
+    result.push(d)
+  }
+  return result
+}
+
+/** The segments a 月營收 run scans for the day `now`, in table order (oldest month first, then
+ * the five fixed 週段). A segment is dropped when its month has no 第五週 (第四週 → 第五週) or
+ * when its start week is after the current week (it would need a future `startDate`). `endDate` is
+ * the end week's Sunday, or `now` itself once the end week is the current week or a later one.
+ * Two segments with the same date range both stay — nothing is merged. Pure: the only input is
+ * `now`, so it can be exercised with any day. */
+function buildMonthlySegments(now: Date): MonthlySegment[] {
+  const currentWeekMonday = isoWeekInfo(now).monday.getTime()
+  const todayIso = toIsoDate(now)
+  const segments: MonthlySegment[] = []
+  for (const { year, monthIndex, text } of monthlyRevenueMonths(now)) {
+    const mondays = mondaysOfMonth(year, monthIndex)
+    for (const pair of MONTHLY_WEEK_PAIRS) {
+      const startMonday = mondays[pair.from]
+      const endMonday = mondays[pair.to === 'last' ? mondays.length - 1 : pair.to]
+      if (!startMonday || !endMonday) continue
+      if (startMonday.getTime() > currentWeekMonday) continue
+      segments.push({
+        month: text,
+        label: pair.label,
+        startDate: toIsoDate(startMonday),
+        endDate: endMonday.getTime() >= currentWeekMonday ? todayIso : toIsoDate(shiftDays(endMonday, 6)),
+      })
+    }
+  }
+  return segments
+}
+
+/** A segment's three totals from its backtest response: only the items that were backtestable
+ * (`sellDate` not `null`) and bought at `MONTHLY_PRICE_CAP` or below (`500.00` counts, `500.01`
+ * does not). No other batch filter applies. `null` when no item is covered. */
+function computeMonthlyTotals(result: BacktestResponse): MonthlyTotals | null {
+  let covered = 0
+  let totalCost = 0
+  let totalProfit = 0
+  for (const item of result.items) {
+    if (item.sellDate === null || item.buyPrice === null || item.buyPrice > MONTHLY_PRICE_CAP) continue
+    covered += 1
+    totalCost += item.cost ?? 0
+    totalProfit += item.profit ?? 0
+  }
+  if (covered === 0) return null
+  const returnPercent = totalCost > 0 ? Math.round((totalProfit / totalCost) * 100 * 100) / 100 : null
+  return { totalCost, totalProfit, returnPercent }
+}
+
 interface ParentAggregate {
   checkedChildren: number
   totalChildren: number
@@ -969,7 +1074,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [paramServerError, setParamServerError] = useState<{ code: StrategyCode; message: string } | null>(null)
 
   // ---------- stock scope ----------
-  const [scope, setScope] = useState<'ALL' | 'SELECTED'>('ALL')
+  const [scope, setScope] = useState<'ALL' | 'SELECTED' | 'MONTHLY'>('ALL')
   const [selectedStocks, setSelectedStocks] = useState<{ stockId: string; stockName: string }[]>([])
   const [stockSearch, setStockSearch] = useState('')
   const debouncedStockSearch = useDebouncedValue(stockSearch, 300)
@@ -1094,6 +1199,16 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const backtestGenerationRef = useRef(0)
   const backtestAbortControllerRef = useRef<AbortController | null>(null)
 
+  // ---------- 月營收統計 (股票範圍「月營收」— one scan → backtest per segment, strictly one at a
+  // time; the result area shows this table instead of the 命中彙總表 whenever `monthlyRows` is set) ----------
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[] | null>(null)
+  const [monthlyRunning, setMonthlyRunning] = useState(false)
+  const [monthlyFee, setMonthlyFee] = useState<{ feeRatePercent: number; taxRatePercent: number } | null>(null)
+  // Same pattern as the backtest generation counter: a run only keeps writing state while its
+  // own id is still the current one; unmount bumps it and aborts the request in flight.
+  const monthlyRunRef = useRef(0)
+  const monthlyAbortControllerRef = useRef<AbortController | null>(null)
+
   // ---------- sync ----------
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
@@ -1121,6 +1236,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // Aborts whatever backtest request is still in flight if this component unmounts —
   // otherwise its `.then`/`.catch` would try to set state on an unmounted component.
   useEffect(() => () => backtestAbortControllerRef.current?.abort(), [])
+  useEffect(
+    () => () => {
+      monthlyRunRef.current += 1
+      monthlyAbortControllerRef.current?.abort()
+    },
+    [],
+  )
 
   // Catalogue — the sole source of strategy names / preset names / description text.
   useEffect(() => {
@@ -1463,7 +1585,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     startDate: scanStartDate,
     endDate: scanEndDate,
     // 使用者明確指名的代號不代為過濾 — only sent for a 全市場 scan.
-    commonStocksOnly: scope === 'ALL' ? commonStocksOnly : undefined,
+    commonStocksOnly: scope !== 'SELECTED' ? commonStocksOnly : undefined,
   })
 
   // Maps a params-driven backend validation error code to the `params` entry it names —
@@ -1576,16 +1698,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       })
   }
 
-  const runScan = (payload: ScanRequest) => {
-    setScanStatus('scanning')
-    setScanErrorMessage(null)
-    setUnknownIds(null)
-    setInvalidRisePercentStrategy(null)
-    setParamServerError(null)
-    setLastScanPayload(payload)
-    // 重新掃描一定清空回測結果，在按下的當下就做，不等新結果回來 — an old backtest is for
-    // an old hit list; leaving it next to a new one would be two datasets that no longer
-    // correspond, with nothing on screen to say so.
+  /** 重新掃描一定清空回測結果，在按下的當下就做，不等新結果回來 — an old backtest is for an
+   * old hit list; leaving it next to a new one would be two datasets that no longer
+   * correspond, with nothing on screen to say so. Shared by the normal scan and the 月營收
+   * run, both of which replace whatever the result area showed. */
+  const clearBacktestState = () => {
     setBacktestStatus('idle')
     setBacktestResult(null)
     setPriceThresholdChecked(false)
@@ -1605,6 +1722,79 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     backtestGenerationRef.current += 1
     backtestAbortControllerRef.current?.abort()
     backtestAbortControllerRef.current = null
+  }
+
+  /** 股票範圍「月營收」的「開始掃描」: lists every segment, then strictly one segment at a time
+   * runs scan → (backtest when there is at least one hit) → fills its row → next segment. The
+   * `strategies` are built once, here, from the cards as they are at click time, so every
+   * segment sends exactly what a 全市場 scan of the same cards would; `commonStocksOnly` is the
+   * page-level checkbox's value at that same moment. A failed scan or backtest marks only its own
+   * row 「失敗」 and the run goes on. Switching the scope radio never touches this loop. */
+  const runMonthly = async () => {
+    const segments = buildMonthlySegments(today())
+    const { strategies } = buildScanPayload()
+    const runId = monthlyRunRef.current + 1
+    monthlyRunRef.current = runId
+    const controller = new AbortController()
+    monthlyAbortControllerRef.current = controller
+    const isCurrent = () => monthlyRunRef.current === runId
+
+    // 結果區原有的內容清空，改列出本次全部的段。
+    setScanResult(null)
+    setScanStatus('idle')
+    setScanErrorMessage(null)
+    setUnknownIds(null)
+    setInvalidRisePercentStrategy(null)
+    setParamServerError(null)
+    setCheckedItemKeys(new Set())
+    setExpandedStockIds(new Set())
+    clearBacktestState()
+    setMonthlyFee(null)
+    setMonthlyRows(segments.map((segment) => ({ segment, status: 'waiting', totals: null })))
+    setMonthlyRunning(true)
+
+    const patchRow = (index: number, patch: Partial<MonthlyRow>) =>
+      setMonthlyRows((rows) => (rows ? rows.map((row, i) => (i === index ? { ...row, ...patch } : row)) : rows))
+
+    for (let i = 0; i < segments.length; i += 1) {
+      if (!isCurrent()) return
+      patchRow(i, { status: 'running' })
+      try {
+        const scan = await scanStrategies(
+          { strategies, startDate: segments[i].startDate, endDate: segments[i].endDate, commonStocksOnly },
+          controller.signal,
+        )
+        if (!isCurrent()) return
+        const hitRows = buildUnionRows(scan)
+        if (hitRows.length === 0) {
+          patchRow(i, { status: 'done', totals: null })
+          continue
+        }
+        const backtest = await backtestStrategies({ items: buildBacktestItems(hitRows) }, controller.signal)
+        if (!isCurrent()) return
+        setMonthlyFee({ feeRatePercent: backtest.feeRatePercent, taxRatePercent: backtest.taxRatePercent })
+        patchRow(i, { status: 'done', totals: computeMonthlyTotals(backtest) })
+      } catch (err: unknown) {
+        if (!isCurrent()) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        patchRow(i, { status: 'failed', totals: null })
+      }
+    }
+    if (!isCurrent()) return
+    setMonthlyRunning(false)
+  }
+
+  const runScan = (payload: ScanRequest) => {
+    setScanStatus('scanning')
+    setScanErrorMessage(null)
+    setUnknownIds(null)
+    setInvalidRisePercentStrategy(null)
+    setParamServerError(null)
+    setLastScanPayload(payload)
+    // 月營收統計表屬於上一次的「月營收」掃描，新的一般掃描一開始就換掉它。
+    setMonthlyRows(null)
+    setMonthlyFee(null)
+    clearBacktestState()
     scanStrategies(payload)
       .then((resp) => {
         setScanResult(resp)
@@ -1748,13 +1938,19 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const canScan =
     !noStrategySelected &&
     !noStockSelected &&
-    !dateInvalid &&
+    // 月營收沒有區間可選，週選擇留下的值不該擋住它。
+    (scope === 'MONTHLY' || !dateInvalid) &&
     !hasInvalidRisePercent &&
     !hasInvalidParams &&
-    scanStatus !== 'scanning'
+    scanStatus !== 'scanning' &&
+    !monthlyRunning
 
   const handleScanClick = () => {
     if (!canScan) return
+    if (scope === 'MONTHLY') {
+      void runMonthly()
+      return
+    }
     runScan(buildScanPayload())
   }
 
@@ -2331,6 +2527,66 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       </th>
     )
   }
+
+  /** 月營收統計表 — the only thing the result area holds in 月營收 mode: title, one note line, one
+   * row per segment, then the fee line once any backtest response has arrived. No selection, sort,
+   * row click or floating totals. A row without a result merges its three total cells into one
+   * (`colSpan`). Layout lives on the table elements only — no `<td>`/`<th>` gets a display class. */
+  const renderMonthlyTable = (rows: MonthlyRow[]) => (
+    <div className="st-result-block st-monthly-block">
+      <h3 className="st-result-title">月營收統計</h3>
+      <p className="st-monthly-note">買進價高於 {MONTHLY_PRICE_CAP} 元的筆不計入</p>
+      <table className="sl-table st-result-table st-monthly-table">
+        <thead>
+          <tr>
+            <th>月份</th>
+            <th>週段</th>
+            <th>實際區間</th>
+            <th className="sl-r">總成本（每筆 1 張）</th>
+            <th className="sl-r">總報酬率</th>
+            <th className="sl-r">總收益（每筆 1 張）</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ segment, status, totals }) => (
+            <tr key={`${segment.month}|${segment.label}`}>
+              <td>{segment.month}</td>
+              <td>{segment.label}</td>
+              <td className="st-monthly-range">
+                {segment.startDate} ~ {segment.endDate}
+              </td>
+              {status === 'done' ? (
+                totals ? (
+                  <>
+                    <td className="sl-r">{formatAmount(totals.totalCost)}</td>
+                    <td className={`sl-r ${signColorClass(totals.returnPercent)}`}>{formatPercent2(totals.returnPercent)}</td>
+                    <td className={`sl-r ${signColorClass(totals.totalProfit)}`}>{formatAmount(totals.totalProfit)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className="sl-r sl-muted">—</td>
+                    <td className="sl-r sl-muted">—</td>
+                    <td className="sl-r sl-muted">—</td>
+                  </>
+                )
+              ) : (
+                <td colSpan={3} className={status === 'failed' ? 'st-monthly-failed' : 'st-monthly-pending'}>
+                  {status === 'failed' ? '失敗' : status === 'running' ? '統計中…' : '等待中'}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {monthlyFee ? (
+        <div className="st-uncounted-notes st-monthly-fee">
+          <p className="st-uncounted-note">
+            收益已扣手續費 {monthlyFee.feeRatePercent}%（買賣各一次）與證交稅 {monthlyFee.taxRatePercent}%
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
 
   const renderMergedTable = () => (
     <div className="st-result-block st-union-block" ref={unionBlockRef}>
@@ -3129,6 +3385,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
             />
             指定股票
           </label>
+          <label className="st-radio">
+            <input type="radio" name="st-scope" checked={scope === 'MONTHLY'} onChange={() => setScope('MONTHLY')} />
+            月營收
+          </label>
         </div>
         {scope === 'SELECTED' ? (
           <div className="st-stock-picker">
@@ -3168,48 +3428,59 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           </div>
         ) : null}
 
-        <div className="st-section-label">區間</div>
-        <div className="st-date-range">
-          <WeekSelector
-            ariaLabel="起始週"
-            monday={parseIsoDate(weekRange.startMonday)}
-            onPrev={() => shiftWeek('start', -1)}
-            onNext={() => shiftWeek('start', 1)}
-          />
-          <span className="st-date-sep">至</span>
-          <WeekSelector
-            ariaLabel="結束週"
-            monday={parseIsoDate(weekRange.endMonday)}
-            onPrev={() => shiftWeek('end', -1)}
-            onNext={() => shiftWeek('end', 1)}
-            nextDisabled={weekRange.endMonday >= currentWeekMonday}
-          />
-          <button
-            type="button"
-            className={`st-shortcut${activeShortcut === '1m' ? ' st-shortcut-active' : ''}`}
-            onClick={() => applyShortcut('1m')}
-          >
-            近一個月
-          </button>
-          <button
-            type="button"
-            className={`st-shortcut${activeShortcut === '3m' ? ' st-shortcut-active' : ''}`}
-            onClick={() => applyShortcut('3m')}
-          >
-            近三個月
-          </button>
-          <button
-            type="button"
-            className={`st-shortcut${activeShortcut === '6m' ? ' st-shortcut-active' : ''}`}
-            onClick={() => applyShortcut('6m')}
-          >
-            近半年
-          </button>
-        </div>
-        <div className="st-range-hint">
-          實際區間 {scanStartDate} ~ {scanEndDate}
-        </div>
-        {dateInvalid || dateRangeServerError ? <div className="st-inline-error">起始週不可晚於結束週</div> : null}
+        {scope === 'MONTHLY' ? (
+          // 月營收不選區間：整個區間列（兩個週選擇、三個快捷鈕、「實際區間」）不畫，原位置只留這一行。
+          // 起、迄週仍在 `weekRange` 裡，切回其他範圍時原樣回來。
+          <div className="st-range-hint st-month-hint">
+            統計月份：{monthlyRevenueMonths(today()).map((m) => m.text).join('、')}
+          </div>
+        ) : (
+          <>
+          <div className="st-section-label">區間</div>
+          <div className="st-date-range">
+            <WeekSelector
+              ariaLabel="起始週"
+              monday={parseIsoDate(weekRange.startMonday)}
+              onPrev={() => shiftWeek('start', -1)}
+              onNext={() => shiftWeek('start', 1)}
+            />
+            <span className="st-date-sep">至</span>
+            <WeekSelector
+              ariaLabel="結束週"
+              monday={parseIsoDate(weekRange.endMonday)}
+              onPrev={() => shiftWeek('end', -1)}
+              onNext={() => shiftWeek('end', 1)}
+              nextDisabled={weekRange.endMonday >= currentWeekMonday}
+            />
+            <button
+              type="button"
+              className={`st-shortcut${activeShortcut === '1m' ? ' st-shortcut-active' : ''}`}
+              onClick={() => applyShortcut('1m')}
+            >
+              近一個月
+            </button>
+            <button
+              type="button"
+              className={`st-shortcut${activeShortcut === '3m' ? ' st-shortcut-active' : ''}`}
+              onClick={() => applyShortcut('3m')}
+            >
+              近三個月
+            </button>
+            <button
+              type="button"
+              className={`st-shortcut${activeShortcut === '6m' ? ' st-shortcut-active' : ''}`}
+              onClick={() => applyShortcut('6m')}
+            >
+              近半年
+            </button>
+          </div>
+          <div className="st-range-hint">
+            實際區間 {scanStartDate} ~ {scanEndDate}
+          </div>
+          {dateInvalid || dateRangeServerError ? <div className="st-inline-error">起始週不可晚於結束週</div> : null}
+
+          </>
+        )}
 
         <div className="st-scan-row">
           <button type="button" className="sl-btn sl-btn-primary" disabled={!canScan} onClick={handleScanClick}>
@@ -3229,6 +3500,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               </button>
             </>
           ) : null}
+          {monthlyRunning && monthlyRows ? (
+            <span className="st-backtest-hint">
+              統計中 {monthlyRows.filter((row) => row.status === 'done' || row.status === 'failed').length}／{monthlyRows.length}
+            </span>
+          ) : null}
           {noStrategySelected ? <span className="st-inline-hint">請至少勾選一個策略</span> : null}
           {!noStrategySelected && noStockSelected ? (
             <span className="st-inline-hint">請至少選擇一檔股票</span>
@@ -3238,7 +3514,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
       {/* ---------- results area ---------- */}
       <div className="st-results">
-        {scanStatus === 'error' ? (
+        {monthlyRows ? (
+          renderMonthlyTable(monthlyRows)
+        ) : scanStatus === 'error' ? (
           <div className="st-results-error">
             <p>{scanErrorMessage}</p>
             <button type="button" className="sl-btn sl-btn-primary" onClick={handleRetry}>

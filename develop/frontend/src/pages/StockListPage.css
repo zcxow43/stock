@@ -1629,3 +1629,33 @@
   border-color: #26333f;
   opacity: 1;
 }
+
+/* 月營收模式 — 統計月份 line (same colour as the 實際區間 line it replaces), and the 月營收統計表
+   in the result area. Every colour is a literal from specs/frontend/strategy.md `## Visual
+   Style`; `<td>`/`<th>` keep their table-cell display (no flex/grid/block on them). */
+.st-month-hint {
+  margin-top: 0;
+}
+
+.st-monthly-note {
+  margin: 0;
+  padding: 0 18px 12px;
+  font-size: 13px;
+  color: #93a4b8;
+}
+
+.st-monthly-range {
+  color: #93a4b8;
+}
+
+.st-monthly-pending {
+  color: #93a4b8;
+}
+
+.st-monthly-failed {
+  color: #f09a94;
+}
+
+.st-monthly-fee {
+  padding-bottom: 14px;
+}
