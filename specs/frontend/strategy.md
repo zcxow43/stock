@@ -1,7 +1,7 @@
 ---
 status: done
 title: "策略型態掃描分頁"
-requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）；一檔多筆的父列賣出價不再恆為「—」，改顯示與父列買進價同一批筆（已勾選且可回測）的賣出均價，兩個均價皆為未含費稅的成交價（2026-10-11，使用者原文「賣出價要標記上」）；股票範圍新增第三個選項「月營收」：不選區間，統計今日所在月份與其前三個日曆月（今日在 10 月即 7、8、9、10 月），每個月依序算五段（第一週→第二週、第二週→第三週、第三週→第四週、第四週→第五週、第一週→月最末週），一週屬於其週一所在的月份，該月沒有第五週或起始週還沒到的段跳過，結束週是本週或更晚的段算到今日為止；每一段各掃描並回測一次全市場，結果區改為「月營收統計」表，每段只列總成本、總報酬率、總收益，三個總計只排除買進價高於 500 元的筆，不套用其餘批次條件（2026-10-12）"
+requirement: "策略分頁 — 可勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）；底底高／箱型突破／上漲支撐各自選靈敏度與自行輸入漲幅門檻；累積上漲自行輸入天數與漲幅門檻；反彈自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者以一個可取消的勾選框整組開關。母體預設只含上市普通股（排除 ETF），掃描指定區間（預設起始週為上週、結束週為本週）內命中的股票。**命中結果一律合併為單一命中彙總表，不再依策略分成多個區塊**，各策略的判定明細欄位隨之移除，本次實際採用的參數改以標題下的一行呈現。「開始掃描」成功且命中至少一檔時自動回測（頁面上沒有回測按鈕，自動回測失敗時錯誤訊息旁有「重試回測」）：進場日（買進日）開盤買進、其後至今日以最高開盤價賣出，表格右側補上買進日／買進價／賣出日／賣出價／報酬率／收益六欄，標題右側補上總報酬率與總收益兩個標籤，部位固定每筆 1 張；一檔有兩個以上相異買進日時該列可展開，每個買進日各一子列、各算一次買進賣出、各有自己的勾選框，父列的勾選框連動其全部子列（部分勾選時呈半選），父列摺疊時買進日／賣出日逐筆列出各筆日期、買進價／報酬率／收益顯示該檔已勾選各筆的合計；每列的勾選框預設勾選，取消勾選時該列反灰且不計入兩個總計，但仍顯示自己的數字，切換不重打端點。另有更新股票清單與同步所有日 K 至今日的兩顆按鈕，並顯示最後同步時間；合併表格的勾選框回測完成後才出現，報酬率與收益的漲跌色（正紅負綠）須實際呈現；命中彙總表的列不導向任何頁面，回測後點選一列等同點選該列的勾選框；總報酬率標籤旁有一個固定標示「取消全選」的勾選框，勾選即取消全部筆的勾選、取消勾選即全部勾回；每一筆的買進日取自掃描回報的進場日＝確認完成日之後的下一個交易日（上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日），落在同一買進日的命中視為同一筆；上漲支撐卡片多一格「確認天數」數字輸入（取自該條目 params，1 或 2、預設 2），本次採用參數一行寫成「上漲支撐（標準・確認 2 日）」；區間的起、迄以週一開始的日曆週選擇（週次依 ISO 8601），送出的起日為起始週週一、迄日為結束週週日（結束週為本週時為今日）；回測完成後「買進價」「報酬率」兩欄的表頭可點選排序（降冪 → 升冪 → 還原預設排序循環，「—」視為最小值，一檔多筆的父列以它畫面上顯示的合計值排序、排序後切換勾選不自動重排），標題右側的總計標籤最前面顯示「總成本（每筆 1 張）」，涵蓋範圍與總報酬率／總收益相同（已勾選且可回測的筆）；往下捲動使三個總計離開畫面時，三個總計浮在畫面頂端跟隨；標題列下方靠右有等高的三個勾選框「取消全選」「取消買進價高於 [金額] 元」（金額可輸入、預設 500、不含等於）「隱藏資料不齊（無賣出日）」（每次回測成功時預設勾選）：價格框勾選即取消勾選並隱藏買進價高於該金額的每一筆、取消勾選即勾回並重新顯示；資料不齊框只隱藏／顯示無賣出日的筆、不改勾選狀態；兩個隱藏框是記住「是否正在隱藏」的開關；「取消全選」不論勾選或取消勾選都會把所有隱藏的筆顯示回來，兩個隱藏框隨之變為未勾選；有筆被隱藏時「共 N 檔」不變並另顯示「另 K 筆已隱藏」；新增三張法人籌碼卡片（法人買賣超佔比、法人連續買超、法人買超強度排名），每張可複選外資與投信（依 API 的複選參數畫勾選框，預設兩者、至少一個），其餘輸入依 params 畫出；命中策略欄標示達標的一方（法人買賣超佔比另標買超／賣超），本次採用參數一行帶出所選法人、參數與法人資料涵蓋到的日期，三者的買進日為訊號日的下一個交易日；新增兩張技術指標卡片（MACD 黃金交叉：短期／長期 EMA 天數；KDJ 黃金交叉：J 門檻，可為負數、無單位），同樣依 params 畫出；數字參數帶 lessThan 時前端擋下「不小於對方參數」的輸入；本次採用參數一行帶出 MACD 的三個天數與 KDJ 的前一日 J 門檻；回測後「收益」欄與買進價、報酬率同樣可點表頭排序；收益與報酬率為回測回應已扣手續費與證交稅的數字，總計下方以一行說明扣了哪些費率；視窗寬 ≤ 1280px 時買進日／賣出日疊成一欄、買進價／賣出價疊成一欄；批次列另有「僅選取報酬率 [n] % 以上」（預設 2、含等於、可為負），勾選即取消勾選不達標的筆但不隱藏，並改為依報酬率降冪排序；每次回測成功（含「重試回測」成功）時「取消買進價高於 N 元」與「僅選取報酬率 n% 以上」兩框皆預設勾選（高價組為空時前者維持未勾選且 disabled），兩格數字輸入因此一開始即 disabled，回測完成的初始排序為報酬率降冪；箱型突破卡片多一個「要求量增」勾選框（預設勾選，取自該條目 paramGroups，取消即送 requireVolume: false 不看量增，並在說明文字下方註明已取消該條件），本次採用參數一行於不看量增時寫成「箱型突破（標準・不看量增）」；新增一張站上均線卡片，依該條目 params 畫出 MA5／MA20／MA60 的複選勾選框（預設三者全選、至少一個），命中策略欄標出達標的均線，本次採用參數一行寫成「站上均線（MA5・MA20・MA60）」；批次列另新增「僅選取全符合」勾選框（無數字輸入，每次回測成功時預設勾選，本次掃描只有一個策略時維持未勾選且 disabled）：以**股票**為單位，未被每一個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**；新增一張量多卡片（成交量開始放大的股票；顯示名稱原為「量開始變多」，改為「量多」，只改名不改行為），依該條目 params 畫出一格「量增門檻」百分比輸入（預設 50、可自行輸入），本次採用參數一行寫成「量多（量增 ≥ 50%）」；命中策略欄對這個型態的每一筆命中帶出該筆實際的量增幅度，寫成「量多（+67.45%） 2026-09-30」；策略選項區標題列最右邊新增「設定」按鈕，按下進入設定模式：列出全部策略，可逐一隱藏／解除隱藏、一鍵全部解除隱藏、以拖拉（或每列的上移／下移按鈕）調整順序，變更即時生效、按「完成」回到卡片；選項區只畫未隱藏的策略並依該順序排列，被隱藏的策略視為未勾選、不進掃描請求，掃描請求的 strategies 改依卡片顯示順序送出；隱藏與順序以策略 code 存於瀏覽器 localStorage，讀寫失敗或內容損壞時退回全部顯示、API 原順序；買進日就是該檔最新一個交易日的筆，回測改以買進日的開盤價賣出（賣出日＝買進日、賣出價＝買進價、報酬率為只扣費稅的負值），它因此有賣出日、不再屬於「資料不齊（無賣出日）」，回測後預設就在表上，並照常受各批次框影響（2026-10-11，使用者原文「賣出日若沒有回檔, 應以最後一天開盤價作為賣出價」）；一檔多筆的父列賣出價不再恆為「—」，改顯示與父列買進價同一批筆（已勾選且可回測）的賣出均價，兩個均價皆為未含費稅的成交價（2026-10-11，使用者原文「賣出價要標記上」）；股票範圍新增第三個選項「月營收」：不選區間，統計今日所在月份與其前三個日曆月（今日在 10 月即 7、8、9、10 月），每個月依序算五段（第一週→第二週、第二週→第三週、第三週→第四週、第四週→第五週、第一週→月最末週），一週屬於其週一所在的月份，該月沒有第五週或起始週還沒到的段跳過，結束週是本週或更晚的段算到今日為止；每一段各掃描並回測一次全市場，結果區改為「月營收統計」表，每段只列總成本、總報酬率、總收益，三個總計只排除買進價高於 500 元的筆，不套用其餘批次條件（2026-10-12）；月營收統計進行中可按「停止統計」中止這次統計：已完成的列保留，正在跑與還沒輪到的列顯示「已停止」，不再送出任何請求（2026-10-13，使用者原文「月營收統計, 統計中可以停止統計」）"
 depends_on: [stock-list]
 ---
 
@@ -203,8 +203,14 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
    1. 送 `POST /api/strategies/scan`：`strategies` 與一般掃描完全相同（同一批卡片、同一個順序、同一組參數），加上該段的 `startDate`／`endDate` 與 `commonStocksOnly`，不帶 `stockIds`。
    2. 掃描命中至少一筆時送 `POST /api/strategies/backtest`，`items[]` 與一般掃描後的自動回測相同：全部命中、每個相異 `(stockId, buyDate)` 一筆。零命中時不送回測。
    3. 由回測回應算出這一段的三個總計，填進該列；接著才送下一段的掃描。
-3. **執行期間「開始掃描」為 disabled**，其右側以次要文字顯示「統計中 {已完成段數}／{總段數}」（例如「統計中 3／16」）；全部的段都結束後按鈕恢復可按、該文字消失。執行期間切換股票範圍不中斷這次統計。
+3. **執行期間「開始掃描」為 disabled**，其右側以次要文字顯示「統計中 {已完成段數}／{總段數}」（例如「統計中 3／16」），該文字右側是一顆次要按鈕「停止統計」；全部的段都結束後「開始掃描」恢復可按、該文字與「停止統計」消失。執行期間切換股票範圍不中斷這次統計。
 4. **某一段的掃描或回測失敗時**，該列顯示錯誤色的「失敗」，接著照常跑下一段。要重算就再按一次「開始掃描」，全部的段重跑。
+5. **按「停止統計」時**（使用者 2026-10-13 的要求：「統計中可以停止統計」），這次統計立即結束：
+   - 正在跑的那一段，其進行中的請求（掃描或回測）由前端中止；其後的段不再送出任何請求。停止不呼叫任何端點。
+   - 已經有結果的列（三個總計、「—」或「失敗」）維持不變。
+   - 正在跑的那一列與還沒輪到的列顯示次要文字「已停止」。
+   - 「開始掃描」恢復可按，「統計中 {已完成段數}／{總段數}」與「停止統計」消失。
+   - 沒有「從停下的那一段接著跑」：再按一次「開始掃描」，全部的段重跑，與第 4 點相同。
 
 **三個總計的涵蓋範圍**（使用者 2026-10-12 的決定：「只排除買進價高於 500 元的筆」）：該段回測回應中 **`sellDate` 不為 `null` 且 `buyPrice` 不大於 `500`** 的每一筆。
 
@@ -232,7 +238,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 總報酬率 | 該段的總報酬率 |
 | 總收益（每筆 1 張） | 該段的總收益 |
 
-- **尚未有結果的列**：三個總計格合併為一格次要文字——還沒輪到的列為「等待中」，正在跑的那一列為「統計中…」，失敗的列為錯誤色「失敗」。
+- **尚未有結果的列**：三個總計格合併為一格次要文字——還沒輪到的列為「等待中」，正在跑的那一列為「統計中…」，失敗的列為錯誤色「失敗」；按「停止統計」後，當時正在跑與還沒輪到的列為「已停止」。
 - **漲跌色沿用全站規則**：總報酬率與總收益正值上漲色、負值下跌色、`0` 為次要文字色；總成本恆為主要文字色。
 - 任何一段的回測回應到達後，表格下方顯示既有的那一行「收益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%」，費率取自回測回應。
 - **本模式的結果區只有這張表**：沒有命中彙總表、勾選框欄、批次勾選框列、「本次採用參數」那一行、資料不足與待確認各行，三個總計也不浮動。列不可點選、不可排序。
@@ -796,8 +802,9 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 重試回測中 | 「重試回測」disabled 並顯示「回測中…」，錯誤訊息保留至重試有結果為止；表格內容不變 |
 | 有結果 | 正常表格 |
 | 零命中 | 合併表格處顯示「此區間內沒有命中的股票」，並附一行提示目前的最後同步時間；不送出回測 |
-| 月營收統計中 | 股票範圍為「月營收」時按「開始掃描」後：結果區為月營收統計表，已完成的列有三個總計、正在跑的列為「統計中…」、其餘為「等待中」；「開始掃描」disabled，右側顯示「統計中 {已完成段數}／{總段數}」 |
-| 月營收統計完成 | 每一列都有三個總計、「—」或「失敗」；「開始掃描」恢復可按 |
+| 月營收統計中 | 股票範圍為「月營收」時按「開始掃描」後：結果區為月營收統計表，已完成的列有三個總計、正在跑的列為「統計中…」、其餘為「等待中」；「開始掃描」disabled，右側顯示「統計中 {已完成段數}／{總段數}」與「停止統計」按鈕 |
+| 月營收統計完成 | 每一列都有三個總計、「—」或「失敗」；「開始掃描」恢復可按，「停止統計」消失 |
+| 月營收統計已停止 | 統計中按「停止統計」後：已經有結果的列維持不變，其餘的列為「已停止」；「開始掃描」恢復可按，「統計中 {已完成段數}／{總段數}」與「停止統計」消失 |
 | 掃描失敗 | 結果區顯示錯誤訊息與「重試」按鈕；不得顯示空表格假裝零命中 |
 | 同步中 | 同步按鈕為執行中狀態；不影響掃描操作，也不影響「更新股票清單」 |
 | 更新清單中 | 「更新股票清單」disabled 並顯示執行中狀態；不影響掃描與同步操作 |
@@ -818,6 +825,7 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` — body `startDate`（設定起日）、`endDate`（今日）、`catchUp: true`、`commonStocksOnly`（取自頁面層級設定），不帶 `stockIds` 代表全市場；`202` 回應的 `targetCount`、`caughtUpCount` 與 `commonStocksOnly` 決定完成摘要的呈現方式 |
 | 「開始掃描」成功且命中 ≥ 1 檔時**自動送出**（無按鈕）；自動回測失敗後按「重試回測」時以同一份 `items[]` 重送 | `POST /api/strategies/backtest` — body `items[]`，**每個相異買進日一筆** `{stockId, buyDate}`，`buyDate` 取自掃描回應各筆的 `buyDate`、前端不自行推算：一檔有幾個相異買進日就送幾筆（落在同一買進日的多筆命中只送一筆，送出前依 `(stockId, buyDate)` 去重）。**送出全部命中標的的全部買進日**，勾選狀態與展開狀態都不影響請求內容。回應的 `items[]`（`buyDate` / `buyPrice` / `sellDate` / `sellPrice` / `returnPercent` / `profit`）依 `(stockId, buyDate)` 對回各子列填入六欄，`buyPrice`、`sellPrice`、`cost`、`profit` 與 `lotSize` 供前端就地重算父列合計與三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行，`totalCost` / `totalProfit` / `totalReturnPercent` / `backtestedCount` 作為全部勾選時的對照值 |
 | 股票範圍為「月營收」時按「開始掃描」 | 每一段依序各送一次 `POST /api/strategies/scan`（body 與上一列「開始掃描」相同，差別只有：不帶 `stockIds`、一律帶 `commonStocksOnly`、`startDate`／`endDate` 為該段的日期）；該段命中 ≥ 1 筆時接著送一次 `POST /api/strategies/backtest`（`items[]` 的組法與上一列相同）。回測回應的 `items[].buyPrice`／`sellDate`／`cost`／`profit` 用於算該段的三個總計，`feeRatePercent`／`taxRatePercent` 用於「收益已扣…」說明行。前一段結束後才送下一段 |
+| 月營收統計中按「停止統計」 | **不呼叫任何 API**——前端中止進行中的那一個掃描或回測請求，其後的段不再送出 |
 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` — 取 `pending`／`running`／`done`／`failed`／`skipped` 更新進度 |
 | 「指定股票」搜尋 | `GET /api/stocks?keyword=&size=20` — 供多選輸入的候選清單 |
 
@@ -946,7 +954,8 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 | 月營收統計表 總成本數值 | `#E6EDF5`（不套漲跌色） |
 | 月營收統計表 總報酬率／總收益數值（正／負／零） | `#E04B45` / `#16A75C` / `#93A4B8` |
 | 月營收統計表 無值時的「—」 | `#6B7C90` |
-| 月營收統計表 「等待中」「統計中…」文字 | `#93A4B8` |
+| 月營收統計表 「等待中」「統計中…」「已停止」文字 | `#93A4B8` |
+| 「停止統計」按鈕 | 與次要按鈕同值：背景 `#1B2836`、文字 `#E6EDF5`、邊框 `#26333F`、hover 背景 `#223347` |
 | 月營收統計表 「失敗」文字 | `#F09A94`（與錯誤訊息文字同值） |
 | 「買進價高於 500 元的筆不計入」說明文字 | `#93A4B8`（與「收益已扣手續費…」說明行同值） |
 | 次要按鈕背景／文字／邊框 | `#1B2836` / `#E6EDF5` / `#26333F` |
@@ -1620,6 +1629,15 @@ API 目前回十二個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 統計完成後切換股票範圍或改動卡片而未重掃時，月營收統計表維持不變
 - [x] 股票範圍為「全市場」或「指定股票」時，送出的請求與結果區的畫面與本次改動前相同
 - [x] 本次未新增任何顏色：新增的文字與表格全部取自 `## Visual Style` 的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+
+### 月營收模式：停止統計
+
+- [x] 月營收統計進行中，「統計中 {已完成段數}／{總段數}」右側有「停止統計」按鈕；尚未開始統計、統計完成後、停止後，以及股票範圍為「全市場」「指定股票」的一般掃描與回測期間，該按鈕都不存在
+- [x] 第 k 段進行中按「停止統計」後不再送出任何請求：`POST /api/strategies/scan` 的總數停在 k、`POST /api/strategies/backtest` 的總數不再增加（以請求計數斷言，按下後至少等待一段的耗時再數）；進行中的那一個請求被前端中止，停止本身不發出任何請求
+- [x] 按下後，已經有結果的列維持原本的三個總計、「—」或「失敗」；當時正在跑的那一列與其後各列顯示 `#93A4B8` 的「已停止」；表上不再有「等待中」與「統計中…」
+- [x] 按下後「開始掃描」恢復可按，「統計中 {已完成段數}／{總段數}」與「停止統計」消失
+- [x] 停止後再按「開始掃描」，全部的段由第一段重跑並跑完，每一列都有三個總計、「—」或「失敗」，沒有「已停止」
+- [x] 本次未新增任何顏色：「停止統計」按鈕的背景／文字／邊框實際渲染為 `#1B2836`／`#E6EDF5`／`#26333F`，「已停止」為 `#93A4B8`，且在 `prefers-color-scheme: dark` 與 `light` 下完全相同
 
 ## Execution Result
 - Status: DONE (pending checkbox sign-off by the requester — per instructions this agent does not tick the boxes itself)
@@ -3065,3 +3083,33 @@ Contract prose rewritten in place:「父列在摺疊時顯示什麼」(table row
 **Housekeeping**: 8081 and 5174 stopped after the run; 8080 / 5173 never touched. Scan and backtest write nothing, so there is no test data to clean up; no sync, import or backfill endpoint was called. `data/real-trades.csv` not modified (the backend read a scratch copy). `docs/frontend/strategy` (storyboard) not updated — not part of these criteria.
 
 **One mistake during setup, recorded as it happened**: the worker backend's first launch on 8081 (16:36:12) passed the two startup switches through `-Dspring-boot.run.jvmArguments`, which `develop/backend/pom.xml`'s own `<jvmArguments>` overrides, so both startup jobs ran once against the shared database before the process was killed. What that run did: one TWSE daily-snapshot request (stock master sync, "1364 stocks upserted", 0 rows of `stock` with a changed `updated_at`); the price catch-up found nothing to fetch (`stock_daily_price` 0 rows changed, `PRICE_BACKFILL` progress rows untouched); the indicator rebuild rewrote the 1,385 `INDICATOR_REBUILD` progress rows' timestamps (`stock_daily_indicator` 0 rows changed); the institutional-trade catch-up called TWSE T86 and **inserted the 1,334 rows of `stock_institutional_trade` for trade date 2026-10-12** (real source data, the same rows the integration backend's own catch-up would write; not deleted). The second launch used environment variables plus `--app.*.enabled=false` program arguments and logged both jobs as disabled; everything verified above ran on that second process.
+
+### Increment 38 — 2026-10-13
+
+**Scope**: the 6 criteria under「月營收模式：停止統計」: a 「停止統計」 button shown only while a 月營收 run is going; pressing it aborts the request in flight, sends nothing further, keeps the rows that already have a result and marks the rest 「已停止」. Frontend only; no endpoint, request field or response changed.
+
+**Files changed**
+- `develop/frontend/src/pages/StrategyTab.tsx` — `MonthlyRowStatus` gains `'stopped'`; new `stopMonthly()` (adds 1 to `monthlyRunRef`, aborts `monthlyAbortControllerRef`, turns every `waiting`／`running` row into `stopped`, sets `monthlyRunning` to `false`); the merged cell renders 「已停止」 for `stopped`; a `.sl-btn` button 「停止統計」 is rendered after the 「統計中 k／N」 hint inside the same `monthlyRunning` condition. `runMonthly` itself is unchanged: its existing `isCurrent()` checks make the stopped loop return without writing state.
+- `develop/frontend/src/pages/StockListPage.css` — not changed. The button uses the existing `.sl-btn` (`#1b2836`／`#e6edf5`／`#26333f`, hover `#223347`) and 「已停止」 uses the existing `.st-monthly-pending` (`#93a4b8`).
+- `docs/frontend/strategy/step-20.html`, `manifest.json` and the re-rendered board (`/doc-fronend strategy`, `SELF-CHECK PASS — 21/21 frames clean`): step 20 now shows 「停止統計」 next to 「統計中 3／18」. All 21 `step-N.png` changed bytes because this render ran on Windows; the earlier ones ran on macOS.
+
+**Decisions the requirement did not state**
+- Button text 「停止統計」 and row text 「已停止」; the button is a secondary button placed right of the 「統計中 k／N」 hint.
+- The segment in flight when the button is pressed is discarded (its row shows 「已停止」), not finished first.
+- No resume: 「開始掃描」 after a stop reruns every segment, the same rule the spec already had for a rerun after 「失敗」.
+- Stopping calls no endpoint. The backend is not told; it finishes the scan or backtest it already received (about 1–3 s) and its response is dropped.
+
+**Live verification** — `npm run build` clean (tsc + vite, 56 modules); `npm run lint` prints only the `react(set-state-in-effect)` warning at `StrategyTab.tsx:1333`, which is not in this diff. Headless Chromium (Playwright 1.62.1) against `npm run dev -- --port 5174 --strictPort` (`API_TARGET=http://localhost:8081`), worker backend `java -jar target/backend.jar` on 8081 with the three startup switches off (log: 「Startup stock master sync disabled」, 「Startup price catch-up disabled」), real database, system day 2026-10-13 (16 segments). Script and output: `verify-stop.mjs`, `verify-stop.log`, `stopped.png`, `stopped-dark.png` in the session scratchpad `…/scratchpad/w1/`. Result: 29 PASS, 0 FAIL. Cards: MACD 黃金交叉 (5/20) + 量多 (50%).
+
+1. Button presence — during a 全市場 scan and its auto backtest (polled every 15 ms from the click until the totals appeared; 「回測中…」 was seen) 「停止統計」 never existed. With 月營收 selected and not started: absent. After the click on 「開始掃描」: the scan row's children read `開始掃描`, `統計中 0／16`, `停止統計` in that order and 「開始掃描」 is `disabled`. After the stop and after a completed run: absent.
+2. No request after the stop — real backend, clicked when the hint read 「統計中 3／16」 (9,648 ms after the start): at the click 4 scans and 3 backtests had been sent; 6 s later still 4 and 3, and the count of every other `/api/` request stayed 8 → 8. Playwright reported exactly one `requestfailed`: `POST /api/strategies/scan net::ERR_ABORTED`. With the request held by interception: segment 4's scan held → 4 scans／3 backtests before and 2.5 s after, `POST /api/strategies/scan net::ERR_ABORTED`; segment 2's backtest held → 2／2 before and after, `POST /api/strategies/backtest net::ERR_ABORTED`; segment 1's scan held → 1／0 before and after.
+3. Rows — real run: rows 1–3 `91,662,021 | 12.55% | 11,506,872`, `91,173,521 | 14.26% | 13,001,507`, `89,940,401 | 20.07% | 18,049,758` identical before and after the click; row 4 went 「統計中…」 → 「已停止」 and rows 5–16 「等待中」 → 「已停止」 (13 rows); no 「等待中」／「統計中…」 left; the table was unchanged 6 s later. 「已停止」 computed colour `rgb(147, 164, 184)` = `#93A4B8`. Scan 1 answered HTTP 500 and stop at segment 3: row 1 stayed 「失敗」, row 2 kept `91,173,521 | 14.26% | 13,001,507`, rows 3–16 「已停止」. Stop during segment 1: all 16 rows 「已停止」.
+4. After the stop — 「開始掃描」 enabled, no 「統計中」 hint, no 「停止統計」 button (checked in all five stop scenarios).
+5. Rerun — 「開始掃描」 after the stop: row 1 「統計中…」 and rows 2–16 「等待中」 at once, 16 scans sent (first `2026-07-06`～`2026-07-19`), all 16 rows ended with three totals, none 「已停止」; rows 1–3 of the rerun equal the three rows the stop had kept.
+6. Colours — 「停止統計」 computed background／text／border `#1B2836`／`#E6EDF5`／`#26333F`, hover background `#223347`, 「已停止」 `#93A4B8`; identical under emulated `prefers-color-scheme: light` (`matchMedia` dark = `false`) and `dark` (`true`). No CSS rule was added.
+
+**Observed, not changed**: each time the browser aborts a request the backend has already received, the backend finishes it and logs one `ERROR … GlobalExceptionHandler : Unexpected error` with `ClientAbortException` when it writes the response (5 such entries in this session's log; the one at 23:16:41.918 matches the real-run stop click, and one at 23:16:25.590 came from a tab switch before any 月營收 run existed). The same log entry already occurs for the existing aborts (tab switch, 「開始掃描」 during a backtest); silencing it is a backend change no spec asks for.
+
+**Housekeeping**: 8081 and 5174 stopped after the run (`netstat` shows only 8080 and 5173 listening); 8080／5173 never touched. No sync, import or backfill endpoint was called; row counts before and after are equal — `stock` 1391, `stock_daily_price` 254656, `stock_sync_progress` 2766, `stock_institutional_trade` 245995, `stock_daily_indicator` 89932, `simulated_trade` 1 — so there is no test data to clean up. The external env file was not read (`Use Env: false`; the backend ran without `FUGLE_API_KEY`, which scan and backtest do not use). Built and verified by the `/code` worker itself, without a nested `frontend` agent.
+
+**Left unchecked**: none. Not exercised: the ≤ 1280px layout and a stored `localStorage` card order other than the default.

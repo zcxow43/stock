@@ -698,7 +698,7 @@ interface MonthlyTotals {
   returnPercent: number | null
 }
 
-type MonthlyRowStatus = 'waiting' | 'running' | 'done' | 'failed'
+type MonthlyRowStatus = 'waiting' | 'running' | 'done' | 'failed' | 'stopped'
 interface MonthlyRow {
   segment: MonthlySegment
   status: MonthlyRowStatus
@@ -1784,6 +1784,21 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setMonthlyRunning(false)
   }
 
+  /** 「停止統計」: ends the 月營收 run at once. Bumping the run id makes `runMonthly`'s loop return
+   * at its next `isCurrent()` check without writing anything more, the abort cancels the scan or
+   * backtest in flight, and every row that has no result yet (the running one and the waiting
+   * ones) becomes 「已停止」. Rows that already have a result are left as they are. */
+  const stopMonthly = () => {
+    monthlyRunRef.current += 1
+    monthlyAbortControllerRef.current?.abort()
+    setMonthlyRows((rows) =>
+      rows
+        ? rows.map((row) => (row.status === 'waiting' || row.status === 'running' ? { ...row, status: 'stopped' } : row))
+        : rows,
+    )
+    setMonthlyRunning(false)
+  }
+
   const runScan = (payload: ScanRequest) => {
     setScanStatus('scanning')
     setScanErrorMessage(null)
@@ -2571,7 +2586,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 )
               ) : (
                 <td colSpan={3} className={status === 'failed' ? 'st-monthly-failed' : 'st-monthly-pending'}>
-                  {status === 'failed' ? '失敗' : status === 'running' ? '統計中…' : '等待中'}
+                  {status === 'failed' ? '失敗' : status === 'running' ? '統計中…' : status === 'stopped' ? '已停止' : '等待中'}
                 </td>
               )}
             </tr>
@@ -3501,9 +3516,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
             </>
           ) : null}
           {monthlyRunning && monthlyRows ? (
-            <span className="st-backtest-hint">
-              統計中 {monthlyRows.filter((row) => row.status === 'done' || row.status === 'failed').length}／{monthlyRows.length}
-            </span>
+            <>
+              <span className="st-backtest-hint">
+                統計中 {monthlyRows.filter((row) => row.status === 'done' || row.status === 'failed').length}／{monthlyRows.length}
+              </span>
+              <button type="button" className="sl-btn" onClick={stopMonthly}>
+                停止統計
+              </button>
+            </>
           ) : null}
           {noStrategySelected ? <span className="st-inline-hint">請至少勾選一個策略</span> : null}
           {!noStrategySelected && noStockSelected ? (
