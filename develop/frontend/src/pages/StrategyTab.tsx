@@ -1663,12 +1663,14 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   /** Sends `POST /api/strategies/backtest` — called automatically once right after a scan
    * succeeds with ≥1 hit, and again (with the SAME `items`, re-derived from the same `rows`)
-   * whenever「重試回測」is pressed. `isRetry` only changes what's displayed while it's running
+   * whenever「重試回測」is pressed. `endDate` is the `endDate` of the scan response `rows` came
+   * from — never the range inputs' current value, which the user may have changed since — so
+   * no sell date lands after the scanned range. `isRetry` only changes what's displayed while it's running
    * (重試 keeps the failure message on screen and swaps its own button label; the
    * auto-backtest has neither) — the request itself is identical either way. `rows` is passed
    * in explicitly by both call sites (never read from the component's own `unionRows`) for
    * the same staleness reason documented on `applyBacktestDefaults` above. */
-  const runBacktest = (rows: UnionRow[], strategyCount: number, isRetry: boolean) => {
+  const runBacktest = (rows: UnionRow[], strategyCount: number, isRetry: boolean, endDate: string) => {
     backtestGenerationRef.current += 1
     const generation = backtestGenerationRef.current
     backtestAbortControllerRef.current?.abort()
@@ -1677,7 +1679,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setBacktestStatus('running')
     setIsRetryingBacktest(isRetry)
     if (!isRetry) setBacktestErrorMessage(null)
-    backtestStrategies({ items: buildBacktestItems(rows) }, controller.signal)
+    backtestStrategies({ endDate, items: buildBacktestItems(rows) }, controller.signal)
       .then((resp) => {
         // 回測進行中「開始掃描」仍可按，其回應若在新掃描之後才到，一律丟棄 — a newer scan
         // (or a newer retry) bumps the generation before this one's response can arrive, so
@@ -1770,7 +1772,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           patchRow(i, { status: 'done', totals: null })
           continue
         }
-        const backtest = await backtestStrategies({ items: buildBacktestItems(hitRows) }, controller.signal)
+        const backtest = await backtestStrategies(
+          { endDate: scan.endDate, items: buildBacktestItems(hitRows) },
+          controller.signal,
+        )
         if (!isCurrent()) return
         setMonthlyFee({ feeRatePercent: backtest.feeRatePercent, taxRatePercent: backtest.taxRatePercent })
         patchRow(i, { status: 'done', totals: computeMonthlyTotals(backtest) })
@@ -1828,7 +1833,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         setExpandedStockIds(new Set())
         // 掃描成功且命中至少一檔時，不需任何使用者動作即自動送出一次回測；掃描失敗或命中
         // 0 檔時不送——沒有命中清單就沒有東西可以回測。
-        if (rows.length > 0) runBacktest(rows, resp.results.length, false)
+        if (rows.length > 0) runBacktest(rows, resp.results.length, false, resp.endDate)
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'UNKNOWN_STOCK_ID') {
@@ -2015,10 +2020,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   /** 「重試回測」— only rendered while `backtestStatus === 'error'` (see JSX below); re-sends
    * ONLY the backtest, with the exact same `items[]` `buildBacktestItems` would derive from
-   * this same `unionRows` (the scan itself is never re-run). */
+   * this same `unionRows` and the same scan's `endDate` (the scan itself is never re-run). */
   const handleRetryBacktest = () => {
-    if (backtestStatus !== 'error') return
-    runBacktest(unionRows, scanResult?.results.length ?? 0, true)
+    if (backtestStatus !== 'error' || !scanResult) return
+    runBacktest(unionRows, scanResult.results.length, true, scanResult.endDate)
   }
 
   const handleSyncClick = () => {

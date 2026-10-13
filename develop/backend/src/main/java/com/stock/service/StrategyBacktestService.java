@@ -75,7 +75,15 @@ public class StrategyBacktestService {
     public BacktestResponseDto backtest(BacktestRequestDto request) {
         List<BacktestItemRequestDto> items = validate(request == null ? null : request.getItems());
 
-        LocalDate asOfDate = LocalDate.now(TAIPEI);
+        // The sell window's last day: the scan range's endDate the caller sent, or today when it
+        // is omitted or later than today (specs/backend/strategy-backtest.md, "賣出窗口的迄日").
+        // Every price row read below is bounded to <= asOfDate, and that one bound is the whole
+        // rule: no sell pick can be later than it, a buy day that is the stock's last row on or
+        // before it has an empty window (the fallback), and a buy day after it has no row at all
+        // (unbacktestable, like any other item with no buy-day row).
+        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate endDate = request.getEndDate();
+        LocalDate asOfDate = endDate == null || endDate.isAfter(today) ? today : endDate;
         LocalDate minBuyDate = items.stream()
                 .map(BacktestItemRequestDto::getBuyDate)
                 .min(Comparator.naturalOrder())
@@ -113,8 +121,8 @@ public class StrategyBacktestService {
             BigDecimal buyPrice = findBuyPrice(rows, item.getBuyDate());
             resultItem.setBuyPrice(buyPrice);
 
-            // A null buyPrice (no row that day, or a 0 open) is the only way an item ends up
-            // unbacktestable: every item that could be bought gets a full result.
+            // A null buyPrice (no row that day, a 0 open, or a buy day after asOfDate) is the only
+            // way an item ends up unbacktestable: every item that could be bought gets a full result.
             if (buyPrice != null) {
                 BigDecimal buyFee = TradingCostCalculator.fee(buyPrice, LOT_SIZE);
                 BigDecimal cost = TradingCostCalculator.cost(buyPrice, LOT_SIZE, buyFee);
@@ -123,8 +131,8 @@ public class StrategyBacktestService {
 
                 SellPick pick = findSellPick(rows, item.getBuyDate());
                 if (pick == null) {
-                    // Empty sell window (the buy day is the stock's last traded day): sell at the
-                    // last traded day's open, which is the buy day itself — sellDate == buyDate,
+                    // Empty sell window (the buy day is the stock's last traded day on or before
+                    // asOfDate): sell at that day's open, which is the buy day itself — sellDate == buyDate,
                     // sellPrice == buyPrice. A fallback for an empty window only, never a floor
                     // under a real pick (specs/backend/strategy-backtest.md, "窗口為空時的退路").
                     pick = new SellPick(item.getBuyDate(), buyPrice);
@@ -238,7 +246,8 @@ public class StrategyBacktestService {
 
     /**
      * The buy day's own OPEN price, or null when that stock has no row for that exact trade date
-     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 1) or when that row's open is not
+     * (specs/backend/strategy-backtest.md, "無法回測的標的" case 1; also case 3, a buy day after the
+     * window's last day, because `rows` never reaches past asOfDate) or when that row's open is not
      * positive (case 2 — a 0 means the stock did not trade that day, not that it was worth 0; see
      * "價格為 0 的日子不是行情"). The check and the returned price are both the OPEN column — the
      * close price is irrelevant here even when it is itself 0 or non-zero (specs/backend/

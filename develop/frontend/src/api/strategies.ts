@@ -405,6 +405,10 @@ export interface BacktestRequestItem {
 }
 
 export interface BacktestRequest {
+  /** The last day of the sell window: the `endDate` of the scan response that produced `items`,
+   * sent verbatim, so no sell date is later than the scanned range (specs/frontend/strategy.md
+   * 「掃描後自動回測」, specs/backend/strategy-backtest.md「賣出窗口的迄日」). */
+  endDate: string
   items: BacktestRequestItem[]
 }
 
@@ -413,12 +417,14 @@ export interface BacktestResultItem {
   /** Echoed verbatim from the request's own `buyDate` — the response never carries a
    * `signalDate` field (specs/backend/strategy-backtest.md「回應不含 signalDate」). */
   buyDate: string
-  /** `null` when the stock could not be bought on the buy date — no price row that day, or an
-   * open of 0 (specs/backend/strategy-backtest.md「無法回測的標的」). The item stays in `items`
+  /** `null` when the stock could not be bought on the buy date — no price row that day, an
+   * open of 0, or a buy date after the request's `endDate`
+   * (specs/backend/strategy-backtest.md「無法回測的標的」). The item stays in `items`
    * and must still render, just with dashes. */
   buyPrice: number | null
-  /** `null` exactly when `buyPrice` is `null`. When the buy date is the stock's latest trading
-   * day there is no later day to sell on, and the backend sells at the buy day's own open:
+  /** `null` exactly when `buyPrice` is `null`; never later than the request's `endDate`. When
+   * the buy date is the stock's last trading day on or before `endDate` there is no later day
+   * to sell on, and the backend sells at the buy day's own open:
    * `sellDate === buyDate`, `sellPrice === buyPrice`, a small negative return that is fees and
    * tax only (同一份 spec「窗口為空時的退路」). The frontend renders that like any other item. */
   sellDate: string | null
