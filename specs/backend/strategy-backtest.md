@@ -100,7 +100,7 @@ depends_on: [strategy-scan, stock-price-ingestion]
 
 #### 賣出價低於買進價是正常結果，不得夾住
 
-「最高開盤價」是**這段期間開盤價的最大值**，不是「最好的出場點」，更不是「保證獲利的出場點」。一檔訊號後一路下跌的股票，它最高的開盤價仍然可能低於買進日的收盤價，此時報酬率為負。**負值必須如實回報**，不得夾為 `0`、不得改成「不賣出」、不得改挑別的日子。夾住負值會讓這份回測變成一個永遠不會虧錢的工具，那比沒有回測更有害。
+「最高開盤價」是**這段期間開盤價的最大值**，不是「最好的出場點」，更不是「保證獲利的出場點」。一檔訊號後一路下跌的股票，它最高的開盤價仍然可能低於買進價（買進日的開盤價），此時報酬率為負。**負值必須如實回報**，不得夾為 `0`、不得改成「不賣出」、不得改挑別的日子。夾住負值會讓這份回測變成一個永遠不會虧錢的工具，那比沒有回測更有害。
 
 #### 交易成本
 
@@ -367,6 +367,39 @@ Response `200`：
 - [x] 賣出窗口內所有開盤價皆為 `0` 時，視同賣出窗口為空，適用「窗口為空時的退路」：`sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`
 - [x] 買進日開盤價為 `0` 的筆**不計入** `totalCost`／`totalProfit`／`backtestedCount`，且該筆仍留在 `items` 中；賣出窗口內開盤價全為 `0` 的筆依退路照常計入
 
+### 買進日與買進價
+- [x] 請求 `items[]` 以 `buyDate` 表示買進日；只帶 `signalDate`、缺 `buyDate` 的請求回 `400` `INVALID_BUY_DATE`
+- [x] 以構造資料驗證買進錨定在 `buyDate` 的**開盤**：D+2 收盤 104、D+3 開盤 106／收盤 112、D+4 開盤 110，送 `buyDate`＝D+3 時 `buyPrice` 為 **106**（不是 D+3 的收盤 112，也不是 D+2 的收盤 104），賣出窗口從 D+4 起，`sellDate` 不早於 D+4
+- [x] 同一檔兩筆 `buyDate` 相同即為重複（`DUPLICATE_BACKTEST_ITEM`，`duplicatedItems` 以 `{stockId, buyDate}` 表示），與造成它們的策略或訊號日無關
+- [x] 本端點不接受也不依賴策略代碼或訊號日：相同 `(stockId, buyDate)` 的請求，不論它來自哪個型態，回應完全相同
+- [x] `buyPrice` 取自買進日那一列的 `open_price`，不再取 `close_price`：同一筆資料在開盤價與收盤價不同時，`buyPrice` 等於開盤價
+- [x] `cost`／`buyFee`／`profit`／`returnPercent` 全部依新的 `buyPrice` 重算，算式本身不變（`cost = buyPrice × 1000 + buyFee`）
+- [x] 買進日**開盤價**為 `0`（收盤價不為 `0`）時該筆無法回測：`buyPrice` 為 `null`，回應 `200`、不計入彙總——判斷的是開盤價，不是收盤價
+- [x] 買進日開盤價 > `0` 但收盤價為 `0` 時該筆**照常回測**，`buyPrice` 為該開盤價
+- [x] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：窗口內有可賣出的交易日時，買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
+- [x] 買進日只有一列且其後無列時：`buyPrice` 有值（開盤價），依「窗口為空時的退路」`sellDate` 為買進日、`sellPrice` 等於該開盤價，計入彙總
+- [x] 價格查詢仍為批次、次數不隨檔數線性增加；買進價與賣出候選同取自 `open_price`，不再另查 `close_price`
+- [x] 交易成本的三項算法、費率與捨去規則完全未變，只是代入的 `buyPrice` 改為開盤價
+
+### 窗口為空時的退路
+- [x] 買進日為該檔最新一個交易日（其後至今日無任何列）時：回應 `200`，`sellDate` 等於 `buyDate`，`sellPrice` 等於 `buyPrice`（買進日的開盤價），`sellFee`／`sellTax`／`profit`／`returnPercent` 皆有值、不為 `null`
+- [x] 該筆的數字照「交易成本」計算：以一筆真實資料手算驗證 `buyFee`／`sellFee`／`sellTax`／`cost`／`profit`／`returnPercent` 逐項相符，`profit` 與 `returnPercent` 為負
+- [x] 該筆計入彙總：單獨回測該筆時 `backtestedCount` 為 `1`、`totalCost` 等於其 `cost`、`totalProfit` 等於其 `profit`、`totalReturnPercent` 等於其 `returnPercent`（不是 `null`）
+- [x] 賣出窗口內有可賣出的交易日時結果與改動前完全相同：一筆其後有列的真實 `(stockId, buyDate)`，回應與改動前逐位元組相同
+- [x] 退路不是賣出價的下限：窗口內最高開盤價低於買進價時，`sellDate` 仍晚於 `buyDate`、`sellPrice` 仍為窗口內最高開盤價，不改用買進價
+- [x] 買進日無該檔列、買進日開盤價為 `0` 兩種情形維持無法回測：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 皆為 `null`，不計入彙總
+- [x] 回應的欄位集合不變：退路筆與一般筆有同一組欄位，未新增任何標示退路的欄位
+
+### 賣出窗口的迄日（`endDate`）
+- [x] 請求帶 `endDate: "2026-09-20"`（週日，非交易日）時回 `200`，各筆的 `sellPrice` 為該檔 `(buyDate, 2026-09-20]` 內 `open_price` 的最大值、`sellDate` 為該值最早出現的交易日：`2305`／`2026-09-08` → `2026-09-18`／`57.70`，`2466`／`2026-09-14` → `2026-09-17`／`105.00`，`2033`／`2026-09-10` → `2026-09-18`／`32.45`
+- [x] 同一份 `items` 不帶 `endDate` 時，回應與改動前逐位元組相同（窗口至今日）
+- [x] 回應的 `asOfDate` 等於窗口迄日：帶 `endDate: "2026-09-20"` 時為 `2026-09-20`，不帶時為今日
+- [x] `endDate` 晚於今日時，回應與不帶 `endDate` 的回應逐位元組相同，`asOfDate` 為今日
+- [x] 買進日是該檔在 `endDate` 當天或之前的最後一個交易日（`2305`／`2026-09-18`，`endDate: "2026-09-20"`，該檔 2026-09-21 起另有交易日）時適用退路：`sellDate` 為 `2026-09-18`、`sellPrice` 等於 `buyPrice`，計入彙總
+- [x] 買進日晚於 `endDate`（`2305`／`2026-09-21`，`endDate: "2026-09-20"`）時該筆無法回測：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，該筆留在 `items`，不計入 `totalCost`／`totalProfit`／`backtestedCount`
+- [x] 窗口內最高開盤價低於買進價時不改走退路：以一筆真實資料驗證 `sellDate` 晚於 `buyDate` 且不晚於 `endDate`，`sellPrice` 低於 `buyPrice`，`returnPercent` 為負
+- [x] 一次請求混合上述三種情形（一般、退路、買進日晚於 `endDate`）時，`backtestedCount` 等於前兩種的筆數，`items` 順序與請求一致
+
 ### 彙總
 - [x] `totalCost` 等於各可回測筆 `cost`（含買進手續費）的總和
 - [x] `totalProfit` 等於各可回測標的 `profit` 的總和
@@ -375,32 +408,10 @@ Response `200`：
 - [x] `backtestedCount` 等於 `sellDate` 非 `null` 的筆數；清單中含無法回測標的時，它小於 `items` 的長度
 
 ### 無法回測的標的
-- [x] 買進日為該檔最新一個交易日時：`buyPrice` 有值，回應為 `200` 而非錯誤；該筆依「窗口為空時的退路」以買進日開盤價賣出，不再是無法回測
 - [x] 買進日在 `stock_daily_price` 無該檔列時：`buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`
 - [x] 無法回測的標的（買進日無該檔列）**仍出現在 `items` 中**，未被從回應裡移除
 - [x] 無法回測的標的**不計入** `totalCost` 與 `totalProfit`：以「一檔可回測 + 一檔不可回測」的清單驗證，`totalCost` 等於可回測那一檔單獨回測時的值
 - [x] 清單中全部標的皆無法回測時：`totalCost` 與 `totalProfit` 為 `0`，`totalReturnPercent` 為 **`null`**（不是 `0`），`backtestedCount` 為 `0`
-
-### 契約與驗證
-- [x] `items` 的順序與請求一致，本端點不重新排序
-- [x] `items` 缺漏或為空陣列回 `400`，`{"code":"NO_BACKTEST_ITEMS"}`，且不對資料庫發出任何價格查詢
-- [x] `items` 為 20001 筆時回 `400`，`{"code":"TOO_MANY_STOCKS"}`；2000 筆為合法（上限計的是**筆數**，`(stockId, buyDate)` 不同的多筆各計一筆）
-- [x] **一份 532 筆的全市場命中清單回 `200`**，不因超過掃描的 `stockIds` 上限 200 而被拒絕
-
-### 一檔多買進日
-- [x] 同一 `stockId` 帶**兩個不同 `buyDate`** 送出時回 `200`，`items` 回**兩筆**，各自有自己的 `buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit`
-- [x] 同一檔的兩筆各自獨立計算：以構造資料驗證，第二筆的 `sellDate` 只在其自己的 `(buyDate, asOfDate]` 窗口內選取，不受第一筆的窗口影響
-- [x] 同一檔的兩筆**各自計入一次成本與收益**：`totalCost` 等於兩筆 `cost` 的總和，`backtestedCount` 為 `2`
-- [x] 同一 `(stockId, buyDate)` 組合出現兩次時回 `400`，`{"code":"DUPLICATE_BACKTEST_ITEM","duplicatedItems":[{"stockId":"...","buyDate":"..."}]}`，且**不**默默合併成一筆
-- [x] 同一 `stockId` 搭配**不同** `buyDate` 不觸發上述錯誤
-- [x] `items` 的順序仍與請求一致，同一檔的多筆維持送入順序
-- [x] 回應的每一筆以 `buyDate` 表示買進日，請求與回應皆**不含** `signalDate` 欄位
-- [x] 含不存在的代號時回 `400`，`{"code":"UNKNOWN_STOCK_ID","unknownIds":[...]}`
-- [x] 同一 `stockId` 出現兩次時回 `400`，`{"code":"DUPLICATE_STOCK_ID","duplicatedIds":[...]}`
-- [x] `buyDate` 晚於今日或缺漏時回 `400`，`{"code":"INVALID_BUY_DATE","stockId":"<該檔>"}`
-- [x] 已下市（`is_active = 0`）的股票可正常回測，不因下市被拒絕或被排除
-- [x] 本端點不寫入 `stock_daily_price`、`stock`、`stock_sync_progress` 任何一張表：一次回測前後三張表的列數與內容完全不變
-- [x] 本端點不建立 `stock_sync_progress` 列，也不與 `PRICE_BACKFILL`／`INDICATOR_REBUILD` 的併發鎖互斥：回補進行中呼叫回測正常回 `200`，不回 `409`
 
 ### 交易成本
 - [x] 買 `1150.00`、賣 `1205.00`：`buyFee` `1638`、`sellFee` `1717`、`sellTax` `3615`、`cost` `1151638`、`profit` `48030`、`returnPercent` `4.17`
@@ -412,47 +423,28 @@ Response `200`：
 - [x] 買進日為最新交易日（賣出窗口為空）的筆：`buyFee` 與 `cost` 有值，`sellFee`／`sellTax`／`profit`／`returnPercent` 依退路同樣有值，其 `cost` 計入 `totalCost`；`buyPrice` 為 `null` 的筆 `buyFee`／`sellFee`／`sellTax`／`cost` 皆為 `null`
 - [x] 兩筆（`1150→1205`、`1180→1210`）一起回測：`totalCost` `2333319`、`totalProfit` `70995`、`totalReturnPercent` `3.04`
 
+### 一檔多買進日
+- [x] 同一 `stockId` 帶**兩個不同 `buyDate`** 送出時回 `200`，`items` 回**兩筆**，各自有自己的 `buyPrice`／`sellDate`／`sellPrice`／`returnPercent`／`profit`
+- [x] 同一檔的兩筆各自獨立計算：以構造資料驗證，第二筆的 `sellDate` 只在其自己的 `(buyDate, asOfDate]` 窗口內選取，不受第一筆的窗口影響
+- [x] 同一檔的兩筆**各自計入一次成本與收益**：`totalCost` 等於兩筆 `cost` 的總和，`backtestedCount` 為 `2`
+- [x] 同一 `(stockId, buyDate)` 組合出現兩次時回 `400`，`{"code":"DUPLICATE_BACKTEST_ITEM","duplicatedItems":[{"stockId":"...","buyDate":"..."}]}`，且**不**默默合併成一筆
+- [x] 同一 `stockId` 搭配**不同** `buyDate` 不觸發上述錯誤
+- [x] `items` 的順序仍與請求一致，同一檔的多筆維持送入順序
+
+### 契約與驗證
+- [x] `items` 的順序與請求一致，本端點不重新排序
+- [x] `items` 缺漏或為空陣列回 `400`，`{"code":"NO_BACKTEST_ITEMS"}`，且不對資料庫發出任何價格查詢
+- [x] `items` 為 20001 筆時回 `400`，`{"code":"TOO_MANY_STOCKS"}`；2000 筆為合法（上限計的是**筆數**，`(stockId, buyDate)` 不同的多筆各計一筆）
+- [x] **一份 532 筆的全市場命中清單回 `200`**，不因超過掃描的 `stockIds` 上限 200 而被拒絕
+- [x] 回應的每一筆以 `buyDate` 表示買進日，請求與回應皆**不含** `signalDate` 欄位
+- [x] 含不存在的代號時回 `400`，`{"code":"UNKNOWN_STOCK_ID","unknownIds":[...]}`
+- [x] `buyDate` 晚於今日或缺漏時回 `400`，`{"code":"INVALID_BUY_DATE","stockId":"<該檔>"}`
+- [x] 已下市（`is_active = 0`）的股票可正常回測，不因下市被拒絕或被排除
+- [x] 本端點不寫入 `stock_daily_price`、`stock`、`stock_sync_progress` 任何一張表：一次回測前後三張表的列數與內容完全不變
+- [x] 本端點不建立 `stock_sync_progress` 列，也不與 `PRICE_BACKFILL`／`INDICATOR_REBUILD` 的併發鎖互斥：回補進行中呼叫回測正常回 `200`，不回 `409`
+
 ### 效能
 - [x] 一份 50 檔的清單，其價格查詢次數不隨檔數線性增加（以查詢計數斷言，非以耗時推測），不得逐檔各發一次查詢
-
-### 以進場日買進
-- [x] 請求 `items[]` 以 `buyDate` 表示買進日；只帶 `signalDate`、缺 `buyDate` 的請求回 `400` `INVALID_BUY_DATE`
-- [x] 以構造資料驗證買進錨定在 `buyDate` 的**開盤**：D+2 收盤 104、D+3 開盤 106／收盤 112、D+4 開盤 110，送 `buyDate`＝D+3 時 `buyPrice` 為 **106**（不是 D+3 的收盤 112，也不是 D+2 的收盤 104），賣出窗口從 D+4 起，`sellDate` 不早於 D+4
-- [x] 同一檔兩筆 `buyDate` 相同即為重複（`DUPLICATE_BACKTEST_ITEM`，`duplicatedItems` 以 `{stockId, buyDate}` 表示），與造成它們的策略或訊號日無關
-- [x] 本端點不接受也不依賴策略代碼或訊號日：相同 `(stockId, buyDate)` 的請求，不論它來自哪個型態，回應完全相同
-
-### 買進價改為買進日開盤價
-
-- [x] `buyPrice` 取自買進日那一列的 `open_price`，不再取 `close_price`：同一筆資料在開盤價與收盤價不同時，`buyPrice` 等於開盤價
-- [x] `cost`／`buyFee`／`profit`／`returnPercent` 全部依新的 `buyPrice` 重算，算式本身不變（`cost = buyPrice × 1000 + buyFee`）
-- [x] 買進日**開盤價**為 `0`（收盤價不為 `0`）時該筆無法回測：`buyPrice` 為 `null`，回應 `200`、不計入彙總——判斷的是開盤價，不是收盤價
-- [x] 買進日開盤價 > `0` 但收盤價為 `0` 時該筆**照常回測**，`buyPrice` 為該開盤價
-- [x] 賣出窗口仍自買進日的**次一交易日**起至今日，取窗口內最高 `open_price`、同值取最早：窗口內有可賣出的交易日時，買進日自己的開盤價即使是全區間最高，也不會成為 `sellPrice`／`sellDate`
-- [x] 買進日只有一列且其後無列時：`buyPrice` 有值（開盤價），依「窗口為空時的退路」`sellDate` 為買進日、`sellPrice` 等於該開盤價，計入彙總
-- [x] 價格查詢仍為批次、次數不隨檔數線性增加；買進價與賣出候選同取自 `open_price`，不再另查 `close_price`
-- [x] 交易成本的三項算法、費率與捨去規則完全未變，只是代入的 `buyPrice` 改為開盤價
-
-### 窗口為空時的退路
-
-- [x] 買進日為該檔最新一個交易日（其後至今日無任何列）時：回應 `200`，`sellDate` 等於 `buyDate`，`sellPrice` 等於 `buyPrice`（買進日的開盤價），`sellFee`／`sellTax`／`profit`／`returnPercent` 皆有值、不為 `null`
-- [x] 該筆的數字照「交易成本」計算：以一筆真實資料手算驗證 `buyFee`／`sellFee`／`sellTax`／`cost`／`profit`／`returnPercent` 逐項相符，`profit` 與 `returnPercent` 為負
-- [x] 該筆計入彙總：單獨回測該筆時 `backtestedCount` 為 `1`、`totalCost` 等於其 `cost`、`totalProfit` 等於其 `profit`、`totalReturnPercent` 等於其 `returnPercent`（不是 `null`）
-- [x] 賣出窗口內有列、但開盤價全為 `0` 時同樣適用退路：`sellDate` 等於 `buyDate`，不是那些 `0` 列的日期
-- [x] 賣出窗口內有可賣出的交易日時結果與改動前完全相同：一筆其後有列的真實 `(stockId, buyDate)`，回應與改動前逐位元組相同
-- [x] 退路不是賣出價的下限：窗口內最高開盤價低於買進價時，`sellDate` 仍晚於 `buyDate`、`sellPrice` 仍為窗口內最高開盤價，不改用買進價
-- [x] 買進日無該檔列、買進日開盤價為 `0` 兩種情形維持無法回測：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 皆為 `null`，不計入彙總
-- [x] 回應的欄位集合不變：退路筆與一般筆有同一組欄位，未新增任何標示退路的欄位
-
-### 賣出窗口的迄日（`endDate`）
-
-- [x] 請求帶 `endDate: "2026-09-20"`（週日，非交易日）時回 `200`，各筆的 `sellPrice` 為該檔 `(buyDate, 2026-09-20]` 內 `open_price` 的最大值、`sellDate` 為該值最早出現的交易日：`2305`／`2026-09-08` → `2026-09-18`／`57.70`，`2466`／`2026-09-14` → `2026-09-17`／`105.00`，`2033`／`2026-09-10` → `2026-09-18`／`32.45`
-- [x] 同一份 `items` 不帶 `endDate` 時，回應與改動前逐位元組相同（窗口至今日）
-- [x] 回應的 `asOfDate` 等於窗口迄日：帶 `endDate: "2026-09-20"` 時為 `2026-09-20`，不帶時為今日
-- [x] `endDate` 晚於今日時，回應與不帶 `endDate` 的回應逐位元組相同，`asOfDate` 為今日
-- [x] 買進日是該檔在 `endDate` 當天或之前的最後一個交易日（`2305`／`2026-09-18`，`endDate: "2026-09-20"`，該檔 2026-09-21 起另有交易日）時適用退路：`sellDate` 為 `2026-09-18`、`sellPrice` 等於 `buyPrice`，計入彙總
-- [x] 買進日晚於 `endDate`（`2305`／`2026-09-21`，`endDate: "2026-09-20"`）時該筆無法回測：`buyPrice`／`sellDate`／`sellPrice`／`buyFee`／`sellFee`／`sellTax`／`cost`／`returnPercent`／`profit` 皆為 `null`，回應為 `200`，該筆留在 `items`，不計入 `totalCost`／`totalProfit`／`backtestedCount`
-- [x] 窗口內最高開盤價低於買進價時不改走退路：以一筆真實資料驗證 `sellDate` 晚於 `buyDate` 且不晚於 `endDate`，`sellPrice` 低於 `buyPrice`，`returnPercent` 為負
-- [x] 一次請求混合上述三種情形（一般、退路、買進日晚於 `endDate`）時，`backtestedCount` 等於前兩種的筆數，`items` 順序與請求一致
 
 ---
 ## Execution Result

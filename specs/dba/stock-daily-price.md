@@ -94,9 +94,6 @@ INSERT IGNORE INTO schema_migration (version) VALUES ('V012');
 - [x] 對同一 `(stock_id, trade_date)` 重複執行 UPSERT 兩次，表中僅有一列，且第二次的值覆蓋第一次
 - [x] 插入 `high_price < low_price` 的資料時被 CHECK 約束拒絕
 - [x] `EXPLAIN` 驗證「單檔股票 + 日期區間」查詢使用主鍵範圍掃描（`type=range`, `key=PRIMARY`），而非全表掃描
-
----
-
 - [x] V012 執行後，既有列的 `created_at` / `updated_at` 與執行前相比正好增加 8 小時
 - [x] V012 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V012` 仍只有一列（位移為冪等）
 - [x] V012 執行前後 `trade_date` 完全未變動，任一列的 `trade_date` 都沒有位移

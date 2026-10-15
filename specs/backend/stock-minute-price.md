@@ -51,7 +51,7 @@ depends_on: [stock-price-ingestion, stock-catalog]
 
 - **FinMind 不採用。** 其分 K 資料集 `TaiwanStockKBar` 限 sponsor 付費會員；免費層請求回 HTTP 400 `{"msg":"Your level is free. Please update your user level."}`，任何日期皆然。
 
-- **富果 API Key 由環境變數 `FUGLE_API_KEY` 注入，不寫入版控中的設定檔，也不得出現在日誌、錯誤訊息或任何回應中。** 本機開發時，金鑰存放在專案**上一層目錄**的 `env` 檔（不在任何 git repo 內；該檔另有空行與一行標題，金鑰為第一個非空、只由 base64 字元組成的行），由 `/start` 啟動後端時讀入並設定此環境變數；該檔不得複製進專案目錄。未設定時，應用程式啟動階段留下明確的警告紀錄；此時對 30 天以前日期的查詢**不發出請求、不寫入狀態表**，直接回 `dataStatus: FETCH_FAILED` 與 `message`「未設定富果 API Key，無法取得 30 天以前的分 K」。不寫入狀態表是刻意的：這是設定問題而非來源失敗，若照常累加 `attempt_count`，設定好金鑰之後這些日期仍會被重試上限擋住。
+- **富果 API Key 由環境變數 `FUGLE_API_KEY` 注入，不寫入版控中的設定檔，也不得出現在日誌、錯誤訊息或任何回應中。** 本機開發時，金鑰存放在專案**上一層目錄**的 `env` 檔（不在任何 git repo 內；鍵名與解析規則見 `.claude/rules/external-env.md` 的 `fugle api key`），由 `/start` 啟動後端時讀入並設定此環境變數；該檔不得複製進專案目錄。未設定時，應用程式啟動階段留下明確的警告紀錄；此時對 30 天以前日期的查詢**不發出請求、不寫入狀態表**，直接回 `dataStatus: FETCH_FAILED` 與 `message`「未設定富果 API Key，無法取得 30 天以前的分 K」。不寫入狀態表是刻意的：這是設定問題而非來源失敗，若照常累加 `attempt_count`，設定好金鑰之後這些日期仍會被重試上限擋住。
 
 - **「超出範圍」誠實傳達到畫面上**：早於 `availableFrom` 的日期是產品層級的限制，不可假裝資料只是暫時抓不到。已抓取並存入的日期會永久保留——包括 Yahoo 在 30 天內抓到的日期，超過 30 天後仍直接讀資料庫，不會改由富果重抓。
 
@@ -71,9 +71,10 @@ depends_on: [stock-price-ingestion, stock-catalog]
 | `OUT_OF_WINDOW`，且目標日**早於** `availableFrom` | 直接回覆該狀態，零外部請求 |
 | `OUT_OF_WINDOW`，但目標日**不早於** `availableFrom` | 視為過時，等同「無對應列」重新判斷來源並請求 |
 
-`OUT_OF_WINDOW` 不是來源回報的結果，而是以 `availableFrom` 在本地推算的結論；`availableFrom` 一改（或早期只有 Yahoo 時以「30 天」寫入的列），舊列就可能與現行分界矛盾。每次查詢都以現行 `availableFrom` 重新檢驗，這類列會在下一次被點開時自行修正，不依賴一次性的資料清理——曾有使用者點開 2026-07-30 時，因富果上線前留下的舊列而仍看到「最早只提供到 2023-05-23」。
 | `FAILED` 且 `attempt_count` 未達上限（預設 3） | 請求外部來源 |
 | `FAILED` 且已達上限 | 直接回覆失敗，零外部請求；僅 `refresh=true` 可強制重試 |
+
+`OUT_OF_WINDOW` 不是來源回報的結果，而是以 `availableFrom` 在本地推算的結論；`availableFrom` 一改（或早期只有 Yahoo 時以「30 天」寫入的列），舊列就可能與現行分界矛盾。每次查詢都以現行 `availableFrom` 重新檢驗，這類列會在下一次被點開時自行修正，不依賴一次性的資料清理——曾有使用者點開 2026-07-30 時，因富果上線前留下的舊列而仍看到「最早只提供到 2023-05-23」。
 
 台股收盤為 13:30，加上資料源的延遲緩衝取 14:00 為「當日定案」的分界。
 
@@ -193,10 +194,10 @@ Response `200`：
 價格 2 位小數，成交量為整數。
 
 ## Acceptance Criteria
+
+### 查詢、快取與正規化
 - [x] `GET /api/stocks/2330/minute-bars?tradeDate=<近 30 日內的交易日>` 首次呼叫觸發外部抓取，回傳 `dataStatus: AVAILABLE` 且 `bars` 首根 `barTime` 為 `09:00`、末根不晚於 `13:30`
-- [x] 正常交易日的 1 分 K 根數為 271（09:00–13:30 含首尾）（此為**當時的觀測**；2026-09-15 以真實資料複驗：Yahoo 在 13:25–13:29 回傳空值，正規化後為 266 根，與富果一致，以下方增量為準）
 - [x] 同一 `(stockId, tradeDate)` 第二次呼叫**不再發出任何外部請求**（以請求記錄或來源呼叫計數驗證），回應內容與第一次相同
-- [x] `tradeDate` 早於今日減 30 天時回 `dataStatus: OUT_OF_WINDOW`，且**未對外部來源發出請求**（此為**當時只有 Yahoo 一個來源**的行為；已於下方增量改為 30 天以前走富果、早於 `availableFrom` 才回 `OUT_OF_WINDOW`）
 - [x] `OUT_OF_WINDOW` / `NO_DATA` 的日期重複呼叫多次，外部請求數維持為 0
 - [x] 已標記 `AVAILABLE` 的過往日期，其分 K 在超過來源 30 日視窗之後仍可正常讀取（資料已永久落地）
 - [x] `interval=5` 的聚合結果：`open` 等於組內第一根的 `open`、`close` 等於最後一根的 `close`、`high`／`low` 為組內極值、`volume` 為組內總和（以 1 分 K 原始資料逐組驗證）
@@ -211,10 +212,7 @@ Response `200`：
 - [x] 抓取失敗後 `stock_minute_fetch_status` 的 `attempt_count` 累加且 `last_error` 有內容；達上限後不再自動重試，但 `refresh=true` 仍可強制重抓
 - [x] K 棒寫入與狀態更新在同一交易內完成：模擬狀態更新失敗時，該次的 K 棒亦不留存（不出現「狀態為 AVAILABLE 但無 K 棒」）
 
-
-### 30 天以前的分 K 改由富果補抓
-
-**來源分流**
+### 來源分流
 - [x] 不早於今日減 30 天的交易日照舊由 Yahoo 抓取：回 `dataStatus: AVAILABLE`、`source: YAHOO`，且未對富果發出任何請求
 - [x] 早於今日減 30 天、且不早於 `availableFrom` 的交易日由富果抓取：回 `dataStatus: AVAILABLE`、`source: FUGLE`，且未對 Yahoo 發出任何請求
 - [x] 富果請求為 `GET .../historical/candles/<代號>?from=<tradeDate>&to=<tradeDate>&timeframe=1&fields=open,high,low,close,volume&sort=asc`，並帶 `X-API-KEY` header（以請求記錄驗證完整路徑、參數與 header）
@@ -223,11 +221,11 @@ Response `200`：
 - [x] 30 天內的日期 Yahoo 請求失敗時記為 `FAILED`，**未改向富果請求**；30 天以前的日期富果失敗時，**未改向 Yahoo 請求**
 - [x] Yahoo 已抓取為 `AVAILABLE` 的日期超過 30 天後，仍直接讀資料庫，未對任何來源重新請求
 
-**`availableFrom`**
+### `availableFrom`
 - [x] 每個回應（含 `AVAILABLE`、`NO_DATA`、`OUT_OF_WINDOW`、`NOT_A_TRADING_DAY`、`FETCH_FAILED`）都帶 `availableFrom`，預設值為 `2023-05-23`
 - [x] `availableFrom` 取自設定：將設定改為其他日期後，回應中的 `availableFrom` 與 `OUT_OF_WINDOW` 的分界同步改變，程式中不存在寫死的 `2023-05-23`
 
-**富果正規化（以真實回應確認）**
+### 富果正規化（以真實回應確認）
 - [x] 以富果的真實回應確認：一個正常交易日的 1 分 K 首根 `barTime` 為 `09:00`、末根為 `13:30`，13:25–13:29 沒有 K 棒，共 266 根
 - [x] 同一交易日分別以 Yahoo 與富果正規化後，兩者的 `bar_time` 集合完全相同（驗證兩個來源落在同一條時間格線，而非相差一分鐘）；Yahoo 在 13:25–13:29 回傳的空值 K 棒被丟棄，因此兩者皆為 266 根
 - [x] 富果 `date` 以其 `+08:00` 時區換算：首根為 `09:00`，而非 `01:00` 或 `17:00`
@@ -237,11 +235,11 @@ Response `200`：
 - [x] 富果結果中 OHLC 任一為 `null` 的分鐘不產生 K 棒，`stock_minute_price` 中不存在價格為 0 的列
 - [x] 富果的 K 棒寫入與 `stock_minute_fetch_status` 更新（`source` 為 `FUGLE`）在同一交易內完成
 
-**富果錯誤處理**
+### 富果錯誤處理
 - [x] 富果回 HTTP 404 時記為 `NO_DATA`；該日期重複呼叫多次，對外請求數維持為 0
 - [x] 富果回 HTTP 401／403／429、逾時或 5xx 時記為 `FAILED`：`attempt_count` 累加、`last_error` 含 HTTP 狀態或逾時原因；達上限後不再自動重試，`refresh=true` 仍可強制重抓
 
-**API Key**
+### API Key
 - [x] 富果 API Key 取自環境變數 `FUGLE_API_KEY`，版控中的設定檔不含任何金鑰值
 - [x] 金鑰值不出現在應用程式日誌、`stock_minute_fetch_status.last_error`、回應的 `message` 或任何 API 回應中：以一個可辨識的假金鑰觸發成功與失敗（401）的請求後，搜尋日誌、資料庫與回應皆找不到該值
 - [x] 未設定 API Key 時，應用程式啟動階段留下明確的警告紀錄
@@ -249,7 +247,7 @@ Response `200`：
 - [x] 承上，設定 API Key 後查詢同一日期，可正常由富果抓取，不受先前的失敗影響
 - [x] 未設定 API Key 時，30 天內的日期仍正常由 Yahoo 抓取
 
-**速率控制**
+### 速率控制
 - [x] 富果相鄰兩次請求的間隔不小於 1 秒，數值取自設定；以並發觸發多個 30 天以前的日期驗證實際請求時間間隔
 - [x] 富果與 Yahoo 各自計算請求間隔：富果的節流不拖慢 Yahoo 的請求
 

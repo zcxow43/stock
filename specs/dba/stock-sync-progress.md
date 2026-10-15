@@ -109,9 +109,6 @@ INSERT IGNORE INTO schema_migration (version) VALUES ('V010');
 - [x] 以 `WHERE job_type = ? AND status IN ('PENDING','FAILED')` 查詢時，`EXPLAIN` 顯示使用 `idx_job_status`
 - [x] `last_synced_date` 的欄位註解為「已成功處理到的區間迄日（未必是交易日）；NULL 表示尚未開始」，在既有資料庫上由 V008 更新，在從空重建時由 V004 直接建成該值
 - [x] V008 於已套用 V004 的資料庫上執行成功，且不影響表中既有列的資料
-
----
-
 - [x] V010 執行後，既有列的 `finished_at` 與執行前相比正好增加 8 小時，`NULL` 值仍為 `NULL`
 - [x] V010 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V010` 仍只有一列（位移為冪等）
 - [x] 容器時區改為 `Asia/Taipei` 並套用 V010 後，`GET /api/stocks/sync/progress` 的 `lastSyncedAt` 與實際同步當下的本地時間一致（誤差在一分鐘內）

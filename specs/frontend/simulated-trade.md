@@ -27,7 +27,7 @@ depends_on: [stock-list]
 2. **摘要列** — 「共 N 筆」與三個總計（總成本、總未實現損益、總報酬率），另有一行費率說明。
 3. **持股表格** — 一列一筆持股，最右一欄為刪除。
 
-**頁面層級的「只看上市普通股」不影響本頁**：本頁沒有母體篩選這件事——使用者指名哪一檔就是哪一檔，包含 ETF 與已下市股票。切換那個勾選框時本頁不重新查詢（`specs/frontend/stock-list.md` 的「各分頁如何套用」需同步記上這一條）。
+**頁面層級的「只看上市普通股」不影響本頁**：本頁沒有母體篩選這件事——使用者指名哪一檔就是哪一檔，包含 ETF 與已下市股票。切換那個勾選框時本頁不重新查詢（`specs/frontend/stock-list.md` 的「各分頁如何套用」已記上這一條）。
 
 ### 加入列
 
@@ -166,7 +166,6 @@ depends_on: [stock-list]
 - [x] 本頁不含「建議」「推薦」「可進場」等措辭
 - [x] 所有顏色為 `## Visual Style` 的固定色碼，`prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 
-
 ### 指定買進日
 - [x] 加入列有一格買進日輸入（`type="date"`），預設值等於回應的 `defaultBuyDate`、`max` 等於回應的 `asOfDate`；`defaultBuyDate` 為 `null` 時留空且「加入」disabled
 - [x] 送出的 body 為 `{ stockId, buyDate }`，買進日即輸入框當下的值（沿用預設時也照樣帶出）；在買進日輸入框按 Enter 同樣送出
@@ -174,6 +173,7 @@ depends_on: [stock-list]
 - [x] 加入成功後買進日**維持不變**、只有代號被清空；加入失敗時兩格都不清空
 - [x] 錯誤文案：`INVALID_BUY_DATE` → 「買進日不能晚於今日」；`NO_PRICE_ON_BUY_DATE` → 「2330 在 2026-09-13 沒有收盤價（可能是假日或停牌），請換一天」；皆顯示在輸入框下方
 - [x] 買進日輸入框的背景／邊框／focus 邊框與代號輸入框同色碼，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+
 ---
 ## Execution Result
 - Status: DONE

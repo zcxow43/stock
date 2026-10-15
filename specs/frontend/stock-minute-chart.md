@@ -150,6 +150,8 @@ depends_on: [stock-daily-chart]
 | 骨架方塊底色 | `#1D2A38` |
 
 ## Acceptance Criteria
+
+### 頁面、資料狀態與互動
 - [x] 由日 K 頁連點兩下某根 K 棒後，導向 `/stocks/{stockId}/minute/{該日期}` 並顯示該日分 K 圖
 - [x] 主圖為單一顏色 `#3E8FD8` 的收盤價折線，畫面上不存在任何蠟燭實體或上下影線
 - [x] X 軸標籤為 `HH:mm`，首根為 `09:00`、末根不晚於 `13:30`
@@ -157,7 +159,6 @@ depends_on: [stock-daily-chart]
 - [x] Tooltip 顯示時間、開高低收、相對當日開盤的漲跌幅、成交量
 - [x] 週期切換為 `5 分` 後重新請求並重繪，資料點數量約為 1 分的五分之一
 - [x] 當日概況條顯示 `dailySummary` 的開高低收與成交量
-- [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「資料來源僅提供最近 30 天的分鐘資料…」，**不出現重試按鈕**，且當日概況條仍顯示（此為**當時的文案**；已於下方增量改為依回應的 `availableFrom` 顯示）
 - [x] `dataStatus` 為 `NO_DATA` / `NOT_A_TRADING_DAY` / `FETCH_FAILED` 時各顯示不同文案，四種狀態的訊息互不相同
 - [x] `dataStatus` 為 `FETCH_FAILED` 時顯示回應的 `message` 與「重試」按鈕，點擊後以 `refresh=true` 重新請求
 - [x] 載入中顯示「正在取得當日分鐘資料…」說明文字，而非僅一個轉圈圖示
@@ -168,8 +169,7 @@ depends_on: [stock-daily-chart]
 - [x] 手動輸入非法日期的網址時顯示「網址中的日期無效」，而非空圖或無限載入
 - [x] 在瀏覽器強制 `prefers-color-scheme: dark` 與 `light` 兩種偏好下截圖比對，頁面與圖表配色完全相同
 
----
-
+### 現價流線圖與成交量副圖
 - [x] 折線不隨漲跌變色：同一張圖在上漲日與下跌日的線色相同，皆為 `#3E8FD8`
 - [x] 線下沒有漸層或面積填色
 - [x] 圖上有一條值為 `dailySummary.open` 的水平虛線，色 `#4A5866`，且 Y 軸標注其價格
@@ -179,7 +179,6 @@ depends_on: [stock-daily-chart]
 - [x] 十字準星移動時，折線上對應的資料點以 `#E6EDF5` 圓點標示
 - [x] 日 K 頁（`/stocks/{stockId}/daily`）的主圖仍為蠟燭圖，未受本次變更影響
 
-
 ### 超出範圍的說明改依最早可取得日顯示
 
 - [x] `dataStatus` 為 `OUT_OF_WINDOW` 時顯示「分鐘資料最早只提供到 {availableFrom}，此交易日早於可取得範圍。」，其中日期取自回應的 `availableFrom`，格式 `YYYY-MM-DD`
@@ -188,7 +187,6 @@ depends_on: [stock-daily-chart]
 - [x] `OUT_OF_WINDOW` 時仍**不出現重試按鈕**，附「返回日 K」按鈕，且當日概況條仍顯示
 - [x] 30 天以前、但不早於 `availableFrom` 的交易日回 `dataStatus: AVAILABLE`（`source: FUGLE`）時，正常繪製分 K 圖與成交量副圖，呈現方式與 `source: YAHOO` 完全相同
 - [x] `dataStatus` 為 `FETCH_FAILED` 且 `message` 為「未設定富果 API Key，無法取得 30 天以前的分 K」時，照常顯示該 `message` 與「重試」按鈕
-- [x] 四種非 `AVAILABLE` 狀態的訊息仍互不相同
 - [x] 新文案的顏色取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下完全一致
 
 ## Execution Result

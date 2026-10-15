@@ -21,7 +21,7 @@ depends_on: [stock-price-ingestion]
 
 ### 清單內容與篩選
 
-- 資料來源為 `stock` 主檔（由 `stock-price-ingestion` 的每日抓取維護）。
+- 資料來源為 `stock` 主檔（由 `stock-price-ingestion` 的每日抓取、`stock-universe-import` 的匯入，以及本 spec 的人工維護端點寫入）。
 - 支援關鍵字搜尋：對 `stock_id` 與 `stock_name` 同時做前綴／包含比對。全市場約 2200 檔，沒有搜尋就只能翻頁找。
 - 支援市場別篩選（`TSE` / `OTC`）。
 - 預設**只列出 `is_active = 1`** 的股票；已下市標的需明確要求才顯示。下市股票的歷史行情仍保留（見 `specs/dba/stock.md`），但不該混在日常瀏覽的清單裡。

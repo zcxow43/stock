@@ -21,7 +21,7 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 
 其中三個型態（底底高、箱型突破、上漲支撐）各有三段靈敏度（`STRICT` / `STANDARD` / `LOOSE`），由呼叫端逐一指定。靈敏度只改門檻，不改判定邏輯。
 
-**累積上漲、反彈、三個法人籌碼型態與兩個技術指標型態都沒有靈敏度**，它們的參數全部由呼叫端直接指定：累積上漲為回看天數 `days` 與漲幅門檻 `risePercent`；反彈為下跌天數 `dropDays`、跌幅門檻 `dropPercent`、反彈天數 `riseDays`、反彈幅度 `risePercent`；法人籌碼型態的參數見「法人籌碼型態」一節，技術指標型態的參數見「技術指標型態」一節（**這五者皆不接受 `risePercent`**——它們不看漲幅）。理由是這兩個型態的參數本身就是使用者要調的全部，靈敏度在此只是「幾個數字的三組預設組合」——一旦每個數字都能自己填，那三段就不再表達任何判定上的差異，只是多一層要先選、選了又會被覆寫的中介。其餘三個型態的靈敏度仍決定回看長度、擺動根數、量能倍數、確認根數與盤整前提等多項參數，不能以少數幾個輸入取代，因此保持不變。
+**累積上漲、反彈、三個法人籌碼型態、兩個技術指標型態、站上均線與量多都沒有靈敏度**，它們的參數全部由呼叫端直接指定：累積上漲為回看天數 `days` 與漲幅門檻 `risePercent`；反彈為下跌天數 `dropDays`、跌幅門檻 `dropPercent`、反彈天數 `riseDays`、反彈幅度 `risePercent`；法人籌碼型態的參數見「法人籌碼型態」一節，技術指標型態的參數見「技術指標型態」一節，站上均線與量多的參數見各自小節（**後七者皆不接受 `risePercent`**——它們不看漲幅）。理由是這兩個型態的參數本身就是使用者要調的全部，靈敏度在此只是「幾個數字的三組預設組合」——一旦每個數字都能自己填，那三段就不再表達任何判定上的差異，只是多一層要先選、選了又會被覆寫的中介。其餘三個型態的靈敏度仍決定回看長度、擺動根數、量能倍數、確認根數與盤整前提等多項參數，不能以少數幾個輸入取代，因此保持不變。
 
 **有靈敏度的三個型態，其漲幅門檻可由呼叫端逐一覆寫**：請求中該策略的 `risePercent` 有值時，取代靈敏度表裡的漲幅欄位；省略時沿用靈敏度的值。靈敏度仍決定該型態的其餘參數（回看長度、擺動根數、量能倍數、確認根數、盤整前提）。各型態被覆寫的是哪一欄，註明在下方各自的參數表下。
 
@@ -190,7 +190,7 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 
 **窗口長度超過該檔可用行情時，該檔計入 `insufficientData`，不視為未命中。** 目前行情自 `2026-01-01` 起累積（見 `specs/backend/stock-price-ingestion.md`），填入接近上限的天數時，資料較短的股票會落入這一類。
 
-**與上漲支撐的分工**：上漲支撐抓的是**單日爆發**（單日漲幅達標、突破近期高點、其後兩日守住起漲價）；本型態抓的是**多日趨勢**（窗口內累積漲幅達標，每日只漲 1% 也算），且**不要求任何確認**。兩者的命中集合刻意不同——一個是爆發，一個是趨勢。若兩者都勾選，同一檔可能同時命中，這是正常的。
+**與上漲支撐的分工**：上漲支撐抓的是**單日爆發**（單日漲幅達標、突破近期高點、其後 `confirmBars` 日守住起漲價）；本型態抓的是**多日趨勢**（窗口內累積漲幅達標，每日只漲 1% 也算），且**不要求任何確認**。兩者的命中集合刻意不同——一個是爆發，一個是趨勢。若兩者都勾選，同一檔可能同時命中，這是正常的。
 
 **本型態同樣不驗證漲勢是否延續**，理由與反彈相同。
 
@@ -309,7 +309,7 @@ depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion
 
 **進場日**：`buyDate` 為該檔在 D **之後的下一個交易日**（下一筆日線資料列，停牌缺列不計，可晚於 `endDate`），與三個法人籌碼型態同一條規則。`signalDate` 仍是交叉當日 D。
 
-**為什麼不是 D 本身。** 指標由收盤價推導，交叉要等 D 收盤才確認，而收盤當下已經無法再成交，能實際下單的最早時點是下一個交易日的開盤。這與其餘八個型態適用的是同一條規則，見「進場日（`buyDate`）」。回測以 `buyDate` 開盤價買進（見 `specs/backend/strategy-backtest.md`），因此回測買點與實際可成交的買點一致。
+**為什麼不是 D 本身。** 指標由收盤價推導，交叉要等 D 收盤才確認，而收盤當下已經無法再成交，能實際下單的最早時點是下一個交易日的開盤。這與其餘十個型態適用的是同一條規則，見「進場日（`buyDate`）」。回測以 `buyDate` 開盤價買進（見 `specs/backend/strategy-backtest.md`），因此回測買點與實際可成交的買點一致。
 
 **`pendingConfirm`**：D 之後還沒有下一個交易日時（例如 D 就是該檔最新一筆日線），該次命中沒有 `buyDate`，該檔列入 `pendingConfirm`、不計入 `matchedCount`——與法人籌碼型態的處理相同。某檔在區間內有任何一次已有 `buyDate` 的命中時，`items` 回報區間內的第一次命中，該檔**不**列入 `pendingConfirm`。
 
@@ -364,7 +364,7 @@ J 由 `3K − 2D` 算出，沒有上下界，會低於 0 也會高於 100，因�
 
 收盤價由下往上站上均線。**一個型態涵蓋三條均線**——MA5、MA20、MA60 由 `maPeriods` 複選指定，勾選的每一條各自獨立判定，**任一條達標即命中**，與三個法人籌碼型態的 `investors` 是同一套機制。
 
-**做成一個型態而不是三個**：三條均線的判定邏輯逐字相同，差別只在天數這一個數字。拆成三個策略會讓目錄從十一個變成十三個、三份幾乎相同的判定與驗收條件各自維護，日後改一次判定要改三遍；而使用者「三條都想看」的需求，複選一次就滿足。代價是三條共用同一組參數——本型態目前沒有第二個參數，這個代價現在為零；真要為某一條單獨設門檻時，再拆不遲。
+**做成一個型態而不是三個**：三條均線的判定邏輯逐字相同，差別只在天數這一個數字。拆成三個策略會讓目錄多出兩個型態、三份幾乎相同的判定與驗收條件各自維護，日後改一次判定要改三遍；而使用者「三條都想看」的需求，複選一次就滿足。代價是三條共用同一組參數——本型態目前沒有第二個參數，這個代價現在為零；真要為某一條單獨設門檻時，再拆不遲。
 
 **均線定義**：MA(n) 為**收盤價**的 n 個交易日簡單移動平均——某交易日 D 的 MA(n) 是 D 之前（**含** D）連續 n 個交易日收盤價的算術平均；不足 n 根者該日無 MA(n)，該條均線在該日不參與判定。這與底底高所用的 MA5 是同一條線的同一個定義（見「底底高」），**全系統只有這一種均線**：取收盤價、不取最低價。換成別的價位，會讓「5 日均線」這個詞在本系統裡代表兩條不同的線。
 
@@ -508,7 +508,7 @@ J 由 `3K − 2D` 算出，沒有上下界，會低於 0 也會高於 100，因�
 
 **普通股篩選（`commonStocksOnly`，預設 `true`）**：只留代號**恰為 4 位數字、且首字元非 `0`** 的股票。這道規則不是本 spec 新訂的，而是沿用 `specs/backend/stock-universe-import.md` 的「只收普通股」定義；同一套判斷同時排除 ETF（`0050`、`00878`）、特別股（`2881A`）與 TDR／存託憑證（`910322`）。兩處必須共用同一個判斷，不得各自實作一份。
 
-預設為 `true` 的理由與該 spec 記載的一致：本模組的三個型態都是為個股價格行為設計的判定規則，ETF 的價格由一籃子成分股加權而成，其「箱型」「突破」「起漲」在意義上與個股不同；把數百檔 ETF 混進母體只會稀釋掃描結果，不會讓使用者多得到可用的訊號。`commonStocksOnly: false` 保留給明確想連 ETF 一起掃的情況。
+預設為 `true` 的理由與該 spec 記載的一致：本模組的型態都是為個股設計的判定規則，ETF 的價格由一籃子成分股加權而成，其「箱型」「突破」「起漲」在意義上與個股不同；把數百檔 ETF 混進母體只會稀釋掃描結果，不會讓使用者多得到可用的訊號。`commonStocksOnly: false` 保留給明確想連 ETF 一起掃的情況。
 
 **本篩選只影響掃描母體，不寫入任何資料表**——`stock` 的內容、`is_active`、以及股票總覽顯示的檔數，都不因這個參數而改變。
 
@@ -1057,7 +1057,7 @@ Response `200`：
 ## Acceptance Criteria
 
 ### 型態目錄（`GET /api/strategies`）
-- [x] `GET /api/strategies` 回傳五個策略：箱型突破、底底高、上漲支撐、反彈、累積上漲；有靈敏度的三個（箱型突破、底底高、上漲支撐）各三段，說明文字與本 spec 的參數表一致
+- [x] `GET /api/strategies` 中有靈敏度的三個（箱型突破、底底高、上漲支撐）各三段，說明文字與本 spec 的參數表一致
 - [x] `CUMULATIVE_RISE` 條目 `presets` 為空陣列，並帶策略層級 `description` 與 `params`（`days`：預設 20、範圍 1～90、step 1；`risePercent`：預設 15、範圍 0～50、step 0.1）
 - [x] `REBOUND` 條目 `presets` 為空陣列，帶策略層級 `description`、`paramGroups`（一筆：`rise`，`default` 為 `true`）與四個 `params`：`dropDays`（預設 3、範圍 1～90、step 1）、`dropPercent`（預設 10、範圍 0～50、step 0.1）、`riseDays`（預設 1、範圍 1～90、step 1、`group` 為 `rise`）、`risePercent`（預設 5、範圍 0～50、step 0.1、`group` 為 `rise`）
 - [x] 底底高／箱型突破兩個條目完全未變，`CUMULATIVE_RISE` 條目亦完全未變；上漲支撐條目的三段 `presets` 說明文字改為不含固定天數（「其後不跌破起漲收盤」），並新增 `params`：`confirmBars`（`name` 為「確認天數」、`unit` 為「日」、`default` `2`、`min` `1`、`max` `2`、`step` `1`）
@@ -1066,11 +1066,23 @@ Response `200`：
 - [x] `POST /api/strategies/scan` 省略 `startDate`／`endDate` 時，區間為「今日往前一個日曆月 ~ 今日」
 - [x] 指定 `stockIds` 時只掃描清單內股票，且允許包含已下市股票
 - [x] 前置資料不足的股票列於 `insufficientData`，且不出現在 `items`，也不計入 `matchedCount`
-- [x] 同一檔在區間內多次命中時，`signalDate` 為區間內第一次
 - [x] `items` 依 `signalDate` 由新到舊排序，同日依 `stockId` 升冪
 - [x] 型態判定以相鄰交易日比較：區間內含停牌造成的日曆間隔時，判定結果與無間隔時一致（不做插補）
 - [x] 全市場掃描時對資料庫的行情查詢為批次查詢，不隨股票數線性增加查詢次數
 - [x] 五個策略可於同一次 `POST /api/strategies/scan` 一併送入，`results` 依送入順序回傳五筆
+- [x] 十個型態的 `buyDate` 皆為**確認完成日之後的下一個交易日**：箱型突破／底底高／反彈／累積上漲／MACD／KDJ／三個法人籌碼型態為 `signalDate` 之後的下一個交易日，上漲支撐為 D + `confirmBars` + 1
+- [x] 「下一個交易日」依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
+- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
+- [x] 訊號落在該檔最新一筆日線、其後尚無交易日時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——**箱型突破／底底高／反彈／累積上漲四個型態亦然**（這取代了它們原本「`pendingConfirm` 恆為空陣列」或「只在確認日未到時非空」的行為）
+- [x] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次、`signalDate` 為那一次，該檔**不**在 `pendingConfirm`——十個型態一致
+- [x] 判定本身完全未變：同一份資料的 `signalDate`、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
+- [x] 掃描讀入的區間往 `endDate` 之後延伸：其餘九個型態最多 1 個交易日、上漲支撐最多 `confirmBars + 1` 個交易日
+- [x] 本 spec 的「已知限制」如實記載箱型突破 `confirmBars = 2` 與底底高的殘留落差（各 1 個與 `swingBars` 個交易日），且文件與回應文案未將這兩個型態描述為「無未來資訊」
+- [x] 十二個型態一致：同一檔在區間內對同一型態多次命中時，`items` 回報訊號日最早的那一次，`signalDate`／`buyDate`／`detail` 皆取自那一次
+- [x] 每一次命中都還沒有 `buyDate` 的股票仍列入 `pendingConfirm`、不在 `items`；有任何一次已有 `buyDate` 時回報第一次命中、不在 `pendingConfirm`
+- [x] 各型態各自收斂：同一次掃描送出多個型態時，同一檔在各型態 `results` 中的 `signalDate` 各為該型態自己的第一次
+- [x] 區間內只命中一次的股票，回應與改動前相同；`matchedCount`、`insufficientData`、`pendingConfirm` 的成員不因本次改動而改變
+- [x] `POST /api/strategies/backtest` 以掃描回報的 `buyDate` 計算，`2466` 上例的買進日／買進價／賣出日／賣出價／報酬率／收益隨新的訊號日改變
 
 ### 掃描母體（`commonStocksOnly`）
 - [x] `commonStocksOnly` 省略時視為 `true`：不帶此欄位的全市場掃描，`scannedStocks` 只計代號恰為 4 位數字且首字元非 `0` 的股票
@@ -1085,6 +1097,16 @@ Response `200`：
 - [x] 箱型突破 `STANDARD`：以一組已知會在箱高 6%、突破 2%、量增 1.8 倍的構造資料驗證命中，且回應的 `boxHigh`／`boxLow`／`breakoutPercent`／`volumeRatio` 與手算相符
 - [x] 箱型突破的盤整前提生效：一段穩定上升（箱高 15%）的資料在 `STANDARD` 下不命中，在 `LOOSE` 下命中
 - [x] 箱型突破 `STRICT` 的 `confirmBars=2`：突破日為區間最後一天且無次日資料時，該檔列於 `pendingConfirm` 而非 `items`
+- [x] `GET /api/strategies` 的 `BOX_BREAKOUT` 條目在既有 `presets` 之外另帶 `paramGroups`，內容恰為一筆 `{ code: "volume", name: "要求量增", default: true }`，且 `params` 為空陣列（與其他有靈敏度型態相同，本增量未改變這點）；三段 `presets` 的 `code`／`name`／`description` 與其餘九個策略的條目完全未變
+- [x] `requireVolume` 省略時行為與現狀完全相同：同一份資料省略本欄位與明確送 `true`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
+- [x] `requireVolume: false` 時跳過量能判定：以一組箱體、盤整、突破幅度皆達標但**量能未達 `volumeMultiple`** 的構造資料驗證——送 `true`（或省略）不命中，送 `false` 命中，且該筆的 `boxHigh`／`boxLow`／`breakoutPercent` 與送 `true` 時對同一日的計算值相同
+- [x] `requireVolume: false` 不影響其他任何條件：盤整前提未過（箱高 15%）的資料在 `STANDARD` + `requireVolume: false` 下仍不命中；`STRICT` + `requireVolume: false` 的 `confirmBars` 仍為 2，突破日為區間最後一天且無次日資料時仍列於 `pendingConfirm`
+- [x] `detail.volumeRatio` 在 `requireVolume: false` 的命中筆上照常回報，且與相同資料在 `requireVolume: true` 下手算的量比相同
+- [x] `LOOSE` 下送 `requireVolume: false` 與 `true` 的命中集合相同，兩者皆回 `200`（該靈敏度本就不驗證量能，不因此回錯誤）
+- [x] 掃描回應中 `BOX_BREAKOUT` 那一筆**同時**回 `preset` 與 `requireVolume`（實際採用值，省略時回 `true`）；其餘九個策略的回應欄位未變，且都不含 `requireVolume`
+- [x] `requireVolume` 與 `risePercent` 可同時指定：`STANDARD` + `risePercent: 2.5` + `requireVolume: false` 時以突破 2.5%、不看量判定，回應同時回 `preset` 與 `requireVolume: false`；依本 spec 的回應欄位規則，`BOX_BREAKOUT` **不回** `risePercent`，覆寫是否生效以命中結果（`breakoutPercent` 與 `matchedCount`）驗證
+- [x] 對 `BOX_BREAKOUT` 以外的任一型態帶 `requireVolume` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"requireVolume"}`
+- [x] `requireVolume` 帶非布林值（字串 `"false"`、數字 `0`）→ `400`，不得被寬鬆解讀為 `false`
 
 ### 底底高
 - [x] 底底高 `STANDARD`：三個遞增幅度各 > 1% 的 swing low 命中，回應的 `lows` 為 3 筆且日期與價格正確
@@ -1119,6 +1141,18 @@ Response `200`：
 - [x] D 與進場日之間有停牌（缺列）時，`RISING_SUPPORT` 的 `buyDate` 為 D 之後第 `confirmBars + 1` 個**有資料列**的交易日，不以日曆日加 N 推算
 - [x] D 為 `endDate` 且確認日與進場日取自 `endDate` 之後時，`buyDate` 可晚於 `endDate`，照常回報
 - [x] `BOX_BREAKOUT`／`HIGHER_LOWS`／`REBOUND`／`CUMULATIVE_RISE` 的 `buyDate` 為 `signalDate` 之後的下一個交易日，不等於 `signalDate`
+- [x] `GET /api/strategies` 的 `RISING_SUPPORT` 條目同時帶 `presets`（三段）與 `params`（恰一筆 `confirmBars`，`default` `2`、`min` `1`、`max` `2`、`step` `1`、`unit` 為「日」）；其餘九個策略的條目完全未變
+- [x] `confirmBars` 省略時行為與現狀的兩日確認一致：同一份資料省略本欄位與明確送 `2`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
+- [x] `confirmBars: 1` 只要求 D+1 守住：以「D+1 收盤 > 支撐線、D+2 收盤 ≤ 支撐線」的構造資料驗證——送 `1` 命中、送 `2`（或省略）不命中
+- [x] `confirmBars: 1` 的 `detail.confirmCloses` 為 **1 筆**（D+1），`confirmBars: 2` 為 2 筆（D+1、D+2）
+- [x] `confirmBars: 1` 的 `buyDate` 為 D+2、`confirmBars: 2` 的 `buyDate` 為 D+3，兩者的 `signalDate` 皆為 D
+- [x] `confirmBars` 與靈敏度正交：`STRICT`／`STANDARD`／`LOOSE` 搭配 `confirmBars: 1` 皆合法，且各自的 `lookback` 與 `risePercent` 仍依靈敏度取值
+- [x] `confirmBars` 與 `risePercent` 覆寫可同時指定，互不影響
+- [x] 掃描回應中 `RISING_SUPPORT` 那一筆**同時**回 `preset` 與 `confirmBars`（實際採用值，省略時回 `2`）；其餘九個策略的回應欄位未變，且都不含 `confirmBars`
+- [x] `confirmBars` 為 `0`、`3`、`1.5`、字串 → `400`，`{"code":"INVALID_CONFIRM_BARS","strategy":"RISING_SUPPORT"}`
+- [x] 對 `RISING_SUPPORT` 以外的任一型態帶 `confirmBars` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"confirmBars"}`
+- [x] `2466`、`RISING_SUPPORT`、`2026-09-07`～`2026-10-04`：`signalDate` 為該型態在此區間內第一個確認成立的上漲日（以 SQL 或逐日縮小區間獨立對照），不再是 `2026-10-02`；`buyDate` 為該訊號日 + `confirmBars` + 1 個交易日
+- [x] 上漲支撐：區間內較早的 D 確認失敗、較晚的 D 確認成立時，回報較晚那個（確認失敗的不是命中）
 
 ### 反彈
 - [x] 五個參數全部省略時，以 `dropDays: 3`、`dropPercent: 10`、`requireRise: true`、`riseDays: 1`、`risePercent: 5` 判定
@@ -1155,28 +1189,6 @@ Response `200`：
 - [x] `risePercent` 覆寫的是各型態參數表指定的那一欄：箱型突破改 `breakoutPercent`、底底高改每段遞增的 `risePercent`、上漲支撐改單日漲幅的 `risePercent`
 - [x] `risePercent` 不影響其餘參數：同一策略在 `STRICT` 與 `LOOSE` 下送相同的 `risePercent`，`lookback`／`swingBars`／`volumeMultiple` 仍依各自靈敏度取值
 - [x] `risePercent` 為 `0` 時等同不驗證漲幅，而非零命中或關閉該型態
-
-### 驗證與錯誤
-- [x] 六種錯誤各自回傳指定的 `code`：`NO_STRATEGY_SELECTED`／`UNKNOWN_STRATEGY`／`DUPLICATE_STRATEGY`／`UNKNOWN_STOCK_ID`／`TOO_MANY_STOCKS`／`INVALID_DATE_RANGE`
-- [x] `days: 0`、`days: 91`、`days: 20.5` → `400`，`{"code":"INVALID_DAYS","strategy":"CUMULATIVE_RISE"}`
-- [x] 對 `CUMULATIVE_RISE` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"CUMULATIVE_RISE"}`
-- [x] 對 `REBOUND` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"REBOUND"}`
-- [x] 對 `REBOUND`（或其餘三個型態）帶 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
-- [x] 對 `REBOUND` 以外的型態帶 `requireRise`／`dropDays`／`dropPercent`／`riseDays` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"<該欄位名>"}`
-- [x] `requireRise: false` 又帶 `riseDays` 或 `risePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"<該欄位名>"}`
-- [x] `dropDays` 為 `0`、`91`、`3.5` → `400`，`{"code":"INVALID_DROP_DAYS","strategy":"REBOUND"}`
-- [x] `riseDays` 為 `0`、`91`、`1.5` → `400`，`{"code":"INVALID_RISE_DAYS","strategy":"REBOUND"}`
-- [x] `dropPercent` 為 `-1`、`50.1`、`10.55` → `400`，`{"code":"INVALID_DROP_PERCENT","strategy":"REBOUND"}`
-- [x] `risePercent` 對 `REBOUND` 超出 `0`～`50` 或小數超過一位 → `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"REBOUND"}`
-- [x] `dropDays: 1` 為合法請求（不回 `400`）；此時窗口只有 T 本身、跌幅恆為 0，除非 `dropPercent` 為 `0` 否則零命中
-- [x] 有靈敏度的三個型態缺 `preset` 仍為 `400`，其行為未因反彈與累積上漲的改動而放寬
-
-### 用語
-- [x] 箱型突破與底底高的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
-- [x] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
-- [x] 反彈與累積上漲的回應欄位名與說明文字皆無「進場」「出場」「建議」「推薦」等暗示買賣操作的措辭
-
-### `risePercent` 上限改為逐型態
 - [x] 箱型突破／底底高／上漲支撐送 `risePercent: 20` 為合法，送 `20.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
 - [x] 反彈／累積上漲送 `risePercent: 50` 為合法，送 `50.1` 回 `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"<該策略 code>"}`
 - [x] 反彈／累積上漲送 `risePercent: 30` 仍為合法（上限未一併收緊）
@@ -1187,9 +1199,8 @@ Response `200`：
 - [x] `GET /api/strategies` 中 `CUMULATIVE_RISE` 與 `REBOUND` 的 `params[].max` 仍為 `50`，未因本次改動而變
 
 ### 法人籌碼型態
-
 型態目錄：
-- [x] `GET /api/strategies` 回傳八個策略；三個法人籌碼型態的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
+- [x] `GET /api/strategies` 中三個法人籌碼型態的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
 - [x] 三者的 `investors` 參數為 `type: "multiSelect"`，`options` 為外資／投信、`default` 為 `["FOREIGN","TRUST"]`、`minSelected` 為 `1`；其餘數字參數不帶 `type`
 - [x] 其餘五個策略的條目與本次改動前完全相同
 
@@ -1237,10 +1248,9 @@ Response `200`：
 - [x] `windowDays` 為 `0`、`21`、`5.5` → `400 INVALID_WINDOW_DAYS`；`ratioPercent` 為 `-1`、`100.1`、`10.55` → `400 INVALID_RATIO_PERCENT`；`buyDays` 為 `0`、`21`、`5.5` → `400 INVALID_BUY_DAYS`；`topN` 為 `0`、`51`、`10.5` → `400 INVALID_TOP_N`；皆帶 `strategy`
 - [x] 三個型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
 
-### 技術指標型態（MACD／KDJ，本次新增）
-
+### 技術指標型態（MACD／KDJ）
 型態目錄：
-- [x] `GET /api/strategies` 回傳十個策略，既有八個之後依序為 `MACD_GOLDEN_CROSS`、`KDJ_GOLDEN_CROSS`；兩者的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
+- [x] `GET /api/strategies` 中 `MACD_GOLDEN_CROSS`、`KDJ_GOLDEN_CROSS` 依序排在三個法人籌碼型態之後；兩者的 `name`、`description`、`presets`（空陣列）與 `params` 與本 spec 的 JSON 範例完全一致
 - [x] `MACD_GOLDEN_CROSS` 的 `fastPeriod` 帶 `lessThan: "slowPeriod"`，`slowPeriod` 不帶；`KDJ_GOLDEN_CROSS` 的 `jThreshold` 之 `unit` 為空字串、`min` 為 `-100`
 - [x] 既有八個策略的條目與本次改動前完全相同（皆不帶 `lessThan`）
 
@@ -1255,6 +1265,8 @@ Response `200`：
 - [x] 以相鄰交易日比較：D−1 與 D 之間有停牌造成的日曆間隔時，判定結果與無間隔時一致
 - [x] 行情以批次查詢讀取：全市場掃描時查詢次數不隨股票數增加；MACD 與 KDJ 同一次送出時行情查詢次數與只送其中一個時相同
 - [x] 十個策略同一次送出時 `results` 依送入順序回傳十筆，既有八個型態的命中結果與未加本功能時相同
+- [x] 某檔較早有一次已有 `buyDate` 的 MACD／KDJ 命中、最新一次交叉尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
+- [x] 兩個型態的判定本身完全未變：同一份資料的命中日（`signalDate`）、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
 
 MACD 黃金交叉：
 - [x] D−1 `OSC < 0`、D `OSC > 0` → 命中，`signalDate` 為 D；D−1 `OSC = 0`、D `OSC > 0` → 命中（前一日為 ≤ 0）；D−1 與 D 皆 > 0 → 不命中；D−1 < 0、D `OSC = 0` → 不命中（當日須 > 0）
@@ -1262,6 +1274,10 @@ MACD 黃金交叉：
 - [x] 自訂天數生效：同一段行情以 `fastPeriod: 5, slowPeriod: 10` 與預設 `5／20` 掃描得到不同的命中日，且各自等於以該組天數依公式手算的交叉日
 - [x] `detail` 為 `dif`／`dea`／`osc`／`prevOsc` 四位小數，`osc` 與 `dif − dea` 相差不超過捨入誤差 `0.0001`
 - [x] 回應回 `fastPeriod`、`slowPeriod`、`signalPeriod`（`9`），不含 `preset`；省略參數時回 `5` 與 `20`
+- [x] `GET /api/strategies` 中 `MACD_GOLDEN_CROSS` 的 `fastPeriod.default` 為 `5`、`slowPeriod.default` 為 `20`；兩者的 `min`／`max`／`step`／`lessThan` 與 `KDJ_GOLDEN_CROSS`、其餘八個策略的條目皆不變
+- [x] `MACD_GOLDEN_CROSS` 不帶 `fastPeriod`／`slowPeriod` 掃描，結果與明確送 `fastPeriod: 5, slowPeriod: 20` 完全相同（`items`、`insufficientData`、`matchedCount`），回應回 `fastPeriod: 5`、`slowPeriod: 20`、`signalPeriod: 9`
+- [x] 明確送 `fastPeriod: 12, slowPeriod: 26` 時，命中日仍與日 K 圖所用指標（`specs/backend/stock-indicator-statistics.md`）的 MACD 黃金交叉日一致——改預設不影響指定 12／26 的結果
+- [x] 以其一省略時的預設值比較 `lessThan`：只送 `slowPeriod: 5`（`fastPeriod` 取預設 5）或 `slowPeriod: 3` → `400 INVALID_MACD_PERIODS`；只送 `slowPeriod: 6` → 合法；只送 `fastPeriod: 19` → 合法、只送 `fastPeriod: 20` → `400 INVALID_MACD_PERIODS`
 
 KDJ 黃金交叉：
 - [x] 構造 D−1 `K < D`、`J = 19.04`，D 當日 `K > D`，`jThreshold: 40` → 命中，`signalDate` 為 D
@@ -1279,66 +1295,8 @@ KDJ 黃金交叉：
 - [x] `jThreshold` 為 `-100.1`、`100.1`、`40.25` → `400 INVALID_J_THRESHOLD`；`-100`、`100`、`-12.5` 為合法請求
 - [x] 兩型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
 
-### MACD 預設天數改為 5／20
-
-- [x] `GET /api/strategies` 中 `MACD_GOLDEN_CROSS` 的 `fastPeriod.default` 為 `5`、`slowPeriod.default` 為 `20`；兩者的 `min`／`max`／`step`／`lessThan` 與 `KDJ_GOLDEN_CROSS`、其餘八個策略的條目皆不變
-- [x] `MACD_GOLDEN_CROSS` 不帶 `fastPeriod`／`slowPeriod` 掃描，結果與明確送 `fastPeriod: 5, slowPeriod: 20` 完全相同（`items`、`insufficientData`、`matchedCount`），回應回 `fastPeriod: 5`、`slowPeriod: 20`、`signalPeriod: 9`
-- [x] 明確送 `fastPeriod: 12, slowPeriod: 26` 時，命中日仍與日 K 圖所用指標（`specs/backend/stock-indicator-statistics.md`）的 MACD 黃金交叉日一致——改預設不影響指定 12／26 的結果
-- [x] 以其一省略時的預設值比較 `lessThan`：只送 `slowPeriod: 5`（`fastPeriod` 取預設 5）或 `slowPeriod: 3` → `400 INVALID_MACD_PERIODS`；只送 `slowPeriod: 6` → 合法；只送 `fastPeriod: 19` → 合法、只送 `fastPeriod: 20` → `400 INVALID_MACD_PERIODS`
-
-### 箱型突破的量能條件可關閉（`requireVolume`）
-
-- [x] `GET /api/strategies` 的 `BOX_BREAKOUT` 條目在既有 `presets` 之外另帶 `paramGroups`，內容恰為一筆 `{ code: "volume", name: "要求量增", default: true }`，且 `params` 為空陣列（與其他有靈敏度型態相同，本增量未改變這點）；三段 `presets` 的 `code`／`name`／`description` 與其餘九個策略的條目完全未變
-- [x] `requireVolume` 省略時行為與現狀完全相同：同一份資料省略本欄位與明確送 `true`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
-- [x] `requireVolume: false` 時跳過量能判定：以一組箱體、盤整、突破幅度皆達標但**量能未達 `volumeMultiple`** 的構造資料驗證——送 `true`（或省略）不命中，送 `false` 命中，且該筆的 `boxHigh`／`boxLow`／`breakoutPercent` 與送 `true` 時對同一日的計算值相同
-- [x] `requireVolume: false` 不影響其他任何條件：盤整前提未過（箱高 15%）的資料在 `STANDARD` + `requireVolume: false` 下仍不命中；`STRICT` + `requireVolume: false` 的 `confirmBars` 仍為 2，突破日為區間最後一天且無次日資料時仍列於 `pendingConfirm`
-- [x] `detail.volumeRatio` 在 `requireVolume: false` 的命中筆上照常回報，且與相同資料在 `requireVolume: true` 下手算的量比相同
-- [x] `LOOSE` 下送 `requireVolume: false` 與 `true` 的命中集合相同，兩者皆回 `200`（該靈敏度本就不驗證量能，不因此回錯誤）
-- [x] 掃描回應中 `BOX_BREAKOUT` 那一筆**同時**回 `preset` 與 `requireVolume`（實際採用值，省略時回 `true`）；其餘九個策略的回應欄位未變，且都不含 `requireVolume`
-- [x] `requireVolume` 與 `risePercent` 可同時指定：`STANDARD` + `risePercent: 2.5` + `requireVolume: false` 時以突破 2.5%、不看量判定，回應同時回 `preset` 與 `requireVolume: false`；依本 spec 的回應欄位規則，`BOX_BREAKOUT` **不回** `risePercent`，覆寫是否生效以命中結果（`breakoutPercent` 與 `matchedCount`）驗證
-- [x] 對 `BOX_BREAKOUT` 以外的任一型態帶 `requireVolume` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"requireVolume"}`
-- [x] `requireVolume` 帶非布林值（字串 `"false"`、數字 `0`）→ `400`，不得被寬鬆解讀為 `false`
-- [x] 任一端點收到型別不符或格式錯誤的請求本體 → `400`，`{"code":"INVALID_REQUEST_BODY"}`，不再回 `500`（本增量修掉的既有缺陷：`{"windowDays":"abc"}` 原本回 `500 INTERNAL_ERROR`）
-
-### MACD／KDJ 的買進日改為訊號日的下一個交易日
-
-- [x] MACD 黃金交叉命中時，`items[].buyDate` 為 `signalDate` 之後的下一個交易日，`signalDate` 仍為交叉當日；KDJ 黃金交叉同此
-- [x] 停牌缺列時取相鄰的下一筆日線資料列，不以日曆日加 1：交叉日之後留一個日曆缺口的構造資料，`buyDate` 等於該相鄰交易列的日期，且明確不等於 `signalDate.plusDays(1)`
-- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為交叉當日、其後的日線已存在時，照常回報該筆與其 `buyDate`
-- [x] 交叉落在該檔最新一筆日線（其後尚無交易日）時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——這取代了本型態原本「`pendingConfirm` 恆為空陣列」的行為
-- [x] 某檔較早有一次已有 `buyDate` 的 MACD／KDJ 命中、最新一次交叉尚無下一個交易日時，`items` 回報較早那一次，該檔**不**在 `pendingConfirm`
-- [x] 兩個型態的判定本身完全未變：同一份資料的命中日（`signalDate`）、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
-- [x] 其餘八個型態的 `buyDate` 規則在本增量中未變（其後由「進場日統一為確認完成日的下一個交易日」增量一併改寫，見該節）
-
-
-### 進場日統一為確認完成日的下一個交易日
-
-- [x] 十個型態的 `buyDate` 皆為**確認完成日之後的下一個交易日**：箱型突破／底底高／反彈／累積上漲／MACD／KDJ／三個法人籌碼型態為 `signalDate` 之後的下一個交易日，上漲支撐為 D + `confirmBars` + 1
-- [x] 「下一個交易日」依相鄰日線資料列認定：訊號日之後留一個日曆缺口（停牌）的構造資料，`buyDate` 等於該相鄰資料列的日期，且明確**不等於** `signalDate.plusDays(1)`
-- [x] `buyDate` 可以晚於 `endDate`：`endDate` 設為訊號日、其後日線已存在時，該筆照常出現在 `items`
-- [x] 訊號落在該檔最新一筆日線、其後尚無交易日時，該檔列於 `pendingConfirm`、不在 `items`、不計入 `matchedCount`——**箱型突破／底底高／反彈／累積上漲四個型態亦然**（這取代了它們原本「`pendingConfirm` 恆為空陣列」或「只在確認日未到時非空」的行為）
-- [x] 某檔較早有一次已有 `buyDate` 的命中、最新一次尚無下一個交易日時，`items` 回報較早那一次、`signalDate` 為那一次，該檔**不**在 `pendingConfirm`——十個型態一致
-- [x] 判定本身完全未變：同一份資料的 `signalDate`、`detail` 各欄與 `insufficientData` 與本次改動前相同，只有 `buyDate` 與上述 `pendingConfirm` 行為改變
-- [x] 掃描讀入的區間往 `endDate` 之後延伸：其餘九個型態最多 1 個交易日、上漲支撐最多 `confirmBars + 1` 個交易日
-- [x] 本 spec 的「已知限制」如實記載箱型突破 `confirmBars = 2` 與底底高的殘留落差（各 1 個與 `swingBars` 個交易日），且文件與回應文案未將這兩個型態描述為「無未來資訊」
-
-### 上漲支撐的確認長度可選（`confirmBars`，本次新增）
-
-- [x] `GET /api/strategies` 的 `RISING_SUPPORT` 條目同時帶 `presets`（三段）與 `params`（恰一筆 `confirmBars`，`default` `2`、`min` `1`、`max` `2`、`step` `1`、`unit` 為「日」）；其餘九個策略的條目完全未變
-- [x] `confirmBars` 省略時行為與現狀的兩日確認一致：同一份資料省略本欄位與明確送 `2`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同
-- [x] `confirmBars: 1` 只要求 D+1 守住：以「D+1 收盤 > 支撐線、D+2 收盤 ≤ 支撐線」的構造資料驗證——送 `1` 命中、送 `2`（或省略）不命中
-- [x] `confirmBars: 1` 的 `detail.confirmCloses` 為 **1 筆**（D+1），`confirmBars: 2` 為 2 筆（D+1、D+2）
-- [x] `confirmBars: 1` 的 `buyDate` 為 D+2、`confirmBars: 2` 的 `buyDate` 為 D+3，兩者的 `signalDate` 皆為 D
-- [x] `confirmBars` 與靈敏度正交：`STRICT`／`STANDARD`／`LOOSE` 搭配 `confirmBars: 1` 皆合法，且各自的 `lookback` 與 `risePercent` 仍依靈敏度取值
-- [x] `confirmBars` 與 `risePercent` 覆寫可同時指定，互不影響
-- [x] 掃描回應中 `RISING_SUPPORT` 那一筆**同時**回 `preset` 與 `confirmBars`（實際採用值，省略時回 `2`）；其餘九個策略的回應欄位未變，且都不含 `confirmBars`
-- [x] `confirmBars` 為 `0`、`3`、`1.5`、字串 → `400`，`{"code":"INVALID_CONFIRM_BARS","strategy":"RISING_SUPPORT"}`
-- [x] 對 `RISING_SUPPORT` 以外的任一型態帶 `confirmBars` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"confirmBars"}`
-
----
-### 站上均線（`MA_BREAKOUT`，本次新增）
-
-- [x] `GET /api/strategies` 回傳十一個策略，既有十個之後為 `MA_BREAKOUT`：`name` 為「站上均線」、`presets` 為空陣列、`params` 恰一筆 `maPeriods`（`type` 為 `multiSelect`、`options` 依序為 `MA5`／`MA20`／`MA60`、`default` 為三者全選、`minSelected` 為 `1`），與本 spec 的 JSON 範例完全一致
+### 站上均線（`MA_BREAKOUT`）
+- [x] `GET /api/strategies` 中 `MA_BREAKOUT` 排在 `KDJ_GOLDEN_CROSS` 之後：`name` 為「站上均線」、`presets` 為空陣列、`params` 恰一筆 `maPeriods`（`type` 為 `multiSelect`、`options` 依序為 `MA5`／`MA20`／`MA60`、`default` 為三者全選、`minSelected` 為 `1`），與本 spec 的 JSON 範例完全一致
 - [x] 既有十個策略的目錄條目完全未變
 - [x] 以構造資料驗證命中：D−1 收盤 ≤ D−1 的 MA(n)、D 收盤 > D 的 MA(n) 時命中，`signalDate` 為 D，`detail` 各欄與手算相符
 - [x] 邊界為 `≤` 與 `>`：D 收盤恰等於 D 的 MA(n) 時**不**命中；D−1 收盤恰等於 D−1 的 MA(n) 時**仍可**命中
@@ -1362,9 +1320,7 @@ KDJ 黃金交叉：
 - [x] 對 `MA_BREAKOUT` 帶 `preset` → `400` `PRESET_NOT_APPLICABLE`；帶 `risePercent`／`confirmBars`／`requireVolume` → `400` `PARAM_NOT_APPLICABLE`，`param` 指名該欄位
 - [x] 十一個策略同一次送出時 `results` 依送入順序回傳十一筆，既有十個型態的命中結果與未加本功能時相同
 
----
 ### 量多（`VOLUME_SURGE`）
-
 - [x] `GET /api/strategies` 回傳十二個策略，既有十一個之後為 `VOLUME_SURGE`：`name` 為「量多」、`presets` 為空陣列、`params` 恰一筆 `increasePercent`（`name` 為「量增門檻」、`unit` 為 `%`、`default` `50`、`min` `0`、`max` `1000`、`step` `0.1`，不帶 `type`），與本 spec 的 JSON 範例完全一致
 - [x] 既有十一個策略的目錄條目完全未變
 - [x] 以真實行情手算驗證命中：取一檔真實股票的某個交易日 D，由 `stock_daily_price` 自行算出 D−1～D−5 的平均成交量與 D 的量增幅度（≥ 50%），以及 D−1 相對 D−2～D−6 平均的量增幅度（< 50%）→ 以預設參數掃描該檔命中，`signalDate` 為 D，`detail` 的 `volume`／`averageVolume`／`increasePercent`／`prevVolume`／`prevAverageVolume`／`prevIncreasePercent` 與手算相符
@@ -1387,23 +1343,31 @@ KDJ 黃金交叉：
 - [x] 對 `VOLUME_SURGE` 帶 `preset` → `400` `PRESET_NOT_APPLICABLE`；帶 `risePercent`／`confirmBars`／`requireVolume`／`maPeriods` → `400` `PARAM_NOT_APPLICABLE`，`param` 指名該欄位；帶 `days` → `400` `DAYS_NOT_APPLICABLE`
 - [x] 十二個策略同一次送出時 `results` 依送入順序回傳十二筆，既有十一個型態的命中結果與未加本功能時相同
 - [x] 本型態的名稱、說明文字與回應欄位名皆無「建議」「推薦」「進場」等暗示買賣操作的措辭
-
-### `VOLUME_SURGE` 顯示名稱改為「量多」
-
 - [x] `GET /api/strategies` 中 `VOLUME_SURGE` 那一筆的 `name` 為「量多」；該筆的 `code`、`description`、`presets`、`params`（`increasePercent`：`name`「量增門檻」、`unit` `%`、`default` `50`、`min` `0`、`max` `1000`、`step` `0.1`）與改名前逐欄相同
 - [x] 其餘十一個策略的目錄條目與改名前完全相同；整份目錄回應中不再出現「量開始變多」
 - [x] 只改名不改行為：同一個 `VOLUME_SURGE` 掃描請求在改名前後的回應完全相同（`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 與每筆 `detail`）；`2330` 於 `2026-09-30` 仍命中，`detail.increasePercent` 為 `67.45`
 - [x] 請求與錯誤契約不變：`code` 仍為 `VOLUME_SURGE`、參數仍為 `increasePercent`，`increasePercent: 1000.1` 仍回 `400` `{"code":"INVALID_INCREASE_PERCENT","strategy":"VOLUME_SURGE"}`
 
-### 收斂改為區間內第一次命中
+### 驗證與錯誤
+- [x] 六種錯誤各自回傳指定的 `code`：`NO_STRATEGY_SELECTED`／`UNKNOWN_STRATEGY`／`DUPLICATE_STRATEGY`／`UNKNOWN_STOCK_ID`／`TOO_MANY_STOCKS`／`INVALID_DATE_RANGE`
+- [x] `days: 0`、`days: 91`、`days: 20.5` → `400`，`{"code":"INVALID_DAYS","strategy":"CUMULATIVE_RISE"}`
+- [x] 對 `CUMULATIVE_RISE` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"CUMULATIVE_RISE"}`
+- [x] 對 `REBOUND` 帶 `preset` → `400`，`{"code":"PRESET_NOT_APPLICABLE","strategy":"REBOUND"}`
+- [x] 對 `REBOUND`（或其餘三個型態）帶 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
+- [x] 對 `REBOUND` 以外的型態帶 `requireRise`／`dropDays`／`dropPercent`／`riseDays` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"<該欄位名>"}`
+- [x] `requireRise: false` 又帶 `riseDays` 或 `risePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"REBOUND","param":"<該欄位名>"}`
+- [x] `dropDays` 為 `0`、`91`、`3.5` → `400`，`{"code":"INVALID_DROP_DAYS","strategy":"REBOUND"}`
+- [x] `riseDays` 為 `0`、`91`、`1.5` → `400`，`{"code":"INVALID_RISE_DAYS","strategy":"REBOUND"}`
+- [x] `dropPercent` 為 `-1`、`50.1`、`10.55` → `400`，`{"code":"INVALID_DROP_PERCENT","strategy":"REBOUND"}`
+- [x] `risePercent` 對 `REBOUND` 超出 `0`～`50` 或小數超過一位 → `400`，`{"code":"INVALID_RISE_PERCENT","strategy":"REBOUND"}`
+- [x] `dropDays: 1` 為合法請求（不回 `400`）；此時窗口只有 T 本身、跌幅恆為 0，除非 `dropPercent` 為 `0` 否則零命中
+- [x] 有靈敏度的三個型態缺 `preset` 仍為 `400`，其行為未因反彈與累積上漲的改動而放寬
+- [x] 任一端點收到型別不符或格式錯誤的請求本體 → `400`，`{"code":"INVALID_REQUEST_BODY"}`，不再回 `500`（本增量修掉的既有缺陷：`{"windowDays":"abc"}` 原本回 `500 INTERNAL_ERROR`）
 
-- [x] 十二個型態一致：同一檔在區間內對同一型態多次命中時，`items` 回報訊號日最早的那一次，`signalDate`／`buyDate`／`detail` 皆取自那一次
-- [x] `2466`、`RISING_SUPPORT`、`2026-09-07`～`2026-10-04`：`signalDate` 為該型態在此區間內第一個確認成立的上漲日（以 SQL 或逐日縮小區間獨立對照），不再是 `2026-10-02`；`buyDate` 為該訊號日 + `confirmBars` + 1 個交易日
-- [x] 上漲支撐：區間內較早的 D 確認失敗、較晚的 D 確認成立時，回報較晚那個（確認失敗的不是命中）
-- [x] 每一次命中都還沒有 `buyDate` 的股票仍列入 `pendingConfirm`、不在 `items`；有任何一次已有 `buyDate` 時回報第一次命中、不在 `pendingConfirm`
-- [x] 各型態各自收斂：同一次掃描送出多個型態時，同一檔在各型態 `results` 中的 `signalDate` 各為該型態自己的第一次
-- [x] 區間內只命中一次的股票，回應與改動前相同；`matchedCount`、`insufficientData`、`pendingConfirm` 的成員不因本次改動而改變
-- [x] `POST /api/strategies/backtest` 以掃描回報的 `buyDate` 計算，`2466` 上例的買進日／買進價／賣出日／賣出價／報酬率／收益隨新的訊號日改變
+### 用語
+- [x] 箱型突破與底底高的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+- [x] 上漲支撐的回應欄位名與說明文字皆無「建議」「推薦」等暗示買賣操作的措辭
+- [x] 反彈與累積上漲的回應欄位名與說明文字皆無「進場」「出場」「建議」「推薦」等暗示買賣操作的措辭
 
 ## Execution Result
 - Status: DONE

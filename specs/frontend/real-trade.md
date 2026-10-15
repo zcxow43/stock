@@ -158,9 +158,8 @@ depends_on: [stock-list, simulated-trade]
 | `INVALID_BUY_PRICE` | 買進價必須大於 0，最多兩位小數 |
 | `INVALID_SHARES` | 股數必須是大於 0 的整數 |
 | `MALFORMED_TRADE_FILE` | 交易紀錄檔的欄位名列不正確，這一筆沒有寫入 |
-| `INVALID_TARGET_SELL_PRICE` | 目標賣價必須大於 0，最多兩位小數 |
 
-刪除與 `PATCH` 的錯誤：`REAL_TRADE_NOT_FOUND` → 「這一筆已經不存在了」，並重新取得列表。`PATCH` 的錯誤訊息顯示在**該列下方**（不是加入列下方），並把該列的控制項回復成原值。
+刪除與 `PATCH` 的錯誤：`REAL_TRADE_NOT_FOUND` → 「這一筆已經不存在了」，並重新取得列表；`PATCH` 回 `INVALID_TARGET_SELL_PRICE` → 「目標賣價必須大於 0，最多兩位小數」。`PATCH` 的錯誤訊息顯示在**該列下方**（不是加入列下方），並把該列的控制項回復成原值。
 
 **前端對四格做與後端相同的基本檢查並先擋下**（空值、非數字、買進價 ≤ 0 或超過兩位小數、股數非正整數、買進日晚於今日），後端的錯誤碼是後備。兩邊都檢查不是重複——前端擋下是為了不讓使用者等一次來回才知道打錯。
 
@@ -197,6 +196,8 @@ depends_on: [stock-list, simulated-trade]
 
 ## Acceptance Criteria
 
+### 分頁與外觀
+
 - [x] `/stocks` 的頁籤列多出第五個頁籤「真實交易」，排在「模擬交易」右邊；既有四個頁籤的文字、順序與行為完全未變
 - [x] 「股數」緊鄰買進價右邊（完整的欄位順序見下方「不統計與目標賣價」）
 - [x] 漲跌色只套在未實現損益與報酬率兩欄，成本／買進價／現價／股數一律為主要文字色
@@ -204,7 +205,7 @@ depends_on: [stock-list, simulated-trade]
 - [x] 清單為空時三個總計顯示 `—`，不是 `0` 或 `0%`
 - [x] 所有顏色為 `## Visual Style` 的固定色碼，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同；本次未新增任何既有色盤以外的顏色
 
-### 改為與模擬交易對稱：加入列、刪除、改走 API
+### 加入列、刪除與 API
 
 - [x] 本頁**不再讀取任何 CSV 檔**：程式中不存在對 `real-trades.csv` 的 import 或 fetch，資料一律來自 `GET /api/real-trades`；`develop/frontend/src/data/` 底下與此功能相關的檔案已移除
 - [x] 加入列有四格輸入，由左至右為代號、買進日、買進價、量；買進日**不**預填上一次收盤日（它現在的預設值見下方「買進日預設今日」）
@@ -228,7 +229,7 @@ depends_on: [stock-list, simulated-trade]
 - [x] 本頁不呼叫 `GET /api/simulated-trades`
 - [x] 新增的兩格輸入與「刪除」按鈕所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下呈現完全一致；本次未新增任何顏色
 
-### 買進日預設今日（本次新增）
+### 買進日預設今日
 
 - [x] 第一次 `GET /api/real-trades` 成功後，買進日輸入的值等於回應的 `asOfDate`（今日，台北日曆日）；代號、買進價、量三格仍為空白
 - [x] 買進日的 `max` 等於 `asOfDate`，與預設值相同——預設值本身即可選範圍的上界，不經任何操作就已是合法值
@@ -241,7 +242,7 @@ depends_on: [stock-list, simulated-trade]
 - [x] `POST` 的 body 仍為 `{ stockId, buyDate, buyPrice, shares }` 四欄全帶，`buyDate` 即買進日輸入當下的值（沿用預設今日時也照樣帶出）
 - [x] 本次未新增任何顏色，也未改動 `## Visual Style` 的任何既有色碼
 
-### 不統計與目標賣價（本次新增）
+### 不統計與目標賣價
 
 - [x] 表格欄位依模式而定：**非設定模式** 11 欄——代號/名稱、買進日、買進價、股數、現價日、現價、**目標賣價**、成本、未實現損益、報酬率、刪除（沒有「不統計」欄）；**設定模式** 12 欄——最左邊多一欄「不統計」且置中，其餘同上。兩種模式下「目標賣價」都緊鄰現價右邊且靠右
 - [x] **設定模式下**每一列最左邊有一個 checkbox，勾選狀態等於該筆回應的 `excluded`；該欄標題文字為「不統計」。非設定模式下表格內沒有任何 checkbox
@@ -266,7 +267,7 @@ depends_on: [stock-list, simulated-trade]
 - [x] `GET` 回 `500` `MALFORMED_TRADE_FILE` 時不顯示表格，因此也沒有任何 checkbox 或目標賣價格可操作
 - [x] 新增的 checkbox 與目標賣價格所用顏色全部取自 `## Visual Style` 既有的字面 hex，在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同；本次未新增任何顏色
 
-### 設定模式、不統計列灰底排最後（本次新增）
+### 設定模式、不統計列灰底排最後
 
 - [x] 摘要列有一個「設定」按鈕，位於**「總報酬率」數值的右邊、與「共 N 筆」／總成本／總未實現損益／總報酬率同一行**；樣式同「加入」按鈕（`#3E8FD8` / `#FFFFFF` / hover `#58A3E8`）
 - [x] 進入分頁時是**非設定模式**：按鈕文字為「設定」，表格 11 欄、沒有「不統計」欄與任何 checkbox，表格內沒有任何輸入框

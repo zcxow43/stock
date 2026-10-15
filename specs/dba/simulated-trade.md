@@ -24,11 +24,11 @@ requirement: "模擬交易分頁 — 使用者只輸入股票代號即建立一�
 
 ### 不設外鍵
 
-`stock_id` 不對 `stock`（見 `specs/dba/stock.md`）建外鍵，與 `specs/dba/stock_institutional_trade` 同一個理由，另加一條本表特有的：**股票下市或從主檔被刪掉時，使用者的模擬紀錄不該跟著消失**。代號是否存在由寫入端在建立時檢查一次（見 `specs/backend/simulated-trade.md`），那是「輸入是否有效」的問題，不是資料庫該連動刪除的關係。
+`stock_id` 不對 `stock`（見 `specs/dba/stock.md`）建外鍵，與 `specs/dba/stock-institutional-trade.md` 同一個理由，另加一條本表特有的：**股票下市或從主檔被刪掉時，使用者的模擬紀錄不該跟著消失**。代號是否存在由寫入端在建立時檢查一次（見 `specs/backend/simulated-trade.md`），那是「輸入是否有效」的問題，不是資料庫該連動刪除的關係。
 
 ### 同一檔同一買進日只能有一筆
 
-`(stock_id, buy_date)` 唯一。使用者只輸入代號、買進日與買進價都由系統決定，所以同一天把同一檔加兩次，產生的會是兩列完全相同的資料——那不是兩個部位，是一次重複點擊。以唯一鍵擋在資料庫層，寫入端才有辦法把它回報成一個明確的錯誤而不是靜默地多一列。
+`(stock_id, buy_date)` 唯一。買進價由系統依買進日決定（見 `specs/backend/simulated-trade.md`），所以同一檔以同一買進日加兩次，產生的會是兩列完全相同的資料——那不是兩個部位，是一次重複點擊。以唯一鍵擋在資料庫層，寫入端才有辦法把它回報成一個明確的錯誤而不是靜默地多一列。
 
 ## Implementation Details
 

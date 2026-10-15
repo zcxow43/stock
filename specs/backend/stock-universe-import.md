@@ -21,7 +21,7 @@ depends_on: [stock-price-ingestion]
 |---|---|---|---|---|---|
 | 本 API（universe 匯入） | ✅ 僅代號與名稱 | ✅ | ❌ **完全不寫** | **2** | 使用者按「更新股票清單」 |
 | 每日增量（`POST /api/stocks/sync/daily`） | ✅ 順帶維護 | ❌ | ✅ 當日一天 | 1 | 每交易日收盤後 |
-| 全市場回補（`POST /api/stocks/sync/backfill`） | ❌ | ❌ | ✅ 歷史區間 | 每檔 1 次 | 使用者按「同步日 K 至今日」 |
+| 全市場回補（`POST /api/stocks/sync/backfill`） | ❌ | ❌ | ✅ 歷史區間 | 每個日曆天 1 次（上櫃標的另加每檔 1 次） | 使用者按「同步日 K 至今日」 |
 
 **產業別只由本 API 維護。** 每日增量與回補的資料源是行情快照，其中沒有產業別欄位；讓它們去猜或去補會多出兩條寫入路徑，而三條路徑對同一份分類資料各有各的更新時機，正是分類資料最容易悄悄變得不一致的成因。
 
@@ -107,7 +107,7 @@ depends_on: [stock-price-ingestion]
 
 ### 併發
 
-本 API 為同步短作業（單一外部請求），**不使用 `stock_sync_progress` 的 `jobType` 併發鎖**，因此與執行中的 `PRICE_BACKFILL` 不互斥。
+本 API 為同步短作業（兩次外部請求），**不使用 `stock_sync_progress` 的 `jobType` 併發鎖**，因此與執行中的 `PRICE_BACKFILL` 不互斥。
 
 這是安全的：回補作業在啟動時就已解析並固定了自己的標的清單（見 `specs/backend/stock-price-ingestion.md` 的「批次目標選擇」），匯入期間新增的股票不會被塞進一個正在跑的批次。新股票會在**下一次**回補時才納入——這正是使用者「先更新清單、再按同步」的操作順序所預期的行為。
 

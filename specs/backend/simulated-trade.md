@@ -9,7 +9,7 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 ## Overview
 
-讓使用者用最少的輸入（只有代號）記下「假設我在最近一個收盤價買了一張，到今天賺賠多少」。持股本身存在 `simulated_trade`（見 `specs/dba/simulated-trade.md`）；**未實現損益、報酬率與現價都在每次查詢當下即時算出、不落地**——它們隨最新收盤價每天改變。畫面是 `specs/frontend/simulated-trade.md`。
+讓使用者用最少的輸入（代號，加上選填的買進日）記下「假設我在那天的收盤價買了一張，到今天賺賠多少」。持股本身存在 `simulated_trade`（見 `specs/dba/simulated-trade.md`）；**未實現損益、報酬率與現價都在每次查詢當下即時算出、不落地**——它們隨最新收盤價每天改變。畫面是 `specs/frontend/simulated-trade.md`。
 
 **它不抓任何外部資料、也不做型態判定**：只讀 `stock_daily_price` 已有的收盤價與 `stock` 的名稱，做四則運算。與 `specs/backend/strategy-backtest.md` 的關係是「同一套成本口徑、不同的出場假設」：回測的出場是區間內最高開盤價，本模組的出場是**假設今天以最新收盤價賣掉**。
 
@@ -195,6 +195,7 @@ Response `204`，無內容。
 - [x] `POST /api/simulated-trades` 帶 `{"stockId":"2330"}` 回 `201`，`buyDate` 等於該檔最後一個 `close_price > 0` 的交易日，`buyPrice` 等於該日收盤價，`shares` 為 `1000`
 - [x] 省略 `buyDate` 時 `close_price` 為 `0` 的交易日被跳過，取再前一個 `close_price > 0` 的交易日
 - [x] 建立後修改 `stock_daily_price` 中該買進日的收盤價，再查 `GET`：該筆的 `buyPrice` 與 `cost` 不變
+- [x] 回應為與 `GET` 的 `items[]` 相同的形狀，含 `currentDate`／`currentPrice`／`unrealizedProfit`／`returnPercent`
 
 ### 指定買進日
 - [x] 帶 `{"stockId":"2330","buyDate":"<某個更早的交易日>"}` 回 `201`，`buyDate` 等於送出的日期、`buyPrice` 等於該檔該日的 `close_price`；未實現損益仍以最新收盤價計算
@@ -203,7 +204,6 @@ Response `204`，無內容。
 - [x] `buyDate` 晚於今日（例如 `2099-01-01`）→ `400 INVALID_BUY_DATE`，且未寫入任何列；格式不合法的字串同樣回 `400 INVALID_BUY_DATE`
 - [x] 指定的 `buyDate` 該檔無該列（例如週日）或 `close_price = 0` → `400 NO_PRICE_ON_BUY_DATE`（帶 `stockId` 與 `buyDate`），**不得**自動改用鄰近交易日建立，且未寫入任何列
 - [x] `GET` 回的 `defaultBuyDate` 等於全市場 `trade_date <= 今日` 且 `close_price > 0` 的最大交易日；它與個別股票的最後交易日無關（構造一檔更早停止交易的股票驗證）
-- [x] 回應為與 `GET` 的 `items[]` 相同的形狀，含 `currentDate`／`currentPrice`／`unrealizedProfit`／`returnPercent`
 
 ### 未實現損益與成本
 - [x] 買進價 `1150.00`、現價 `1205.00`：`buyFee` `1638`、`cost` `1151638`、`sellFee` `1717`、`sellTax` `3615`、`unrealizedProfit` `48030`、`returnPercent` `4.17`（與 `specs/backend/strategy-backtest.md` 同一組數字）

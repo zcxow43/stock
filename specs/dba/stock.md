@@ -113,13 +113,13 @@ ON DUPLICATE KEY UPDATE
 
 **種子只建立股票主檔，不虛構任何成交價格。** 這是刻意的：捏造的 OHLC 會讓日 K 圖與 MACD／KD 顯示看似合理實則不存在的走勢，比空白更難察覺是假的。因此點進種子股票的日 K 頁時，在跑過行情抓取之前圖表是空的——真實行情由 `specs/backend/stock-price-ingestion.md` 的回補流程寫入 `stock_daily_price`，指標再由 `specs/backend/stock-indicator-statistics.md` 從那份 OHLC 推導。種子資料與行情抓取是互補的兩步，不是替代關係。
 
-種子清單是開發樣本，不是完整上市清單。全市場 universe 一律由行情抓取流程以 UPSERT 補齊——兩者寫入同一張表、同一種語意，所以先跑哪個都不會衝突。
+種子清單是開發樣本，不是完整上市清單。全市場 universe 由行情抓取流程與 universe 匯入（`specs/backend/stock-universe-import.md`）以 UPSERT 補齊——它們與種子寫入同一張表、同一種語意，所以先跑哪個都不會衝突。
 
 ### Migration SQL — V011__shift_stock_timestamps_to_taipei.sql
 
 **Applied-when**: `SELECT COUNT(*) > 0 FROM schema_migration WHERE version = 'V011'`
 
-一次性資料位移，不改結構。接在 `V009` 之後，理由與 `specs/dba/stock-sync-progress.md` 的 V009 完全相同：`created_at` / `updated_at` 由資料庫時鐘寫入，容器時區從 `UTC` 改為 `Asia/Taipei` 之前寫入的列比台北時間早 8 小時。
+一次性資料位移，不改結構。接在 `V009` 之後，理由與 `specs/dba/stock-sync-progress.md` 的 V010 完全相同：`created_at` / `updated_at` 由資料庫時鐘寫入，容器時區從 `UTC` 改為 `Asia/Taipei` 之前寫入的列比台北時間早 8 小時。
 
 ```sql
 UPDATE stock t
@@ -144,9 +144,6 @@ INSERT IGNORE INTO schema_migration (version) VALUES ('V011');
 - [x] 中文名稱在資料庫中正確顯示為中文，非亂碼或問號（連線端字元集為 `utf8mb4`）
 - [x] V007 連續執行兩次後，`stock` 的列數不變，且名稱為最新值
 - [x] V007 的 SQL 完整存在於本 spec 內，專案中不存在對應的獨立 `.sql` 檔
-
----
-
 - [x] V011 執行後，既有列的 `created_at` / `updated_at` 與執行前相比正好增加 8 小時
 - [x] V011 連續執行兩次，第二次影響 0 列，且 `schema_migration` 中 `V011` 仍只有一列（位移為冪等）
 
