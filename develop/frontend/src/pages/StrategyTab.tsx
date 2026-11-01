@@ -679,8 +679,8 @@ function computeBacktestTotals(result: BacktestResponse, checkedItemKeys: Set<st
   return { includedCount, totalCost, totalProfit, totalReturnPercent, uncountedNoSellDate, uncountedUnchecked }
 }
 
-/** 月營收模式 — one 週段 of one month: the (起始週, 結束週) pair resolved to the two dates the
- * scan request carries (specs/frontend/strategy.md「月營收模式」). */
+/** 月統計模式 — one 週段 of one month: the (起始週, 結束週) pair resolved to the two dates the
+ * scan request carries (specs/frontend/strategy.md「月統計模式」). */
 interface MonthlySegment {
   /** `YYYY-MM` */
   month: string
@@ -705,7 +705,7 @@ interface MonthlyRow {
   totals: MonthlyTotals | null
 }
 
-/** 「買進價高於 500 元的筆不計入」 — the fixed amount of the 月營收 mode (no input for it). */
+/** 「買進價高於 500 元的筆不計入」 — the fixed amount of the 月統計 mode (no input for it). */
 const MONTHLY_PRICE_CAP = 500
 const MONTHLY_MONTH_COUNT = 4
 
@@ -738,7 +738,7 @@ function mondaysOfMonth(year: number, monthIndex: number): Date[] {
   return result
 }
 
-/** The segments a 月營收 run scans for the day `now`, in table order (oldest month first, then
+/** The segments a 月統計 run scans for the day `now`, in table order (oldest month first, then
  * the five fixed 週段). A segment is dropped when its month has no 第五週 (第四週 → 第五週) or
  * when its start week is after the current week (it would need a future `startDate`). `endDate` is
  * the end week's Sunday, or `now` itself once the end week is the current week or a later one.
@@ -1199,7 +1199,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const backtestGenerationRef = useRef(0)
   const backtestAbortControllerRef = useRef<AbortController | null>(null)
 
-  // ---------- 月營收統計 (股票範圍「月營收」— one scan → backtest per segment, strictly one at a
+  // ---------- 月統計 (股票範圍「月統計」— one scan → backtest per segment, strictly one at a
   // time; the result area shows this table instead of the 命中彙總表 whenever `monthlyRows` is set) ----------
   const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[] | null>(null)
   const [monthlyRunning, setMonthlyRunning] = useState(false)
@@ -1702,7 +1702,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   /** 重新掃描一定清空回測結果，在按下的當下就做，不等新結果回來 — an old backtest is for an
    * old hit list; leaving it next to a new one would be two datasets that no longer
-   * correspond, with nothing on screen to say so. Shared by the normal scan and the 月營收
+   * correspond, with nothing on screen to say so. Shared by the normal scan and the 月統計
    * run, both of which replace whatever the result area showed. */
   const clearBacktestState = () => {
     setBacktestStatus('idle')
@@ -1726,7 +1726,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     backtestAbortControllerRef.current = null
   }
 
-  /** 股票範圍「月營收」的「開始掃描」: lists every segment, then strictly one segment at a time
+  /** 股票範圍「月統計」的「開始掃描」: lists every segment, then strictly one segment at a time
    * runs scan → (backtest when there is at least one hit) → fills its row → next segment. The
    * `strategies` are built once, here, from the cards as they are at click time, so every
    * segment sends exactly what a 全市場 scan of the same cards would; `commonStocksOnly` is the
@@ -1789,7 +1789,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setMonthlyRunning(false)
   }
 
-  /** 「停止統計」: ends the 月營收 run at once. Bumping the run id makes `runMonthly`'s loop return
+  /** 「停止統計」: ends the 月統計 run at once. Bumping the run id makes `runMonthly`'s loop return
    * at its next `isCurrent()` check without writing anything more, the abort cancels the scan or
    * backtest in flight, and every row that has no result yet (the running one and the waiting
    * ones) becomes 「已停止」. Rows that already have a result are left as they are. */
@@ -1811,7 +1811,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     setInvalidRisePercentStrategy(null)
     setParamServerError(null)
     setLastScanPayload(payload)
-    // 月營收統計表屬於上一次的「月營收」掃描，新的一般掃描一開始就換掉它。
+    // 月統計表屬於上一次的「月統計」掃描，新的一般掃描一開始就換掉它。
     setMonthlyRows(null)
     setMonthlyFee(null)
     clearBacktestState()
@@ -1958,7 +1958,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const canScan =
     !noStrategySelected &&
     !noStockSelected &&
-    // 月營收沒有區間可選，週選擇留下的值不該擋住它。
+    // 月統計沒有區間可選，週選擇留下的值不該擋住它。
     (scope === 'MONTHLY' || !dateInvalid) &&
     !hasInvalidRisePercent &&
     !hasInvalidParams &&
@@ -2548,13 +2548,13 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     )
   }
 
-  /** 月營收統計表 — the only thing the result area holds in 月營收 mode: title, one note line, one
+  /** 月統計表 — the only thing the result area holds in 月統計 mode: title, one note line, one
    * row per segment, then the fee line once any backtest response has arrived. No selection, sort,
    * row click or floating totals. A row without a result merges its three total cells into one
    * (`colSpan`). Layout lives on the table elements only — no `<td>`/`<th>` gets a display class. */
   const renderMonthlyTable = (rows: MonthlyRow[]) => (
     <div className="st-result-block st-monthly-block">
-      <h3 className="st-result-title">月營收統計</h3>
+      <h3 className="st-result-title">月統計</h3>
       <p className="st-monthly-note">買進價高於 {MONTHLY_PRICE_CAP} 元的筆不計入</p>
       <table className="sl-table st-result-table st-monthly-table">
         <thead>
@@ -3407,7 +3407,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           </label>
           <label className="st-radio">
             <input type="radio" name="st-scope" checked={scope === 'MONTHLY'} onChange={() => setScope('MONTHLY')} />
-            月營收
+            月統計
           </label>
         </div>
         {scope === 'SELECTED' ? (
@@ -3449,7 +3449,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         ) : null}
 
         {scope === 'MONTHLY' ? (
-          // 月營收不選區間：整個區間列（兩個週選擇、三個快捷鈕、「實際區間」）不畫，原位置只留這一行。
+          // 月統計不選區間：整個區間列（兩個週選擇、三個快捷鈕、「實際區間」）不畫，原位置只留這一行。
           // 起、迄週仍在 `weekRange` 裡，切回其他範圍時原樣回來。
           <div className="st-range-hint st-month-hint">
             統計月份：{monthlyRevenueMonths(today()).map((m) => m.text).join('、')}

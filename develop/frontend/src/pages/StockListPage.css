@@ -1630,7 +1630,7 @@
   opacity: 1;
 }
 
-/* 月營收模式 — 統計月份 line (same colour as the 實際區間 line it replaces), and the 月營收統計表
+/* 月統計模式 — 統計月份 line (same colour as the 實際區間 line it replaces), and the 月統計表
    in the result area. Every colour is a literal from specs/frontend/strategy.md `## Visual
    Style`; `<td>`/`<th>` keep their table-cell display (no flex/grid/block on them). */
 .st-month-hint {

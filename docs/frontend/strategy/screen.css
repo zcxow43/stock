@@ -277,8 +277,8 @@
 .page-strategy .setrow .stag2 { color:#6B7C90; font-size:12px; }
 .page-strategy .setrow .sact { margin-left:auto; display:flex; align-items:center; gap:6px; }
 
-/* ---- 月營收模式 ---- */
-/* mview：往下捲過策略卡片後的畫面，條件區只剩「股票範圍」以下，版面留給月營收統計表 */
+/* ---- 月統計模式 ---- */
+/* mview：往下捲過策略卡片後的畫面，條件區只剩「股票範圍」以下，版面留給月統計表 */
 .page-strategy.mview .topbar, .page-strategy.mview .head, .page-strategy.mview .pageopt,
 .page-strategy.mview .tabs, .page-strategy.mview .syncbar, .page-strategy.mview .condhead,
 .page-strategy.mview .cards { display:none; }
