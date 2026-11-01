@@ -298,3 +298,12 @@
 .page-strategy .mstat tbody td.up { color:#E04B45; }
 .page-strategy .mstat tbody td.down { color:#16A75C; }
 .page-strategy .mstat tbody td.flat { color:#93A4B8; }
+
+/* 「加入模擬」：代表單一一筆的列（單一買進日列與子列），名稱之後的小按鈕 */
+.page-strategy .addsim { margin-left:8px; height:20px; padding:0 7px; font-size:12px; line-height:18px;
+       background:#1B2836; color:#E6EDF5; border:1px solid #26333F; border-radius:4px;
+       font-family:inherit; vertical-align:middle; cursor:pointer; white-space:nowrap; }
+.page-strategy .addsim:hover, .page-strategy .addsim.hover { background:#223347; }
+.page-strategy .addsim.busy, .page-strategy .addsim:disabled { background:#16202C; color:#4A5866; cursor:default; }
+.page-strategy .addsim.done { background:#16202C; color:#93A4B8; border-color:#26333F; cursor:default; }
+.page-strategy .addsim.fail { background:#1B2836; color:#F09A94; border-color:#8A3A34; }

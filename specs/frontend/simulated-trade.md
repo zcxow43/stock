@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為以買進日至該日之間最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出"
 depends_on: [stock-list]
 ---
 
@@ -11,7 +11,7 @@ depends_on: [stock-list]
 
 `/stocks` 的**第四個頁籤**，排在「動態」右邊（頁籤容器與第一個頁籤見 `specs/frontend/stock-list.md`，第二個見 `specs/frontend/strategy.md`，第三個見 `specs/frontend/momentum.md`）。回答一個問題：**「如果我最近買了這幾檔各一張，現在賺賠多少？」**
 
-使用者輸入代號與買進日（預設為上一次收盤日）；買進價與張數由後端決定（見 `specs/backend/simulated-trade.md`），畫面上**不提供修改**。持股存在後端，重新整理、換瀏覽器都還在。
+使用者輸入代號與買進日（預設為上一次收盤日），或在策略分頁命中彙總表按「加入模擬」（以該筆的買進日與買進價加入，見 `specs/frontend/strategy.md`）；買進價與張數由後端決定（見 `specs/backend/simulated-trade.md`），畫面上**不提供修改**。持股存在後端，重新整理、換瀏覽器都還在。
 
 路由：`/stocks?tab=simulated`。
 
@@ -24,7 +24,7 @@ depends_on: [stock-list]
 由上而下：
 
 1. **加入列** — 一格股票代號輸入 + 一格買進日 + 「加入」主要按鈕 + 說明文字。
-2. **摘要列** — 「共 N 筆」與三個總計（總成本、總未實現損益、總報酬率），另有一行費率說明。
+2. **摘要列** — 「共 N 筆」、「目標結算日」日期輸入與「清除」按鈕、三個總計（總成本、總未實現損益、總報酬率；設了目標結算日時為三個結算總計），另有一行費率說明。
 3. **持股表格** — 一列一筆持股，最右一欄為刪除。
 
 **頁面層級的「只看上市普通股」不影響本頁**：本頁沒有母體篩選這件事——使用者指名哪一檔就是哪一檔，包含 ETF 與已下市股票。切換那個勾選框時本頁不重新查詢（`specs/frontend/stock-list.md` 的「各分頁如何套用」已記上這一條）。
@@ -58,6 +58,39 @@ depends_on: [stock-list]
 - **費率取自回應**，不在前端寫死；一行說明的用意與策略分頁相同：使用者會拿「(現價 − 買進價) × 1000」驗算，沒有這行就對不起來。
 - `totalReturnPercent` 為 `null`（沒有任何持股）時，三個總計皆顯示弱化色的「—」，不顯示 `0`／`0%`。
 
+### 目標結算日
+
+回答「如果每一檔都在某一天之前、以那段期間的最高價賣掉，總共賺賠多少」。計算全在後端（見 `specs/backend/simulated-trade.md` 的「目標結算日」）：每筆以**買進日至目標結算日（含兩端）之間最大的最高價**賣出。
+
+| 元素 | 行為 |
+|---|---|
+| 「目標結算日」標籤 + 日期輸入 | 位於摘要列「共 N 筆」之後、三個總計之前；`type="date"`，**預設空白**；`max` 為回應的 `asOfDate` |
+| 「清除」次要按鈕 | 緊接日期輸入之後；日期為空時 disabled；按下清空日期 |
+
+- **日期改變即重新取得列表**：`GET /api/simulated-trades?settleDate=<日期>`；清除（或把輸入清空）時改回不帶參數的 `GET`。不需要另按「套用」。
+- **加入、刪除、「重試」之後的重新取得沿用目前的目標結算日**：結算模式下加入一筆，新的一筆直接以同一個目標結算日結算。
+- **目標結算日只存在本頁的畫面狀態**：不寫入網址、不寫入 `localStorage`；切到別的分頁再切回、或重新整理後回到空白（現價模式）。
+- **空白時（現價模式）本頁與過去完全相同。**
+
+設了目標結算日時（結算模式），畫面改顯示回應的結算欄位，不在前端重算：
+
+| 位置 | 現價模式 | 結算模式 |
+|---|---|---|
+| 表格第 4 欄 | 現價日 `currentDate` | 賣出日 `settlement.sellDate` |
+| 表格第 5 欄 | 現價 `currentPrice` | 賣出價 `settlement.sellPrice`，兩位小數 |
+| 表格第 7 欄 | 未實現損益 `unrealizedProfit` | 結算損益 `settlement.profit`，千分位、不帶小數，套漲跌色 |
+| 表格第 8 欄 | 報酬率 `returnPercent` | 報酬率 `settlement.returnPercent`，兩位小數加 `%`，套漲跌色 |
+| 總成本 | `totalCost` | `settledTotalCost` |
+| 第二個總計 | 「總未實現損益」`totalUnrealizedProfit` | 「總結算損益」`settledTotalProfit` |
+| 總報酬率 | `totalReturnPercent` | `settledTotalReturnPercent` |
+| 費率說明 | 「未實現損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，賣出成本以現價估算」 | 「結算損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，每筆以買進日至 {settleDate} 之間的最高價賣出」 |
+
+- **欄數與欄序不變**，只換表頭文字與內容：兩種模式的表格同寬，切換時欄位不跳動。
+- **`settlement` 為 `null` 的筆**（買進日晚於目標結算日）：第 4、5、7、8 欄顯示弱化色「—」，其餘欄照常；它不計入三個結算總計（後端已排除）。這種筆至少一筆時，費率說明下方多一行次要文字「另 K 筆買進日晚於目標結算日，未計入」，K 為 `settlement` 為 `null` 的筆數。
+- `settledTotalReturnPercent` 為 `null`（沒有任何一筆有結算）時，三個總計皆顯示弱化色「—」。
+- 結算模式下「現價日不等於 `asOfDate` 時以次要文字色顯示」的規則不適用於賣出日：賣出日本來就早於今日，一律為主要文字色。
+- `400 INVALID_SETTLE_DATE` → 日期輸入下方「目標結算日不能晚於今日」，表格保留上一次成功的資料。
+
 ### 持股表格
 
 | 欄位 | 內容 | 對齊 |
@@ -71,6 +104,8 @@ depends_on: [stock-list]
 | 未實現損益 | `unrealizedProfit`，千分位、不帶小數，套漲跌色 | 靠右 |
 | 報酬率 | `returnPercent`，兩位小數加 `%`，套漲跌色 | 靠右 |
 | 刪除 | 每列一顆「刪除」文字按鈕 | 靠右 |
+
+上表為現價模式；結算模式下第 4、5、7、8 欄的表頭與內容依「目標結算日」一節替換。
 
 - **買進日與現價日都要顯示。** 少了現價日，使用者看到週末或已下市的持股時無從判斷「這個現價是哪一天的」，會把上週的收盤當成今天的。
 - **現價日不等於 `asOfDate` 時，現價日以次要文字色顯示**（其餘列為主要文字色）——那一格說的是「這個數字比今天舊」。
@@ -109,7 +144,9 @@ depends_on: [stock-list]
 
 | 時機 | 呼叫 |
 |---|---|
-| 進入分頁（含由其他分頁切回、重新整理） | `GET /api/simulated-trades` — 取 `items[]` 與三個總計、`feeRatePercent`／`taxRatePercent`／`asOfDate`／`defaultBuyDate`（後者為買進日輸入的預設值與 `max`） |
+| 進入分頁（含由其他分頁切回、重新整理） | `GET /api/simulated-trades` — 取 `items[]` 與三個總計、`feeRatePercent`／`taxRatePercent`／`asOfDate`／`defaultBuyDate`（後者為買進日輸入的預設值與 `max`；`asOfDate` 也是目標結算日輸入的 `max`） |
+| 選了或改了「目標結算日」 | `GET /api/simulated-trades?settleDate=<日期>` — 取 `items[].settlement` 與 `settleDate`／`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 顯示結算模式；其後加入、刪除、重試的重新取得都帶同一個 `settleDate` |
+| 按「清除」或把目標結算日清空 | `GET /api/simulated-trades` — 不帶 `settleDate`，回到現價模式 |
 | 按「加入」或在任一輸入框按 Enter | `POST /api/simulated-trades` — body `{ stockId, buyDate }`（買進日一律送出，即使它還是預設值）；成功後**重新取得列表**（`GET`），讓三個總計與排序一律由後端決定；`201` 的回應體只用來確認系統選了哪一個買進日與買進價，不拿它自行插入列表 |
 | 按某列的「刪除」 | `DELETE /api/simulated-trades/{id}` — 成功後重新取得列表 |
 
@@ -136,6 +173,14 @@ depends_on: [stock-list]
 | 「刪除」文字按鈕／hover | `#93A4B8` / `#E04B45` |
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 | 加入成功時的列閃爍背景 | `#1D2A38`（與列 hover 同值） |
+| 「目標結算日」標籤文字 | `#93A4B8`（與次要文字同值） |
+| 目標結算日輸入框背景／文字／邊框／focus 邊框 | `#0F1620` / `#E6EDF5` / `#26333F` / `#3E8FD8`（與代號輸入框同值） |
+| 「清除」次要按鈕背景／文字／邊框／hover 背景 | `#1B2836` / `#E6EDF5` / `#26333F` / `#223347`（與 `specs/frontend/strategy.md` 的次要按鈕同值） |
+| 「清除」按鈕 disabled 背景／文字 | `#16202C` / `#4A5866`（與「加入」disabled 同值） |
+| 結算損益／報酬率（正／負／零） | `#E04B45` / `#16A75C` / `#93A4B8`（與未實現損益同值） |
+| 賣出日、賣出價 | `#E6EDF5` |
+| 結算模式下 `settlement` 為 `null` 的「—」 | `#6B7C90` |
+| 「另 K 筆買進日晚於目標結算日，未計入」 | `#93A4B8` |
 
 以上皆為固定色碼，**不得取自任何會隨 `prefers-color-scheme` 改變的變數或 token**：本頁在深色與淺色系統偏好下呈現完全相同。
 
@@ -173,6 +218,17 @@ depends_on: [stock-list]
 - [x] 加入成功後買進日**維持不變**、只有代號被清空；加入失敗時兩格都不清空
 - [x] 錯誤文案：`INVALID_BUY_DATE` → 「買進日不能晚於今日」；`NO_PRICE_ON_BUY_DATE` → 「2330 在 2026-09-13 沒有收盤價（可能是假日或停牌），請換一天」；皆顯示在輸入框下方
 - [x] 買進日輸入框的背景／邊框／focus 邊框與代號輸入框同色碼，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+
+### 目標結算日
+- [x] 摘要列「共 N 筆」之後有「目標結算日」日期輸入（預設空白、`max` 等於回應的 `asOfDate`）與「清除」按鈕；日期為空時「清除」disabled
+- [x] 選一個日期即送出 `GET /api/simulated-trades?settleDate=<該日期>`（不需另按按鈕）；按「清除」後日期清空並送出不帶 `settleDate` 的 `GET`，畫面回到現價模式
+- [x] 結算模式下表頭依序為代號 / 名稱、買進日、買進價、賣出日、賣出價、成本、結算損益、報酬率、刪除；第 4、5、7、8 欄的值等於回應的 `settlement.sellDate`／`sellPrice`／`profit`／`returnPercent`
+- [x] 結算模式下三個總計顯示 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`，第二個總計的標籤為「總結算損益」，費率說明為「結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以買進日至 {settleDate} 之間的最高價賣出」
+- [x] `settlement` 為 `null` 的筆第 4、5、7、8 欄為弱化色「—」，並出現「另 K 筆買進日晚於目標結算日，未計入」；`settledTotalReturnPercent` 為 `null` 時三個總計皆為「—」
+- [x] 結算模式下加入或刪除一筆後，重新取得的 `GET` 仍帶同一個 `settleDate`，目標結算日輸入維持原值
+- [x] 結算損益與報酬率實際渲染的文字色：正 `#E04B45`、負 `#16A75C`、`0` 為 `#93A4B8`；目標結算日輸入框背景／邊框與代號輸入框相同；`prefers-color-scheme: dark` 與 `light` 下相同
+- [x] 以真實資料驗證：在結算模式下，畫面上一筆的賣出價等於以 SQL 查出該檔在買進日至目標結算日之間的 `MAX(high_price)`
+- [x] 由策略分頁「加入模擬」加入的持股出現在本頁表格，買進日與買進價等於策略分頁該筆顯示的值
 
 ---
 ## Execution Result
@@ -226,3 +282,25 @@ Implements the 6 previously-unchecked criteria under「指定買進日（本次�
   5. **`INVALID_BUY_DATE`/`NO_PRICE_ON_BUY_DATE` copy, both under the input** — added as two new rows to the existing table-driven 加入-error test.
   6. **買進日 input's background/border/focus-border match the code input's literal hex, unaffected by `prefers-color-scheme`** — unit test `'買進日輸入框與代號輸入框共用同一個背景／邊框／focus 邊框 CSS class...'` (class-identity assertion, per this suite's established jsdom-can't-paint-real-CSS limitation — see `StockListPage.cellColorCascade.test.ts`'s header comment); live-verified actual computed colors byte-identical between the two inputs and matching the spec's literal hex, in both `dark` and `light` emulated `colorScheme`.
 - Notes: none left unfixed.
+
+---
+### Increment 2 — 2026-11-01
+
+Implements the 「### 目標結算日」 criteria (all but the last, which needs the strategy-tab 「加入模擬」 button, not built yet; left `- [ ]`).
+
+- Files changed:
+  - `develop/frontend/src/api/simulatedTrades.ts` — `fetchSimulatedTrades(signal, settleDate?)` appends `?settleDate=` only when non-empty; `createSimulatedTrade(..., signal?, priceBasis?: 'CLOSE' | 'OPEN')` adds `priceBasis` to the body only when given (this tab still sends `{stockId, buyDate}`); added `settlement`, `settleDate`, `settled*` types.
+  - `develop/frontend/src/pages/SimulatedTradeTab.tsx` — 目標結算日 label + date input (`max` = `asOfDate`) + 「清除」 in the summary row; change/clear refetches immediately; `settleDateRef` keeps add/delete/retry refetches on the current date; settle mode swaps headers 4/5/7/8, cells, totals, 「總結算損益」 label, fee note and the 「另 K 筆…未計入」 line; `settlement: null` rows show muted 「—」; `INVALID_SETTLE_DATE` shows 「目標結算日不能晚於今日」 and keeps the last table.
+  - `develop/frontend/src/pages/SimulatedTradeTab.css` — `.sim-settle-item` only; the date input reuses `.sim-add-input` (identical colors by construction), 「清除」 reuses `.sl-btn`.
+- Decisions: settle date is component state only (no URL/localStorage); settle mode is keyed on the response's `settleDate` plus a non-empty input so a stale response cannot flip the labels; totals taken from `settled*` response fields, no client math. No tests written or run, per project rule.
+- Live evidence (backend 8081, Vite 5174, Playwright, dark and light `colorScheme`, same results):
+  - Pick 2026-10-15 sent exactly `GET /api/simulated-trades?settleDate=2026-10-15`; 清除 sent `GET /api/simulated-trades` and emptied the input; 清除 disabled while empty; `max` = 2026-11-01.
+  - Headers in settle mode: 代號 / 名稱|買進日|買進價|賣出日|賣出價|成本|結算損益|報酬率|刪除.
+  - Real data: 2305 (buyDate 2026-09-08, OPEN) showed 賣出價 74.70, equal to `SELECT MAX(high_price) ... BETWEEN '2026-09-08' AND '2026-10-15'` = 74.70 (賣出日 2026-10-13).
+  - 2330 (buyDate 2026-10-30) with settle 2026-10-15: four cells `—` in `#6B7C90`, note 「另 1 筆買進日晚於目標結算日，未計入」, totals from settled fields (33,998 / +40,372 / +118.75%).
+  - Add 2317 and delete it while settle date 2026-10-30 was set: each refetch was `GET ...?settleDate=2026-10-30`; the input kept its value.
+  - Computed colors: profit/return positive `rgb(224,75,69)`, negative `rgb(22,167,92)`; settle input bg/border `rgb(15,22,32)`/`rgb(38,51,63)` = code input; label `#93A4B8`; 清除 bg `#1B2836`. The zero case (`#93A4B8`) was not observed live (no zero-profit row); it uses the shared `sl-flat` class, same as 現價 mode.
+  - Table geometry: every body cell's left/right equal its header's, one `top` per row, no `td` with non-`table-cell` display.
+  - `npm run build` clean. Rows created (ids 420, 421, plus 2317 added by script) were all deleted; `GET /api/simulated-trades` returns `items: []`.
+- Not verified: 「由策略分頁「加入模擬」…」 — depends on the strategy-tab button (next step).
+- Increment 2 evidence (2026-11-01): 策略分頁 4526 東台 row (買進日 2026-10-20, 買進價 35.65) added via 「加入模擬」; 模擬交易分頁 showed 4526 with 買進日 2026-10-20 and 買進價 35.65.

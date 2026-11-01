@@ -25,6 +25,7 @@ import {
   type StrategyResult,
   type VolumeSurgeDetail,
 } from '../api/strategies'
+import { createSimulatedTrade, SimulatedTradeApiError } from '../api/simulatedTrades'
 import { fetchSyncProgress, startBackfill, type ProgressResponse } from '../api/sync'
 import StrategyCardSettingsList from '../components/StrategyCardSettingsList'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -614,6 +615,8 @@ function buildUnionRows(result: ScanResponse): UnionRow[] {
 
 /** Composite key for `checkedItemKeys`/`backtestItemsByKey` — one `(stockId, buyDate)`
  * position, matching the backend's own uniqueness key for a backtest item. */
+type AddSimState = { status: 'adding' | 'added' | 'failed'; message?: string }
+
 function itemKey(stockId: string, buyDate: string): string {
   return `${stockId}::${buyDate}`
 }
@@ -1183,6 +1186,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
 
   // ---------- 回測 (auto-triggered after a successful scan with ≥1 hit — no button) ----------
   const [backtestStatus, setBacktestStatus] = useState<BacktestStatus>('idle')
+  // 「加入模擬」按鈕狀態，以 itemKey(stockId, buyDate) 對應；只存在畫面上，重新掃描／回測時清空。
+  const [addSimStates, setAddSimStates] = useState<Map<string, AddSimState>>(new Map())
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null)
   const [backtestErrorMessage, setBacktestErrorMessage] = useState<string | null>(null)
   // Distinguishes a running 重試回測 from the initial auto-backtest — both share
@@ -1686,6 +1691,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
         // an outdated response can never overwrite a result it no longer corresponds to.
         if (backtestGenerationRef.current !== generation) return
         setBacktestResult(resp)
+        setAddSimStates(new Map())
         applyBacktestDefaults(resp, rows, strategyCount)
         setBacktestStatus('success')
         setBacktestErrorMessage(null)
@@ -1707,6 +1713,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const clearBacktestState = () => {
     setBacktestStatus('idle')
     setBacktestResult(null)
+    setAddSimStates(new Map())
     setPriceThresholdChecked(false)
     setReturnThresholdChecked(false)
     setAllMatchChecked(false)
@@ -2210,6 +2217,54 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     if (backtestResult) for (const item of backtestResult.items) map.set(itemKey(item.stockId, item.buyDate), item)
     return map
   })()
+
+  const handleAddSimulation = (stockId: string, buyDate: string) => {
+    const key = itemKey(stockId, buyDate)
+    const generation = backtestGenerationRef.current
+    const setState = (state: AddSimState) => {
+      // A new scan/backtest bumps the generation; its button states start fresh, so a late reply is dropped.
+      if (backtestGenerationRef.current !== generation) return
+      setAddSimStates((prev) => new Map(prev).set(key, state))
+    }
+    setState({ status: 'adding' })
+    createSimulatedTrade(stockId, buyDate, undefined, 'OPEN')
+      .then(() => setState({ status: 'added' }))
+      .catch((err: unknown) => {
+        if (err instanceof SimulatedTradeApiError && err.code === 'DUPLICATE_SIMULATED_TRADE') {
+          setState({ status: 'added' })
+          return
+        }
+        const message =
+          err instanceof SimulatedTradeApiError && err.code === 'NO_PRICE_ON_BUY_DATE'
+            ? `${stockId} 在 ${buyDate} 沒有開盤價，無法加入`
+            : '加入失敗，請稍後再試'
+        setState({ status: 'failed', message })
+      })
+  }
+
+  /** 「加入模擬」按鈕 — only for a row standing for exactly one buy date; stops the click so it
+   * neither toggles the row's checkbox nor expands/collapses anything. */
+  const renderAddSimButton = (stockId: string, buyDate: string) => {
+    const key = itemKey(stockId, buyDate)
+    const state = addSimStates.get(key)
+    const noPrice = (backtestItemsByKey.get(key)?.buyPrice ?? null) === null
+    const status = state?.status
+    const label = status === 'adding' ? '加入中…' : status === 'added' ? '已加入' : status === 'failed' ? '加入失敗' : '加入模擬'
+    return (
+      <button
+        type="button"
+        className={`sl-btn sl-btn-sm st-add-sim-btn${status === 'added' ? ' is-added' : status === 'failed' ? ' is-failed' : ''}`}
+        disabled={noPrice || status === 'adding' || status === 'added'}
+        title={status === 'failed' ? state?.message : undefined}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleAddSimulation(stockId, buyDate)
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
 
   const backtestTotals = backtestResult ? computeBacktestTotals(backtestResult, checkedItemKeys) : null
 
@@ -2955,6 +3010,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   ) : null}
                   <td>
                     {row.stockId} {row.stockName}
+                    {backtestResult && !hasChildren ? renderAddSimButton(row.stockId, groups[0].buyDate) : null}
                   </td>
                   <td>
                     <div className="st-union-hits">{renderUnionHits(groups.flatMap((group) => group.hits))}</div>
@@ -3007,6 +3063,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                     ) : null}
                     <td className="st-child-indent">
                       {row.stockId} {row.stockName}
+                      {backtestResult ? renderAddSimButton(row.stockId, group.buyDate) : null}
                     </td>
                     <td>
                       <div className="st-union-hits">{renderUnionHits(group.hits)}</div>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>模擬交易分頁</title>
+<link rel="stylesheet" href="../_scripts/shell.css">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body class="page-simtrade">
+  <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>股票總覽</h1>
+      <div class="count">共 <b>1,032</b> 檔</div>
+    </div>
+    <div class="pageopt"><span class="cb"></span>只看上市普通股（排除 ETF、特別股、TDR）</div>
+    <div class="tabs">
+      <button class="tab">總覽</button>
+      <button class="tab">策略</button>
+      <button class="tab">動態</button>
+      <button class="tab on">模擬交易</button>
+      <button class="tab">真實交易</button>
+    </div>
+    <div class="addbar">
+      <div class="addrow">
+        <div class="codein ph">輸入股票代號，例如 2330</div>
+        <button class="addbtn dis">加入</button>
+      </div>
+      <div class="addhint">以今日以前最後一個交易日的收盤價買進 1 張（每筆 1,000 股）</div>
+    </div>
+    <div class="sumbox">
+      <div class="summary">
+        <div class="cnt">共 <b>3</b> 筆</div>
+        <div class="settle"><span class="slbl">目標結算日</span><div class="settlein focus">2026 / 09 / 16<span class="cal">▦</span></div><button class="clrbtn" data-trigger>清除</button></div>
+        <div class="kv"><span class="k">總成本</span><span class="v">33,998</span></div>
+        <div class="kv" data-target><span class="k">總結算損益</span><span class="v up">+2,242</span></div>
+        <div class="kv"><span class="k">總報酬率</span><span class="v up">+6.59%</span></div>
+      </div>
+      <div class="feenote">結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以買進日至 2026-09-16 之間的最高價賣出</div>
+      <div class="exclnote">另 2 筆買進日晚於目標結算日，未計入</div>
+    </div>
+    <table>
+      <thead><tr><th>代號 / 名稱</th><th>買進日</th><th class="r">買進價</th><th>賣出日</th><th class="r">賣出價</th><th class="r">成本</th><th class="r">結算損益</th><th class="r">報酬率</th><th class="r">刪除</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sid">2317</span><span class="snm">鴻海</span></td><td>2026-09-17</td><td class="r">268.00</td><td class="dash">—</td><td class="r dash">—</td><td class="r">268,381</td><td class="r dash">—</td><td class="r dash">—</td><td class="r"><button class="del">刪除</button></td></tr>
+        <tr><td><span class="sid">2330</span><span class="snm">台積電</span></td><td>2026-09-17</td><td class="r">1,150.00</td><td class="dash">—</td><td class="r dash">—</td><td class="r">1,151,638</td><td class="r dash">—</td><td class="r dash">—</td><td class="r"><button class="del">刪除</button></td></tr>
+        <tr><td><span class="sid">2305</span><span class="snm">全友</span></td><td>2026-09-08</td><td class="r">33.95</td><td>2026-09-11</td><td class="r">36.40</td><td class="r">33,998</td><td class="r up">+2,242</td><td class="r up">+6.59%</td><td class="r"><button class="del">刪除</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

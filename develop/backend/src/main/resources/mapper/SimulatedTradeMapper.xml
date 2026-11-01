@@ -14,6 +14,20 @@
         ORDER BY buy_date DESC, stock_id ASC
     </select>
 
+    <select id="findSettlementPrices" resultType="com.stock.domain.SimulatedTradeSettlementPrice">
+        SELECT trade_id, trade_date, high_price
+        FROM (
+            SELECT st.id AS trade_id, p.trade_date, p.high_price,
+                   ROW_NUMBER() OVER (PARTITION BY st.id ORDER BY p.high_price DESC, p.trade_date ASC) AS rn
+            FROM simulated_trade st
+            JOIN stock_daily_price p
+              ON p.stock_id = st.stock_id
+             AND p.trade_date BETWEEN st.buy_date AND #{settleDate}
+             AND p.high_price > 0
+        ) ranked
+        WHERE rn = 1
+    </select>
+
     <delete id="deleteById">
         DELETE FROM simulated_trade WHERE id = #{id}
     </delete>

@@ -199,3 +199,9 @@
 .sim-row-flash td {
   animation: sim-row-flash 1.2s ease;
 }
+
+/* 目標結算日 — label + date input + 清除 sit inline in the summary row; the input reuses
+   `.sim-add-input` (same literal colors as the code input). */
+.sim-settle-item {
+  align-items: center;
+}

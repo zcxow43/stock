@@ -1659,3 +1659,27 @@
 .st-monthly-fee {
   padding-bottom: 14px;
 }
+
+/* 「加入模擬」— reuses .sl-btn / .sl-btn-sm colors (secondary button + Disabled button), only
+   adds the gap after the stock name and a non-wrapping, inline layout inside the cell. */
+.sl-btn.st-add-sim-btn {
+  display: inline-flex;
+  height: 22px;
+  padding: 0 8px;
+  margin-left: 8px;
+  font-size: 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/* 「已加入」 / 「加入失敗」 — literal hex from specs/frontend/strategy.md Visual Style. */
+.sl-btn.st-add-sim-btn.is-added,
+.sl-btn.st-add-sim-btn.is-added:disabled {
+  background: #16202c;
+  color: #93a4b8;
+  border-color: #26333f;
+}
+.sl-btn.st-add-sim-btn.is-failed {
+  background: #1b2836;
+  color: #f09a94;
+  border-color: #8a3a34;
+}

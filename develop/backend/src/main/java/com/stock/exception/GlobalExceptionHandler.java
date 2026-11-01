@@ -265,6 +265,16 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.invalidSimulatedTradeBuyDate(e.getBuyDate()));
     }
 
+    @ExceptionHandler(InvalidPriceBasisException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPriceBasis(InvalidPriceBasisException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidPriceBasis());
+    }
+
+    @ExceptionHandler(InvalidSettleDateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSettleDate(InvalidSettleDateException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSettleDate(e.getSettleDate()));
+    }
+
     @ExceptionHandler(NoPriceOnBuyDateException.class)
     public ResponseEntity<ErrorResponse> handleNoPriceOnBuyDate(NoPriceOnBuyDateException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易持股表 simulated_trade"
-requirement: "模擬交易分頁 — 使用者只輸入股票代號即建立一筆模擬持股，買進日固定為今日以前最後一個有收盤價的交易日、買進價為該日收盤、部位固定 1 張；資料需長期保存，重新整理或換瀏覽器都還在"
+requirement: "模擬交易分頁 — 使用者只輸入股票代號即建立一筆模擬持股，買進日固定為今日以前最後一個有收盤價的交易日、買進價為該日收盤、部位固定 1 張；資料需長期保存，重新整理或換瀏覽器都還在；買進日可由使用者指定，買進價依建立方式為買進日的收盤價或開盤價（策略分頁「加入模擬」取開盤價），V018 只把兩個欄位註解改成這個事實（2026-11-01）"
 ---
 
 # 模擬交易持股表 simulated_trade — DBA Spec
@@ -10,13 +10,13 @@ requirement: "模擬交易分頁 — 使用者只輸入股票代號即建立一�
 
 一列代表「使用者在模擬交易分頁建立的一筆持股」。寫入與讀取端都是 `specs/backend/simulated-trade.md`，畫面是 `specs/frontend/simulated-trade.md`。未實現損益不存在本表——它隨最新收盤價每天改變，存下來就會是一個過期的數字（理由見下方「只存建立當下的事實」）。
 
-**本 migration 為 V017，接在 V016 之後。** 本表不引用任何其他表（無外鍵，理由見下），因此不受其他 migration 的建立順序約束。
+**本表由 V017 建立（接在 V016 之後），V018 只改 `buy_date`／`buy_price` 兩欄的註解（見「Migration SQL — V018」）。** 本表不引用任何其他表（無外鍵，理由見下），因此不受其他 migration 的建立順序約束。
 
 ## Requirements
 
 ### 只存建立當下的事實
 
-本表只存三件在建立那一刻就決定、之後不該再變的事：**哪一檔、哪一天買的、買在什麼價**（以及固定的股數）。
+本表只存三件在建立那一刻就決定、之後不該再變的事：**哪一檔、哪一天買的、買在什麼價**（以及固定的股數）。買進日由使用者指定（省略時為最後一個有收盤價的交易日）；買進價是買進日的收盤價，或在策略分頁按「加入模擬」建立時為買進日的開盤價（見 `specs/backend/simulated-trade.md` 的 `priceBasis`）。本表不記錄是哪一種——它存的是「買在什麼價」這個結果。
 
 - **未實現損益、報酬率、現價、手續費與證交稅都不存**：它們是「這筆持股 + 今天的收盤價」算出來的，每個交易日都不一樣。存進表裡就必須有人負責每天更新，而漏更新的那一天，畫面上會出現一個看起來精確、實際上是昨天的數字。讀取時即時算，成本只是一次收盤價查詢。
 - **買進價要存，不能每次查行情表重算**：`stock_daily_price` 的同一天收盤價可能被來源事後更正（見 `specs/backend/stock-price-ingestion.md` 的 UPSERT 語意）。使用者建立的部位是「我當時以這個價格買進」，不該因為行情被更正而悄悄改成另一個成本。存下來，畫面上的數字才對得起使用者自己記下的那一筆。
@@ -38,8 +38,8 @@ requirement: "模擬交易分頁 — 使用者只輸入股票代號即建立一�
 CREATE TABLE simulated_trade (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '流水號，供刪除單筆使用',
     stock_id   VARCHAR(10)     NOT NULL COMMENT '股票代號，如 2330',
-    buy_date   DATE            NOT NULL COMMENT '買進日＝建立當下今日以前最後一個有收盤價的交易日',
-    buy_price  DECIMAL(10,2)   NOT NULL COMMENT '買進價＝買進日收盤價，建立時寫入後不再隨行情更正而變動',
+    buy_date   DATE            NOT NULL COMMENT '買進日，建立時指定（省略時為最後一個有收盤價的交易日）',
+    buy_price  DECIMAL(10,2)   NOT NULL COMMENT '買進價＝買進日收盤價或開盤價（依建立方式），寫入後不再隨行情更正而變動',
     shares     INT UNSIGNED    NOT NULL COMMENT '股數，目前固定 1000（1 張）',
     created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -49,6 +49,18 @@ CREATE TABLE simulated_trade (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='模擬交易持股（使用者自行加入，未實現損益即時計算不落地）';
+```
+
+上方為本表目前的完整定義（V017 建立、V018 改註解後的結果）；V017 當時的兩欄註解是「買進日＝建立當下今日以前最後一個有收盤價的交易日」與「買進價＝買進日收盤價，建立時寫入後不再隨行情更正而變動」。
+
+### Migration SQL — V018__comment_simulated_trade_buy_price.sql
+
+接在 V017 之後。只改兩欄的 `COMMENT`，型別、`NOT NULL` 與資料都不變；純 DDL，套用與否可由 `information_schema.COLUMNS.COLUMN_COMMENT` 讀出，重跑結果相同。
+
+```sql
+ALTER TABLE simulated_trade
+    MODIFY buy_date  DATE          NOT NULL COMMENT '買進日，建立時指定（省略時為最後一個有收盤價的交易日）',
+    MODIFY buy_price DECIMAL(10,2) NOT NULL COMMENT '買進價＝買進日收盤價或開盤價（依建立方式），寫入後不再隨行情更正而變動';
 ```
 
 `buy_price` 用 `DECIMAL(10,2)`，與 `stock_daily_price` 的價格欄位同型別同精度——它就是從那裡抄來的一個值，型別不一致會在比對與顯示時產生看不出來的捨入差。
@@ -72,6 +84,7 @@ CREATE TABLE simulated_trade (
 - [x] `buy_price` 為 `DECIMAL(10,2)`：寫入 `1150.005` 之類的值不會被存成更高精度，與 `stock_daily_price.close_price` 同型別
 - [x] 表上沒有任何外鍵：刪除 `stock` 中對應代號的列後，本表的列仍在
 - [x] 以 `id` 刪除一列後該列消失，其餘列不受影響
+- [x] V018 套用後 `information_schema.COLUMNS` 中 `buy_date`、`buy_price` 的 `COLUMN_COMMENT` 與上方 V018 SQL 逐字相同，`COLUMN_TYPE`／`IS_NULLABLE` 不變（`date`／`NO`、`decimal(10,2)`／`NO`），表內既有列數與內容不變
 
 ---
 ## Execution Result
@@ -109,3 +122,39 @@ CREATE TABLE `simulated_trade` (
 **收尾**：所有驗證用列（`id=1` 已於步驟 6 刪除，其餘由 `DELETE FROM simulated_trade;` 清空）皆已移除，`SELECT COUNT(*) FROM simulated_trade` 確認為 `0`，表已清空。
 
 **`schema_migration` 登錄**：依 `specs/dba/schema-migration.md`，該表只用來為「相對位移類」的 DML migration 把關（例如 `SET t = t + INTERVAL 8 HOUR` 這種一跑多次會累加錯誤的語句），純 DDL（`CREATE TABLE`）明確排除在外（"冪等的 DDL（`CREATE TABLE IF NOT EXISTS`、`ALTER ... MODIFY` 註解）...不需要登錄，不必為了形式一致而全部塞進來"）。V017 是一次性的 `CREATE TABLE`，本身冪等地由 `information_schema` 可自證是否已套用，因此**未**在 `schema_migration` 插入 `V017` 這一列，也确认目前這台 live 資料庫的 `schema_migration` 仍為空表（與 `specs/dba/schema-migration.md` Increment 2 所記錄的狀態一致——V010–V012 的位移類 migration 因缺 `Applied-when` 探針而未被判定套用，未在本次任務範圍內處理）。
+
+### Increment 1 — 2026-11-01
+
+- Status: DONE
+- 套用 `V018__comment_simulated_trade_buy_price.sql`（SQL 與上方區塊逐字相同），一次成功、無錯誤。未重跑 V017；未對任何列做 INSERT／UPDATE／DELETE。所有 `mysql` 呼叫皆帶 `--default-character-set=utf8mb4`。
+- 列數：套用前 `SELECT COUNT(*) FROM simulated_trade` = `0`；套用後 = `0`。
+
+**`information_schema.COLUMNS`（套用後）：**
+
+| COLUMN_NAME | COLUMN_TYPE | IS_NULLABLE | COLUMN_COMMENT |
+|---|---|---|---|
+| buy_date | date | NO | 買進日，建立時指定（省略時為最後一個有收盤價的交易日） |
+| buy_price | decimal(10,2) | NO | 買進價＝買進日收盤價或開盤價（依建立方式），寫入後不再隨行情更正而變動 |
+
+套用前 `COLUMN_TYPE`／`IS_NULLABLE` 同為 `date`／`NO`、`decimal(10,2)`／`NO`，未變。
+
+**HEX 比對**（`HEX(COLUMN_COMMENT)` 與 spec SQL 字串的 UTF-8 編碼逐位元組相同）：
+
+- `buy_date`：`E8B2B7E980B2E697A5EFBC8CE5BBBAE7AB8BE69982E68C87E5AE9AEFBC88E79C81E795A5E69982E782BAE69C80E5BE8CE4B880E5808BE69C89E694B6E79BA4E583B9E79A84E4BAA4E69893E697A5EFBC89`
+- `buy_price`：`E8B2B7E980B2E583B9EFBC9DE8B2B7E980B2E697A5E694B6E79BA4E583B9E68896E9968BE79BA4E583B9EFBC88E4BE9DE5BBBAE7AB8BE696B9E5BC8FEFBC89EFBC8CE5AFABE585A5E5BE8CE4B88DE5868DE99AA8E8A18CE68385E69BB4E6ADA3E8808CE8AE8AE58B95`
+
+**`SHOW CREATE TABLE simulated_trade`（套用後）：**
+
+```sql
+CREATE TABLE `simulated_trade` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '流水號，供刪除單筆使用',
+  `stock_id` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '股票代號，如 2330',
+  `buy_date` date NOT NULL COMMENT '買進日，建立時指定（省略時為最後一個有收盤價的交易日）',
+  `buy_price` decimal(10,2) NOT NULL COMMENT '買進價＝買進日收盤價或開盤價（依建立方式），寫入後不再隨行情更正而變動',
+  `shares` int unsigned NOT NULL COMMENT '股數，目前固定 1000（1 張）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_stock_buy_date` (`stock_id`,`buy_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=416 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模擬交易持股（使用者自行加入，未實現損益即時計算不落地）'
+```

@@ -1,6 +1,7 @@
 package com.stock.service;
 
 import com.stock.domain.SimulatedTrade;
+import com.stock.domain.SimulatedTradeSettlementPrice;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
 import com.stock.dto.CreateSimulatedTradeRequest;
@@ -8,6 +9,8 @@ import com.stock.dto.SimulatedTradeItemDto;
 import com.stock.dto.SimulatedTradeResponseDto;
 import com.stock.exception.DuplicateSimulatedTradeException;
 import com.stock.exception.InvalidSimulatedTradeBuyDateException;
+import com.stock.exception.InvalidPriceBasisException;
+import com.stock.exception.InvalidSettleDateException;
 import com.stock.exception.InvalidStockIdException;
 import com.stock.exception.NoPriceBeforeTodayException;
 import com.stock.exception.NoPriceOnBuyDateException;
@@ -60,13 +63,14 @@ public class SimulatedTradeService {
         this.priceMapper = priceMapper;
     }
 
-    public SimulatedTradeResponseDto list() {
+    public SimulatedTradeResponseDto list(String rawSettleDate) {
         LocalDate asOfDate = LocalDate.now(TAIPEI);
+        LocalDate settleDate = parseSettleDate(rawSettleDate, asOfDate);
         // 全市場上一次收盤日（specs/backend/simulated-trade.md, "預設買進日（defaultBuyDate）"）— one
         // query, not scoped to any stock; null when the database holds no price rows at all.
         LocalDate defaultBuyDate = priceMapper.findMarketWideLatestPositiveCloseDate(asOfDate);
         List<SimulatedTrade> trades = simulatedTradeMapper.findAllOrderedByBuyDateDescStockIdAsc();
-        return buildResponse(asOfDate, defaultBuyDate, trades);
+        return buildResponse(asOfDate, defaultBuyDate, settleDate, trades);
     }
 
     @Transactional
@@ -75,6 +79,8 @@ public class SimulatedTradeService {
         if (stockId == null) {
             throw new InvalidStockIdException();
         }
+
+        boolean useOpen = parsePriceBasisIsOpen(request.getPriceBasis(), request.getBuyDate());
 
         Stock stock = stockMapper.findById(stockId);
         if (stock == null) {
@@ -105,12 +111,12 @@ public class SimulatedTradeService {
                 throw new InvalidSimulatedTradeBuyDateException(rawBuyDate);
             }
             StockDailyPrice buyRow = priceMapper.findOne(stockId, requestedDate);
-            if (buyRow == null || buyRow.getClosePrice() == null
-                    || buyRow.getClosePrice().signum() <= 0) {
+            BigDecimal basisPrice = buyRow == null ? null : (useOpen ? buyRow.getOpenPrice() : buyRow.getClosePrice());
+            if (basisPrice == null || basisPrice.signum() <= 0) {
                 throw new NoPriceOnBuyDateException(stockId, requestedDate);
             }
             buyDate = requestedDate;
-            buyPrice = buyRow.getClosePrice();
+            buyPrice = basisPrice;
         }
 
         SimulatedTrade trade = new SimulatedTrade();
@@ -145,10 +151,11 @@ public class SimulatedTradeService {
     }
 
     private SimulatedTradeResponseDto buildResponse(LocalDate asOfDate, LocalDate defaultBuyDate,
-                                                      List<SimulatedTrade> trades) {
+                                                      LocalDate settleDate, List<SimulatedTrade> trades) {
         SimulatedTradeResponseDto response = new SimulatedTradeResponseDto();
         response.setAsOfDate(asOfDate);
         response.setDefaultBuyDate(defaultBuyDate);
+        response.setSettleDate(settleDate);
         response.setLotSize(TradingCostCalculator.LOT_SIZE);
         response.setFeeRatePercent(TradingCostCalculator.FEE_RATE_PERCENT);
         response.setTaxRatePercent(TradingCostCalculator.TAX_RATE_PERCENT);
@@ -175,13 +182,32 @@ public class SimulatedTradeService {
         Map<String, StockDailyPrice> currentByStock = loadCurrentPrices(stockIds, asOfDate);
         Map<String, String> nameByStock = loadStockNames(stockIds);
 
+        // One more batched query, only when a settleDate was requested: its count is independent of
+        // the number of holdings.
+        Map<Long, SimulatedTradeSettlementPrice> settlementByTrade = new HashMap<>();
+        if (settleDate != null) {
+            for (SimulatedTradeSettlementPrice row : simulatedTradeMapper.findSettlementPrices(settleDate)) {
+                settlementByTrade.put(row.getTradeId(), row);
+            }
+        }
+
         BigDecimal totalCost = BigDecimal.ZERO;
         BigDecimal totalUnrealizedProfit = BigDecimal.ZERO;
+        BigDecimal settledTotalCost = BigDecimal.ZERO;
+        BigDecimal settledTotalProfit = BigDecimal.ZERO;
+        boolean anySettled = false;
         List<SimulatedTradeItemDto> items = new ArrayList<>(trades.size());
         for (SimulatedTrade trade : trades) {
             StockDailyPrice currentRow = currentByStock.get(trade.getStockId());
             SimulatedTradeItemDto item =
                     toItemDto(trade, nameByStock.get(trade.getStockId()), currentRow);
+            SimulatedTradeSettlementPrice settlementPrice = settlementByTrade.get(trade.getId());
+            if (settlementPrice != null) {
+                item.setSettlement(toSettlement(trade, item.getCost(), settlementPrice));
+                settledTotalCost = settledTotalCost.add(item.getCost());
+                settledTotalProfit = settledTotalProfit.add(item.getSettlement().getProfit());
+                anySettled = true;
+            }
             items.add(item);
             totalCost = totalCost.add(item.getCost());
             totalUnrealizedProfit = totalUnrealizedProfit.add(item.getUnrealizedProfit());
@@ -190,8 +216,45 @@ public class SimulatedTradeService {
         response.setTotalCost(totalCost);
         response.setTotalUnrealizedProfit(totalUnrealizedProfit);
         response.setTotalReturnPercent(TradingCostCalculator.returnPercent(totalUnrealizedProfit, totalCost));
+        response.setSettledTotalCost(settledTotalCost);
+        response.setSettledTotalProfit(settledTotalProfit);
+        response.setSettledTotalReturnPercent(
+                anySettled ? TradingCostCalculator.returnPercent(settledTotalProfit, settledTotalCost) : null);
         response.setItems(items);
         return response;
+    }
+
+    private SimulatedTradeItemDto.Settlement toSettlement(SimulatedTrade trade, BigDecimal cost,
+                                                           SimulatedTradeSettlementPrice sellRow) {
+        BigDecimal sellPrice = sellRow.getHighPrice();
+        BigDecimal sellFee = TradingCostCalculator.fee(sellPrice, trade.getShares());
+        BigDecimal sellTax = TradingCostCalculator.tax(sellPrice, trade.getShares());
+        BigDecimal profit = TradingCostCalculator.profit(sellPrice, trade.getShares(), sellFee, sellTax, cost);
+        SimulatedTradeItemDto.Settlement settlement = new SimulatedTradeItemDto.Settlement();
+        settlement.setSellDate(sellRow.getTradeDate());
+        settlement.setSellPrice(sellPrice);
+        settlement.setSellFee(sellFee);
+        settlement.setSellTax(sellTax);
+        settlement.setProfit(profit);
+        settlement.setReturnPercent(TradingCostCalculator.returnPercent(profit, cost));
+        return settlement;
+    }
+
+    /** Absent -> null; malformed or after today -> INVALID_SETTLE_DATE echoing the raw string. */
+    private LocalDate parseSettleDate(String raw, LocalDate today) {
+        if (raw == null) {
+            return null;
+        }
+        LocalDate parsed;
+        try {
+            parsed = LocalDate.parse(raw.trim());
+        } catch (DateTimeParseException e) {
+            throw new InvalidSettleDateException(raw);
+        }
+        if (parsed.isAfter(today)) {
+            throw new InvalidSettleDateException(raw);
+        }
+        return parsed;
     }
 
     private SimulatedTradeItemDto toItemDto(SimulatedTrade trade, String stockName, StockDailyPrice currentRow) {
@@ -259,6 +322,23 @@ public class SimulatedTradeService {
         } catch (DateTimeParseException e) {
             throw new InvalidSimulatedTradeBuyDateException(trimmedBuyDate);
         }
+    }
+
+    /**
+     * priceBasis: absent or CLOSE -> false, OPEN -> true; anything else, or OPEN without a buyDate,
+     * -> INVALID_PRICE_BASIS (specs/backend/simulated-trade.md).
+     */
+    private boolean parsePriceBasisIsOpen(String priceBasis, String buyDate) {
+        if (priceBasis == null || "CLOSE".equals(priceBasis)) {
+            return false;
+        }
+        if ("OPEN".equals(priceBasis)) {
+            if (buyDate == null || buyDate.trim().isEmpty()) {
+                throw new InvalidPriceBasisException("priceBasis OPEN requires buyDate");
+            }
+            return true;
+        }
+        throw new InvalidPriceBasisException("Unknown priceBasis: " + priceBasis);
     }
 
     /** Trims and treats a blank result as absent — {@code null}/empty/whitespace-only all count as missing. */

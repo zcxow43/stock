@@ -21,6 +21,10 @@ public class SimulatedTradeResponseDto {
     private BigDecimal totalCost;
     private BigDecimal totalUnrealizedProfit;
     private BigDecimal totalReturnPercent;
+    private LocalDate settleDate;
+    private BigDecimal settledTotalCost = BigDecimal.ZERO;
+    private BigDecimal settledTotalProfit = BigDecimal.ZERO;
+    private BigDecimal settledTotalReturnPercent;
     private List<SimulatedTradeItemDto> items;
 
     public SimulatedTradeResponseDto() {
@@ -101,5 +105,37 @@ public class SimulatedTradeResponseDto {
 
     public void setItems(List<SimulatedTradeItemDto> items) {
         this.items = items;
+    }
+
+    public LocalDate getSettleDate() {
+        return settleDate;
+    }
+
+    public void setSettleDate(LocalDate settleDate) {
+        this.settleDate = settleDate;
+    }
+
+    public BigDecimal getSettledTotalCost() {
+        return settledTotalCost;
+    }
+
+    public void setSettledTotalCost(BigDecimal settledTotalCost) {
+        this.settledTotalCost = settledTotalCost;
+    }
+
+    public BigDecimal getSettledTotalProfit() {
+        return settledTotalProfit;
+    }
+
+    public void setSettledTotalProfit(BigDecimal settledTotalProfit) {
+        this.settledTotalProfit = settledTotalProfit;
+    }
+
+    public BigDecimal getSettledTotalReturnPercent() {
+        return settledTotalReturnPercent;
+    }
+
+    public void setSettledTotalReturnPercent(BigDecimal settledTotalReturnPercent) {
+        this.settledTotalReturnPercent = settledTotalReturnPercent;
     }
 }

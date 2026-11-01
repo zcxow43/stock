@@ -53,6 +53,8 @@ public class ErrorResponse {
     private final BigDecimal shares;
     // real-trade.md wire contract: INVALID_TARGET_SELL_PRICE's "targetSellPrice" echoes the offending number.
     private final BigDecimal targetSellPrice;
+    // simulated-trade.md wire contract: INVALID_SETTLE_DATE's "settleDate" echoes the offending string as sent.
+    private final String settleDate;
 
     public ErrorResponse(String code) {
         this(code, null, null, null, null, null, null, null, null, null, null, null, null);
@@ -90,6 +92,15 @@ public class ErrorResponse {
                 duplicatedItems, buyDate, id, buyPrice, shares, null);
     }
 
+    // Pre-settleDate 16-arg form; delegates to the full constructor.
+    private ErrorResponse(String code, List<String> unknownIds, Integer limit, List<?> allowed, String stockId,
+                          List<String> fields, List<String> unknown, List<String> duplicated, String strategy,
+                          String param, List<BacktestDuplicateItemDto> duplicatedItems, String buyDate, Long id,
+                          BigDecimal buyPrice, BigDecimal shares, BigDecimal targetSellPrice) {
+        this(code, unknownIds, limit, allowed, stockId, fields, unknown, duplicated, strategy, param,
+                duplicatedItems, buyDate, id, buyPrice, shares, targetSellPrice, null);
+    }
+
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
     // single-constructor auto-detection no longer applies, so response deserialization in tests
     // needs this to be unambiguous.
@@ -109,7 +120,8 @@ public class ErrorResponse {
                            @JsonProperty("id") Long id,
                            @JsonProperty("buyPrice") BigDecimal buyPrice,
                            @JsonProperty("shares") BigDecimal shares,
-                           @JsonProperty("targetSellPrice") BigDecimal targetSellPrice) {
+                           @JsonProperty("targetSellPrice") BigDecimal targetSellPrice,
+                           @JsonProperty("settleDate") String settleDate) {
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -126,6 +138,7 @@ public class ErrorResponse {
         this.buyPrice = buyPrice;
         this.shares = shares;
         this.targetSellPrice = targetSellPrice;
+        this.settleDate = settleDate;
     }
 
     public static ErrorResponse pageSizeExceeded(int limit) {
@@ -312,6 +325,17 @@ public class ErrorResponse {
                 null, null, buyDate == null ? null : buyDate.toString(), null);
     }
 
+    /** INVALID_PRICE_BASIS (specs/backend/simulated-trade.md, "以開盤價建立"): code only. */
+    public static ErrorResponse invalidPriceBasis() {
+        return new ErrorResponse("INVALID_PRICE_BASIS");
+    }
+
+    /** INVALID_SETTLE_DATE (specs/backend/simulated-trade.md, "目標結算日"): {settleDate}, as sent. */
+    public static ErrorResponse invalidSettleDate(String settleDate) {
+        return new ErrorResponse("INVALID_SETTLE_DATE", null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, settleDate);
+    }
+
     /** SIMULATED_TRADE_NOT_FOUND (specs/backend/simulated-trade.md, "驗證與錯誤"): {id}. */
     public static ErrorResponse simulatedTradeNotFound(Long id) {
         return new ErrorResponse("SIMULATED_TRADE_NOT_FOUND", null, null, null, null, null, null, null, null, null,
@@ -404,5 +428,9 @@ public class ErrorResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public String getSettleDate() {
+        return settleDate;
     }
 }

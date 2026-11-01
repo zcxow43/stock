@@ -1,9 +1,11 @@
 package com.stock.mapper;
 
 import com.stock.domain.SimulatedTrade;
+import com.stock.domain.SimulatedTradeSettlementPrice;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Mapper
@@ -27,4 +29,11 @@ public interface SimulatedTradeMapper {
 
     /** Hard delete by id (specs/dba/simulated-trade.md, "硬刪除"). Returns the affected row count — 0 means the id did not exist. */
     int deleteById(@Param("id") Long id);
+
+    /**
+     * One batched query for every holding's settlement sell price: the max {@code high_price > 0}
+     * with {@code trade_date} in [buy_date, settleDate] and the earliest date it occurs
+     * (specs/backend/simulated-trade.md, "settleDate"). Holdings bought after settleDate yield no row.
+     */
+    List<SimulatedTradeSettlementPrice> findSettlementPrices(@Param("settleDate") LocalDate settleDate);
 }

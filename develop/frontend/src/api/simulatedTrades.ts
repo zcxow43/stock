@@ -18,9 +18,25 @@ export interface SimulatedTradeItem {
   unrealizedProfit: number
   /** Two decimals, can be negative. */
   returnPercent: number
+  /** Only present in settle mode (`?settleDate=`); `null` when buyDate is after settleDate. */
+  settlement?: SimulatedTradeSettlement | null
+}
+
+export interface SimulatedTradeSettlement {
+  sellDate: string
+  sellPrice: number
+  sellFee: number
+  sellTax: number
+  profit: number
+  returnPercent: number
 }
 
 export interface SimulatedTradeListResponse {
+  /** Echo of the requested settleDate; absent/null in current-price mode. */
+  settleDate?: string | null
+  settledTotalCost?: number | null
+  settledTotalProfit?: number | null
+  settledTotalReturnPercent?: number | null
   asOfDate: string
   /** Market-wide latest closed trading day; `null` only when the DB has no price data at
    * all yet. Used by the UI as the 買進日 input's default value and `max`. */
@@ -104,8 +120,15 @@ async function request<T>(url: string, init?: RequestInit, signal?: AbortSignal)
 
 /** GET /api/simulated-trades — fired once on entering the tab (and on every return to it,
  * since re-entry must reflect any changes made elsewhere in the meantime). */
-export async function fetchSimulatedTrades(signal?: AbortSignal): Promise<SimulatedTradeListResponse> {
-  return request<SimulatedTradeListResponse>('/api/simulated-trades', { method: 'GET' }, signal)
+export async function fetchSimulatedTrades(
+  signal?: AbortSignal,
+  settleDate?: string,
+): Promise<SimulatedTradeListResponse> {
+  // Blank settleDate is never sent — omitting the param is how current-price mode is asked for.
+  const url = settleDate
+    ? `/api/simulated-trades?settleDate=${encodeURIComponent(settleDate)}`
+    : '/api/simulated-trades'
+  return request<SimulatedTradeListResponse>(url, { method: 'GET' }, signal)
 }
 
 /** POST /api/simulated-trades — body is `{ stockId, buyDate }`; `buyDate` is always sent
@@ -118,13 +141,14 @@ export async function createSimulatedTrade(
   stockId: string,
   buyDate: string,
   signal?: AbortSignal,
+  priceBasis?: 'CLOSE' | 'OPEN',
 ): Promise<SimulatedTradeItem> {
   return request<SimulatedTradeItem>(
     '/api/simulated-trades',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stockId, buyDate }),
+      body: JSON.stringify(priceBasis ? { stockId, buyDate, priceBasis } : { stockId, buyDate }),
     },
     signal,
   )

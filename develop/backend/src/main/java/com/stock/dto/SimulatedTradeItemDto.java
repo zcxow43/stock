@@ -26,6 +26,7 @@ public class SimulatedTradeItemDto {
     private BigDecimal sellTax;
     private BigDecimal unrealizedProfit;
     private BigDecimal returnPercent;
+    private Settlement settlement;
 
     public SimulatedTradeItemDto() {
     }
@@ -140,5 +141,73 @@ public class SimulatedTradeItemDto {
 
     public void setReturnPercent(BigDecimal returnPercent) {
         this.returnPercent = returnPercent;
+    }
+
+    /** Null unless GET carried settleDate and this holding was bought on or before it. */
+    public Settlement getSettlement() {
+        return settlement;
+    }
+
+    public void setSettlement(Settlement settlement) {
+        this.settlement = settlement;
+    }
+
+    /** Sale at the highest high_price in [buyDate, settleDate] (specs/backend/simulated-trade.md). */
+    public static class Settlement {
+
+        private LocalDate sellDate;
+        private BigDecimal sellPrice;
+        private BigDecimal sellFee;
+        private BigDecimal sellTax;
+        private BigDecimal profit;
+        private BigDecimal returnPercent;
+
+        public LocalDate getSellDate() {
+            return sellDate;
+        }
+
+        public void setSellDate(LocalDate sellDate) {
+            this.sellDate = sellDate;
+        }
+
+        public BigDecimal getSellPrice() {
+            return sellPrice;
+        }
+
+        public void setSellPrice(BigDecimal sellPrice) {
+            this.sellPrice = sellPrice;
+        }
+
+        public BigDecimal getSellFee() {
+            return sellFee;
+        }
+
+        public void setSellFee(BigDecimal sellFee) {
+            this.sellFee = sellFee;
+        }
+
+        public BigDecimal getSellTax() {
+            return sellTax;
+        }
+
+        public void setSellTax(BigDecimal sellTax) {
+            this.sellTax = sellTax;
+        }
+
+        public BigDecimal getProfit() {
+            return profit;
+        }
+
+        public void setProfit(BigDecimal profit) {
+            this.profit = profit;
+        }
+
+        public BigDecimal getReturnPercent() {
+            return returnPercent;
+        }
+
+        public void setReturnPercent(BigDecimal returnPercent) {
+            this.returnPercent = returnPercent;
+        }
     }
 }

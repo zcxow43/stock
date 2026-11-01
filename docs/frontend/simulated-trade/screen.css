@@ -74,3 +74,22 @@
           justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; }
 .datein.focus { border-color:#3E8FD8; }
 .datein .cal { flex:none; }
+
+/* ---- 目標結算日（摘要列「共 N 筆」之後）---- */
+/* spec ## Visual Style：輸入框 #0F1620／#E6EDF5／#26333F／focus #3E8FD8；
+   「清除」#1B2836／#E6EDF5／#26333F／hover #223347，disabled #16202C／#4A5866。 */
+.summary .settle { display:flex; align-items:center; gap:8px; align-self:center; }
+.summary .settle .slbl { font-size:13px; color:#93A4B8; }
+.settlein { width:150px; height:32px; background:#0F1620; border:1px solid #26333F; border-radius:6px;
+            color:#E6EDF5; font-size:14px; padding:0 10px; display:flex; align-items:center;
+            justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; }
+.settlein.ph { color:#6B7C90; }
+.settlein.focus { border-color:#3E8FD8; }
+.settlein .cal { flex:none; color:#93A4B8; font-size:12px; }
+.clrbtn { height:32px; padding:0 14px; background:#1B2836; color:#E6EDF5; border:1px solid #26333F;
+          border-radius:6px; font-size:13px; font-family:inherit; cursor:pointer; }
+.clrbtn:hover { background:#223347; }
+.clrbtn.dis { background:#16202C; color:#4A5866; cursor:default; }
+/* 結算模式：settlement 為 null 的四格「—」與「另 K 筆…未計入」 */
+.page-simtrade td.dash { color:#6B7C90; }
+.exclnote { font-size:12px; color:#93A4B8; margin-top:4px; }

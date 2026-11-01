@@ -14,6 +14,7 @@ public class CreateSimulatedTradeRequest {
 
     private String stockId;
     private String buyDate;
+    private String priceBasis;
 
     public CreateSimulatedTradeRequest() {
     }
@@ -32,5 +33,14 @@ public class CreateSimulatedTradeRequest {
 
     public void setBuyDate(String buyDate) {
         this.buyDate = buyDate;
+    }
+
+    /** Optional: CLOSE (default when absent) or OPEN; a raw String so bad values reach the service. */
+    public String getPriceBasis() {
+        return priceBasis;
+    }
+
+    public void setPriceBasis(String priceBasis) {
+        this.priceBasis = priceBasis;
     }
 }

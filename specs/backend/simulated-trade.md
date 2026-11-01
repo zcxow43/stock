@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易持股 API"
-requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆"
+requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報以「買進日至目標結算日（含兩端）之間最大的最高價」賣出的結算損益與報酬率，及其彙總（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）"
 depends_on: [stock-catalog, stock-price-ingestion]
 ---
 
@@ -11,7 +11,7 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 讓使用者用最少的輸入（代號，加上選填的買進日）記下「假設我在那天的收盤價買了一張，到今天賺賠多少」。持股本身存在 `simulated_trade`（見 `specs/dba/simulated-trade.md`）；**未實現損益、報酬率與現價都在每次查詢當下即時算出、不落地**——它們隨最新收盤價每天改變。畫面是 `specs/frontend/simulated-trade.md`。
 
-**它不抓任何外部資料、也不做型態判定**：只讀 `stock_daily_price` 已有的收盤價與 `stock` 的名稱，做四則運算。與 `specs/backend/strategy-backtest.md` 的關係是「同一套成本口徑、不同的出場假設」：回測的出場是區間內最高開盤價，本模組的出場是**假設今天以最新收盤價賣掉**。
+**它不抓任何外部資料、也不做型態判定**：只讀 `stock_daily_price` 已有的收盤價與 `stock` 的名稱，做四則運算。與 `specs/backend/strategy-backtest.md` 的關係是「同一套成本口徑、不同的出場假設」：回測的出場是區間內最高開盤價，本模組預設的出場是**假設今天以最新收盤價賣掉**；呼叫端帶了目標結算日時，另外回報**以買進日至目標結算日之間最大的最高價賣掉**的結算結果（見「目標結算日」）。
 
 ## Requirements
 
@@ -22,12 +22,14 @@ depends_on: [stock-catalog, stock-price-ingestion]
 | 項目 | 規則 |
 |---|---|
 | 買進日 | 請求的 `buyDate`；**省略時**為該檔在 `stock_daily_price` 中 `trade_date <= 今日`（台北日曆日）且 `close_price > 0` 的**最大** `trade_date` |
-| 買進價 | 該檔在買進日那一天的 `close_price`（必須存在且 > 0，否則拒絕） |
+| 買進價 | 依請求的 `priceBasis`：省略或 `CLOSE` 為該檔在買進日那一天的 `close_price`；`OPEN` 為那一天的 `open_price`。所取的價格必須存在且 > 0，否則拒絕 |
 | 股數 | 固定 `1000`（1 張），與 `specs/backend/strategy-backtest.md` 的部位約定相同 |
 
-- **買進日可指定、買進價與股數不可指定**：價格不是使用者自己填的數字，而是那一天實際的收盤價——開放輸入等於允許一筆與市場無關的成本。要換價格就換日期。
+- **買進日可指定、買進價與股數不可指定**：價格不是使用者自己填的數字，而是那一天實際的收盤價（或開盤價，見下）——開放輸入等於允許一筆與市場無關的成本。要換價格就換日期。
+- **`priceBasis: OPEN` 給策略分頁的「加入模擬」用**（見 `specs/frontend/strategy.md`）：命中彙總表的買進價是回測的買進價，即**買進日的開盤價**（見 `specs/backend/strategy-backtest.md` 的「買進價為什麼是開盤價」）。使用者在那張表上看到 33.95 就按「加入模擬」，持股的買進價就必須是 33.95，而不是同一天另一個收盤價。呼叫端送的是「取哪一個價格欄位」而不是價格本身，買進價照樣由本端點從 `stock_daily_price` 讀出——價格不可由呼叫端輸入這條規則不變。
+- **`priceBasis: OPEN` 必須帶 `buyDate`**：開盤價只對一個指定的日子有意義；省略 `buyDate` 時的「最後一個有收盤價的交易日」只用於 `CLOSE`。`OPEN` 而無 `buyDate` 回 `400 INVALID_PRICE_BASIS`。
 - **買進日不得晚於今日**：未來還沒有收盤價，回 `400 INVALID_BUY_DATE`。今日本身可以選，但只有在今日收盤價已寫入時才成立，否則同樣是「那天沒有收盤價」。
-- **那一天必須正好有該檔的收盤價**：停牌、尚未上市、或該日 `close_price = 0`（「該日沒有成交」的記錄方式，見 `specs/backend/strategy-backtest.md` 的「價格為 `0` 的日子不是行情」）都回 `400 NO_PRICE_ON_BUY_DATE`。**不得自動往前找最近的交易日**——使用者指定 2026-09-13（週日）時，靜靜地改用 09-11 的價格建立一筆，畫面上會出現一個他沒有選過的日期。回報錯誤，讓他自己改。
+- **那一天必須正好有該檔的收盤價**（`OPEN` 時為開盤價）：停牌、尚未上市、或該日所取的價格為 `0`（「該日沒有成交」的記錄方式，見 `specs/backend/strategy-backtest.md` 的「價格為 `0` 的日子不是行情」）都回 `400 NO_PRICE_ON_BUY_DATE`。**不得自動往前找最近的交易日**——使用者指定 2026-09-13（週日）時，靜靜地改用 09-11 的價格建立一筆，畫面上會出現一個他沒有選過的日期。回報錯誤，讓他自己改。
 - **買進價寫入後不再變動**：即使該日收盤價事後被來源更正，這筆持股的成本不變（理由見 `specs/dba/simulated-trade.md`）。
 
 ### 預設買進日（`defaultBuyDate`）
@@ -64,6 +66,38 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 以成本加權，理由與 `specs/backend/strategy-backtest.md` 的彙總相同：部位固定每筆 1 張，各檔股價量級差距大，算術平均會讓一張低價股與一張高價股有同樣的權重。
 
+### 目標結算日（`settleDate`）
+
+`GET` 可帶選填的 `settleDate`（台北日曆日）。帶了，每一筆持股另外回報一份**結算**——「假設在目標結算日之前，以這段期間最高的價格賣掉」：
+
+| 項目 | 規則 |
+|---|---|
+| 結算窗口 | 該筆的買進日起、至 `settleDate` 為止，**含兩端** |
+| 賣出價 | 窗口內該檔 `high_price > 0` 的各列中，**最大的 `high_price`**（「最高價」即 `stock_daily_price.high_price`，與行情來源的「最高價」欄位同一個詞、同一個欄位） |
+| 賣出日 | 該最大值**第一次出現**的交易日 |
+| 賣出手續費／證交稅 | 以賣出價計，與「現價與未實現損益」同一套交易成本（各自無條件捨去至元） |
+| 結算損益 | `賣出價 × 股數 − 賣出手續費 − 證交稅 − 成本` |
+| 結算報酬率 | `結算損益 ÷ 成本 × 100`，四捨五入至小數第二位 |
+
+- **窗口含買進日本身**：使用者的原文是「所有股票會以那天以前的最高價做賣出」，從買進那天算起。買進日本身必有一列價格大於 `0` 的行情（買進價就是從那一列取的，`high_price` 不小於當日的開盤與收盤），所以只要買進日不晚於 `settleDate`，窗口內一定有賣出價。
+- **買進日晚於 `settleDate` 的筆沒有結算**：那一天這筆持股還沒買進，談不上賣出。它的 `settlement` 為 `null`，**不計入三個結算總計**，但照常出現在 `items`，照常計入以現價計算的三個總計。
+- **`settleDate` 晚於該檔最後一個交易日**（例如今日尚無行情、或已下市）時，窗口就到它最後一個有行情的日子為止，照常結算，不報錯。
+- **結算損益可為負**：最高價仍可能不足以付清成本與費稅，如實回報，不得夾為 `0`。
+- **結算不取代現價**：帶了 `settleDate`，`currentDate`／`currentPrice`／`unrealizedProfit` 與三個現價總計照常回報；結算是另一組欄位（`items[].settlement` 與三個 `settled*` 總計）。畫面顯示哪一組由畫面決定（見 `specs/frontend/simulated-trade.md`）。
+- **`settleDate` 不得晚於今日**：未來的日子不是已發生的結算點，回 `400 INVALID_SETTLE_DATE`；格式不合法同樣回這個錯誤。
+- **不帶 `settleDate` 時**，回應的 `settleDate` 為 `null`、每筆 `settlement` 為 `null`、三個結算總計為 `0`／`0`／`null`，其餘欄位與過去完全相同。
+- **它不落地**：目標結算日是一次查詢的參數，不寫入 `simulated_trade` 或任何其他表。
+
+結算彙總：
+
+| 欄位 | 算法 |
+|---|---|
+| 結算總成本 | 有結算的各筆 `cost` 的總和 |
+| 結算總損益 | 有結算的各筆 `settlement.profit` 的總和 |
+| 結算總報酬率 | `結算總損益 ÷ 結算總成本 × 100`，兩位小數；**沒有任何一筆有結算時為 `null`** |
+
+與現價彙總一樣以成本加權。
+
 ### 已下市或已無行情的持股
 
 持股建立之後該檔可能下市。**已下市（`is_active = 0`）的股票照常回報**，不從列表中消失，也不被排除在彙總之外——它的現價就是它最後一個有成交的交易日的收盤價，現價日欄位會把那一天說出來。與 `specs/backend/strategy-backtest.md`「不篩 `is_active`」一致。
@@ -74,9 +108,14 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 ```
 GET /api/simulated-trades
+GET /api/simulated-trades?settleDate=2026-09-19
 ```
 
-Response `200`：
+| Query | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| `settleDate` | date | 否 | 目標結算日（台北日曆日），不得晚於今日；見「目標結算日」 |
+
+Response `200`（下例帶了 `settleDate=2026-09-19`）：
 
 ```json
 {
@@ -88,6 +127,10 @@ Response `200`：
   "totalCost": 1151638,
   "totalUnrealizedProfit": 48030,
   "totalReturnPercent": 4.17,
+  "settleDate": "2026-09-19",
+  "settledTotalCost": 1151638,
+  "settledTotalProfit": 72920,
+  "settledTotalReturnPercent": 6.33,
   "items": [
     {
       "id": 12,
@@ -103,7 +146,15 @@ Response `200`：
       "sellFee": 1717,
       "sellTax": 3615,
       "unrealizedProfit": 48030,
-      "returnPercent": 4.17
+      "returnPercent": 4.17,
+      "settlement": {
+        "sellDate": "2026-09-19",
+        "sellPrice": 1230.00,
+        "sellFee": 1752,
+        "sellTax": 3690,
+        "profit": 72920,
+        "returnPercent": 6.33
+      }
     }
   ]
 }
@@ -125,6 +176,15 @@ Response `200`：
 | `items[].currentDate` / `currentPrice` | date / number | 現價日與該日收盤價 |
 | `items[].unrealizedProfit` | int | 元，**可為負值** |
 | `items[].returnPercent` | number | 兩位小數，**可為負值** |
+| `settleDate` | date \| null | 請求帶的目標結算日原樣帶回；未帶時為 `null` |
+| `settledTotalCost` | number | 有結算（`settlement` 不為 `null`）的各筆 `cost` 總和；沒有任何一筆有結算時為 `0` |
+| `settledTotalProfit` | number | 有結算的各筆 `settlement.profit` 總和；沒有任何一筆有結算時為 `0` |
+| `settledTotalReturnPercent` | number \| null | 成本加權；**沒有任何一筆有結算時為 `null`** |
+| `items[].settlement` | object \| null | 該筆的結算；未帶 `settleDate`、或該筆買進日晚於 `settleDate` 時為 `null` |
+| `items[].settlement.sellDate` / `sellPrice` | date / number | 窗口內最大的 `high_price` 與它第一次出現的交易日 |
+| `items[].settlement.sellFee` / `sellTax` | int | 以 `sellPrice` 計的賣出手續費與證交稅（元） |
+| `items[].settlement.profit` | int | 結算損益（元），**可為負值** |
+| `items[].settlement.returnPercent` | number | 兩位小數，**可為負值** |
 
 `items` 依 `buyDate` **由新到舊**排序，同日依 `stockId` 升冪——最近加入的在最上面，與使用者的操作順序一致。排序由本端點決定，畫面不再重排。
 
@@ -137,13 +197,14 @@ POST /api/simulated-trades
 Request：
 
 ```json
-{ "stockId": "2330", "buyDate": "2026-09-18" }
+{ "stockId": "2330", "buyDate": "2026-09-18", "priceBasis": "OPEN" }
 ```
 
 | 欄位 | 型別 | 必填 | 說明 |
 |---|---|---|---|
 | `stockId` | string | 是 | 股票代號；前後空白去除後比對，須存在於 `stock`（不篩 `is_active`） |
-| `buyDate` | date | 否 | 買進日（台北日曆日）；不得晚於今日；省略時為該檔最後一個有收盤價的交易日 |
+| `buyDate` | date | 否 | 買進日（台北日曆日）；不得晚於今日；省略時為該檔最後一個有收盤價的交易日（僅限 `CLOSE`） |
+| `priceBasis` | string | 否 | `CLOSE`（省略時的預設）或 `OPEN`：買進價取買進日的收盤價或開盤價；`OPEN` 必須同時帶 `buyDate` |
 
 Response `201`：與 `GET` 的 `items[]` 單筆同一個形狀（含即時算出的現價與未實現損益），讓呼叫端能直接確認系統替它選了哪一個買進日與買進價。**畫面仍會在成功後重新取得列表**（排序與三個總計一律由後端決定，見 `specs/frontend/simulated-trade.md`）——這個回應體是「剛才建立了什麼」的回執，不是列表的替代品。
 
@@ -161,7 +222,9 @@ Response `204`，無內容。
 | `stockId` 不存在於 `stock` | `400` | `{"code":"UNKNOWN_STOCK_ID","unknownIds":["9999"]}` |
 | 該檔完全沒有任何 `close_price > 0` 的交易日（`buyDate` 省略時） | `400` | `{"code":"NO_PRICE_BEFORE_TODAY","stockId":"9999"}` |
 | `buyDate` 格式不合法或晚於今日 | `400` | `{"code":"INVALID_BUY_DATE","buyDate":"2099-01-01"}` |
-| 該檔在指定的 `buyDate` 沒有收盤價（無該列或 `close_price = 0`） | `400` | `{"code":"NO_PRICE_ON_BUY_DATE","stockId":"2330","buyDate":"2026-09-13"}` |
+| 該檔在指定的 `buyDate` 沒有所取的價格（無該列，或 `CLOSE` 時 `close_price = 0`、`OPEN` 時 `open_price = 0`） | `400` | `{"code":"NO_PRICE_ON_BUY_DATE","stockId":"2330","buyDate":"2026-09-13"}` |
+| `priceBasis` 不是 `CLOSE`／`OPEN`，或為 `OPEN` 而未帶 `buyDate` | `400` | `{"code":"INVALID_PRICE_BASIS"}` |
+| `GET` 的 `settleDate` 格式不合法或晚於今日 | `400` | `{"code":"INVALID_SETTLE_DATE","settleDate":"2099-01-01"}` |
 | `(stockId, buyDate)` 已存在 | `409` | `{"code":"DUPLICATE_SIMULATED_TRADE","stockId":"2330","buyDate":"2026-09-18"}` |
 | `DELETE` 的 `id` 不存在 | `404` | `{"code":"SIMULATED_TRADE_NOT_FOUND","id":99}` |
 
@@ -174,13 +237,14 @@ Response `204`，無內容。
 1. 取今日（台北日曆日）為 `asOfDate`，並查出全市場上一次收盤日為 `defaultBuyDate`（一次查詢；無行情時為 `null`）。
 2. 讀出 `simulated_trade` 全部列（列數是使用者手動加入的量級）。
 3. **以整份代號清單為條件批次查詢**各檔的現價（`trade_date <= asOfDate` 且 `close_price > 0` 的最大 `trade_date` 與其收盤價）與名稱——不得逐筆各發一次查詢，與 `specs/backend/strategy-backtest.md`「有界次數的查詢」同一條規定。清單為空時直接回空結果，不把空集合交給資料庫。
-4. 逐筆算出四項費用、成本、未實現損益與報酬率，彙總後依 `buyDate` 由新到舊組出 `items`。
+4. 帶了 `settleDate` 時（先驗證，不合法回 `400 INVALID_SETTLE_DATE`），**以一次批次查詢**取得每一筆持股的結算賣出價與賣出日：以 `simulated_trade` 與 `stock_daily_price` 依 `stock_id` 相接，條件 `trade_date BETWEEN 該筆 buy_date AND settleDate` 且 `high_price > 0`，每筆取最大 `high_price` 與它最早的 `trade_date`。查詢次數與持股筆數無關；買進日晚於 `settleDate` 的筆在這次查詢中沒有列，即 `settlement` 為 `null`。
+5. 逐筆算出四項費用、成本、未實現損益與報酬率（以及有結算時的結算各欄），彙總後依 `buyDate` 由新到舊組出 `items`。
 
 `POST`：
 
-1. 驗證 `stockId`（非空、存在於 `stock`）與 `buyDate`（有值時須為合法日期且不晚於今日，否則 `400 INVALID_BUY_DATE`）。
+1. 驗證 `stockId`（非空、存在於 `stock`）、`priceBasis`（省略視為 `CLOSE`；不是 `CLOSE`／`OPEN`，或 `OPEN` 而 `buyDate` 省略 → `400 INVALID_PRICE_BASIS`）與 `buyDate`（有值時須為合法日期且不晚於今日，否則 `400 INVALID_BUY_DATE`）。
 2. 取買進日與買進價：
-   - `buyDate` 有值 → 查該檔該日的 `close_price`；無該列或為 `0` → `400 NO_PRICE_ON_BUY_DATE`。
+   - `buyDate` 有值 → 查該檔該日的 `close_price`（`OPEN` 時為 `open_price`）；無該列或為 `0` → `400 NO_PRICE_ON_BUY_DATE`。
    - `buyDate` 省略 → 查該檔 `trade_date <= 今日` 且 `close_price > 0` 的最大 `trade_date` 與其收盤價；查無 → `400 NO_PRICE_BEFORE_TODAY`。
 3. `INSERT` 一列（`shares = 1000`）；唯一鍵衝突 → `409 DUPLICATE_SIMULATED_TRADE`（不得改成 UPSERT）。
 4. 以剛寫入的列即時算出與 `GET` 相同形狀的單筆回應。
@@ -227,6 +291,24 @@ Response `204`，無內容。
 - [x] 同一檔在同一天加入第二次 → `409 DUPLICATE_SIMULATED_TRADE`（帶 `stockId` 與 `buyDate`），資料庫仍只有一列
 - [x] `DELETE /api/simulated-trades/{id}` 回 `204` 且該列消失；再刪一次回 `404 SIMULATED_TRADE_NOT_FOUND`
 - [x] 三支端點都不寫入 `stock`、`stock_daily_price`、`stock_sync_progress`：呼叫前後三張表的列數與內容不變
+
+### 以開盤價建立（`priceBasis`）
+- [x] `POST` 帶 `{"stockId":"2305","buyDate":"2026-09-08","priceBasis":"OPEN"}` 回 `201`，`buyPrice` 等於 `stock_daily_price` 中 2305 在 2026-09-08 的 `open_price`，且等於 `POST /api/strategies/backtest` 對同一 `(stockId, buyDate)` 回報的 `buyPrice`
+- [x] 省略 `priceBasis` 與帶 `"CLOSE"` 時行為與過去相同（`buyPrice` 為該日 `close_price`）
+- [x] `priceBasis` 為 `"OPEN"` 而未帶 `buyDate`、或為其他字串（例如 `"HIGH"`）→ `400 INVALID_PRICE_BASIS`，且未寫入任何列
+- [x] `OPEN` 時該日無該列（例如週日）→ `400 NO_PRICE_ON_BUY_DATE`，不改用收盤價、不改用鄰近交易日，且未寫入任何列
+- [x] 同一 `(stockId, buyDate)` 已加入後再以另一個 `priceBasis` 加入 → `409 DUPLICATE_SIMULATED_TRADE`
+
+### 目標結算日（`settleDate`）
+- [x] 不帶 `settleDate` 時回應的 `settleDate` 為 `null`、每筆 `settlement` 為 `null`、`settledTotalCost`／`settledTotalProfit` 為 `0`、`settledTotalReturnPercent` 為 `null`，其餘欄位與過去相同
+- [x] 帶 `settleDate`：每筆 `settlement.sellPrice` 等於以 SQL 直接查出的 `MAX(high_price)`（`trade_date` 介於該筆 `buy_date` 與 `settleDate`、含兩端，`high_price > 0`），`sellDate` 為該最大值最早出現的交易日
+- [x] 費稅與損益沿用同一套交易成本：買進價 `1150.00`、結算賣出價 `1230.00` 時 `sellFee` `1752`、`sellTax` `3690`、`profit` `72920`、`returnPercent` `6.33`（成本 `1151638`）；以實際一筆持股的回應數字依此公式手算驗證
+- [x] 窗口含買進日：`settleDate` 等於 `buyDate` 時 `settlement.sellDate` 等於 `buyDate`、`sellPrice` 等於該日 `high_price`
+- [x] 買進日晚於 `settleDate` 的筆 `settlement` 為 `null`，照常出現在 `items` 且照常計入 `totalCost`／`totalUnrealizedProfit`，但不計入三個 `settled*` 總計；全部筆都晚於 `settleDate` 時 `settledTotalReturnPercent` 為 `null`
+- [x] `settledTotalCost`／`settledTotalProfit` 等於有結算各筆的 `cost`／`settlement.profit` 總和，`settledTotalReturnPercent` 等於兩者之比 × 100（兩位小數）
+- [x] `settleDate` 晚於今日（`2099-01-01`）或格式不合法 → `400 INVALID_SETTLE_DATE`（帶 `settleDate`）
+- [x] 結算以一次批次查詢讀取，查詢次數與持股筆數無關
+- [x] 帶 `settleDate` 的 `GET` 不寫入任何表（`simulated_trade` 的列數與內容不變）
 
 ---
 ## Execution Result
@@ -305,3 +387,30 @@ This increment implements the 6 previously-unchecked criteria under "指定買�
   6. **`defaultBuyDate` is market-wide, independent of any one stock's own last trade date** — `get_defaultBuyDate_isMarketWideLatestClose_independentOfAnyOneStocksOwnLastTradeDate` (`ST105` delisted 400 days before the market baseline, `ST106` only inserted — and only asserted to move `defaultBuyDate` forward — when the live baseline isn't already `today`, since this runs against a live shared database whose real max trade date is unknown in advance).
 
 - Notes: the 3 pre-existing test failures are a live-database environmental fact (one real leftover `simulated_trade` row from prior real usage of the running server), not a regression from this increment — left un-fixed and unremediated deliberately, per the instruction not to modify checked-criteria behavior/tests and not to disturb existing rows. Nothing else left unfixed.
+
+### Increment 2 — 2026-11-01
+
+Implements `priceBasis` on POST and `settleDate` on GET. Verified live with curl against :8081 (local DB 127.0.0.1:3306/stock); no tests written or run.
+
+- Files changed (all under `develop/backend/src/main/`):
+  - `java/com/stock/service/SimulatedTradeService.java` — `list(String settleDate)`, `parsePriceBasisIsOpen`, `parseSettleDate`, `toSettlement`; `create()` picks `open_price` or `close_price` from the existing `findOne` row.
+  - `java/com/stock/controller/SimulatedTradeController.java` — optional `settleDate` request param.
+  - `java/com/stock/mapper/SimulatedTradeMapper.java` + `resources/mapper/SimulatedTradeMapper.xml` — `findSettlementPrices(settleDate)`: one query joining `simulated_trade` to `stock_daily_price` (`trade_date BETWEEN buy_date AND settleDate`, `high_price > 0`), `ROW_NUMBER() OVER (PARTITION BY st.id ORDER BY high_price DESC, trade_date ASC)` keeps the max and its earliest date.
+  - `java/com/stock/domain/SimulatedTradeSettlementPrice.java` (new) — row type of that query.
+  - `java/com/stock/dto/CreateSimulatedTradeRequest.java` (`priceBasis` as raw String), `SimulatedTradeItemDto.java` (nested `Settlement`), `SimulatedTradeResponseDto.java` (`settleDate`, `settled*`).
+  - `java/com/stock/dto/ErrorResponse.java` — `settleDate` field, `invalidPriceBasis()`, `invalidSettleDate(String)`.
+  - `java/com/stock/exception/InvalidPriceBasisException.java`, `InvalidSettleDateException.java` (new) + two handlers in `GlobalExceptionHandler.java` (both 400).
+- Design decisions: `TradingCostCalculator` reused unchanged for settlement fee/tax/profit/return. `settleDate` is parsed as a raw String so a malformed value is echoed in `INVALID_SETTLE_DATE`. The settlement query runs only when `settleDate` is present, once, independent of holding count (one mapper call, no per-row query).
+- Evidence (rows created: ids 416 (2305 2026-09-08 OPEN), 417 (2330 2026-09-08 CLOSE), 418 (2305 2026-10-20 default basis); all deleted via DELETE -> 204, `SELECT COUNT(*) FROM simulated_trade` = 0 afterwards):
+  - POST 2305 / 2026-09-08 / OPEN -> 201 `buyPrice 33.95`; SQL `open_price` = 33.95; `POST /api/strategies/backtest` same item -> `buyPrice 33.95`.
+  - Omitted priceBasis and `CLOSE` -> 201, `buyPrice` = `close_price` (2330 2026-09-08: 2470.00 = SQL).
+  - OPEN without buyDate, and `HIGH` -> `400 {"code":"INVALID_PRICE_BASIS"}`; OPEN on 2026-09-13 -> `400 NO_PRICE_ON_BUY_DATE` (stockId, buyDate); same (2305, 2026-09-08) with `CLOSE` after OPEN -> `409 DUPLICATE_SIMULATED_TRADE`. No rows written by the failures (only 416-418 existed).
+  - GET without settleDate -> `settleDate null`, `settledTotalCost 0`, `settledTotalProfit 0`, `settledTotalReturnPercent null`, `items[].settlement null`.
+  - GET settleDate=2026-10-30: 2305 (from 09-08) sellPrice 74.70 on 2026-10-13, SQL MAX(high_price)=74.70, earliest date 2026-10-13; 2330 sellPrice 2590.00 on 2026-10-06, SQL max 2590, `MIN(trade_date)` at that value = 2026-10-06; 2305 (from 10-20) sellPrice 57.50, SQL max 57.50.
+  - Hand arithmetic, 2330: 2590*1000*0.001425 = 3690.75 -> sellFee 3690; *0.003 = 7770; profit 2590000-3690-7770-2473519 = 105021; 105021/2473519 = 4.25%. Matches response.
+  - settleDate = buyDate (2026-09-08): `sellDate` 2026-09-08, `sellPrice` 36.2 (2305) and 2505.0 (2330) = SQL `high_price` of that day.
+  - settleDate=2026-10-10: the 10-20 holding has `settlement null` yet stays in `items` and in `totalCost 2562294`; `settledTotalCost 2507517` = 33998+2473519, `settledTotalProfit 143203` = 38182+105021, `settledTotalReturnPercent 5.71` = 143203/2507517*100.
+  - settleDate=2026-09-07 (all later): all `settlement null`, `settledTotalReturnPercent null`.
+  - settleDate=2099-01-01 and `abc` -> `400 {"code":"INVALID_SETTLE_DATE","settleDate":...}`.
+  - GET writes nothing: `simulated_trade` rows unchanged between GETs.
+- code-quality review: no Critical/Important findings. Noted: the pre-existing `ErrorResponse` telescoping constructors grew one more delegate (kept to match the file's convention). A blank `settleDate=` returns `INVALID_SETTLE_DATE`.

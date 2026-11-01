@@ -82,6 +82,13 @@ export default function SimulatedTradeTab() {
 
   const [flashId, setFlashId] = useState<number | null>(null)
 
+  // 目標結算日 — screen-local state only (not in the URL / localStorage). Empty = 現價模式.
+  const [settleDateValue, setSettleDateValue] = useState('')
+  const [settleError, setSettleError] = useState<string | null>(null)
+  // The re-fetches after 加入/刪除/重試 run from closures captured earlier, so the latest
+  // value also lives in a ref.
+  const settleDateRef = useRef('')
+
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   // Guards setState calls that resolve after unmount (e.g. the user switches tabs mid
@@ -96,17 +103,18 @@ export default function SimulatedTradeTab() {
 
   /** Fetches the list and replaces `data`/`status` with the result. Used for the initial
    * load, 重試, and the required re-fetch after every successful 加入/刪除. */
-  const runFetch = () => {
+  const runFetch = (settleDate: string = settleDateRef.current) => {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
     setStatus('loading')
-    return fetchSimulatedTrades(controller.signal)
+    return fetchSimulatedTrades(controller.signal, settleDate || undefined)
       .then((resp) => {
         if (!mountedRef.current) return
         setData(resp)
         setStatus('success')
         setLoadErrorMessage(null)
+        setSettleError(null)
         if (!buyDateInitializedRef.current) {
           buyDateInitializedRef.current = true
           setBuyDateValue(resp.defaultBuyDate ?? '')
@@ -115,6 +123,12 @@ export default function SimulatedTradeTab() {
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return
         if (!mountedRef.current) return
+        if (err instanceof SimulatedTradeApiError && err.code === 'INVALID_SETTLE_DATE') {
+          // Keep the last good table; only the date input shows the message.
+          setStatus('success')
+          setSettleError('目標結算日不能晚於今日')
+          return
+        }
         // `data` is deliberately left untouched here — see 畫面狀態's「載入失敗…保留上一次
         // 成功的資料不清空」. Clearing it would also make `items` fall back to `[]`, which
         // would misrender as the empty state instead of the error state.
@@ -140,6 +154,12 @@ export default function SimulatedTradeTab() {
     const timer = setTimeout(() => setFlashId(null), 1300)
     return () => clearTimeout(timer)
   }, [flashId])
+
+  const changeSettleDate = (next: string) => {
+    settleDateRef.current = next
+    setSettleDateValue(next)
+    void runFetch(next)
+  }
 
   const handleAdd = async () => {
     const stockId = inputValue.trim()
@@ -198,7 +218,12 @@ export default function SimulatedTradeTab() {
 
   const canAdd = inputValue.trim() !== '' && buyDateValue !== '' && !adding
   const items = data?.items ?? []
-  const noHoldings = data ? data.totalReturnPercent == null : true
+  const settleMode = data?.settleDate != null && settleDateValue !== ''
+  const noSettlementCount = settleMode ? items.filter((it) => it.settlement == null).length : 0
+  const totalReturn = settleMode ? (data?.settledTotalReturnPercent ?? null) : (data?.totalReturnPercent ?? null)
+  const noHoldings = data ? totalReturn == null : true
+  const totalCostShown = settleMode ? (data?.settledTotalCost ?? 0) : (data?.totalCost ?? 0)
+  const totalProfitShown = settleMode ? (data?.settledTotalProfit ?? 0) : (data?.totalUnrealizedProfit ?? 0)
   const isEmpty = status === 'success' && data != null && items.length === 0
 
   return (
@@ -257,30 +282,57 @@ export default function SimulatedTradeTab() {
               <div className="sim-summary-count">
                 共 <b>{items.length}</b> 筆
               </div>
-              <div className="sim-summary-item">
-                <span className="sim-summary-label">總成本</span>
-                <span className="sim-summary-value">{noHoldings ? '—' : formatMoney(data.totalCost)}</span>
+              <div className="sim-summary-item sim-settle-item">
+                <label className="sim-summary-label" htmlFor="sim-settle-date">
+                  目標結算日
+                </label>
+                <input
+                  id="sim-settle-date"
+                  type="date"
+                  className="sim-add-input sim-date-input"
+                  value={settleDateValue}
+                  max={data.asOfDate}
+                  onChange={(e) => changeSettleDate(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="sl-btn"
+                  disabled={settleDateValue === ''}
+                  onClick={() => changeSettleDate('')}
+                >
+                  清除
+                </button>
               </div>
               <div className="sim-summary-item">
-                <span className="sim-summary-label">總未實現損益</span>
+                <span className="sim-summary-label">總成本</span>
+                <span className="sim-summary-value">{noHoldings ? '—' : formatMoney(totalCostShown)}</span>
+              </div>
+              <div className="sim-summary-item">
+                <span className="sim-summary-label">{settleMode ? '總結算損益' : '總未實現損益'}</span>
                 <span
-                  className={`sim-summary-value${noHoldings ? ' sl-muted' : ` ${gainClass(data.totalUnrealizedProfit)}`}`}
+                  className={`sim-summary-value${noHoldings ? ' sl-muted' : ` ${gainClass(totalProfitShown)}`}`}
                 >
-                  {noHoldings ? '—' : formatSignedMoney(data.totalUnrealizedProfit)}
+                  {noHoldings ? '—' : formatSignedMoney(totalProfitShown)}
                 </span>
               </div>
               <div className="sim-summary-item">
                 <span className="sim-summary-label">總報酬率</span>
                 <span
-                  className={`sim-summary-value${noHoldings ? ' sl-muted' : ` ${gainClass(data.totalReturnPercent as number)}`}`}
+                  className={`sim-summary-value${noHoldings ? ' sl-muted' : ` ${gainClass(totalReturn as number)}`}`}
                 >
-                  {noHoldings ? '—' : formatSignedPercent(data.totalReturnPercent as number)}
+                  {noHoldings ? '—' : formatSignedPercent(totalReturn as number)}
                 </span>
               </div>
             </div>
+            {settleError ? <div className="sim-add-error">{settleError}</div> : null}
             <div className="sim-fee-note">
-              未實現損益已扣手續費 {data.feeRatePercent}%（買賣各一次）與證交稅 {data.taxRatePercent}%，賣出成本以現價估算
+              {settleMode
+                ? `結算損益已扣手續費 ${data.feeRatePercent}%（買賣各一次）與證交稅 ${data.taxRatePercent}%，每筆以買進日至 ${data.settleDate} 之間的最高價賣出`
+                : `未實現損益已扣手續費 ${data.feeRatePercent}%（買賣各一次）與證交稅 ${data.taxRatePercent}%，賣出成本以現價估算`}
             </div>
+            {noSettlementCount > 0 ? (
+              <div className="sim-fee-note">另 {noSettlementCount} 筆買進日晚於目標結算日，未計入</div>
+            ) : null}
           </div>
 
           {isEmpty ? (
@@ -297,16 +349,17 @@ export default function SimulatedTradeTab() {
                     <th>代號 / 名稱</th>
                     <th>買進日</th>
                     <th className="sl-r">買進價</th>
-                    <th>現價日</th>
-                    <th className="sl-r">現價</th>
+                    <th>{settleMode ? '賣出日' : '現價日'}</th>
+                    <th className="sl-r">{settleMode ? '賣出價' : '現價'}</th>
                     <th className="sl-r">成本</th>
-                    <th className="sl-r">未實現損益</th>
+                    <th className="sl-r">{settleMode ? '結算損益' : '未實現損益'}</th>
                     <th className="sl-r">報酬率</th>
                     <th className="sl-r">刪除</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item: SimulatedTradeItem) => {
+                    const st = item.settlement
                     const currentDateStale = item.currentDate !== data.asOfDate
                     return (
                       <tr
@@ -324,15 +377,39 @@ export default function SimulatedTradeTab() {
                         </td>
                         <td>{item.buyDate}</td>
                         <td className="sl-r">{formatPrice(item.buyPrice)}</td>
-                        <td className={currentDateStale ? 'sim-stale-date' : undefined}>{item.currentDate}</td>
-                        <td className="sl-r">{formatPrice(item.currentPrice)}</td>
-                        <td className="sl-r">{formatMoney(item.cost)}</td>
-                        <td className={`sl-r ${gainClass(item.unrealizedProfit)}`}>
-                          {formatSignedMoney(item.unrealizedProfit)}
-                        </td>
-                        <td className={`sl-r ${gainClass(item.returnPercent)}`}>
-                          {formatSignedPercent(item.returnPercent)}
-                        </td>
+                        {settleMode ? (
+                          st ? (
+                            <>
+                              <td>{st.sellDate}</td>
+                              <td className="sl-r">{formatPrice(st.sellPrice)}</td>
+                              <td className="sl-r">{formatMoney(item.cost)}</td>
+                              <td className={`sl-r ${gainClass(st.profit)}`}>{formatSignedMoney(st.profit)}</td>
+                              <td className={`sl-r ${gainClass(st.returnPercent)}`}>
+                                {formatSignedPercent(st.returnPercent)}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="sl-muted">—</td>
+                              <td className="sl-r sl-muted">—</td>
+                              <td className="sl-r">{formatMoney(item.cost)}</td>
+                              <td className="sl-r sl-muted">—</td>
+                              <td className="sl-r sl-muted">—</td>
+                            </>
+                          )
+                        ) : (
+                          <>
+                            <td className={currentDateStale ? 'sim-stale-date' : undefined}>{item.currentDate}</td>
+                            <td className="sl-r">{formatPrice(item.currentPrice)}</td>
+                            <td className="sl-r">{formatMoney(item.cost)}</td>
+                            <td className={`sl-r ${gainClass(item.unrealizedProfit)}`}>
+                              {formatSignedMoney(item.unrealizedProfit)}
+                            </td>
+                            <td className={`sl-r ${gainClass(item.returnPercent)}`}>
+                              {formatSignedPercent(item.returnPercent)}
+                            </td>
+                          </>
+                        )}
                         <td className="sl-r">
                           <button
                             type="button"
