@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為以買進日至該日之間最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為以買進日至該日之間最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）"
 depends_on: [stock-list]
 ---
 
@@ -48,13 +48,18 @@ depends_on: [stock-list]
 
 | 元素 | 內容 |
 |---|---|
-| 「共 N 筆」 | 持股筆數 |
+| 「共 N 筆」 | 持股筆數（`items` 的筆數） |
 | 總成本 | 回應的 `totalCost`，千分位、不帶小數 |
 | 總未實現損益 | 回應的 `totalUnrealizedProfit`，千分位、不帶小數，套漲跌色 |
 | 總報酬率 | 回應的 `totalReturnPercent`，兩位小數加 `%`，套漲跌色 |
 | 費率說明 | 三個總計下方一行次要文字：「未實現損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，賣出成本以現價估算」 |
 
-- **三個總計直接取回應的值，不在前端重算**：本頁沒有勾選框、沒有篩選，畫面顯示的就是全部持股，沒有任何需要前端就地重算的情境（與 `specs/frontend/strategy.md` 的總計不同，那裡有勾選框）。多算一份只會多一種與後端不一致的可能。
+- **每次 `GET` 之後，三個總計直接取回應的值，不在前端重算**。
+- **唯一的例外是刪除成功之後**：刪除不重新取得列表（見「持股表格」），所以「共 N 筆」與三個總計改由前端依剩下的列重算，公式與 `specs/backend/simulated-trade.md` 的「彙總」與「目標結算日」結算彙總完全相同：
+  - 總成本 ＝ 剩下各列 `cost` 的總和；總未實現損益 ＝ 剩下各列 `unrealizedProfit` 的總和；總報酬率 ＝ 總未實現損益 ÷ 總成本 × 100，四捨五入（half-up，遠離零）至小數第二位；剩下 0 筆時總報酬率為 `null`。
+  - 結算模式下另算三個結算總計：只取 `settlement` 不為 `null` 的列；結算總成本 ＝ 那些列 `cost` 的總和；結算總損益 ＝ 那些列 `settlement.profit` 的總和；結算總報酬率 ＝ 結算總損益 ÷ 結算總成本 × 100，同樣 half-up 至小數第二位；沒有任何一列有結算時為 `null`。
+  - 各列的 `cost`／`unrealizedProfit`／`settlement.profit` 都是後端算好的整數元，前端只做加總與一次除法，不重算任何一列的費用、成本或損益。
+  - 重算後的值一直顯示到下一次 `GET`（加入、重試、改目標結算日、切回本頁）為止，下一次 `GET` 的回應值覆蓋它。
 - **費率取自回應**，不在前端寫死；一行說明的用意與策略分頁相同：使用者會拿「(現價 − 買進價) × 1000」驗算，沒有這行就對不起來。
 - `totalReturnPercent` 為 `null`（沒有任何持股）時，三個總計皆顯示弱化色的「—」，不顯示 `0`／`0%`。
 
@@ -68,11 +73,11 @@ depends_on: [stock-list]
 | 「清除」次要按鈕 | 緊接日期輸入之後；日期為空時 disabled；按下清空日期 |
 
 - **日期改變即重新取得列表**：`GET /api/simulated-trades?settleDate=<日期>`；清除（或把輸入清空）時改回不帶參數的 `GET`。不需要另按「套用」。
-- **加入、刪除、「重試」之後的重新取得沿用目前的目標結算日**：結算模式下加入一筆，新的一筆直接以同一個目標結算日結算。
+- **加入、「重試」之後的重新取得沿用目前的目標結算日**；刪除不重新取得，目標結算日輸入維持原值：結算模式下加入一筆，新的一筆直接以同一個目標結算日結算。
 - **目標結算日只存在本頁的畫面狀態**：不寫入網址、不寫入 `localStorage`；切到別的分頁再切回、或重新整理後回到空白（現價模式）。
 - **空白時（現價模式）本頁與過去完全相同。**
 
-設了目標結算日時（結算模式），畫面改顯示回應的結算欄位，不在前端重算：
+設了目標結算日時（結算模式），畫面改顯示回應的結算欄位（三個結算總計在刪除後依「摘要列」一節的公式就地重算，其餘欄位一律取自回應）：
 
 | 位置 | 現價模式 | 結算模式 |
 |---|---|---|
@@ -112,13 +117,16 @@ depends_on: [stock-list]
 - **列依後端回的順序呈現**（買進日由新到舊、同日代號升冪），前端不重排，也**不提供排序**：本頁的列數是使用者自己加進來的量級，排序不是這個頁面要解決的問題。
 - **列不可點選、不導向任何頁面**，游標維持預設箭頭；只有「刪除」按鈕可點。
 - **漲跌色沿用全站規則**：未實現損益與報酬率為正值時 `#E04B45`、負值 `#16A75C`、`0` 為次要文字色 `#93A4B8`。成本與買進價、現價**不套漲跌色**，恆為主要文字色。**以實際渲染出的顏色為準**（表格儲存格的預設文字色若以更高權重宣告會把漲跌色蓋掉，類別掛對了畫面照樣是白字）。
-- **刪除立即生效、不跳確認框**：加回來只要再打一次代號，成本極低；確認框在這種可逆操作上只是多一次點擊。刪除後重新取得列表（總計隨之更新）。
+- **刪除立即生效、不跳確認框**：加回來只要再打一次代號，成本極低；確認框在這種可逆操作上只是多一次點擊。
+- **刪除成功後只在畫面上就地移除那一列，不重新取得列表**：不送 `GET`、不顯示「載入中…」、表格不清空再重畫，其餘列的位置、內容與目標結算日輸入都不變；「共 N 筆」與三個總計依「摘要列」一節的公式就地重算。剩下 0 筆時顯示「沒有任何持股」狀態。
+- **送出中的那一列「刪除」按鈕 disabled**，避免同一列連按兩次送出兩個 `DELETE`。
+- **刪除失敗時該列保留不動**，表格上方顯示錯誤訊息（見「錯誤處理」）。
 
 ### 畫面狀態
 
 | 狀態 | 呈現 |
 |---|---|
-| 載入中（進入分頁、加入或刪除後重新取得） | 表格區顯示「載入中…」，加入列照常可用 |
+| 載入中（進入分頁、加入後重新取得、重試、改目標結算日；刪除不會進入此狀態） | 表格區顯示「載入中…」，加入列照常可用 |
 | 沒有任何持股 | 表格不顯示，改以弱化色說明「尚無模擬持股，輸入股票代號加入第一筆」；摘要列的三個總計顯示「—」 |
 | 有持股 | 摘要列 + 表格 |
 | 載入失敗 | 錯誤訊息區塊 + 「重試」按鈕，保留上一次成功的資料不清空 |
@@ -133,8 +141,8 @@ depends_on: [stock-list]
 | `400 INVALID_BUY_DATE` | 輸入框下方「買進日不能晚於今日」 |
 | `400 NO_PRICE_ON_BUY_DATE` | 輸入框下方「{代號} 在 {buyDate} 沒有收盤價（可能是假日或停牌），請換一天」 |
 | `409 DUPLICATE_SIMULATED_TRADE` | 輸入框下方「{代號} 在 {buyDate} 已經加過了」 |
-| `404 SIMULATED_TRADE_NOT_FOUND`（刪除時） | 表格上方「這筆持股已經不存在」，並重新取得列表（別人或另一個分頁刪掉了） |
-| 其他失敗 | 「加入失敗，請稍後再試」／「刪除失敗，請稍後再試」 |
+| `404 SIMULATED_TRADE_NOT_FOUND`（刪除時） | 表格上方「這筆持股已經不存在」；該列已不在後端（別人或另一個分頁刪掉了），因此與刪除成功相同，就地移除該列並重算「共 N 筆」與三個總計，不重新取得列表 |
+| 其他失敗 | 「加入失敗，請稍後再試」／「刪除失敗，請稍後再試」（刪除失敗時該列保留不動） |
 
 錯誤訊息在下一次成功的加入或刪除時清除。
 
@@ -145,12 +153,12 @@ depends_on: [stock-list]
 | 時機 | 呼叫 |
 |---|---|
 | 進入分頁（含由其他分頁切回、重新整理） | `GET /api/simulated-trades` — 取 `items[]` 與三個總計、`feeRatePercent`／`taxRatePercent`／`asOfDate`／`defaultBuyDate`（後者為買進日輸入的預設值與 `max`；`asOfDate` 也是目標結算日輸入的 `max`） |
-| 選了或改了「目標結算日」 | `GET /api/simulated-trades?settleDate=<日期>` — 取 `items[].settlement` 與 `settleDate`／`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 顯示結算模式；其後加入、刪除、重試的重新取得都帶同一個 `settleDate` |
+| 選了或改了「目標結算日」 | `GET /api/simulated-trades?settleDate=<日期>` — 取 `items[].settlement` 與 `settleDate`／`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 顯示結算模式；其後加入、重試的重新取得都帶同一個 `settleDate` |
 | 按「清除」或把目標結算日清空 | `GET /api/simulated-trades` — 不帶 `settleDate`，回到現價模式 |
 | 按「加入」或在任一輸入框按 Enter | `POST /api/simulated-trades` — body `{ stockId, buyDate }`（買進日一律送出，即使它還是預設值）；成功後**重新取得列表**（`GET`），讓三個總計與排序一律由後端決定；`201` 的回應體只用來確認系統選了哪一個買進日與買進價，不拿它自行插入列表 |
-| 按某列的「刪除」 | `DELETE /api/simulated-trades/{id}` — 成功後重新取得列表 |
+| 按某列的「刪除」 | `DELETE /api/simulated-trades/{id}` — 成功（`204`）或 `404` 後**不重新取得列表**：就地移除該列，「共 N 筆」與三個總計依「摘要列」一節的公式在前端重算 |
 
-契約見 `specs/backend/simulated-trade.md`。**前端不自行計算任何費用、成本、損益或報酬率**，全部取自回應——同一組數字兩邊各算一次，遲早會因為捨入方式不同而對不起來。
+契約見 `specs/backend/simulated-trade.md`。**前端不自行計算任何一列的費用、成本、損益或報酬率**，全部取自回應。唯一在前端算的是刪除後的三個總計（與結算總計），只做加總與一次 half-up 至兩位小數的除法，公式與後端「彙總」完全相同，所以刪除後畫面上的總計等於下一次 `GET` 會回的值。
 
 ## Visual Style
 
@@ -171,6 +179,7 @@ depends_on: [stock-list]
 | 「加入」按鈕背景／文字／hover 背景 | `#3E8FD8` / `#FFFFFF` / `#58A3E8` |
 | 「加入」按鈕 disabled 背景／邊框／文字 | `#16202C` / `#26333F` / `#4A5866` |
 | 「刪除」文字按鈕／hover | `#93A4B8` / `#E04B45` |
+| 「刪除」文字按鈕 disabled（送出中） | `#4A5866`（與「加入」disabled 文字同值） |
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 | 加入成功時的列閃爍背景 | `#1D2A38`（與列 hover 同值） |
 | 「目標結算日」標籤文字 | `#93A4B8`（與次要文字同值） |
@@ -203,11 +212,11 @@ depends_on: [stock-list]
 - [x] 總計下方顯示「未實現損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，賣出成本以現價估算」，數字取自回應（把 mock 的 `feeRatePercent` 改為 `0.1` 時畫面隨之改變）
 
 ### 刪除與狀態
-- [x] 每列有「刪除」按鈕，點擊即送出 `DELETE /api/simulated-trades/{id}`（不跳確認框），成功後重新取得列表，總計隨之更新
+- [x] 每列有「刪除」按鈕，點擊即送出 `DELETE /api/simulated-trades/{id}`（不跳確認框）
 - [x] `items` 為空時不顯示表格，改顯示「尚無模擬持股，輸入股票代號加入第一筆」，三個總計顯示「—」（不是 `0`／`0%`）
 - [x] 載入中顯示「載入中…」且加入列仍可用；`GET` 失敗時顯示錯誤與「重試」按鈕，且不清空上一次成功的資料
 - [x] 錯誤文案：`INVALID_STOCK_ID` → 「請輸入股票代號」；`UNKNOWN_STOCK_ID` → 「找不到代號 9999」；`NO_PRICE_BEFORE_TODAY` → 「9999 在今日以前沒有可用的收盤價，無法加入」；`409 DUPLICATE_SIMULATED_TRADE` → 「2330 在 2026-09-18 已經加過了」；四者皆顯示在輸入框下方且**不清空輸入內容**
-- [x] 刪除回 `404` 時顯示「這筆持股已經不存在」並重新取得列表
+- [x] 刪除回 `404` 時顯示「這筆持股已經不存在」，該列就地移除、總計就地重算，`DELETE` 之後沒有任何 `GET`
 - [x] 本頁不含「建議」「推薦」「可進場」等措辭
 - [x] 所有顏色為 `## Visual Style` 的固定色碼，`prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
 
@@ -225,10 +234,18 @@ depends_on: [stock-list]
 - [x] 結算模式下表頭依序為代號 / 名稱、買進日、買進價、賣出日、賣出價、成本、結算損益、報酬率、刪除；第 4、5、7、8 欄的值等於回應的 `settlement.sellDate`／`sellPrice`／`profit`／`returnPercent`
 - [x] 結算模式下三個總計顯示 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`，第二個總計的標籤為「總結算損益」，費率說明為「結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以買進日至 {settleDate} 之間的最高價賣出」
 - [x] `settlement` 為 `null` 的筆第 4、5、7、8 欄為弱化色「—」，並出現「另 K 筆買進日晚於目標結算日，未計入」；`settledTotalReturnPercent` 為 `null` 時三個總計皆為「—」
-- [x] 結算模式下加入或刪除一筆後，重新取得的 `GET` 仍帶同一個 `settleDate`，目標結算日輸入維持原值
+- [x] 結算模式下加入一筆後，重新取得的 `GET` 仍帶同一個 `settleDate`，目標結算日輸入維持原值
 - [x] 結算損益與報酬率實際渲染的文字色：正 `#E04B45`、負 `#16A75C`、`0` 為 `#93A4B8`；目標結算日輸入框背景／邊框與代號輸入框相同；`prefers-color-scheme: dark` 與 `light` 下相同
 - [x] 以真實資料驗證：在結算模式下，畫面上一筆的賣出價等於以 SQL 查出該檔在買進日至目標結算日之間的 `MAX(high_price)`
 - [x] 由策略分頁「加入模擬」加入的持股出現在本頁表格，買進日與買進價等於策略分頁該筆顯示的值
+
+### 刪除不重新取得
+- [x] 按「刪除」成功（`204`）後，瀏覽器在 `DELETE /api/simulated-trades/{id}` 之後**沒有送出任何 `GET /api/simulated-trades`**（以真實瀏覽器的網路請求紀錄驗證）；畫面不出現「載入中…」，其餘列不變，只少了被刪的那一列
+- [x] 現價模式下刪除一筆後，「共 N 筆」減 1；總成本／總未實現損益／總報酬率等於剩下各列 `cost`／`unrealizedProfit` 的總和與兩者之比 × 100（half-up 兩位小數），且等於刪除後重新整理頁面時 `GET` 回應的 `totalCost`／`totalUnrealizedProfit`／`totalReturnPercent`
+- [x] 結算模式下刪除一筆後，目標結算日輸入維持原值、表格仍為結算模式；三個總計等於剩下有結算各列的 `cost`／`settlement.profit` 總和與兩者之比 × 100（half-up 兩位小數），且等於以同一個 `settleDate` 重新 `GET` 時回應的 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`；「另 K 筆…未計入」的 K 隨之更新
+- [x] 刪到剩 0 筆時顯示「尚無模擬持股，輸入股票代號加入第一筆」，三個總計為「—」
+- [x] `DELETE` 回 `500`（或網路錯誤）時該列仍在、總計不變，表格上方顯示「刪除失敗，請稍後再試」
+- [x] 送出中的那一列「刪除」按鈕 disabled，渲染文字色 `#4A5866`
 
 ---
 ## Execution Result
@@ -304,3 +321,18 @@ Implements the 「### 目標結算日」 criteria (all but the last, which needs
   - `npm run build` clean. Rows created (ids 420, 421, plus 2317 added by script) were all deleted; `GET /api/simulated-trades` returns `items: []`.
 - Not verified: 「由策略分頁「加入模擬」…」 — depends on the strategy-tab button (next step).
 - Increment 2 evidence (2026-11-01): 策略分頁 4526 東台 row (買進日 2026-10-20, 買進價 35.65) added via 「加入模擬」; 模擬交易分頁 showed 4526 with 買進日 2026-10-20 and 買進價 35.65.
+
+### Increment 3 — 2026-11-01
+
+- Requirement: 「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」.
+- Files:
+  - `develop/frontend/src/pages/SimulatedTradeTab.tsx` — `handleDelete` no longer calls `runFetch()`. On `204` and on `404 SIMULATED_TRADE_NOT_FOUND` it calls `setData(prev => withoutItem(prev, id))`. New `withoutItem` removes the row and recomputes `totalCost`／`totalUnrealizedProfit`／`totalReturnPercent` and, when `settleDate` is set, `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` from the remaining rows. New `returnPercentHalfUp(profit, cost)` does `profit ÷ cost × 100` half-up (away from zero) to 2 decimals in integer arithmetic. Other failures leave `data` untouched and show 「刪除失敗，請稍後再試」.
+- Not changed: `SimulatedTradeTab.css` already had `.sim-del-btn:disabled { color: #4a5866 }`.
+- Live verification (backend `:8081`, frontend `:5174`, real DB; test rows 438–442 created by `POST` and all deleted; the user's 8 rows 428, 430–436 untouched):
+  - 現價模式, delete 2317 (id 439): browser network log shows `DELETE /api/simulated-trades/439 → 204` and no `GET` after it; 「載入中…」 never rendered. 共 11 → 10 筆; totals 4,431,101／+213,167／+4.81% → 4,191,260／+208,593／+4.98%; a fresh `GET` returned `10 / 4191260 / 208593 / 4.98`.
+  - 結算模式 settleDate 2026-10-20, delete 2330 (id 438): only `DELETE /api/simulated-trades/438 → 204`, no `GET`; date input still `2026-10-20`; 共 10 → 9 筆; settled totals 3,927,886／+450,710／+11.47% → 1,484,409／+455,028／+30.65%; fresh `GET ?settleDate=2026-10-20` returned `1484409 / 455028 / 30.65`, 1 null settlement (「另 1 筆…未計入」 still shown).
+  - `DELETE` mocked to `500`: row 2603 stays, totals unchanged, toast 「刪除失敗，請稍後再試」.
+  - `404`: row 440 deleted by curl first, then UI 刪除 → `DELETE …/440 → 404`, toast 「這筆持股已經不存在」, row removed, no `GET`; the in-flight button was `disabled` with computed color `rgb(74, 88, 102)` (`#4A5866`).
+  - 現價模式 delete of id 441: UI totals 1,484,409／+285,631／+19.24% equal fresh `GET` `1484409 / 285631 / 19.24`.
+  - 0 筆: `GET` items filtered client-side to the one test row 442, then real `DELETE …/442 → 204`: table removed, 「尚無模擬持股，輸入股票代號加入第一筆」, three totals 「—」, 共 0 筆.
+

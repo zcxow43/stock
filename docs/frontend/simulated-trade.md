@@ -19,7 +19,7 @@
 | 3 | 加入成功後 | `GET /api/simulated-trades` | 重新取得列表，讓三個總計與列的排序一律由後端決定（前端不自行加總、不重排） | [simulated-trade](../backend/simulated-trade.md) |
 | 4 | 在輸入框按 Enter（等同按「加入」） | `POST /api/simulated-trades` | 同一支端點；Enter 與按鈕沒有行為差異 | [simulated-trade](../backend/simulated-trade.md) |
 | 4 | 加入成功後 | `GET /api/simulated-trades` | 重新取得列表，兩筆與更新後的三個總計都由這次回應決定 | [simulated-trade](../backend/simulated-trade.md) |
-| 4 | 按某列的「刪除」（分鏡未走到） | `DELETE /api/simulated-trades/{id}` | 立即刪除、不跳確認框，成功後同樣重新取得列表 | [simulated-trade](../backend/simulated-trade.md) |
+| 4 | 按某列的「刪除」（分鏡未走到） | `DELETE /api/simulated-trades/{id}` | 立即刪除、不跳確認框；成功後不重新取得列表，只就地移除該列並在前端重算「共 N 筆」與三個總計 | [simulated-trade](../backend/simulated-trade.md) |
 | 5 | 在策略分頁按 2305 全友「加入模擬」 | `POST /api/simulated-trades` | body `{ stockId: "2305", buyDate: "2026-09-08", priceBasis: "OPEN" }`，買進價由後端讀買進日開盤價（33.95），與策略分頁回測的買進價同一個數字 | [simulated-trade](../backend/simulated-trade.md) |
 | 5 | 切回本分頁 | `GET /api/simulated-trades` | 重新取得列表，2305 以一般的一列出現 | [simulated-trade](../backend/simulated-trade.md) |
 | 6 | 選目標結算日 2026-09-16 | `GET /api/simulated-trades?settleDate=2026-09-16` | 取每筆 `settlement`（買進日至目標結算日之間最大的最高價賣出）與 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`；買進日晚於該日的 2330、2317 `settlement` 為 `null`，不計入結算總計 | [simulated-trade](../backend/simulated-trade.md) |

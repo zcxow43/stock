@@ -36,6 +36,41 @@ function gainClass(value: number): string {
   return value > 0 ? 'sl-up' : 'sl-down'
 }
 
+/** `profit ÷ cost × 100`, half-up (away from zero) to two decimals — the same rounding the
+ * backend's 彙總 uses (specs/backend/simulated-trade.md). Inputs are whole 元, so integer
+ * arithmetic keeps it exact. `null` when nothing contributes (cost 0). */
+function returnPercentHalfUp(profit: number, cost: number): number | null {
+  if (cost === 0) return null
+  const q = Math.floor((2 * Math.abs(profit) * 10000 + cost) / (2 * cost))
+  return profit < 0 ? -q / 100 : q / 100
+}
+
+/** Removes one row and recomputes the totals from the remaining rows with the backend's own
+ * 彙總 formulas, so a successful 刪除 needs no re-fetch (specs/frontend/simulated-trade.md
+ * 「摘要列」). The settled totals are recomputed only in settle mode. */
+function withoutItem(resp: SimulatedTradeListResponse, id: number): SimulatedTradeListResponse {
+  const items = resp.items.filter((it) => it.id !== id)
+  const totalCost = items.reduce((sum, it) => sum + it.cost, 0)
+  const totalUnrealizedProfit = items.reduce((sum, it) => sum + it.unrealizedProfit, 0)
+  const next: SimulatedTradeListResponse = {
+    ...resp,
+    items,
+    totalCost,
+    totalUnrealizedProfit,
+    totalReturnPercent: items.length === 0 ? null : returnPercentHalfUp(totalUnrealizedProfit, totalCost),
+  }
+  if (resp.settleDate != null) {
+    const settled = items.filter((it) => it.settlement != null)
+    const settledTotalCost = settled.reduce((sum, it) => sum + it.cost, 0)
+    const settledTotalProfit = settled.reduce((sum, it) => sum + (it.settlement?.profit ?? 0), 0)
+    next.settledTotalCost = settledTotalCost
+    next.settledTotalProfit = settledTotalProfit
+    next.settledTotalReturnPercent =
+      settled.length === 0 ? null : returnPercentHalfUp(settledTotalProfit, settledTotalCost)
+  }
+  return next
+}
+
 /** Maps a failed 加入 to the exact copy specs/frontend/simulated-trade.md「錯誤處理」requires,
  * falling back to the request's own `stockId`/`buyDate` when the error body doesn't echo one
  * back. */
@@ -102,7 +137,8 @@ export default function SimulatedTradeTab() {
   const buyDateInitializedRef = useRef(false)
 
   /** Fetches the list and replaces `data`/`status` with the result. Used for the initial
-   * load, 重試, and the required re-fetch after every successful 加入/刪除. */
+   * load, 重試, 目標結算日 changes and the re-fetch after a successful 加入 — never after
+   * 刪除, which updates the table in place. */
   const runFetch = (settleDate: string = settleDateRef.current) => {
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -202,12 +238,13 @@ export default function SimulatedTradeTab() {
       await deleteSimulatedTrade(id)
       if (!mountedRef.current) return
       setTableMessage(null)
-      await runFetch()
+      setData((prev) => (prev ? withoutItem(prev, id) : prev))
     } catch (err) {
       if (!mountedRef.current) return
       if (err instanceof SimulatedTradeApiError && err.code === 'SIMULATED_TRADE_NOT_FOUND') {
+        // Already gone on the backend — same end state as a successful delete.
         setTableMessage('這筆持股已經不存在')
-        await runFetch()
+        setData((prev) => (prev ? withoutItem(prev, id) : prev))
       } else {
         setTableMessage('刪除失敗，請稍後再試')
       }
