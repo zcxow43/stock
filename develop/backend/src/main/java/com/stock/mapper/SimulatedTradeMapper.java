@@ -31,9 +31,10 @@ public interface SimulatedTradeMapper {
     int deleteById(@Param("id") Long id);
 
     /**
-     * One batched query for every holding's settlement sell price: the max {@code high_price > 0}
-     * with {@code trade_date} in [buy_date, settleDate] and the earliest date it occurs
-     * (specs/backend/simulated-trade.md, "settleDate"). Holdings bought after settleDate yield no row.
+     * One batched query for every holding's settlement sell price: the {@code high_price} on the latest
+     * {@code trade_date} in [buy_date, settleDate] with {@code high_price > 0} — settleDate itself when the
+     * stock quoted that day, otherwise its last quoted day before it (specs/backend/simulated-trade.md,
+     * "settleDate"). Holdings bought after settleDate yield no row.
      */
     List<SimulatedTradeSettlementPrice> findSettlementPrices(@Param("settleDate") LocalDate settleDate);
 }

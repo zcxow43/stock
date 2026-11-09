@@ -18,7 +18,7 @@
         SELECT trade_id, trade_date, high_price
         FROM (
             SELECT st.id AS trade_id, p.trade_date, p.high_price,
-                   ROW_NUMBER() OVER (PARTITION BY st.id ORDER BY p.high_price DESC, p.trade_date ASC) AS rn
+                   ROW_NUMBER() OVER (PARTITION BY st.id ORDER BY p.trade_date DESC) AS rn
             FROM simulated_trade st
             JOIN stock_daily_price p
               ON p.stock_id = st.stock_id

@@ -3,7 +3,7 @@ package com.stock.domain;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/** Per-holding result of the batched settlement query: the max high_price in the window and its earliest date. */
+/** Per-holding result of the batched settlement query: the sell date (settleDate or the stock's last quoted day before it) and that day's high_price. */
 public class SimulatedTradeSettlementPrice {
 
     private Long tradeId;

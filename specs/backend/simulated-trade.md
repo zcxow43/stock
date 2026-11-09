@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易持股 API"
-requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報以「買進日至目標結算日（含兩端）之間最大的最高價」賣出的結算損益與報酬率，及其彙總（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；`settleDate` 不是交易日時改用距離它最近的全市場交易日（等距取較早、不晚於全市場最後一個交易日），回應的 `settleDate` 為改過後的交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）"
+requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報「在目標結算日當天以該檔當天的最高價賣出」的結算損益與報酬率，及其彙總（該檔當天無行情時改用目標結算日當天或之前最後一個有行情的交易日）（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；`settleDate` 不是交易日時改用距離它最近的全市場交易日（等距取較早、不晚於全市場最後一個交易日），回應的 `settleDate` 為改過後的交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；賣出日一律為目標結算日、不再取區間最高價（2026-11-09，使用者原文「6834 should use 11/2 as target day」）"
 depends_on: [stock-catalog, stock-price-ingestion]
 ---
 
@@ -11,7 +11,7 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 讓使用者用最少的輸入（代號，加上選填的買進日）記下「假設我在那天的收盤價買了一張，到今天賺賠多少」。持股本身存在 `simulated_trade`（見 `specs/dba/simulated-trade.md`）；**未實現損益、報酬率與現價都在每次查詢當下即時算出、不落地**——它們隨最新收盤價每天改變。畫面是 `specs/frontend/simulated-trade.md`。
 
-**它不抓任何外部資料、也不做型態判定**：只讀 `stock_daily_price` 已有的收盤價與 `stock` 的名稱，做四則運算。與 `specs/backend/strategy-backtest.md` 的關係是「同一套成本口徑、不同的出場假設」：回測的出場是區間內最高開盤價，本模組預設的出場是**假設今天以最新收盤價賣掉**；呼叫端帶了目標結算日時，另外回報**以買進日至目標結算日之間最大的最高價賣掉**的結算結果（見「目標結算日」）。
+**它不抓任何外部資料、也不做型態判定**：只讀 `stock_daily_price` 已有的收盤價與 `stock` 的名稱，做四則運算。與 `specs/backend/strategy-backtest.md` 的關係是「同一套成本口徑、不同的出場假設」：回測的出場是區間內最高開盤價，本模組預設的出場是**假設今天以最新收盤價賣掉**；呼叫端帶了目標結算日時，另外回報**在目標結算日當天、以該檔當天的最高價賣掉**的結算結果（見「目標結算日」）。
 
 ## Requirements
 
@@ -68,7 +68,7 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 ### 目標結算日（`settleDate`）
 
-`GET` 可帶選填的 `settleDate`（台北日曆日）。帶了，每一筆持股另外回報一份**結算**——「假設在目標結算日之前，以這段期間最高的價格賣掉」。
+`GET` 可帶選填的 `settleDate`（台北日曆日）。帶了，每一筆持股另外回報一份**結算**——「假設每一筆都在目標結算日當天、以該檔當天的最高價賣掉」（使用者原文「6834 should use 11/2 as target day」：買進日 2026-10-12、目標結算日 2026-11-02 的 6834，賣出日是 2026-11-02，不是區間內最高價出現的 2026-10-14）。
 
 **目標結算日一律是交易日**：請求的 `settleDate` 先換成**距離它最近的全市場交易日**，以下所有規則中的「`settleDate`」都指換過之後的這一天，回應的 `settleDate` 也回報這一天（使用者原文「目標結算日 應為距離這天最近的一天交易日」）：
 
@@ -83,17 +83,16 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 | 項目 | 規則 |
 |---|---|
-| 結算窗口 | 該筆的買進日起、至 `settleDate` 為止，**含兩端** |
-| 賣出價 | 窗口內該檔 `high_price > 0` 的各列中，**最大的 `high_price`**（「最高價」即 `stock_daily_price.high_price`，與行情來源的「最高價」欄位同一個詞、同一個欄位） |
-| 賣出日 | 該最大值**第一次出現**的交易日 |
+| 賣出日 | **`settleDate` 當天**；該檔當天沒有行情（無該列，或 `high_price = 0`，例如停牌、已下市）時，改用該檔 `trade_date <= settleDate` 且 `high_price > 0` 的**最後一個**交易日 |
+| 賣出價 | 該檔在賣出日的 `high_price`（「最高價」即 `stock_daily_price.high_price`，與行情來源的「最高價」欄位同一個詞、同一個欄位）；**不取**買進日至 `settleDate` 之間的最大值 |
 | 賣出手續費／證交稅 | 以賣出價計，與「現價與未實現損益」同一套交易成本（各自無條件捨去至元） |
 | 結算損益 | `賣出價 × 股數 − 賣出手續費 − 證交稅 − 成本` |
 | 結算報酬率 | `結算損益 ÷ 成本 × 100`，四捨五入至小數第二位 |
 
-- **窗口含買進日本身**：使用者的原文是「所有股票會以那天以前的最高價做賣出」，從買進那天算起。買進日本身必有一列價格大於 `0` 的行情（買進價就是從那一列取的，`high_price` 不小於當日的開盤與收盤），所以只要買進日不晚於 `settleDate`，窗口內一定有賣出價。
+- **一定有賣出價**：買進日本身必有一列價格大於 `0` 的行情（買進價就是從那一列取的，`high_price` 不小於當日的開盤與收盤），所以只要買進日不晚於 `settleDate`，「`settleDate` 當天或之前最後一個有行情的交易日」一定存在，且不早於買進日；`settleDate` 等於買進日時，賣出日就是買進日。
 - **買進日晚於 `settleDate` 的筆沒有結算**：那一天這筆持股還沒買進，談不上賣出。它的 `settlement` 為 `null`，**不計入三個結算總計**，但照常出現在 `items`，照常計入以現價計算的三個總計。
-- **`settleDate` 晚於該檔最後一個交易日**（例如今日尚無行情、或已下市）時，窗口就到它最後一個有行情的日子為止，照常結算，不報錯。
-- **結算損益可為負**：最高價仍可能不足以付清成本與費稅，如實回報，不得夾為 `0`。
+- **該檔在 `settleDate` 當天沒有行情**（停牌、已下市、或今日尚無該檔行情）時，依「賣出日」的規則改用之前最後一個有行情的交易日，照常結算，不報錯；賣出日回報的就是那一天，所以畫面上看得出它不是目標結算日。
+- **結算損益可為負**：賣出日的最高價仍可能不足以付清成本與費稅，如實回報，不得夾為 `0`。
 - **結算不取代現價**：帶了 `settleDate`，`currentDate`／`currentPrice`／`unrealizedProfit` 與三個現價總計照常回報；結算是另一組欄位（`items[].settlement` 與三個 `settled*` 總計）。畫面顯示哪一組由畫面決定（見 `specs/frontend/simulated-trade.md`）。
 - **`settleDate` 不得晚於今日**：未來的日子不是已發生的結算點，回 `400 INVALID_SETTLE_DATE`；格式不合法同樣回這個錯誤。這個檢查作用在**請求的原始日期**上，先驗證、後換成交易日。
 - **不帶 `settleDate` 時**，回應的 `settleDate` 為 `null`、每筆 `settlement` 為 `null`、三個結算總計為 `0`／`0`／`null`，其餘欄位與過去完全相同。
@@ -192,7 +191,7 @@ Response `200`（下例帶了 `settleDate=2026-09-19`）：
 | `settledTotalProfit` | number | 有結算的各筆 `settlement.profit` 總和；沒有任何一筆有結算時為 `0` |
 | `settledTotalReturnPercent` | number \| null | 成本加權；**沒有任何一筆有結算時為 `null`** |
 | `items[].settlement` | object \| null | 該筆的結算；未帶 `settleDate`、或該筆買進日晚於 `settleDate` 時為 `null` |
-| `items[].settlement.sellDate` / `sellPrice` | date / number | 窗口內最大的 `high_price` 與它第一次出現的交易日 |
+| `items[].settlement.sellDate` / `sellPrice` | date / number | 賣出日（`settleDate`；該檔當天無行情時為之前最後一個有行情的交易日）與該日的 `high_price` |
 | `items[].settlement.sellFee` / `sellTax` | int | 以 `sellPrice` 計的賣出手續費與證交稅（元） |
 | `items[].settlement.profit` | int | 結算損益（元），**可為負值** |
 | `items[].settlement.returnPercent` | number | 兩位小數，**可為負值** |
@@ -248,7 +247,7 @@ Response `204`，無內容。
 1. 取今日（台北日曆日）為 `asOfDate`，並查出全市場上一次收盤日為 `defaultBuyDate`（一次查詢；無行情時為 `null`）。
 2. 讀出 `simulated_trade` 全部列（列數是使用者手動加入的量級）。
 3. **以整份代號清單為條件批次查詢**各檔的現價（`trade_date <= asOfDate` 且 `close_price > 0` 的最大 `trade_date` 與其收盤價）與名稱——不得逐筆各發一次查詢，與 `specs/backend/strategy-backtest.md`「有界次數的查詢」同一條規定。清單為空時直接回空結果，不把空集合交給資料庫。
-4. 帶了 `settleDate` 時（先驗證，不合法回 `400 INVALID_SETTLE_DATE`），先以**一次查詢**取得全市場 `close_price > 0` 中 `trade_date <= 請求日期` 的最大交易日與 `trade_date >= 請求日期` 且 `trade_date <= asOfDate` 的最小交易日，依「目標結算日」的規則選出實際的 `settleDate`；再**以一次批次查詢**取得每一筆持股的結算賣出價與賣出日：以 `simulated_trade` 與 `stock_daily_price` 依 `stock_id` 相接，條件 `trade_date BETWEEN 該筆 buy_date AND settleDate` 且 `high_price > 0`，每筆取最大 `high_price` 與它最早的 `trade_date`。查詢次數與持股筆數無關；買進日晚於 `settleDate` 的筆在這次查詢中沒有列，即 `settlement` 為 `null`。
+4. 帶了 `settleDate` 時（先驗證，不合法回 `400 INVALID_SETTLE_DATE`），先以**一次查詢**取得全市場 `close_price > 0` 中 `trade_date <= 請求日期` 的最大交易日與 `trade_date >= 請求日期` 且 `trade_date <= asOfDate` 的最小交易日，依「目標結算日」的規則選出實際的 `settleDate`；再**以一次批次查詢**取得每一筆持股的結算賣出日與賣出價：以 `simulated_trade` 與 `stock_daily_price` 依 `stock_id` 相接，條件 `trade_date BETWEEN 該筆 buy_date AND settleDate` 且 `high_price > 0`，每筆取**最大的 `trade_date`**（`settleDate` 當天有行情時就是 `settleDate`）與該列的 `high_price`。查詢次數與持股筆數無關；買進日晚於 `settleDate` 的筆在這次查詢中沒有列，即 `settlement` 為 `null`。
 5. 逐筆算出四項費用、成本、未實現損益與報酬率（以及有結算時的結算各欄），彙總後依 `buyDate` 由新到舊組出 `items`。
 
 `POST`：
@@ -328,6 +327,13 @@ Response `204`，無內容。
 - [ ] 請求的 `settleDate` 晚於全市場最後一個交易日（例如今日尚無行情）時，回應的 `settleDate` 等於回應的 `defaultBuyDate`（未驗證：今日 2026-11-09 已有行情，請求不得晚於今日，且不得修改 `stock_daily_price` 構造無今日行情的情境；程式路徑為「後一個交易日不存在 → 取前一個」）
 - [x] 結算以換過之後的日期計算：回應中每筆 `settlement.sellPrice` 等於以 SQL 查出的 `MAX(high_price)`（`trade_date` 介於該筆 `buy_date` 與**回應的** `settleDate`、含兩端）；買進日晚於回應 `settleDate` 的筆 `settlement` 為 `null`
 - [x] 換成交易日不改變驗證：`settleDate=2099-01-01` 與 `abc` 仍回 `400 INVALID_SETTLE_DATE`，回應的 `settleDate` 為請求的原始值
+
+### 在目標結算日當天賣出
+- [x] `settleDate=2026-11-02`：6834（買進日 2026-10-12）的 `settlement.sellDate` 為 `2026-11-02`，`settlement.sellPrice` 等於 `SELECT high_price FROM stock_daily_price WHERE stock_id='6834' AND trade_date='2026-11-02'`（不是區間最高價出現的 2026-10-14 的 `168.00`）
+- [x] 帶 `settleDate` 時，每一筆買進日不晚於回應 `settleDate`、且該檔在回應 `settleDate` 當天有 `high_price > 0` 行情的持股，`settlement.sellDate` 等於回應的 `settleDate`，`settlement.sellPrice` 等於該檔當天的 `high_price`（以 SQL 逐筆核對）
+- [x] 該檔在回應 `settleDate` 當天沒有行情（無該列或 `high_price = 0`）時，`settlement.sellDate` 等於以 SQL 查出的 `MAX(trade_date)`（`stock_id` 為該檔、`trade_date <= settleDate`、`high_price > 0`），`sellPrice` 等於那一天的 `high_price`；以資料庫中既有的停牌日驗證，不新增或修改 `stock_daily_price` 的列
+- [x] `settleDate` 等於某筆的買進日時，該筆 `settlement.sellDate` 等於 `buyDate`、`sellPrice` 等於該日 `high_price`
+- [x] 買進日晚於回應 `settleDate` 的筆 `settlement` 仍為 `null`，不計入三個 `settled*` 總計；`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 等於有結算各筆的 `cost`／`settlement.profit` 總和與兩者之比
 
 ---
 ## Execution Result
@@ -450,3 +456,14 @@ Settle date snapped to the nearest trading day. Verified live with curl on :8081
   - Settlement uses the snapped date: for 10 holdings, each `settlement.sellPrice`/`sellDate` equals SQL `MAX(high_price)` / earliest date between `buy_date` and the response `settleDate` for all three snapped dates 10-27, 11-06, 11-09. The difference shows on 2466: window end 11-06 gives 402.0 (11-03); window end 10-27 gives 287.0 (10-27). Holding 444 (buy 11-06): `settlement` null at settleDate 10-26 -> 10-27, 2195.0 at 11-07 -> 11-06 (= SQL), 2290.0 at 11-08 -> 11-09 (= SQL). `settledTotalCost` 3892836 -> 6030878 when 444 gets a settlement.
   - 2099-01-01 -> `400 {"code":"INVALID_SETTLE_DATE","settleDate":"2099-01-01"}`; `abc` -> same code with `"abc"`.
 - Not verified: "settleDate later than the last trading day -> equals defaultBuyDate". Today (2026-11-09) already has quotes and requests after today are rejected; `stock_daily_price` must not be modified.
+
+### Increment 4 — 2026-11-09
+- Files changed:
+  - `develop/backend/src/main/resources/mapper/SimulatedTradeMapper.xml` — `findSettlementPrices` ROW_NUMBER ordering changed from `high_price DESC, trade_date ASC` to `trade_date DESC` (window still `buy_date..settleDate`, `high_price > 0`, still one batch query).
+  - `develop/backend/src/main/java/com/stock/mapper/SimulatedTradeMapper.java`, `develop/backend/src/main/java/com/stock/domain/SimulatedTradeSettlementPrice.java` — comments updated. Service unchanged (it already uses the row's `trade_date` and `high_price`).
+- Live evidence (backend on :8081, local MySQL; every holding cross-checked by SQL `latest trade_date in [buy_date, response settleDate] with high_price>0`, 0 mismatches in every run; no table rows written):
+  - `settleDate=2026-11-02`: 6834 (buy 2026-10-12) `sellDate=2026-11-02`, `sellPrice=116.0` = SQL 116.00 (not 168.00). All 8 holdings sold on 2026-11-02 and match SQL (e.g. 2466 389.0, 2492 375.5, 6672 531.0). Totals: cost 1484409, profit 328340, return 22.12; the cost and profit sums over the items equal the totals.
+  - Fallback: `settleDate=2026-10-23` (response `settleDate` stays 2026-10-23, since that date has 1 stray row with close>0 so the snap rule treats it as a trading day; 6834 has no row that day). All 8 holdings fall back to 2026-10-22: 6834 149.5, 2466 270.0, 6672 677.0, matching SQL. Total profit 497736.
+  - `settleDate=2026-10-26` snaps to response `settleDate=2026-10-27`; all match SQL. `2026-10-12` (6834 buy date): sellDate = buyDate, matches SQL.
+  - Later buys: `settleDate=2026-10-06` → 6834, 4934, 6668 `settlement=null`, totals cover only 5 holdings (cost 1286629, profit 40578); `2026-10-07` → 6834, 4934 null (cost 1338602, profit 144811). `2026-11-09` all settled, profit 57843.
+- Not verified: no halt day exists in the data for a holding on a date with full-market quotes (the query for holdings x market days with no quote returned 0 rows); the fallback was verified through 2026-10-23, where only 1 stock quoted. Criteria covered: all five under 在目標結算日當天賣出 (fallback via 10-23 as above). Backend stopped after verification.

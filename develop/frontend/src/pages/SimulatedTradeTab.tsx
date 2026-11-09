@@ -370,7 +370,7 @@ export default function SimulatedTradeTab() {
             {settleError ? <div className="sim-add-error">{settleError}</div> : null}
             <div className="sim-fee-note">
               {settleMode
-                ? `結算損益已扣手續費 ${data.feeRatePercent}%（買賣各一次）與證交稅 ${data.taxRatePercent}%，每筆以買進日至 ${data.settleDate} 之間的最高價賣出`
+                ? `結算損益已扣手續費 ${data.feeRatePercent}%（買賣各一次）與證交稅 ${data.taxRatePercent}%，每筆以 ${data.settleDate} 當天的最高價賣出`
                 : `未實現損益已扣手續費 ${data.feeRatePercent}%（買賣各一次）與證交稅 ${data.taxRatePercent}%，賣出成本以現價估算`}
             </div>
             {noSettlementCount > 0 ? (
