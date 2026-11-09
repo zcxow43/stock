@@ -1,0 +1,44 @@
+/* 代號複製按鈕 — fixed hex values from specs/frontend/simulated-trade.md ## Visual Style;
+   never a variable that changes under prefers-color-scheme. Icon 14x14, hit area 20x20;
+   negative vertical margin keeps the 20px box from growing the text line it sits on. */
+.copy-code-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: -3px 0 -3px 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #93a4b8;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.copy-code-btn:hover {
+  color: #e6edf5;
+}
+
+.copy-code-btn:focus {
+  outline: none;
+}
+
+.copy-code-btn:focus-visible {
+  outline: 1px solid #3e8fd8;
+  outline-offset: 0;
+}
+
+.copy-code-btn.copy-code-btn-copied {
+  color: #3e8fd8;
+}
+
+.copy-code-btn.copy-code-btn-failed {
+  color: #f09a94;
+}
+
+.copy-code-btn svg {
+  display: block;
+}

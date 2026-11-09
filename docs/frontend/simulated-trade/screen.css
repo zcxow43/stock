@@ -93,3 +93,12 @@
 /* 結算模式：settlement 為 null 的四格「—」與「另 K 筆…未計入」 */
 .page-simtrade td.dash { color:#6B7C90; }
 .exclnote { font-size:12px; color:#93A4B8; margin-top:4px; }
+
+/* ---- 代號複製按鈕（代號文字之後、名稱之前）---- */
+/* spec ## Visual Style：圖示 #93A4B8／hover #E6EDF5，已複製 #3E8FD8，複製失敗 #F09A94；
+   背景透明、無邊框；圖示 14×14、可點範圍 20×20，不改變列高。 */
+.page-simtrade .cpy { display:inline-flex; align-items:center; justify-content:center;
+       width:20px; height:20px; margin-left:4px; padding:0; border:0; border-radius:4px;
+       background:transparent; color:#93A4B8; cursor:pointer; vertical-align:middle; }
+.page-simtrade .cpy.ok { color:#3E8FD8; }
+.page-simtrade .cpy + .snm { margin-left:4px; }

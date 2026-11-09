@@ -150,6 +150,12 @@
   font-size: 13px;
 }
 
+/* 代號 + 複製按鈕同一行；名稱仍在下一行。 */
+.sim-code-line {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* 現價日不等於 asOfDate 時的次要文字色 — the one cell-level color override this table needs
    beyond the shared 漲跌 classes. */
 .sim-stale-date {

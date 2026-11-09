@@ -7,6 +7,7 @@ import {
   type SimulatedTradeItem,
   type SimulatedTradeListResponse,
 } from '../api/simulatedTrades'
+import CopyCodeButton from '../components/CopyCodeButton'
 import './SimulatedTradeTab.css'
 
 type Status = 'loading' | 'success' | 'error'
@@ -414,7 +415,10 @@ export default function SimulatedTradeTab() {
                       >
                         <td>
                           <div className="sim-stock-cell">
-                            <span className="sl-code">{item.stockId}</span>
+                            <span className="sim-code-line">
+                              <span className="sl-code">{item.stockId}</span>
+                              <CopyCodeButton code={item.stockId} />
+                            </span>
                             <span className="sim-stock-name">{item.stockName}</span>
                           </div>
                         </td>

@@ -30,6 +30,7 @@ import { fetchSyncProgress, startBackfill, type ProgressResponse } from '../api/
 import StrategyCardSettingsList from '../components/StrategyCardSettingsList'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { applyCardOrder, useStrategyCardSettings } from '../hooks/useStrategyCardSettings'
+import CopyCodeButton from '../components/CopyCodeButton'
 import './StockListPage.css'
 
 /** Matches the backend's configured startup catch-up start date
@@ -3010,6 +3011,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                   ) : null}
                   <td>
                     {row.stockId} {row.stockName}
+                    <CopyCodeButton code={row.stockId} />
                     {backtestResult && !hasChildren ? renderAddSimButton(row.stockId, groups[0].buyDate) : null}
                   </td>
                   <td>
@@ -3063,6 +3065,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                     ) : null}
                     <td className="st-child-indent">
                       {row.stockId} {row.stockName}
+                      <CopyCodeButton code={row.stockId} />
                       {backtestResult ? renderAddSimButton(row.stockId, group.buyDate) : null}
                     </td>
                     <td>

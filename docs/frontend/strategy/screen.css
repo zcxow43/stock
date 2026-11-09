@@ -307,3 +307,11 @@
 .page-strategy .addsim.busy, .page-strategy .addsim:disabled { background:#16202C; color:#4A5866; cursor:default; }
 .page-strategy .addsim.done { background:#16202C; color:#93A4B8; border-color:#26333F; cursor:default; }
 .page-strategy .addsim.fail { background:#1B2836; color:#F09A94; border-color:#8A3A34; }
+
+/* ---- 代號複製按鈕（名稱之後、「加入模擬」左邊）---- */
+/* 與模擬交易分頁同一個元件、同一組色碼：圖示 #93A4B8／hover #E6EDF5，已複製 #3E8FD8，
+   複製失敗 #F09A94；背景透明、無邊框；圖示 14×14、可點範圍 20×20。 */
+.page-strategy .cpy { display:inline-flex; align-items:center; justify-content:center;
+       width:20px; height:20px; margin:-3px 0 -3px 4px; padding:0; border:0; border-radius:4px;
+       background:transparent; color:#93A4B8; cursor:pointer; vertical-align:middle; }
+.page-strategy .cpy + .addsim { margin-left:4px; }

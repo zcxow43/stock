@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的最高價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」）"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的最高價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」）；持股表「代號／名稱」欄的代號旁有一顆小的複製按鈕，點了把該列的股票代號複製到剪貼簿（2026-11-09，使用者原文「模擬交易 代號旁邊給我一小顆複製按鈕」）"
 depends_on: [stock-list]
 ---
 
@@ -25,7 +25,7 @@ depends_on: [stock-list]
 
 1. **加入列** — 一格股票代號輸入 + 一格買進日 + 「加入」主要按鈕 + 說明文字。
 2. **摘要列** — 「共 N 筆」、「目標結算日」日期輸入與「清除」按鈕、三個總計（總成本、總未實現損益、總報酬率；設了目標結算日時為三個結算總計），另有一行費率說明。
-3. **持股表格** — 一列一筆持股，最右一欄為刪除。
+3. **持股表格** — 一列一筆持股，代號旁有一顆複製按鈕，最右一欄為刪除。
 
 **頁面層級的「只看上市普通股」不影響本頁**：本頁沒有母體篩選這件事——使用者指名哪一檔就是哪一檔，包含 ETF 與已下市股票。切換那個勾選框時本頁不重新查詢（`specs/frontend/stock-list.md` 的「各分頁如何套用」已記上這一條）。
 
@@ -101,7 +101,7 @@ depends_on: [stock-list]
 
 | 欄位 | 內容 | 對齊 |
 |---|---|---|
-| 代號 / 名稱 | `stockId` `stockName` | 靠左 |
+| 代號 / 名稱 | `stockId` 與緊接其後的複製按鈕、`stockName` | 靠左 |
 | 買進日 | `buyDate` | 靠左 |
 | 買進價 | `buyPrice`，兩位小數 | 靠右 |
 | 現價日 | `currentDate` | 靠左 |
@@ -116,7 +116,14 @@ depends_on: [stock-list]
 - **買進日與現價日都要顯示。** 少了現價日，使用者看到週末或已下市的持股時無從判斷「這個現價是哪一天的」，會把上週的收盤當成今天的。
 - **現價日不等於 `asOfDate` 時，現價日以次要文字色顯示**（其餘列為主要文字色）——那一格說的是「這個數字比今天舊」。
 - **列依後端回的順序呈現**（買進日由新到舊、同日代號升冪），前端不重排，也**不提供排序**：本頁的列數是使用者自己加進來的量級，排序不是這個頁面要解決的問題。
-- **列不可點選、不導向任何頁面**，游標維持預設箭頭；只有「刪除」按鈕可點。
+- **列不可點選、不導向任何頁面**，游標維持預設箭頭；只有代號旁的複製按鈕與「刪除」按鈕可點。
+- **代號旁的複製按鈕**：每列一顆，緊接在代號文字之後、與代號同一行，名稱的位置不變；現價模式與結算模式都有。
+  - 外觀：無邊框、透明背景的圖示按鈕，圖示為兩個重疊方框（「複製」的通用圖示），圖示 14×14 px、可點範圍 20×20 px，與代號文字垂直置中，不改變列高。
+  - `title` 與 `aria-label` 為「複製代號 {stockId}」，例如「複製代號 6834」；可用 Tab 聚焦、Enter／空白鍵觸發。
+  - 點擊：把該列的 `stockId`（例如 `6834`）寫入剪貼簿，**只有代號本身**——不含名稱、空白或換行。不送出任何 API 請求，不觸發列上的任何其他動作。
+  - 複製成功：圖示換成勾號、改為 `#3E8FD8`，`title` 改為「已複製」，1.5 秒後恢復原圖示與原色。連按時以最後一次點擊重新計時。
+  - 複製失敗（瀏覽器拒絕寫入剪貼簿）：圖示換成叉號、改為 `#F09A94`，`title` 改為「複製失敗」，1.5 秒後恢復。不使用表格上方的錯誤訊息區。
+  - 同一時間只有被點的那一列顯示回饋，其他列的按鈕維持原狀。
 - **漲跌色沿用全站規則**：未實現損益與報酬率為正值時 `#E04B45`、負值 `#16A75C`、`0` 為次要文字色 `#93A4B8`。成本與買進價、現價**不套漲跌色**，恆為主要文字色。**以實際渲染出的顏色為準**（表格儲存格的預設文字色若以更高權重宣告會把漲跌色蓋掉，類別掛對了畫面照樣是白字）。
 - **刪除立即生效、不跳確認框**：加回來只要再打一次代號，成本極低；確認框在這種可逆操作上只是多一次點擊。
 - **刪除成功後只在畫面上就地移除那一列，不重新取得列表**：不送 `GET`、不顯示「載入中…」、表格不清空再重畫，其餘列的位置、內容與目標結算日輸入都不變；「共 N 筆」與三個總計依「摘要列」一節的公式就地重算。剩下 0 筆時顯示「沒有任何持股」狀態。
@@ -181,6 +188,10 @@ depends_on: [stock-list]
 | 「加入」按鈕 disabled 背景／邊框／文字 | `#16202C` / `#26333F` / `#4A5866` |
 | 「刪除」文字按鈕／hover | `#93A4B8` / `#E04B45` |
 | 「刪除」文字按鈕 disabled（送出中） | `#4A5866`（與「加入」disabled 文字同值） |
+| 代號複製按鈕圖示／hover | `#93A4B8` / `#E6EDF5`（背景透明、無邊框） |
+| 代號複製按鈕已複製（勾號） | `#3E8FD8`（與 focus 邊框同值） |
+| 代號複製按鈕複製失敗（叉號） | `#F09A94`（與錯誤訊息文字同值） |
+| 代號複製按鈕鍵盤 focus 外框 | `#3E8FD8` |
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 | 加入成功時的列閃爍背景 | `#1D2A38`（與列 hover 同值） |
 | 「目標結算日」標籤文字 | `#93A4B8`（與次要文字同值） |
@@ -252,6 +263,14 @@ depends_on: [stock-list]
 - [x] 刪到剩 0 筆時顯示「尚無模擬持股，輸入股票代號加入第一筆」，三個總計為「—」
 - [x] `DELETE` 回 `500`（或網路錯誤）時該列仍在、總計不變，表格上方顯示「刪除失敗，請稍後再試」
 - [x] 送出中的那一列「刪除」按鈕 disabled，渲染文字色 `#4A5866`
+
+### 代號複製按鈕
+- [x] 持股表每一列的「代號 / 名稱」格中，代號文字之後（與代號同一行）有一顆圖示按鈕，`title` 與 `aria-label` 為「複製代號 {stockId}」；現價模式與結算模式都存在；列高與加入此按鈕前相同
+- [x] 在真實瀏覽器點 6834 那一列的複製按鈕後，以 `navigator.clipboard.readText()` 讀回的值恰為 `6834`（不含名稱、空白或換行）；點擊不送出任何 `/api/` 請求
+- [x] 點擊成功後該按鈕圖示變為勾號、實際渲染色 `#3E8FD8`、`title` 為「已複製」，1.5 秒後恢復原圖示、`#93A4B8` 與原 `title`；其他列的按鈕不變
+- [x] 剪貼簿寫入被拒時（瀏覽器未授權剪貼簿權限），該按鈕圖示變為叉號、實際渲染色 `#F09A94`、`title` 為「複製失敗」，1.5 秒後恢復；表格上方的錯誤訊息區不出現任何訊息
+- [x] 以 Tab 聚焦複製按鈕後按 Enter 同樣複製代號；聚焦時顯示 `#3E8FD8` 外框
+- [x] 圖示預設色 `#93A4B8`、hover 為 `#E6EDF5`，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
 
 ---
 ## Execution Result
@@ -361,3 +380,18 @@ Implements the 「### 目標結算日」 criteria (all but the last, which needs
   - 6834 天二科技 row: 買進日 2026-10-12, 買進價 130.00, 賣出日 2026-11-02, 賣出價 116.00; `SELECT high_price … '6834' AND '2026-11-02'` returns 116.00.
 - `npm run build` passes. No tests written or run. No rows created or modified; backend 8081 and Vite 5174 stopped.
 - Not verified: the 現價模式 note (unchanged code).
+
+### Increment 6 — 2026-11-09
+- Files changed:
+  - `develop/frontend/src/components/CopyCodeButton.tsx` (new) — shared icon button; `navigator.clipboard.writeText(code)`; states idle (copy glyph, 「複製代號 {code}」) / copied (check, `title`/`aria-label` 「已複製」) / failed (cross, 「複製失敗」); 1.5 s timer restarted on every click; `stopPropagation` on click so a row-level click handler never runs.
+  - `develop/frontend/src/components/CopyCodeButton.css` (new) — 20×20 transparent borderless button, 14×14 icon, `margin: -3px 0 -3px 4px` so the box does not grow the text line; `#93A4B8` / hover `#E6EDF5` / copied `#3E8FD8` / failed `#F09A94` / `:focus-visible` outline `1px solid #3E8FD8`.
+  - `develop/frontend/src/pages/SimulatedTradeTab.tsx` — the code line is now `<span class="sim-code-line">{stockId}<CopyCodeButton/></span>`; the name stays on the line below. `SimulatedTradeTab.css` adds `.sim-code-line { display:inline-flex; align-items:center }`.
+- Verified with a throwaway Playwright script (Chromium, clipboard permissions granted) on `http://localhost:5174/stocks?tab=simulated` against this worktree's backend jar on `:8081`, once with `colorScheme: 'dark'` and once with `'light'`, real database (8 existing holdings, ids 428–436):
+  - All 8 rows: the button is the element right after `.sl-code`; `title` = `aria-label` = 「複製代號 {stockId}」; 20×20; vertically centred on the code line. Row heights are identical with the button shown and with it forced to `display:none`.
+  - Click on 6834: `navigator.clipboard.readText()` returns `"6834"`; 0 `/api/` requests after the click; that button has the check icon, `rgb(62, 143, 216)`, `title` 已複製; the other 7 buttons are unchanged; after 1.5 s `title` is 複製代號 6834 and the color is `rgb(147, 164, 184)`. Hover color `rgb(230, 237, 245)`.
+  - Tab from the 目標結算日 input reaches a copy button; outline `solid rgb(62, 143, 216)`; Enter copies `6834`.
+  - Clipboard rejection, simulated by replacing `navigator.clipboard.writeText` with a function that rejects with `NotAllowedError` (init script): cross icon, `rgb(240, 154, 148)`, `title` 複製失敗; 0 `.sl-toast` / `.sim-add-error` elements; reverts after 1.5 s.
+  - 目標結算日 2026-11-02 (結算模式): all 8 rows still have the button.
+  - All computed colors identical between dark and light. 0 page errors, 0 console errors.
+- `npm run build` passes. No tests written or run. No rows created or modified (`simulated_trade` ids 428–436, 8 rows, before and after). Backend 8081 and Vite 5174 stopped; 8080 / 5173 never touched.
+- Storyboard: `docs/frontend/simulated-trade/step-3..7.html` show the copy icon after each code; new `step-8.html` shows 2330's button in the copied state; re-rendered, SELF-CHECK PASS 8/8.

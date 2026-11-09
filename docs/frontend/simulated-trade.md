@@ -24,5 +24,6 @@
 | 5 | 切回本分頁 | `GET /api/simulated-trades` | 重新取得列表，2305 以一般的一列出現 | [simulated-trade](../backend/simulated-trade.md) |
 | 6 | 選目標結算日 2026-09-16 | `GET /api/simulated-trades?settleDate=2026-09-16` | 取每筆 `settlement`（在目標結算日當天以該檔當天最高價賣出；當天無行情時用之前最後一個有行情的交易日）與 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`；買進日晚於該日的 2330、2317 `settlement` 為 `null`，不計入結算總計 | [simulated-trade](../backend/simulated-trade.md) |
 | 7 | 按「清除」 | `GET /api/simulated-trades` | 不帶 `settleDate`，回到現價模式 | [simulated-trade](../backend/simulated-trade.md) |
+| 8 | 按 2330 代號旁的複製按鈕 | —（不發請求） | 純前端：把代號「2330」寫入剪貼簿，按鈕換成勾號 1.5 秒 | [simulated-trade](../backend/simulated-trade.md) |
 
 本流程**不抓取任何外部資料**：三支端點都只讀 `stock` 的名稱與 `stock_daily_price` 已入庫的收盤價做四則運算，不向交易所發出請求、不建立同步進度列，也不做任何型態判定或回測——收盤價由[策略分頁](strategy.md)那條線的日 K 同步負責寫入。本頁也**不送** `commonStocksOnly`：頁籤列上方的「只看上市普通股」對它不生效，使用者指名哪一檔就是哪一檔（含 ETF 與已下市股票），切換那個勾選框時本頁不重新查詢。未實現損益、報酬率、現價與目標結算日的結算都由後端每次查詢當下即時算出，前端一個數字都不重算；目標結算日只是查詢參數，不寫入任何表。

@@ -1672,6 +1672,11 @@
   white-space: nowrap;
 }
 /* 「已加入」 / 「加入失敗」 — literal hex from specs/frontend/strategy.md Visual Style. */
+/* 代號複製按鈕緊鄰「加入模擬」左邊：兩者之間只留按鈕自己的 4px。 */
+.copy-code-btn + .sl-btn.st-add-sim-btn {
+  margin-left: 4px;
+}
+
 .sl-btn.st-add-sim-btn.is-added,
 .sl-btn.st-add-sim-btn.is-added:disabled {
   background: #16202c;
