@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為以買進日至該日之間最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為以買進日至該日之間最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）"
 depends_on: [stock-list]
 ---
 
@@ -73,7 +73,8 @@ depends_on: [stock-list]
 | 「清除」次要按鈕 | 緊接日期輸入之後；日期為空時 disabled；按下清空日期 |
 
 - **日期改變即重新取得列表**：`GET /api/simulated-trades?settleDate=<日期>`；清除（或把輸入清空）時改回不帶參數的 `GET`。不需要另按「套用」。
-- **加入、「重試」之後的重新取得沿用目前的目標結算日**；刪除不重新取得，目標結算日輸入維持原值：結算模式下加入一筆，新的一筆直接以同一個目標結算日結算。
+- **目標結算日一律是交易日**：使用者選的日期不是交易日時，後端換成距離它最近的交易日（規則見 `specs/backend/simulated-trade.md` 的「目標結算日」），回應的 `settleDate` 就是那一天。`GET` 成功後，**日期輸入的值改為回應的 `settleDate`**——例如選了週日 2026-10-18，輸入框隨即顯示 2026-10-19。前端不自己判斷哪天是交易日，只採用回應的值。
+- **加入、「重試」之後的重新取得沿用目前的目標結算日**——也就是輸入框裡已換成的交易日；刪除不重新取得，目標結算日輸入維持原值：結算模式下加入一筆，新的一筆直接以同一個目標結算日結算。
 - **目標結算日只存在本頁的畫面狀態**：不寫入網址、不寫入 `localStorage`；切到別的分頁再切回、或重新整理後回到空白（現價模式）。
 - **空白時（現價模式）本頁與過去完全相同。**
 
@@ -153,7 +154,7 @@ depends_on: [stock-list]
 | 時機 | 呼叫 |
 |---|---|
 | 進入分頁（含由其他分頁切回、重新整理） | `GET /api/simulated-trades` — 取 `items[]` 與三個總計、`feeRatePercent`／`taxRatePercent`／`asOfDate`／`defaultBuyDate`（後者為買進日輸入的預設值與 `max`；`asOfDate` 也是目標結算日輸入的 `max`） |
-| 選了或改了「目標結算日」 | `GET /api/simulated-trades?settleDate=<日期>` — 取 `items[].settlement` 與 `settleDate`／`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 顯示結算模式；其後加入、重試的重新取得都帶同一個 `settleDate` |
+| 選了或改了「目標結算日」 | `GET /api/simulated-trades?settleDate=<日期>` — 取 `items[].settlement` 與 `settleDate`／`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 顯示結算模式；回應的 `settleDate`（換成的最近交易日）寫回日期輸入，其後加入、重試的重新取得都帶這個 `settleDate` |
 | 按「清除」或把目標結算日清空 | `GET /api/simulated-trades` — 不帶 `settleDate`，回到現價模式 |
 | 按「加入」或在任一輸入框按 Enter | `POST /api/simulated-trades` — body `{ stockId, buyDate }`（買進日一律送出，即使它還是預設值）；成功後**重新取得列表**（`GET`），讓三個總計與排序一律由後端決定；`201` 的回應體只用來確認系統選了哪一個買進日與買進價，不拿它自行插入列表 |
 | 按某列的「刪除」 | `DELETE /api/simulated-trades/{id}` — 成功（`204`）或 `404` 後**不重新取得列表**：就地移除該列，「共 N 筆」與三個總計依「摘要列」一節的公式在前端重算 |
@@ -238,6 +239,9 @@ depends_on: [stock-list]
 - [x] 結算損益與報酬率實際渲染的文字色：正 `#E04B45`、負 `#16A75C`、`0` 為 `#93A4B8`；目標結算日輸入框背景／邊框與代號輸入框相同；`prefers-color-scheme: dark` 與 `light` 下相同
 - [x] 以真實資料驗證：在結算模式下，畫面上一筆的賣出價等於以 SQL 查出該檔在買進日至目標結算日之間的 `MAX(high_price)`
 - [x] 由策略分頁「加入模擬」加入的持股出現在本頁表格，買進日與買進價等於策略分頁該筆顯示的值
+- [x] 選一個非交易日（例如週日）後，日期輸入顯示回應的 `settleDate`（最近的交易日，非原選日期），費率說明中的 {settleDate} 也是這一天
+- [x] 選一個交易日時，日期輸入維持所選日期不變
+- [x] 選了非交易日、輸入已換成交易日之後再加入一筆，重新取得的 `GET` 帶的 `settleDate` 是換成的交易日（以真實瀏覽器的網路請求紀錄驗證）
 
 ### 刪除不重新取得
 - [x] 按「刪除」成功（`204`）後，瀏覽器在 `DELETE /api/simulated-trades/{id}` 之後**沒有送出任何 `GET /api/simulated-trades`**（以真實瀏覽器的網路請求紀錄驗證）；畫面不出現「載入中…」，其餘列不變，只少了被刪的那一列
@@ -336,3 +340,13 @@ Implements the 「### 目標結算日」 criteria (all but the last, which needs
   - 現價模式 delete of id 441: UI totals 1,484,409／+285,631／+19.24% equal fresh `GET` `1484409 / 285631 / 19.24`.
   - 0 筆: `GET` items filtered client-side to the one test row 442, then real `DELETE …/442 → 204`: table removed, 「尚無模擬持股，輸入股票代號加入第一筆」, three totals 「—」, 共 0 筆.
 
+
+### Increment 4 — 2026-11-09
+- Files changed: `develop/frontend/src/pages/SimulatedTradeTab.tsx` — in `runFetch`'s success handler, when a `settleDate` was requested and the response carries `settleDate`, write it into `settleDateRef` and `settleDateValue`. Setting state does not fire the input's `onChange`, so no extra GET.
+- Verified with Playwright driving real Chrome on `http://localhost:5174/stocks?tab=simulated` against backend `:8081` (network log captured):
+  - Pick 2026-10-25 (Sun): one `GET ?settleDate=2026-10-25`; input became 2026-10-23; fee note 「…至 2026-10-23 之間的最高價賣出」.
+  - Pick 2026-11-08 (Sun): input became 2026-11-09; note shows 2026-11-09.
+  - Pick 2026-10-22 (trading day): input stayed 2026-10-22; note shows 2026-10-22.
+  - Each pick produced exactly one GET (no refetch after the rewrite).
+  - After snap to 2026-10-23, add 2330: `POST /api/simulated-trades` then `GET /api/simulated-trades?settleDate=2026-10-23`; input stayed 2026-10-23.
+- Cleanup: test row id 445 deleted (count 0); backend 8081 and Vite 5174 stopped. `npm run build` passes. No tests written or run.

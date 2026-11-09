@@ -151,6 +151,12 @@ export default function SimulatedTradeTab() {
         setStatus('success')
         setLoadErrorMessage(null)
         setSettleError(null)
+        // The backend snaps a non-trading day to the nearest trading day; show and reuse
+        // that day. Setting state here does not fire the input's onChange, so no extra GET.
+        if (settleDate && resp.settleDate) {
+          settleDateRef.current = resp.settleDate
+          setSettleDateValue(resp.settleDate)
+        }
         if (!buyDateInitializedRef.current) {
           buyDateInitializedRef.current = true
           setBuyDateValue(resp.defaultBuyDate ?? '')

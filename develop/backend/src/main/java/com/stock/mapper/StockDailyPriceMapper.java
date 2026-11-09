@@ -4,6 +4,7 @@ import com.stock.domain.HighLow;
 import com.stock.domain.PriceStats;
 import com.stock.domain.StockDailyPrice;
 import com.stock.domain.StockLatestTradeDate;
+import com.stock.domain.TradingDayNeighbors;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -154,4 +155,8 @@ public interface StockDailyPriceMapper {
      * stock's own last trade date says nothing about the market's. Null when no such row exists.
      */
     LocalDate findMarketWideLatestPositiveCloseDate(@Param("asOfDate") LocalDate asOfDate);
+
+    /** Trading days (any stock with close_price > 0) nearest to {@code date}: max <= date and min in [date, asOfDate]; one query. */
+    TradingDayNeighbors findTradingDayNeighbors(@Param("date") LocalDate date,
+                                                @Param("asOfDate") LocalDate asOfDate);
 }

@@ -217,4 +217,12 @@
         WHERE trade_date &lt;= #{asOfDate} AND close_price > 0
     </select>
 
+    <select id="findTradingDayNeighbors" resultType="com.stock.domain.TradingDayNeighbors">
+        SELECT
+            (SELECT MAX(trade_date) FROM stock_daily_price
+              WHERE trade_date &lt;= #{date} AND close_price > 0) AS previous,
+            (SELECT MIN(trade_date) FROM stock_daily_price
+              WHERE trade_date &gt;= #{date} AND trade_date &lt;= #{asOfDate} AND close_price > 0) AS next
+    </select>
+
 </mapper>

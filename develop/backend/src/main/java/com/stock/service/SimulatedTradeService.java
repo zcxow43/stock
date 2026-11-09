@@ -4,6 +4,7 @@ import com.stock.domain.SimulatedTrade;
 import com.stock.domain.SimulatedTradeSettlementPrice;
 import com.stock.domain.Stock;
 import com.stock.domain.StockDailyPrice;
+import com.stock.domain.TradingDayNeighbors;
 import com.stock.dto.CreateSimulatedTradeRequest;
 import com.stock.dto.SimulatedTradeItemDto;
 import com.stock.dto.SimulatedTradeResponseDto;
@@ -28,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,7 +67,7 @@ public class SimulatedTradeService {
 
     public SimulatedTradeResponseDto list(String rawSettleDate) {
         LocalDate asOfDate = LocalDate.now(TAIPEI);
-        LocalDate settleDate = parseSettleDate(rawSettleDate, asOfDate);
+        LocalDate settleDate = snapToTradingDay(parseSettleDate(rawSettleDate, asOfDate), asOfDate);
         // 全市場上一次收盤日（specs/backend/simulated-trade.md, "預設買進日（defaultBuyDate）"）— one
         // query, not scoped to any stock; null when the database holds no price rows at all.
         LocalDate defaultBuyDate = priceMapper.findMarketWideLatestPositiveCloseDate(asOfDate);
@@ -238,6 +240,28 @@ public class SimulatedTradeService {
         settlement.setProfit(profit);
         settlement.setReturnPercent(TradingCostCalculator.returnPercent(profit, cost));
         return settlement;
+    }
+
+    /**
+     * Replaces a validated settleDate with the nearest market-wide trading day (fewest calendar days;
+     * tie -> earlier; never after asOfDate). Keeps the date as-is when no trading day exists.
+     */
+    private LocalDate snapToTradingDay(LocalDate requested, LocalDate asOfDate) {
+        if (requested == null) {
+            return null;
+        }
+        TradingDayNeighbors n = priceMapper.findTradingDayNeighbors(requested, asOfDate);
+        LocalDate prev = n == null ? null : n.getPrevious();
+        LocalDate next = n == null ? null : n.getNext();
+        if (prev == null) {
+            return next != null ? next : requested;
+        }
+        if (next == null) {
+            return prev;
+        }
+        long back = ChronoUnit.DAYS.between(prev, requested);
+        long forward = ChronoUnit.DAYS.between(requested, next);
+        return forward < back ? next : prev;
     }
 
     /** Absent -> null; malformed or after today -> INVALID_SETTLE_DATE echoing the raw string. */
