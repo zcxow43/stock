@@ -89,7 +89,9 @@
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button>全市場</button><button>指定股票</button><button class="on">月統計</button></div></div>
       <div class="rangehint mmonths">統計月份：2026-05、2026-06、2026-07、2026-08</div>
-      <div class="actions"><button class="btn primary">開始掃描</button></div>
+      <div class="actions"><button class="btn primary dis">開始掃描</button>
+        <span class="mhint" data-trigger>統計中 3／18</span>
+        <button class="btn">停止統計</button></div>
     </div>
     <div class="res mres">
       <h3>月統計</h3>
@@ -98,7 +100,6 @@
         <thead><tr><th>月份</th><th>週段</th><th>實際區間</th><th class="r">總成本（每筆 1 張）</th><th class="r">總報酬率</th><th class="r">總收益（每筆 1 張）</th></tr></thead>
         <tbody id="mrows"></tbody>
       </table>
-      <div class="mnote mfee">收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%</div>
     </div>
   </div>
 <script>
@@ -125,7 +126,7 @@ const SEGS = [
   ['2026-08','第四週 → 第五週','2026-08-24','2026-08-30',677962,1919],
   ['2026-08','第一週 → 月最末週','2026-08-03','2026-08-30',1612480,22947],
 ];
-const DONE = 18;   // 已完成的段數；下一段正在跑，其餘等待中
+const DONE = 3;   // 已完成的段數；下一段正在跑，其餘等待中
 const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : 'flat');
 const sign = (v) => (v > 0 ? '+' : '');
 document.getElementById('mrows').innerHTML = SEGS.map(([m, seg, s, e, cost, profit], i) => {

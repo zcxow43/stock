@@ -1189,6 +1189,10 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   const [backtestStatus, setBacktestStatus] = useState<BacktestStatus>('idle')
   // 「加入模擬」按鈕狀態，以 itemKey(stockId, buyDate) 對應；只存在畫面上，重新掃描／回測時清空。
   const [addSimStates, setAddSimStates] = useState<Map<string, AddSimState>>(new Map())
+  // 「報酬率 N% 以上加入模擬」: threshold input (kept for the whole page visit, independent of
+  // `returnThresholdInput`) and whether the sequential bulk run is in flight.
+  const [bulkAddInput, setBulkAddInput] = useState('10')
+  const [bulkAdding, setBulkAdding] = useState(false)
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null)
   const [backtestErrorMessage, setBacktestErrorMessage] = useState<string | null>(null)
   // Distinguishes a running 重試回測 from the initial auto-backtest — both share
@@ -2219,7 +2223,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return map
   })()
 
-  const handleAddSimulation = (stockId: string, buyDate: string) => {
+  const handleAddSimulation = (stockId: string, buyDate: string): Promise<void> => {
     const key = itemKey(stockId, buyDate)
     const generation = backtestGenerationRef.current
     const setState = (state: AddSimState) => {
@@ -2228,7 +2232,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       setAddSimStates((prev) => new Map(prev).set(key, state))
     }
     setState({ status: 'adding' })
-    createSimulatedTrade(stockId, buyDate, undefined, 'OPEN')
+    return createSimulatedTrade(stockId, buyDate, undefined, 'OPEN')
       .then(() => setState({ status: 'added' }))
       .catch((err: unknown) => {
         if (err instanceof SimulatedTradeApiError && err.code === 'DUPLICATE_SIMULATED_TRADE') {
@@ -2423,6 +2427,43 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     ...(hideIncomplete ? incompleteGroupKeys : []),
   ])
   const visibleGroups = (row: UnionRow) => row.buyDateGroups.filter((group) => !hiddenItemKeys.has(itemKey(row.stockId, group.buyDate)))
+
+  // ---------- 「報酬率 N% 以上加入模擬」 ----------
+  const bulkAddInvalid = isReturnThresholdInputInvalid(bulkAddInput)
+  // Every 筆 shown (not hidden by the two hide toggles, collapsed children included) in table
+  // display order, with a backtested returnPercent >= N and a button that is neither 已加入 nor
+  // 加入中…. The checkbox state is deliberately not consulted.
+  const bulkAddTargets: Array<{ stockId: string; buyDate: string }> = (() => {
+    if (!backtestResult || bulkAddInvalid) return []
+    const threshold = Number(bulkAddInput)
+    const targets: Array<{ stockId: string; buyDate: string }> = []
+    for (const row of displayRows) {
+      for (const group of visibleGroups(row)) {
+        const key = itemKey(row.stockId, group.buyDate)
+        const returnPercent = backtestItemsByKey.get(key)?.returnPercent ?? null
+        const status = addSimStates.get(key)?.status
+        if (returnPercent === null || returnPercent < threshold) continue
+        if (status === 'added' || status === 'adding') continue
+        targets.push({ stockId: row.stockId, buyDate: group.buyDate })
+      }
+    }
+    return targets
+  })()
+
+  const handleBulkAddSimulation = async () => {
+    if (bulkAdding || bulkAddTargets.length === 0) return
+    const generation = backtestGenerationRef.current
+    setBulkAdding(true)
+    try {
+      for (const target of bulkAddTargets) {
+        // A rescan/re-backtest started meanwhile: the table these targets came from is gone.
+        if (backtestGenerationRef.current !== generation) break
+        await handleAddSimulation(target.stockId, target.buyDate)
+      }
+    } finally {
+      setBulkAdding(false)
+    }
+  }
 
   // ---------- 「僅選取報酬率 n% 以上」勾選框 ----------
   const returnThresholdInvalid = isReturnThresholdInputInvalid(returnThresholdInput)
@@ -2783,6 +2824,34 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               />
               <span className={`st-total-label${incompleteGroupKeys.length === 0 ? ' st-total-label-disabled' : ''}`}>隱藏資料不齊（無賣出日）</span>
             </label>
+            <div className="st-total-item st-price-threshold-item st-bulk-add-item">
+              <div className="st-price-threshold-row">
+                <span className="st-total-label">報酬率</span>
+                <input
+                  type="number"
+                  min={-100}
+                  max={100}
+                  step="0.01"
+                  className="st-price-threshold-input"
+                  value={bulkAddInput}
+                  disabled={bulkAdding}
+                  onChange={(e) => setBulkAddInput(e.target.value)}
+                  aria-label="報酬率幾趴以上加入模擬的門檻"
+                />
+                <span className="st-total-label">% 以上</span>
+                <button
+                  type="button"
+                  className="sl-btn sl-btn-sm st-bulk-add-btn"
+                  disabled={bulkAdding || bulkAddInvalid || bulkAddTargets.length === 0}
+                  onClick={() => void handleBulkAddSimulation()}
+                >
+                  {bulkAdding ? '加入中…' : '加入模擬'}
+                </button>
+              </div>
+              {bulkAddInvalid ? (
+                <p className="st-inline-error st-price-threshold-hint">報酬率需介於 -100 ~ 100、最多兩位小數</p>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>

@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="../_scripts/shell.css">
 <link rel="stylesheet" href="screen.css">
 </head>
-<body class="page-strategy nodesc mview">
+<body class="page-strategy nodesc">
   <div class="topbar"><div class="brand">台股 <span>K 線</span> 瀏覽</div></div>
   <div class="wrap">
     <div class="head">
@@ -88,57 +88,53 @@
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button>全市場</button><button>指定股票</button><button class="on">月統計</button></div></div>
-      <div class="rangehint mmonths">統計月份：2026-05、2026-06、2026-07、2026-08</div>
-      <div class="actions"><button class="btn primary dis">開始掃描</button>
-        <span class="mhint" data-trigger>統計中 3／18</span>
-        <button class="btn">停止統計</button></div>
+      <div class="rangehint mmonths" data-target>統計月份：2026-05、2026-06、2026-07、2026-08</div>
+      <div class="actions"><button class="btn primary" data-trigger>開始掃描</button>
+        <span class="hint">回測完成 ・ 以 2026-08-30 收盤為基準</span></div>
     </div>
-    <div class="res mres">
-      <h3>月統計</h3>
-      <div class="mnote">買進價高於 500 元的筆不計入</div>
-      <table class="mstat" data-target>
-        <thead><tr><th>月份</th><th>週段</th><th>實際區間</th><th class="r">總成本（每筆 1 張）</th><th class="r">總報酬率</th><th class="r">總收益（每筆 1 張）</th></tr></thead>
-        <tbody id="mrows"></tbody>
+    <div class="res union">
+      <div class="reshead">
+        <h3>命中彙總<span> — 共 5 檔</span></h3>
+        <div class="totals">
+          <div class="tot"><span class="tl">總成本（每筆 1 張）</span><b class="cost">3,761,851</b></div>
+          <div class="tot"><span class="tl">總報酬率</span><b class="up">+1.33%</b></div>
+          <div class="tot"><span class="tl">總收益（每筆 1 張）</span><b class="up">+50,208</b></div>
+        </div>
+      <div class="totnote">收益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%</div>
+      </div>
+      <div class="totnote" style="margin:1px 0 2px">另 3 筆未勾選，未計入</div>
+      <div class="subrow"><div class="params">箱型突破（標準）・MACD 黃金交叉（5／20／9）・站上均線（MA5・MA20・MA60）</div>
+        <div class="batchrow"><label class="allclear"><span class="acb"></span>取消全選</label>
+          <label class="pxclear"><span class="acb"></span>取消買進價高於<input class="pxamt" value="500">元</label>
+          <label class="pxclear"><span class="acb"></span>僅選取報酬率<input class="pxamt" value="2">% 以上</label>
+          <label class="hideinc"><span class="acb on"></span>僅選取全符合</label>
+          <label class="hideinc dis"><span class="acb"></span>隱藏資料不齊（無賣出日）</label>
+          <span class="bulkadd">報酬率<input class="pxamt" value="10">% 以上<button class="addsim" disabled>加入模擬</button></span></div></div>
+      <table>
+        <thead><tr><th class="exp"></th><th class="ck"></th><th>代號</th><th>名稱</th><th>命中策略與訊號日</th><th>買進日</th><th class="r sortable">買進價<span class="si">↕</span></th><th>賣出日</th><th class="r">賣出價</th><th class="r sortable sorted">報酬率<span class="si">▼</span></th><th class="r sortable">收益（每筆 1 張）<span class="si">↕</span></th></tr></thead>
+        <tbody>
+          <tr class="hover"><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2317</td><td>鴻海<button class="cpy" title="複製代號 2317"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">箱型突破</span><span class="sdate">2026-08-24</span><span class="sep">・</span><span class="stag">MACD 黃金交叉</span><span class="sdate">2026-08-24</span><span class="sep">・</span><span class="stag">站上均線（MA20）</span><span class="sdate">2026-08-24</span></td><td>2026-08-25</td><td class="r">264.50</td><td>2026-08-29</td><td class="r">274.00</td><td class="r up">+2.99%</td><td class="r up">+7,912</td></tr>
+          <tr class="off"><td class="exp"></td><td class="ck"><span class="cb"></span></td><td class="code">2881</td><td>富邦金<button class="cpy" title="複製代號 2881"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">MACD 黃金交叉</span><span class="sdate">2026-08-26</span><span class="sep">・</span><span class="stag">站上均線（MA20）</span><span class="sdate">2026-08-26</span></td><td>2026-08-27</td><td class="r">88.50</td><td>2026-08-29</td><td class="r">91.40</td><td class="r up">+2.67%</td><td class="r up">+2,370</td></tr>
+          <tr class="open"><td class="exp"><span class="caret">▾</span></td><td class="ck"><span class="cb on"></span></td><td class="code">2330</td><td>台積電<button class="cpy" title="複製代號 2330"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button></td>
+            <td class="hits"><span class="stag">箱型突破</span><span class="sdate">2026-08-26</span><span class="sep">・</span><span class="stag">MACD 黃金交叉</span><span class="sdate">2026-08-27</span><span class="sep">・</span><span class="stag">站上均線（MA5／MA20）</span><span class="sdate">2026-08-24</span></td><td class="dates"><span>2026-08-28</span><span>2026-08-27</span><span>2026-08-25</span></td><td class="r">1,164.00</td><td class="dates"><span>2026-08-29</span><span>2026-08-29</span><span>2026-08-29</span></td><td class="r">1,185.00</td><td class="r up">+1.21%</td><td class="r up">+42,296</td></tr>
+          <tr class="sub"><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2330</td><td>台積電<button class="cpy" title="複製代號 2330"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">站上均線（MA5／MA20）</span><span class="sdate">2026-08-24</span></td><td>2026-08-25</td><td class="r">1,150.00</td><td>2026-08-29</td><td class="r">1,185.00</td><td class="r up">+2.44%</td><td class="r up">+28,119</td></tr>
+          <tr class="sub"><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2330</td><td>台積電<button class="cpy" title="複製代號 2330"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">箱型突破</span><span class="sdate">2026-08-26</span></td><td>2026-08-27</td><td class="r">1,170.00</td><td>2026-08-29</td><td class="r">1,185.00</td><td class="r up">+0.69%</td><td class="r up">+8,090</td></tr>
+          <tr class="sub"><td class="exp"></td><td class="ck"><span class="cb on"></span></td><td class="code">2330</td><td>台積電<button class="cpy" title="複製代號 2330"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">MACD 黃金交叉</span><span class="sdate">2026-08-27</span></td><td>2026-08-28</td><td class="r">1,172.00</td><td>2026-08-29</td><td class="r">1,185.00</td><td class="r up">+0.52%</td><td class="r up">+6,087</td></tr>
+          <tr class="off"><td class="exp"></td><td class="ck"><span class="cb"></span></td><td class="code">3231</td><td>緯創<button class="cpy" title="複製代號 3231"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">站上均線（MA60）</span><span class="sdate">2026-08-29</span></td><td>2026-08-30</td><td class="r">118.50</td><td>2026-08-30</td><td class="r">118.50</td><td class="r down">-0.58%</td><td class="r down">-691</td></tr>
+          <tr class="off"><td class="exp"></td><td class="ck"><span class="cb"></span></td><td class="code">2603</td><td>長榮<button class="cpy" title="複製代號 2603"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="4.5" y="4.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.5 2.5V2a1 1 0 0 0-1-1H2.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="addsim">加入模擬</button></td>
+            <td class="hits"><span class="stag">箱型突破</span><span class="sdate">2026-08-25</span><span class="sep">・</span><span class="stag">站上均線（MA5）</span><span class="sdate">2026-08-25</span></td><td>2026-08-26</td><td class="r">205.50</td><td>2026-08-27</td><td class="r">199.00</td><td class="r down">-3.73%</td><td class="r down">-7,672</td></tr>
+        </tbody>
       </table>
+      <div class="note">箱型突破：另有 1 檔已突破，但確認日尚未到 ▸</div>
+      <div class="note">MACD 黃金交叉：另有 1 檔已交叉，但次一交易日尚未到 ▸</div>
+      <div class="note">站上均線：另有 2 檔已站上，但次一交易日尚未到 ▸</div>
     </div>
   </div>
-<script>
-// 今日 2026-08-30（週日，本週為 08/24–08/30）：統計 2026-05 ~ 2026-08，共 18 段。
-// 8 月的第五週 08/31–09/06 還沒到：「第四週 → 第五週」「第一週 → 月最末週」兩段照算，endDate 截到今日 08-30。
-// [月份, 週段, startDate, endDate, 總成本, 總收益]；總成本為 null 代表該段沒有任何一筆計入（零命中）。
-const SEGS = [
-  ['2026-05','第一週 → 第二週','2026-05-04','2026-05-17',512728,14310],
-  ['2026-05','第二週 → 第三週','2026-05-11','2026-05-24',734045,9872],
-  ['2026-05','第三週 → 第四週','2026-05-18','2026-05-31',421599,-3204],
-  ['2026-05','第一週 → 月最末週','2026-05-04','2026-05-31',1166317,21655],
-  ['2026-06','第一週 → 第二週','2026-06-01','2026-06-14',688979,25410],
-  ['2026-06','第二週 → 第三週','2026-06-08','2026-06-21',903285,31077],
-  ['2026-06','第三週 → 第四週','2026-06-15','2026-06-28',356507,-1926],
-  ['2026-06','第四週 → 第五週','2026-06-22','2026-07-05',null,null],
-  ['2026-06','第一週 → 月最末週','2026-06-01','2026-07-05',1402996,47318],
-  ['2026-07','第一週 → 第二週','2026-07-06','2026-07-19',845203,12644],
-  ['2026-07','第二週 → 第三週','2026-07-13','2026-07-26',590840,-8117],
-  ['2026-07','第三週 → 第四週','2026-07-20','2026-08-02',777106,19530],
-  ['2026-07','第一週 → 月最末週','2026-07-06','2026-08-02',1733468,28902],
-  ['2026-08','第一週 → 第二週','2026-08-03','2026-08-16',468667,6240],
-  ['2026-08','第二週 → 第三週','2026-08-10','2026-08-23',951355,17803],
-  ['2026-08','第三週 → 第四週','2026-08-17','2026-08-30',677962,1919],
-  ['2026-08','第四週 → 第五週','2026-08-24','2026-08-30',677962,1919],
-  ['2026-08','第一週 → 月最末週','2026-08-03','2026-08-30',1612480,22947],
-];
-const DONE = 3;   // 已完成的段數；下一段正在跑，其餘等待中
-const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : 'flat');
-const sign = (v) => (v > 0 ? '+' : '');
-document.getElementById('mrows').innerHTML = SEGS.map(([m, seg, s, e, cost, profit], i) => {
-  const lead = `<td>${m}</td><td>${seg}</td><td class="rng">${s} ~ ${e}</td>`;
-  if (i > DONE) return `<tr>${lead}<td class="wait" colspan="3">等待中</td></tr>`;
-  if (i === DONE) return `<tr class="hover">${lead}<td class="wait" colspan="3">統計中…</td></tr>`;
-  if (cost === null) return `<tr>${lead}<td class="r none">—</td><td class="r none">—</td><td class="r none">—</td></tr>`;
-  const pct = Math.round((profit / cost) * 10000) / 100;
-  return `<tr>${lead}<td class="r cost">${cost.toLocaleString('en-US')}</td>` +
-    `<td class="r ${cls(pct)}">${sign(pct)}${pct.toFixed(2)}%</td>` +
-    `<td class="r ${cls(profit)}">${sign(profit)}${profit.toLocaleString('en-US')}</td></tr>`;
-}).join('');
-</script>
 </body>
 </html>

@@ -1688,3 +1688,20 @@
   color: #f09a94;
   border-color: #8a3a34;
 }
+
+/* 批次列「報酬率 [N] % 以上 [加入模擬]」 — same 28px row as the other batch controls; button
+   colours reuse the 次要／Disabled button literals from specs/frontend/strategy.md Visual Style. */
+.sl-btn.st-bulk-add-btn {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.st-batch-controls .st-bulk-add-item {
+  flex-shrink: 0;
+}
+.st-batch-controls {
+  justify-content: flex-end;
+  padding-right: 18px;
+}
