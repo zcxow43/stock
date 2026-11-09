@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天最高價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的最高價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」）；持股表「代號／名稱」欄的代號旁有一顆小的複製按鈕，點了把該列的股票代號複製到剪貼簿（2026-11-09，使用者原文「模擬交易 代號旁邊給我一小顆複製按鈕」）"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天開盤價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的開盤價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」「open price」）；持股表「代號／名稱」欄的代號旁有一顆小的複製按鈕，點了把該列的股票代號複製到剪貼簿（2026-11-09，使用者原文「模擬交易 代號旁邊給我一小顆複製按鈕」）"
 depends_on: [stock-list]
 ---
 
@@ -65,7 +65,7 @@ depends_on: [stock-list]
 
 ### 目標結算日
 
-回答「如果每一檔都在某一天賣掉，總共賺賠多少」。計算全在後端（見 `specs/backend/simulated-trade.md` 的「目標結算日」）：每筆在**目標結算日當天、以該檔當天的最高價**賣出；該檔當天沒有行情（停牌、已下市）時，後端改用目標結算日之前最後一個有行情的交易日，賣出日欄位顯示的就是那一天。
+回答「如果每一檔都在某一天賣掉，總共賺賠多少」。計算全在後端（見 `specs/backend/simulated-trade.md` 的「目標結算日」）：每筆在**目標結算日當天、以該檔當天的開盤價**賣出；該檔當天沒有行情（停牌、已下市）時，後端改用目標結算日之前最後一個有行情的交易日，賣出日欄位顯示的就是那一天。
 
 | 元素 | 行為 |
 |---|---|
@@ -89,7 +89,7 @@ depends_on: [stock-list]
 | 總成本 | `totalCost` | `settledTotalCost` |
 | 第二個總計 | 「總未實現損益」`totalUnrealizedProfit` | 「總結算損益」`settledTotalProfit` |
 | 總報酬率 | `totalReturnPercent` | `settledTotalReturnPercent` |
-| 費率說明 | 「未實現損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，賣出成本以現價估算」 | 「結算損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，每筆以 {settleDate} 當天的最高價賣出」 |
+| 費率說明 | 「未實現損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，賣出成本以現價估算」 | 「結算損益已扣手續費 {feeRatePercent}%（買賣各一次）與證交稅 {taxRatePercent}%，每筆以 {settleDate} 當天的開盤價賣出」 |
 
 - **欄數與欄序不變**，只換表頭文字與內容：兩種模式的表格同寬，切換時欄位不跳動。
 - **`settlement` 為 `null` 的筆**（買進日晚於目標結算日）：第 4、5、7、8 欄顯示弱化色「—」，其餘欄照常；它不計入三個結算總計（後端已排除）。這種筆至少一筆時，費率說明下方多一行次要文字「另 K 筆買進日晚於目標結算日，未計入」，K 為 `settlement` 為 `null` 的筆數。
@@ -256,6 +256,10 @@ depends_on: [stock-list]
 - [x] 結算模式的費率說明為「結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以 {settleDate} 當天的最高價賣出」，{settleDate} 為日期輸入目前的值；畫面上不再出現「每筆以買進日至 … 之間的最高價賣出」
 - [x] 以真實資料驗證：目標結算日選 2026-11-02 時，6834（買進日 2026-10-12）那一列的賣出日顯示 `2026-11-02`，賣出價等於 `SELECT high_price FROM stock_daily_price WHERE stock_id='6834' AND trade_date='2026-11-02'`
 
+### 以開盤價結算
+- [x] 結算模式的費率說明為「結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以 {settleDate} 當天的開盤價賣出」，{settleDate} 為日期輸入目前的值；畫面上不再出現「當天的最高價賣出」
+- [x] 以真實資料驗證：目標結算日選 2026-11-02 時，6834（買進日 2026-10-12）那一列的賣出日顯示 `2026-11-02`，賣出價等於 `SELECT open_price FROM stock_daily_price WHERE stock_id='6834' AND trade_date='2026-11-02'`（兩位小數）
+
 ### 刪除不重新取得
 - [x] 按「刪除」成功（`204`）後，瀏覽器在 `DELETE /api/simulated-trades/{id}` 之後**沒有送出任何 `GET /api/simulated-trades`**（以真實瀏覽器的網路請求紀錄驗證）；畫面不出現「載入中…」，其餘列不變，只少了被刪的那一列
 - [x] 現價模式下刪除一筆後，「共 N 筆」減 1；總成本／總未實現損益／總報酬率等於剩下各列 `cost`／`unrealizedProfit` 的總和與兩者之比 × 100（half-up 兩位小數），且等於刪除後重新整理頁面時 `GET` 回應的 `totalCost`／`totalUnrealizedProfit`／`totalReturnPercent`
@@ -395,3 +399,11 @@ Implements the 「### 目標結算日」 criteria (all but the last, which needs
   - All computed colors identical between dark and light. 0 page errors, 0 console errors.
 - `npm run build` passes. No tests written or run. No rows created or modified (`simulated_trade` ids 428–436, 8 rows, before and after). Backend 8081 and Vite 5174 stopped; 8080 / 5173 never touched.
 - Storyboard: `docs/frontend/simulated-trade/step-3..7.html` show the copy icon after each code; new `step-8.html` shows 2330's button in the copied state; re-rendered, SELF-CHECK PASS 8/8.
+
+### Increment 7 — 2026-11-09
+- Files changed: `develop/frontend/src/pages/SimulatedTradeTab.tsx` — settle-mode fee note now 「…，每筆以 ${settleDate} 當天的開盤價賣出」 (was 「…當天的最高價賣出」). Grep of `develop/frontend/src` found no other 最高價 wording.
+- Verified with Playwright on `http://localhost:5174/stocks?tab=simulated` against backend `:8081`:
+  - 目標結算日 2026-11-02: note reads 「結算損益已扣手續費 0.1425%（買賣各一次）與證交稅 0.3%，每筆以 2026-11-02 當天的開盤價賣出」; page text does not contain 「當天的最高價賣出」.
+  - 6834 天二科技 row: 買進日 2026-10-12, 買進價 130.00, 賣出日 2026-11-02, 賣出價 111.50; `SELECT open_price … '6834' AND '2026-11-02'` returns 111.50.
+- `npm run build` passes. No tests written or run. No `simulated_trade` or `stock_daily_price` rows changed. Backend 8081 and Vite 5174 stopped.
+- Not verified: 現價模式 note (code unchanged).

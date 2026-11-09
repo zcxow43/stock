@@ -152,7 +152,7 @@ public class SimulatedTradeItemDto {
         this.settlement = settlement;
     }
 
-    /** Sale at the highest high_price in [buyDate, settleDate] (specs/backend/simulated-trade.md). */
+    /** Sale at the sell day's open_price (settleDate or the stock's last quoted day before it) (specs/backend/simulated-trade.md). */
     public static class Settlement {
 
         private LocalDate sellDate;

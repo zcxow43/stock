@@ -22,7 +22,7 @@
 | 4 | 按某列的「刪除」（分鏡未走到） | `DELETE /api/simulated-trades/{id}` | 立即刪除、不跳確認框；成功後不重新取得列表，只就地移除該列並在前端重算「共 N 筆」與三個總計 | [simulated-trade](../backend/simulated-trade.md) |
 | 5 | 在策略分頁按 2305 全友「加入模擬」 | `POST /api/simulated-trades` | body `{ stockId: "2305", buyDate: "2026-09-08", priceBasis: "OPEN" }`，買進價由後端讀買進日開盤價（33.95），與策略分頁回測的買進價同一個數字 | [simulated-trade](../backend/simulated-trade.md) |
 | 5 | 切回本分頁 | `GET /api/simulated-trades` | 重新取得列表，2305 以一般的一列出現 | [simulated-trade](../backend/simulated-trade.md) |
-| 6 | 選目標結算日 2026-09-16 | `GET /api/simulated-trades?settleDate=2026-09-16` | 取每筆 `settlement`（在目標結算日當天以該檔當天最高價賣出；當天無行情時用之前最後一個有行情的交易日）與 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`；買進日晚於該日的 2330、2317 `settlement` 為 `null`，不計入結算總計 | [simulated-trade](../backend/simulated-trade.md) |
+| 6 | 選目標結算日 2026-09-16 | `GET /api/simulated-trades?settleDate=2026-09-16` | 取每筆 `settlement`（在目標結算日當天以該檔當天開盤價賣出；當天無行情時用之前最後一個有行情的交易日）與 `settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent`；買進日晚於該日的 2330、2317 `settlement` 為 `null`，不計入結算總計 | [simulated-trade](../backend/simulated-trade.md) |
 | 7 | 按「清除」 | `GET /api/simulated-trades` | 不帶 `settleDate`，回到現價模式 | [simulated-trade](../backend/simulated-trade.md) |
 | 8 | 按 2330 代號旁的複製按鈕 | —（不發請求） | 純前端：把代號「2330」寫入剪貼簿，按鈕換成勾號 1.5 秒 | [simulated-trade](../backend/simulated-trade.md) |
 

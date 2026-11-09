@@ -15,15 +15,15 @@
     </select>
 
     <select id="findSettlementPrices" resultType="com.stock.domain.SimulatedTradeSettlementPrice">
-        SELECT trade_id, trade_date, high_price
+        SELECT trade_id, trade_date, open_price
         FROM (
-            SELECT st.id AS trade_id, p.trade_date, p.high_price,
+            SELECT st.id AS trade_id, p.trade_date, p.open_price,
                    ROW_NUMBER() OVER (PARTITION BY st.id ORDER BY p.trade_date DESC) AS rn
             FROM simulated_trade st
             JOIN stock_daily_price p
               ON p.stock_id = st.stock_id
              AND p.trade_date BETWEEN st.buy_date AND #{settleDate}
-             AND p.high_price > 0
+             AND p.open_price > 0
         ) ranked
         WHERE rn = 1
     </select>

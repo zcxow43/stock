@@ -3,12 +3,12 @@ package com.stock.domain;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/** Per-holding result of the batched settlement query: the sell date (settleDate or the stock's last quoted day before it) and that day's high_price. */
+/** Per-holding result of the batched settlement query: the sell date (settleDate or the stock's last quoted day before it) and that day's open_price. */
 public class SimulatedTradeSettlementPrice {
 
     private Long tradeId;
     private LocalDate tradeDate;
-    private BigDecimal highPrice;
+    private BigDecimal openPrice;
 
     public Long getTradeId() {
         return tradeId;
@@ -26,11 +26,11 @@ public class SimulatedTradeSettlementPrice {
         this.tradeDate = tradeDate;
     }
 
-    public BigDecimal getHighPrice() {
-        return highPrice;
+    public BigDecimal getOpenPrice() {
+        return openPrice;
     }
 
-    public void setHighPrice(BigDecimal highPrice) {
-        this.highPrice = highPrice;
+    public void setOpenPrice(BigDecimal openPrice) {
+        this.openPrice = openPrice;
     }
 }

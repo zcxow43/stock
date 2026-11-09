@@ -228,7 +228,7 @@ public class SimulatedTradeService {
 
     private SimulatedTradeItemDto.Settlement toSettlement(SimulatedTrade trade, BigDecimal cost,
                                                            SimulatedTradeSettlementPrice sellRow) {
-        BigDecimal sellPrice = sellRow.getHighPrice();
+        BigDecimal sellPrice = sellRow.getOpenPrice();
         BigDecimal sellFee = TradingCostCalculator.fee(sellPrice, trade.getShares());
         BigDecimal sellTax = TradingCostCalculator.tax(sellPrice, trade.getShares());
         BigDecimal profit = TradingCostCalculator.profit(sellPrice, trade.getShares(), sellFee, sellTax, cost);
