@@ -1,7 +1,7 @@
 ---
-status: done
+status: pending
 title: "模擬交易持股 API"
-requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報「在目標結算日當天以該檔當天的開盤價賣出」的結算損益與報酬率，及其彙總（該檔當天無行情時改用目標結算日當天或之前最後一個有行情的交易日）（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；`settleDate` 不是交易日時改用距離它最近的全市場交易日（等距取較早、不晚於全市場最後一個交易日），回應的 `settleDate` 為改過後的交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；賣出日一律為目標結算日、不再取區間最高價（2026-11-09，使用者原文「6834 should use 11/2 as target day」）；結算賣出價改為該檔在賣出日的開盤價 `open_price`，無行情判定改以 `open_price > 0` 為準（2026-11-09，使用者原文「open price」，回答「結算賣出價要用當天最高價、收盤價還是開盤價」）"
+requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報「在目標結算日當天以該檔當天的開盤價賣出」的結算損益與報酬率，及其彙總（該檔當天無行情時改用目標結算日當天或之前最後一個有行情的交易日）（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；`settleDate` 不是交易日時改用距離它最近的全市場交易日（等距取較早、不晚於全市場最後一個交易日），回應的 `settleDate` 為改過後的交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；賣出日一律為目標結算日、不再取區間最高價（2026-11-09，使用者原文「6834 should use 11/2 as target day」）；結算賣出價改為該檔在賣出日的開盤價 `open_price`，無行情判定改以 `open_price > 0` 為準（2026-11-09，使用者原文「open price」，回答「結算賣出價要用當天最高價、收盤價還是開盤價」）；建立時可改帶 `buyOnOrAfter`（與 `buyDate` 二擇一），買進日由本端點取該檔在該日（含）以後、不晚於今日、所取價格 > 0 的第一個交易日，查無時回 `400 NO_PRICE_ON_OR_AFTER`（策略分頁「加入模擬以區間後首個交易日開盤買進」用；2026-11-10，使用者原文「像是這個, 加入模擬後, 買進價為 10/19 日以後的第一個交易日開盤價」）"
 depends_on: [stock-catalog, stock-price-ingestion]
 ---
 
@@ -17,19 +17,23 @@ depends_on: [stock-catalog, stock-price-ingestion]
 
 ### 一筆持股怎麼建立
 
-使用者送出 `stockId` 與（選填的）`buyDate`：
+使用者送出 `stockId` 與（選填的）`buyDate` 或 `buyOnOrAfter`（兩者最多帶一個）：
 
 | 項目 | 規則 |
 |---|---|
-| 買進日 | 請求的 `buyDate`；**省略時**為該檔在 `stock_daily_price` 中 `trade_date <= 今日`（台北日曆日）且 `close_price > 0` 的**最大** `trade_date` |
+| 買進日 | 帶 `buyDate` 時為請求的 `buyDate`；帶 `buyOnOrAfter` 時為該檔在 `stock_daily_price` 中 `buyOnOrAfter <= trade_date <= 今日` 且所取價格（依 `priceBasis`）> 0 的**最小** `trade_date`；**兩者皆省略時**為該檔 `trade_date <= 今日`（台北日曆日）且 `close_price > 0` 的**最大** `trade_date` |
 | 買進價 | 依請求的 `priceBasis`：省略或 `CLOSE` 為該檔在買進日那一天的 `close_price`；`OPEN` 為那一天的 `open_price`。所取的價格必須存在且 > 0，否則拒絕 |
 | 股數 | 固定 `1000`（1 張），與 `specs/backend/strategy-backtest.md` 的部位約定相同 |
 
 - **買進日可指定、買進價與股數不可指定**：價格不是使用者自己填的數字，而是那一天實際的收盤價（或開盤價，見下）——開放輸入等於允許一筆與市場無關的成本。要換價格就換日期。
 - **`priceBasis: OPEN` 給策略分頁的「加入模擬」用**（見 `specs/frontend/strategy.md`）：命中彙總表的買進價是回測的買進價，即**買進日的開盤價**（見 `specs/backend/strategy-backtest.md` 的「買進價為什麼是開盤價」）。使用者在那張表上看到 33.95 就按「加入模擬」，持股的買進價就必須是 33.95，而不是同一天另一個收盤價。呼叫端送的是「取哪一個價格欄位」而不是價格本身，買進價照樣由本端點從 `stock_daily_price` 讀出——價格不可由呼叫端輸入這條規則不變。
-- **`priceBasis: OPEN` 必須帶 `buyDate`**：開盤價只對一個指定的日子有意義；省略 `buyDate` 時的「最後一個有收盤價的交易日」只用於 `CLOSE`。`OPEN` 而無 `buyDate` 回 `400 INVALID_PRICE_BASIS`。
+- **`priceBasis: OPEN` 必須帶 `buyDate` 或 `buyOnOrAfter`**：開盤價只對一個指定的日子有意義；兩者皆省略時的「最後一個有收盤價的交易日」只用於 `CLOSE`。`OPEN` 而兩者皆無回 `400 INVALID_PRICE_BASIS`。
+- **`buyOnOrAfter` 給策略分頁「加入模擬以區間後首個交易日開盤買進」用**（見 `specs/frontend/strategy.md`）：呼叫端只知道「掃描區間結束的隔天」這個日曆日，不知道哪一天是交易日；「該日（含）以後第一個交易日」由本端點從 `stock_daily_price` 查出，前端不另外查行情。例：`buyOnOrAfter` 為 2026-10-19、`priceBasis` 為 `OPEN`，買進日為該檔 2026-10-19 起第一個 `open_price > 0` 的 `trade_date`，買進價為那一天的 `open_price`。
+  - **「交易日」以該檔自己的行情為準**：取的是**該檔**第一個所取價格 > 0 的日子，不是全市場的交易日；該檔在全市場第一個交易日停牌時，買進日是它復牌那天。
+  - **該日（含）以後到今日為止，該檔沒有任何所取價格 > 0 的日子時**（例如 `buyOnOrAfter` 為明日或更晚、或今日尚無該檔行情）回 `400 NO_PRICE_ON_OR_AFTER`，不寫入任何列。`buyOnOrAfter` 晚於今日不是格式錯誤，而是「還沒有行情」，同樣回這個錯誤。
+  - **與 `buyDate` 同時帶**回 `400 INVALID_BUY_ON_OR_AFTER`：兩個欄位對買進日各說一套，本端點不替呼叫端挑一個。格式不合法同樣回這個錯誤。
 - **買進日不得晚於今日**：未來還沒有收盤價，回 `400 INVALID_BUY_DATE`。今日本身可以選，但只有在今日收盤價已寫入時才成立，否則同樣是「那天沒有收盤價」。
-- **那一天必須正好有該檔的收盤價**（`OPEN` 時為開盤價）：停牌、尚未上市、或該日所取的價格為 `0`（「該日沒有成交」的記錄方式，見 `specs/backend/strategy-backtest.md` 的「價格為 `0` 的日子不是行情」）都回 `400 NO_PRICE_ON_BUY_DATE`。**不得自動往前找最近的交易日**——使用者指定 2026-09-13（週日）時，靜靜地改用 09-11 的價格建立一筆，畫面上會出現一個他沒有選過的日期。回報錯誤，讓他自己改。
+- **帶 `buyDate` 時，那一天必須正好有該檔的收盤價**（`OPEN` 時為開盤價）：停牌、尚未上市、或該日所取的價格為 `0`（「該日沒有成交」的記錄方式，見 `specs/backend/strategy-backtest.md` 的「價格為 `0` 的日子不是行情」）都回 `400 NO_PRICE_ON_BUY_DATE`。**不得自動往前找最近的交易日**——使用者指定 2026-09-13（週日）時，靜靜地改用 09-11 的價格建立一筆，畫面上會出現一個他沒有選過的日期。回報錯誤，讓他自己改。往後找交易日只發生在呼叫端明確帶 `buyOnOrAfter` 時。
 - **買進價寫入後不再變動**：即使該日收盤價事後被來源更正，這筆持股的成本不變（理由見 `specs/dba/simulated-trade.md`）。
 
 ### 預設買進日（`defaultBuyDate`）
@@ -213,8 +217,15 @@ Request：
 | 欄位 | 型別 | 必填 | 說明 |
 |---|---|---|---|
 | `stockId` | string | 是 | 股票代號；前後空白去除後比對，須存在於 `stock`（不篩 `is_active`） |
-| `buyDate` | date | 否 | 買進日（台北日曆日）；不得晚於今日；省略時為該檔最後一個有收盤價的交易日（僅限 `CLOSE`） |
-| `priceBasis` | string | 否 | `CLOSE`（省略時的預設）或 `OPEN`：買進價取買進日的收盤價或開盤價；`OPEN` 必須同時帶 `buyDate` |
+| `buyDate` | date | 否 | 買進日（台北日曆日）；不得晚於今日；與 `buyOnOrAfter` 皆省略時為該檔最後一個有收盤價的交易日（僅限 `CLOSE`） |
+| `buyOnOrAfter` | date | 否 | 與 `buyDate` 二擇一；買進日為該檔在此日（含）以後、不晚於今日、所取價格 > 0 的第一個交易日 |
+| `priceBasis` | string | 否 | `CLOSE`（省略時的預設）或 `OPEN`：買進價取買進日的收盤價或開盤價；`OPEN` 必須同時帶 `buyDate` 或 `buyOnOrAfter` |
+
+例（策略分頁勾選「加入模擬以區間後首個交易日開盤買進」時）：
+
+```json
+{ "stockId": "2330", "buyOnOrAfter": "2026-10-19", "priceBasis": "OPEN" }
+```
 
 Response `201`：與 `GET` 的 `items[]` 單筆同一個形狀（含即時算出的現價與未實現損益），讓呼叫端能直接確認系統替它選了哪一個買進日與買進價。**畫面仍會在成功後重新取得列表**（排序與三個總計一律由後端決定，見 `specs/frontend/simulated-trade.md`）——這個回應體是「剛才建立了什麼」的回執，不是列表的替代品。
 
@@ -233,7 +244,9 @@ Response `204`，無內容。
 | 該檔完全沒有任何 `close_price > 0` 的交易日（`buyDate` 省略時） | `400` | `{"code":"NO_PRICE_BEFORE_TODAY","stockId":"9999"}` |
 | `buyDate` 格式不合法或晚於今日 | `400` | `{"code":"INVALID_BUY_DATE","buyDate":"2099-01-01"}` |
 | 該檔在指定的 `buyDate` 沒有所取的價格（無該列，或 `CLOSE` 時 `close_price = 0`、`OPEN` 時 `open_price = 0`） | `400` | `{"code":"NO_PRICE_ON_BUY_DATE","stockId":"2330","buyDate":"2026-09-13"}` |
-| `priceBasis` 不是 `CLOSE`／`OPEN`，或為 `OPEN` 而未帶 `buyDate` | `400` | `{"code":"INVALID_PRICE_BASIS"}` |
+| `buyOnOrAfter` 格式不合法，或與 `buyDate` 同時帶 | `400` | `{"code":"INVALID_BUY_ON_OR_AFTER","buyOnOrAfter":"abc"}` |
+| 該檔在 `buyOnOrAfter`（含）以後到今日為止沒有所取價格 > 0 的交易日（含 `buyOnOrAfter` 晚於今日） | `400` | `{"code":"NO_PRICE_ON_OR_AFTER","stockId":"2330","buyOnOrAfter":"2026-11-11"}` |
+| `priceBasis` 不是 `CLOSE`／`OPEN`，或為 `OPEN` 而 `buyDate` 與 `buyOnOrAfter` 皆未帶 | `400` | `{"code":"INVALID_PRICE_BASIS"}` |
 | `GET` 的 `settleDate` 格式不合法或晚於今日 | `400` | `{"code":"INVALID_SETTLE_DATE","settleDate":"2099-01-01"}` |
 | `(stockId, buyDate)` 已存在 | `409` | `{"code":"DUPLICATE_SIMULATED_TRADE","stockId":"2330","buyDate":"2026-09-18"}` |
 | `DELETE` 的 `id` 不存在 | `404` | `{"code":"SIMULATED_TRADE_NOT_FOUND","id":99}` |
@@ -252,11 +265,12 @@ Response `204`，無內容。
 
 `POST`：
 
-1. 驗證 `stockId`（非空、存在於 `stock`）、`priceBasis`（省略視為 `CLOSE`；不是 `CLOSE`／`OPEN`，或 `OPEN` 而 `buyDate` 省略 → `400 INVALID_PRICE_BASIS`）與 `buyDate`（有值時須為合法日期且不晚於今日，否則 `400 INVALID_BUY_DATE`）。
+1. 驗證 `stockId`（非空、存在於 `stock`）、`buyOnOrAfter`（有值時須為合法日期且未同時帶 `buyDate`，否則 `400 INVALID_BUY_ON_OR_AFTER`）、`priceBasis`（省略視為 `CLOSE`；不是 `CLOSE`／`OPEN`，或 `OPEN` 而 `buyDate` 與 `buyOnOrAfter` 皆省略 → `400 INVALID_PRICE_BASIS`）與 `buyDate`（有值時須為合法日期且不晚於今日，否則 `400 INVALID_BUY_DATE`）。
 2. 取買進日與買進價：
    - `buyDate` 有值 → 查該檔該日的 `close_price`（`OPEN` 時為 `open_price`）；無該列或為 `0` → `400 NO_PRICE_ON_BUY_DATE`。
-   - `buyDate` 省略 → 查該檔 `trade_date <= 今日` 且 `close_price > 0` 的最大 `trade_date` 與其收盤價；查無 → `400 NO_PRICE_BEFORE_TODAY`。
-3. `INSERT` 一列（`shares = 1000`）；唯一鍵衝突 → `409 DUPLICATE_SIMULATED_TRADE`（不得改成 UPSERT）。
+   - `buyOnOrAfter` 有值 → 以一次查詢取該檔 `trade_date >= buyOnOrAfter` 且 `trade_date <= 今日` 且 `close_price > 0`（`OPEN` 時為 `open_price > 0`）的最小 `trade_date` 與該列的所取價格；查無 → `400 NO_PRICE_ON_OR_AFTER`。
+   - 兩者皆省略 → 查該檔 `trade_date <= 今日` 且 `close_price > 0` 的最大 `trade_date` 與其收盤價；查無 → `400 NO_PRICE_BEFORE_TODAY`。
+3. `INSERT` 一列（`shares = 1000`，`buy_date` 為第 2 步取得的買進日）；唯一鍵衝突 → `409 DUPLICATE_SIMULATED_TRADE`（不得改成 UPSERT；`buyDate` 欄位帶第 2 步取得的買進日）。
 4. 以剛寫入的列即時算出與 `GET` 相同形狀的單筆回應。
 
 `DELETE`：以 `id` 刪一列，影響列數為 `0` → `404`。
@@ -343,6 +357,17 @@ Response `204`，無內容。
 - [x] 該檔在回應 `settleDate` 當天沒有行情（無該列或 `open_price = 0`）時，`settlement.sellDate` 為該檔 `trade_date <= settleDate` 且 `open_price > 0` 的最後一個交易日，`sellPrice` 為那一天的 `open_price`；以資料庫中既有資料驗證，不新增或修改 `stock_daily_price` 的列
 - [x] 買進日晚於回應 `settleDate` 的筆 `settlement` 仍為 `null`，不計入三個 `settled*` 總計；`settledTotalCost`／`settledTotalProfit`／`settledTotalReturnPercent` 等於有結算各筆的 `cost`／`settlement.profit` 總和與兩者之比 × 100（兩位小數）
 - [x] 結算的查詢仍為一次批次查詢（與持股筆數無關），帶 `settleDate` 的 `GET` 不寫入任何表
+
+### 以某日（含）以後的第一個交易日建立（`buyOnOrAfter`）
+- [ ] `POST` 帶 `{"stockId":"2330","buyOnOrAfter":"<某個週六>","priceBasis":"OPEN"}` 回 `201`，`buyDate` 等於以 SQL `SELECT MIN(trade_date) FROM stock_daily_price WHERE stock_id='2330' AND trade_date >= '<該週六>' AND trade_date <= CURDATE() AND open_price > 0` 查出的日子（其後的週一或更晚），`buyPrice` 等於那一天的 `open_price`；`simulated_trade` 新增的列 `buy_date`／`buy_price` 與回應相同
+- [ ] `buyOnOrAfter` 本身是該檔有 `open_price > 0` 的交易日時，回應的 `buyDate` 等於 `buyOnOrAfter`
+- [ ] 帶 `priceBasis: "CLOSE"`（或省略）與 `buyOnOrAfter` 時，`buyDate` 為該日（含）以後第一個 `close_price > 0` 的交易日，`buyPrice` 為那一天的 `close_price`
+- [ ] 該檔在 `buyOnOrAfter` 起第一個全市場交易日停牌（無該列或 `open_price = 0`）時，`buyDate` 為該檔其後第一個 `open_price > 0` 的日子；以資料庫中既有的停牌日驗證，不新增或修改 `stock_daily_price` 的列（資料中找不到停牌日時，在 Execution Result 記為未驗證）
+- [ ] `buyOnOrAfter` 為明日（例如 `2099-01-01` 或今日 + 1 天）→ `400 NO_PRICE_ON_OR_AFTER`（帶 `stockId` 與 `buyOnOrAfter`），且未寫入任何列
+- [ ] `buyOnOrAfter` 為 `"abc"`，或與 `buyDate` 同時帶 → `400 INVALID_BUY_ON_OR_AFTER`，且未寫入任何列
+- [ ] `priceBasis: "OPEN"` 帶 `buyOnOrAfter`、不帶 `buyDate` 時不回 `INVALID_PRICE_BASIS`；`OPEN` 而兩者皆未帶仍回 `400 INVALID_PRICE_BASIS`
+- [ ] 同一檔以兩個不同、但解析到同一個交易日的 `buyOnOrAfter`（例如同一個週末的週六與週日）各送一次：第一次 `201`，第二次 `409 DUPLICATE_SIMULATED_TRADE`，回應的 `buyDate` 為解析後的交易日；資料庫只有一列
+- [ ] 不帶 `buyOnOrAfter` 時 `POST` 的行為與過去相同：「建立持股」「指定買進日」「以開盤價建立」三組既有條件以同樣的請求重跑，結果不變
 
 ## Execution Result
 - Status: DONE

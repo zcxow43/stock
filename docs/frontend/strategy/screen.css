@@ -318,3 +318,7 @@
        width:20px; height:20px; margin:-3px 0 -3px 4px; padding:0; border:0; border-radius:4px;
        background:transparent; color:#93A4B8; cursor:pointer; vertical-align:middle; }
 .page-strategy .cpy + .addsim { margin-left:4px; }
+
+/* 「加入模擬以 {D} 起第一個交易日開盤買進」：表頭之上獨立一行、靠左 */
+.page-strategy .simbasis { display:flex; justify-content:flex-start; margin:-2px 0 3px; }
+.page-strategy .simbasis > label { height:20px; }

@@ -1,6 +1,6 @@
 # 策略型態掃描與回測
 
-從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 按條件區最右邊的「設定」進入設定模式，隱藏用不到的 KDJ 黃金交叉、把「量多」拖到第七位，按「完成」回到卡片 → 於剩下的十一張策略卡片中勾選三個（箱型突破、MACD 黃金交叉、站上均線）掃描 → 命中彙總表以**命中策略數由多到少**的新預設排序呈現並自動回測（五個批次框預設勾選，表格一出現就是報酬率降冪） → 取消勾選「取消買進價高於 500 元」讓被藏起來的筆勾回並重新顯示 → 展開一檔的多個買進日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 勾選「僅選取全符合」只留下三個策略都命中過的那幾檔 → 往下捲動、三個總計浮動跟隨 → 捲回頂端，逐列「加入模擬」一筆，再以批次列的「報酬率 [N] % 以上 [加入模擬]」一次加入其餘達標的筆 → 股票範圍改選「月統計」（不選區間，統計本月與前三個月） → 按「開始掃描」，18 段逐段掃描並回測 → 月統計表每段列出總成本、總報酬率、總收益」的完整流程。
+從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 按條件區最右邊的「設定」進入設定模式，隱藏用不到的 KDJ 黃金交叉、把「量多」拖到第七位，按「完成」回到卡片 → 於剩下的十一張策略卡片中勾選三個（箱型突破、MACD 黃金交叉、站上均線）掃描 → 命中彙總表以**命中策略數由多到少**的新預設排序呈現並自動回測（五個批次框預設勾選，表格一出現就是報酬率降冪） → 取消勾選「取消買進價高於 500 元」讓被藏起來的筆勾回並重新顯示 → 展開一檔的多個買進日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 勾選「僅選取全符合」只留下三個策略都命中過的那幾檔 → 往下捲動、三個總計浮動跟隨 → 捲回頂端，在「加入模擬以 {D} 起第一個交易日開盤買進」預設勾選下按一筆「加入模擬」（實際區間止於今日，{D} 以後尚無行情 → 加入失敗），取消勾選後逐列「加入模擬」一筆，再以批次列的「報酬率 [N] % 以上 [加入模擬]」一次加入其餘達標的筆 → 股票範圍改選「月統計」（不選區間，統計本月與前三個月） → 按「開始掃描」，18 段逐段掃描並回測 → 月統計表每段列出總成本、總報酬率、總收益」的完整流程。
 
 選三個而不是十二個策略，是因為「僅選取全符合」要求一檔被**每一個**已選策略各命中過至少一次——選滿十二個時幾乎不會有任何一檔全中，每一列都會被取消勾選、三個總計顯示「—」，那一步就看不出這個框在做什麼。
 
@@ -37,12 +37,14 @@
 | 16 | 勾選「僅選取全符合」 | —（不發請求） | 以**股票**為單位重算勾選：未被三個已選策略各命中過至少一次的股票，其每一筆都取消勾選但**不隱藏**（因此不多出「另 K 筆已隱藏」那一行）；純前端 | [strategy-scan](../backend/strategy-scan.md) |
 | 17 | 往下捲動 | —（不發請求） | 三個總計浮在畫面頂端跟隨，數字與原位同一份；純呈現 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 18 | 捲回頁面頂端 | —（不發請求） | 條件區回到畫面上，股票範圍有全市場／指定股票／月統計三個選項；純呈現 | [strategy-scan](../backend/strategy-scan.md) |
-| 19 | 按鴻海那一列的「加入模擬」 | `POST /api/simulated-trades` | body `{stockId:"2317", buyDate:"2026-08-25", priceBasis:"OPEN"}`：以該筆的買進日加入模擬交易，買進價由後端讀該日開盤價，與這一列回測的買進價 264.50 同一個數字；成功（或 `409` 已加入過）時按鈕改為「已加入」。按鈕不切換勾選、不改變總計 | [simulated-trade](../backend/simulated-trade.md) |
-| 20 | 把「報酬率 [10] % 以上」改成 2、按批次列的「加入模擬」 | `POST /api/simulated-trades` | 作用範圍（顯示中、報酬率 ≥ 2%、尚未「已加入」，不看勾選）內的每一筆依表格順序各送一次、前一筆回應後才送下一筆，body 與逐列按鈕相同：先 `{stockId:"2881", buyDate:"2026-08-27", priceBasis:"OPEN"}`，再 `{stockId:"2330", buyDate:"2026-08-25", priceBasis:"OPEN"}`；鴻海已加入、跳過不重送。成功的筆按鈕改為「已加入」 | [simulated-trade](../backend/simulated-trade.md) |
-| 21 | 股票範圍改選「月統計」 | —（不發請求） | 區間列換成「統計月份」那一行，上一次的命中彙總表維持不變；純前端 | [strategy-scan](../backend/strategy-scan.md) |
-| 22 | 按「開始掃描」（月統計） | `POST /api/strategies/scan` | 每一段各送一次、前一段結束後才送下一段：`strategies` 與第 9 步相同，`commonStocksOnly=true`、不帶 `stockIds`，`startDate`／`endDate` 為該段起始週的週一／結束週的週日（結束週為本週或更晚時送今日）；此刻已送第 1～4 段。只讀已入庫的日線，不向交易所抓取 | [strategy-scan](../backend/strategy-scan.md) |
-| 22 | 該段掃描命中 ≥ 1 筆時**自動送出** | `POST /api/strategies/backtest` | `items` 為該段全部命中依 `(stockId, buyDate)` 去重後的每一筆；回應各筆的 `buyPrice`／`sellDate`／`cost`／`profit` 用來算該段三個總計（只計 `sellDate` 不為 `null` 且 `buyPrice` ≤ 500 的筆）。此刻已送第 1～3 段 | [strategy-backtest](../backend/strategy-backtest.md) |
-| 23 | 其餘各段依序跑完 | `POST /api/strategies/scan` | 第 5～18 段各送一次，body 只換 `startDate`／`endDate`；最後兩段的結束週 08/31–09/06 還沒到，送 `2026-08-24`／`2026-08-30` 與 `2026-08-03`／`2026-08-30` | [strategy-scan](../backend/strategy-scan.md) |
-| 23 | 其餘各段依序跑完 | `POST /api/strategies/backtest` | 第 4～18 段中命中 ≥ 1 筆的各送一次（零命中的段不送）；回應的 `feeRatePercent`／`taxRatePercent` 用於表格下方的說明行 | [strategy-backtest](../backend/strategy-backtest.md) |
+| 19 | 按鴻海那一列的「加入模擬」（「加入模擬以 2026-08-31 起第一個交易日開盤買進」預設勾選） | `POST /api/simulated-trades` | body `{stockId:"2317", buyOnOrAfter:"2026-08-31", priceBasis:"OPEN"}`：由後端取該檔 2026-08-31（含）以後第一個有開盤價的交易日、以該日開盤價加入；實際區間止於今日 2026-08-30，尚無以後的行情 → `400 NO_PRICE_ON_OR_AFTER`，按鈕顯示「加入失敗」 | [simulated-trade](../backend/simulated-trade.md) |
+| 20 | 取消勾選「加入模擬以 2026-08-31 起第一個交易日開盤買進」 | —（不發請求） | 之後逐列與批次的「加入模擬」改以該筆回測的買進日開盤價加入；各列按鈕改顯示未勾選模式下的狀態；純前端 | [simulated-trade](../backend/simulated-trade.md) |
+| 21 | 按鴻海那一列的「加入模擬」（勾選框未勾選） | `POST /api/simulated-trades` | body `{stockId:"2317", buyDate:"2026-08-25", priceBasis:"OPEN"}`：以該筆的買進日加入模擬交易，買進價由後端讀該日開盤價，與這一列回測的買進價 264.50 同一個數字；成功（或 `409` 已加入過）時按鈕改為「已加入」。按鈕不切換勾選、不改變總計 | [simulated-trade](../backend/simulated-trade.md) |
+| 22 | 把「報酬率 [10] % 以上」改成 2、按批次列的「加入模擬」 | `POST /api/simulated-trades` | 作用範圍（顯示中、報酬率 ≥ 2%、尚未「已加入」，不看勾選）內的每一筆依表格順序各送一次、前一筆回應後才送下一筆，body 與逐列按鈕相同：先 `{stockId:"2881", buyDate:"2026-08-27", priceBasis:"OPEN"}`，再 `{stockId:"2330", buyDate:"2026-08-25", priceBasis:"OPEN"}`；鴻海已加入、跳過不重送。成功的筆按鈕改為「已加入」 | [simulated-trade](../backend/simulated-trade.md) |
+| 23 | 股票範圍改選「月統計」 | —（不發請求） | 區間列換成「統計月份」那一行，上一次的命中彙總表維持不變；純前端 | [strategy-scan](../backend/strategy-scan.md) |
+| 24 | 按「開始掃描」（月統計） | `POST /api/strategies/scan` | 每一段各送一次、前一段結束後才送下一段：`strategies` 與第 9 步相同，`commonStocksOnly=true`、不帶 `stockIds`，`startDate`／`endDate` 為該段起始週的週一／結束週的週日（結束週為本週或更晚時送今日）；此刻已送第 1～4 段。只讀已入庫的日線，不向交易所抓取 | [strategy-scan](../backend/strategy-scan.md) |
+| 24 | 該段掃描命中 ≥ 1 筆時**自動送出** | `POST /api/strategies/backtest` | `items` 為該段全部命中依 `(stockId, buyDate)` 去重後的每一筆；回應各筆的 `buyPrice`／`sellDate`／`cost`／`profit` 用來算該段三個總計（只計 `sellDate` 不為 `null` 且 `buyPrice` ≤ 500 的筆）。此刻已送第 1～3 段 | [strategy-backtest](../backend/strategy-backtest.md) |
+| 25 | 其餘各段依序跑完 | `POST /api/strategies/scan` | 第 5～18 段各送一次，body 只換 `startDate`／`endDate`；最後兩段的結束週 08/31–09/06 還沒到，送 `2026-08-24`／`2026-08-30` 與 `2026-08-03`／`2026-08-30` | [strategy-scan](../backend/strategy-scan.md) |
+| 25 | 其餘各段依序跑完 | `POST /api/strategies/backtest` | 第 4～18 段中命中 ≥ 1 筆的各送一次（零命中的段不送）；回應的 `feeRatePercent`／`taxRatePercent` 用於表格下方的說明行 | [strategy-backtest](../backend/strategy-backtest.md) |
 
 本流程**不呼叫**任何指標運算、分 K 或漲幅排行端點——掃描與回測讀的都是同步流程已寫入的日線，指標、分 K 與產業別漲幅由各自的頁面負責。整張命中彙總表由第 9 步那一次 `POST /api/strategies/scan` 的回應組成，前端不再為每個策略各發一次請求；回測是另一支獨立端點，掃描本身不附帶回測結果，而是第 9 步掃描成功後由前端自動接著送出；第 10～17 步的五步預設勾選與報酬率降冪初始排序、展開、勾選切換、五個批次勾選框與捲動則完全不觸網——一檔的每個買進日在第 10 步就已各自回了一筆，這是回測回應保留逐筆 `buyPrice`、`cost` 與 `lotSize` 的用途。第 5～8 步的設定（隱藏、排序）同樣不觸網，只讀寫瀏覽器的 `localStorage`。第 18 步的捲動與第 21 步的切換股票範圍不觸網；第 19 步的「加入模擬」與第 20 步批次列的「加入模擬」是本頁唯二寫入另一個功能（模擬交易）的請求，兩者送的是同一支端點、同一種 body；第 22～23 步的月統計沒有自己的端點，用的是第 9 步那兩支——每一段各一次掃描、命中時各一次回測，三個總計由前端從回測回應算出。第 2 步匯入的產業別本頁自己不用，它是給[動態分頁](momentum.md)分組顯示用的。
