@@ -1,7 +1,7 @@
 ---
 status: done
 title: "模擬交易分頁"
-requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天開盤價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的開盤價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」「open price」）；持股表「代號／名稱」欄的代號旁有一顆小的複製按鈕，點了把該列的股票代號複製到剪貼簿（2026-11-09，使用者原文「模擬交易 代號旁邊給我一小顆複製按鈕」）"
+requirement: "在「動態」旁新增第四個分頁「模擬交易」：輸入股票代號與買進日（預設為上一次收盤日、可往前改）即加入一筆模擬持股（買進價為該檔該日收盤、固定 1 張，後兩者不可修改），表格逐筆列出以最新收盤價計算的未實現損益與報酬率（已扣買進手續費與以現價估的賣出手續費、證交稅），並顯示總成本、總未實現損益、總報酬率；每筆可刪除；資料存在後端，重新整理後仍在；摘要列多一格可選的「目標結算日」，選了之後表格的現價四欄改為在該日當天以該檔當天開盤價賣出的賣出日／賣出價／結算損益／報酬率，三個總計改為結算總計，可「清除」回到現價（2026-11-01，使用者原文「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；持股也可由策略分頁命中彙總表的「加入模擬」加入（見 `specs/frontend/strategy.md`），本頁照常列出；按「刪除」成功後只在畫面上就地移除那一列、不重新取得列表，「共 N 筆」與三個總計依剩下的列以後端同一套公式在前端重算（2026-11-01，使用者原文「點擊刪除, 不要重新搜尋畫面, UI 刪除就好」）；選的目標結算日不是交易日時，日期輸入改顯示後端換成的最近交易日（回應的 `settleDate`），之後的重新取得都帶這個交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；結算模式的費率說明改為「每筆以 {settleDate} 當天的開盤價賣出」（2026-11-09，使用者原文「6834 should use 11/2 as target day」「open price」）；持股表「代號／名稱」欄的代號旁有一顆小的複製按鈕，點了把該列的股票代號複製到剪貼簿（2026-11-09，使用者原文「模擬交易 代號旁邊給我一小顆複製按鈕」）複製過代號的列（以代號為準、與策略分頁共用、記在 sessionStorage）整列換成已複製樣式。"
 depends_on: [stock-list]
 ---
 
@@ -124,6 +124,12 @@ depends_on: [stock-list]
   - 複製成功：圖示換成勾號、改為 `#3E8FD8`，`title` 改為「已複製」，1.5 秒後恢復原圖示與原色。連按時以最後一次點擊重新計時。
   - 複製失敗（瀏覽器拒絕寫入剪貼簿）：圖示換成叉號、改為 `#F09A94`，`title` 改為「複製失敗」，1.5 秒後恢復。不使用表格上方的錯誤訊息區。
   - 同一時間只有被點的那一列顯示回饋，其他列的按鈕維持原狀。
+- **複製過的列整列換成「已複製」樣式**（如同瀏覽器的已造訪連結），讓使用者看得出哪些股票已經複製過：
+  - **以股票代號為準，不以列為準**：某代號複製成功後，本表所有該代號的列（同一檔不同買進日的多筆）都換成已複製樣式；策略分頁命中彙總表上該代號的列也一樣（見 `specs/frontend/strategy.md` 的「已複製的列」）。兩張表共用同一份已複製代號集合，在任一張表複製，另一張表切過去時即為已複製樣式，不需重新整理。
+  - **只有複製成功才標記**：剪貼簿寫入被拒（叉號「複製失敗」）時不標記。1.5 秒後按鈕圖示恢復原狀，但列的已複製樣式持續，不隨按鈕回饋消失。
+  - **記在瀏覽器的 `sessionStorage`**，key 為 `copiedStockIds`，值為代號字串的 JSON 陣列（例如 `["6834","1416"]`，不重複）：切換分頁、重新整理頁面後仍保留；關掉瀏覽器（session 結束）後清空。不送出任何 API 請求、後端不知道這件事。`sessionStorage` 無法讀寫（瀏覽器封鎖）時退回只存在記憶體，標記照常生效到頁面關閉或重新整理為止，不顯示錯誤。
+  - 沒有「取消標記」的操作；再按一次複製按鈕照常複製，列維持已複製樣式。
+  - **樣式**：整列背景改為 `#241F38`，滑鼠移入時改為 `#2C2645`；代號文字改為 `#B9A2F5`。其餘文字顏色不變——名稱、買進價、現價、成本維持 `#E6EDF5`，未實現損益與報酬率維持漲跌色 `#E04B45`／`#16A75C`／`#93A4B8`，較舊的現價日維持 `#93A4B8`，結算模式的弱化「—」維持 `#6B7C90`。現價模式與結算模式都套用。色碼見 `## Visual Style`。
 - **漲跌色沿用全站規則**：未實現損益與報酬率為正值時 `#E04B45`、負值 `#16A75C`、`0` 為次要文字色 `#93A4B8`。成本與買進價、現價**不套漲跌色**，恆為主要文字色。**以實際渲染出的顏色為準**（表格儲存格的預設文字色若以更高權重宣告會把漲跌色蓋掉，類別掛對了畫面照樣是白字）。
 - **刪除立即生效、不跳確認框**：加回來只要再打一次代號，成本極低；確認框在這種可逆操作上只是多一次點擊。
 - **刪除成功後只在畫面上就地移除那一列，不重新取得列表**：不送 `GET`、不顯示「載入中…」、表格不清空再重畫，其餘列的位置、內容與目標結算日輸入都不變；「共 N 筆」與三個總計依「摘要列」一節的公式就地重算。剩下 0 筆時顯示「沒有任何持股」狀態。
@@ -192,6 +198,8 @@ depends_on: [stock-list]
 | 代號複製按鈕已複製（勾號） | `#3E8FD8`（與 focus 邊框同值） |
 | 代號複製按鈕複製失敗（叉號） | `#F09A94`（與錯誤訊息文字同值） |
 | 代號複製按鈕鍵盤 focus 外框 | `#3E8FD8` |
+| 已複製列背景／hover 背景 | `#241F38` / `#2C2645` |
+| 已複製列代號文字 | `#B9A2F5` |
 | 錯誤訊息文字／背景／邊框 | `#F09A94` / `#3A1C1A` / `#8A3A34` |
 | 加入成功時的列閃爍背景 | `#1D2A38`（與列 hover 同值） |
 | 「目標結算日」標籤文字 | `#93A4B8`（與次要文字同值） |
@@ -275,6 +283,17 @@ depends_on: [stock-list]
 - [x] 剪貼簿寫入被拒時（瀏覽器未授權剪貼簿權限），該按鈕圖示變為叉號、實際渲染色 `#F09A94`、`title` 為「複製失敗」，1.5 秒後恢復；表格上方的錯誤訊息區不出現任何訊息
 - [x] 以 Tab 聚焦複製按鈕後按 Enter 同樣複製代號；聚焦時顯示 `#3E8FD8` 外框
 - [x] 圖示預設色 `#93A4B8`、hover 為 `#E6EDF5`，`prefers-color-scheme: dark` 與 `light` 下實際渲染色相同
+
+### 已複製的列
+- [x] 點 6834 那一列的複製按鈕成功後，該列（及本表其他代號為 6834 的列）整列實際渲染背景為 `#241F38`、代號文字為 `#B9A2F5`；滑鼠移入時背景為 `#2C2645`；未複製的列背景與文字不變
+- [x] 已複製列的未實現損益與報酬率仍為漲跌色 `#E04B45`／`#16A75C`／`#93A4B8`，名稱、買進價、現價、成本仍為 `#E6EDF5`；現價模式與結算模式皆同
+- [x] 1.5 秒後按鈕恢復原圖示，列仍維持已複製樣式
+- [x] 剪貼簿寫入被拒（叉號「複製失敗」）時該列不換成已複製樣式，`sessionStorage.copiedStockIds` 不含該代號
+- [x] 複製後 `sessionStorage.getItem('copiedStockIds')` 為含該代號的 JSON 陣列；切到其他分頁再切回、以及重新整理頁面後，該列仍為已複製樣式
+- [x] 清空 `sessionStorage`（模擬新的瀏覽器 session）後重新整理，所有列回到一般樣式
+- [x] 在策略分頁複製某代號後切到模擬交易分頁，該代號的列為已複製樣式（反之亦然），不需重新整理
+- [x] 複製並標記的過程不送出任何 `/api/` 請求
+- [x] 已複製列的各色實際渲染值在 `prefers-color-scheme: dark` 與 `light` 下相同
 
 ---
 ## Execution Result
@@ -407,3 +426,21 @@ Implements the 「### 目標結算日」 criteria (all but the last, which needs
   - 6834 天二科技 row: 買進日 2026-10-12, 買進價 130.00, 賣出日 2026-11-02, 賣出價 111.50; `SELECT open_price … '6834' AND '2026-11-02'` returns 111.50.
 - `npm run build` passes. No tests written or run. No `simulated_trade` or `stock_daily_price` rows changed. Backend 8081 and Vite 5174 stopped.
 - Not verified: 現價模式 note (code unchanged).
+
+### Increment 8 — 2026-11-15
+- Files changed:
+  - `develop/frontend/src/hooks/copiedStockIds.ts` (new) — shared store: sessionStorage `copiedStockIds` (JSON array), in-memory fallback when sessionStorage throws, subscribe/notify, `markCopied(code)` and `useCopiedStockIds()` (`useSyncExternalStore`).
+  - `develop/frontend/src/components/CopyCodeButton.tsx` — calls `markCopied(code)` after `writeText` resolves (never on rejection).
+  - `develop/frontend/src/pages/SimulatedTradeTab.tsx` — row gets class `sim-row-copied` when its `stockId` is in the set.
+  - `develop/frontend/src/pages/SimulatedTradeTab.css` — `tr.sim-row-copied td` `#241f38`, hover `#2c2645`, `.sl-code` `#b9a2f5`; only background and code color are overridden, so gain/loss/muted classes keep their colors.
+- Verified with Playwright (Chromium) on `http://localhost:5174/stocks?tab=simulated` against backend `:8081`, dark and light schemes, with 3 temporary rows (2330, 2355 2026-10-12, 6834) next to the existing 2355 row:
+  - Copy 6834: row bg `rgb(36, 31, 56)`, code `rgb(185, 162, 245)`, hover bg `rgb(44, 38, 69)`; other rows bg `rgba(0, 0, 0, 0)`, code `rgb(230, 237, 245)`. Copy 2355: both 2355 rows marked.
+  - Colors on copied rows: 名稱/買進價/現價/成本 `rgb(230, 237, 245)`; 損益/報酬率 `rgb(224, 75, 69)` (6834 loss `rgb(22, 167, 92)`); older 現價日 `rgb(147, 164, 184)`; settle mode (2026-11-02) same, 「—」 `rgb(107, 124, 144)`.
+  - After 1.5 s the button title is 複製代號 6834 and the row stays `rgb(36, 31, 56)`.
+  - Rejected `writeText`: title 複製失敗, `sessionStorage.copiedStockIds` is null, row not marked.
+  - `sessionStorage.copiedStockIds` is `["6834"]` after copy; still marked after navigating away and back and after reload; after `sessionStorage.clear()` + reload no row is marked.
+  - Copy produced 0 `/api/` requests. Dark and light colors identical.
+  - Seeding `["2330"]` into sessionStorage (what the strategy tab will write) marks the 2330 row, confirming the shared key.
+- Not verified in this increment: the 策略分頁 -> 模擬交易 criterion (strategy table wired later; verified live below).
+- Cross-tab verified live (after strategy.md Increment 44): copy 3701 on 策略 then switch to 模擬交易 -> 3701 row `sim-row-copied` bg `rgb(36, 31, 56)`; copy 2355 on 模擬交易 then switch to 策略 -> 2355 row `st-row-copied` bg `rgb(36, 31, 56)`; no reload. Test trades 481, 482 deleted.
+- `npm run build` passes. No tests written or run. Test rows 478-480 deleted via DELETE; the pre-existing row (id 477) remains. Backend 8081 and Vite 5174 stopped.

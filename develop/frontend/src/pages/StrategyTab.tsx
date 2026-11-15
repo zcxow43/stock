@@ -31,6 +31,7 @@ import StrategyCardSettingsList from '../components/StrategyCardSettingsList'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { applyCardOrder, useStrategyCardSettings } from '../hooks/useStrategyCardSettings'
 import CopyCodeButton from '../components/CopyCodeButton'
+import { useCopiedStockIds } from '../hooks/copiedStockIds'
 import './StockListPage.css'
 
 /** Matches the backend's configured startup catch-up start date
@@ -1029,6 +1030,7 @@ export interface StrategyTabProps {
 }
 
 export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProps) {
+  const copiedIds = useCopiedStockIds()
   // ---------- strategy catalogue ----------
   const [catalog, setCatalog] = useState<StrategyCatalogItem[]>([])
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -3038,7 +3040,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
               const parentRow = (
                 <tr
                   key={row.stockId}
-                  className={`sl-row${rowUnchecked ? ' st-row-unchecked' : ''}`}
+                  className={`sl-row${rowUnchecked ? ' st-row-unchecked' : ''}${copiedIds.has(row.stockId) ? ' st-row-copied' : ''}`}
                   onClick={handleParentRowClick}
                 >
                   <td className="st-expand-col">
@@ -3079,7 +3081,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                     </td>
                   ) : null}
                   <td>
-                    {row.stockId} {row.stockName}
+                    <span className="st-code">{row.stockId}</span> {row.stockName}
                     <CopyCodeButton code={row.stockId} />
                     {backtestResult && !hasChildren ? renderAddSimButton(row.stockId, groups[0].buyDate) : null}
                   </td>
@@ -3119,7 +3121,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                 return (
                   <tr
                     key={key}
-                    className={`sl-row st-child-row${childChecked ? '' : ' st-row-unchecked'}`}
+                    className={`sl-row st-child-row${childChecked ? '' : ' st-row-unchecked'}${copiedIds.has(row.stockId) ? ' st-row-copied' : ''}`}
                     onClick={backtestResult ? () => toggleItemChecked(row.stockId, group.buyDate) : undefined}
                   >
                     <td className="st-expand-col"></td>
@@ -3133,7 +3135,7 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
                       </td>
                     ) : null}
                     <td className="st-child-indent">
-                      {row.stockId} {row.stockName}
+                      <span className="st-code">{row.stockId}</span> {row.stockName}
                       <CopyCodeButton code={row.stockId} />
                       {backtestResult ? renderAddSimButton(row.stockId, group.buyDate) : null}
                     </td>

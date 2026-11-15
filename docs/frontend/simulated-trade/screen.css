@@ -102,3 +102,10 @@
        background:transparent; color:#93A4B8; cursor:pointer; vertical-align:middle; }
 .page-simtrade .cpy.ok { color:#3E8FD8; }
 .page-simtrade .cpy + .snm { margin-left:4px; }
+
+/* ---- 已複製列（以代號為準，記在 sessionStorage.copiedStockIds）---- */
+/* spec ## Visual Style：已複製列背景 #241F38／hover #2C2645，代號文字 #B9A2F5；
+   其餘文字色（名稱、價格、漲跌色）不變。 */
+.page-simtrade tbody tr.copied { background:#241F38; }
+.page-simtrade tbody tr.copied.hover { background:#2C2645; }
+.page-simtrade tbody tr.copied .sid { color:#B9A2F5; }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { markCopied } from '../hooks/copiedStockIds'
 import './CopyCodeButton.css'
 
 type CopyState = 'idle' | 'copied' | 'failed'
@@ -32,6 +33,7 @@ export default function CopyCodeButton({ code }: { code: string }) {
     e.stopPropagation()
     try {
       await navigator.clipboard.writeText(code)
+      markCopied(code)
       show('copied')
     } catch {
       show('failed')

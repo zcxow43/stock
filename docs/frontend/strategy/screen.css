@@ -322,3 +322,10 @@
 /* 「加入模擬以 {D} 起第一個交易日開盤買進」：表頭之上獨立一行、靠左 */
 .page-strategy .simbasis { display:flex; justify-content:flex-start; margin:-2px 0 3px; }
 .page-strategy .simbasis > label { height:20px; }
+
+/* ---- 已複製的列：複製成功過的代號，該代號每一列（單一列、父列、子列）整列換色 ---- */
+.page-strategy .cpy.ok { color:#3E8FD8; }
+.page-strategy tbody tr.copied, .page-strategy tr.copied > td { background:#241F38; }
+.page-strategy tbody tr.copied.hover, .page-strategy tr.copied.hover > td { background:#2C2645; }
+.page-strategy tr.copied td.code { color:#B9A2F5; }
+.page-strategy tr.copied.off td.code { color:#6B7C90; }

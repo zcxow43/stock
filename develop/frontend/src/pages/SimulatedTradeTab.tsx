@@ -8,6 +8,7 @@ import {
   type SimulatedTradeListResponse,
 } from '../api/simulatedTrades'
 import CopyCodeButton from '../components/CopyCodeButton'
+import { useCopiedStockIds } from '../hooks/copiedStockIds'
 import './SimulatedTradeTab.css'
 
 type Status = 'loading' | 'success' | 'error'
@@ -104,6 +105,7 @@ function addErrorMessage(err: unknown, attemptedStockId: string, attemptedBuyDat
  * `commonStocksOnly` prop and never reads the page-level setting: this page has no
  * population filter, so toggling that checkbox elsewhere can't affect it. */
 export default function SimulatedTradeTab() {
+  const copiedIds = useCopiedStockIds()
   const [data, setData] = useState<SimulatedTradeListResponse | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null)
@@ -408,7 +410,11 @@ export default function SimulatedTradeTab() {
                     return (
                       <tr
                         key={item.id}
-                        className={flashId === item.id ? 'sim-row-flash' : undefined}
+                        className={
+                          [flashId === item.id ? 'sim-row-flash' : '', copiedIds.has(item.stockId) ? 'sim-row-copied' : '']
+                            .filter(Boolean)
+                            .join(' ') || undefined
+                        }
                         onAnimationEnd={() => {
                           if (flashId === item.id) setFlashId(null)
                         }}

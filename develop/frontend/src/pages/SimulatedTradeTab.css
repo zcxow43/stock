@@ -211,3 +211,19 @@
 .sim-settle-item {
   align-items: center;
 }
+
+/* 已複製列 — literal colors, no theme variables. Background goes on the `<td>`s like the
+   hover rule above; both selectors are (0,2,3) so the copied rules come after it and a
+   copied row's hover has its own rule. Only `.sl-code` is recolored: gain/loss/muted cells
+   keep their own color classes. */
+.sim-holdings-table tbody tr.sim-row-copied td {
+  background: #241f38;
+}
+
+.sim-holdings-table tbody tr.sim-row-copied:hover td {
+  background: #2c2645;
+}
+
+.sim-holdings-table tbody tr.sim-row-copied td .sl-code {
+  color: #b9a2f5;
+}

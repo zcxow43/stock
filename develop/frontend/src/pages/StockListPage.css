@@ -1556,6 +1556,26 @@
   background: #1d2a38;
 }
 
+/* 已複製的列 — literal colors. Placed after the child-row rules so equal-specificity
+   background rules win; only `.st-code` is recolored, 報酬率／收益 keep their own
+   .sl-up/.sl-down/.sl-neutral color. An unchecked row keeps the copied background but its
+   code text stays weak gray (the td rule is !important, so the span needs its own rule). */
+.sl-table tbody tr.st-row-copied td {
+  background: #241f38;
+}
+
+.sl-table tbody tr.st-row-copied:hover td {
+  background: #2c2645;
+}
+
+.sl-table tbody tr.st-row-copied td .st-code {
+  color: #b9a2f5;
+}
+
+.sl-table tbody tr.st-row-copied.st-row-unchecked td .st-code {
+  color: #6b7c90;
+}
+
 .st-child-indent {
   position: relative;
   padding-left: 28px !important;
