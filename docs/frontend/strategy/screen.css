@@ -329,3 +329,12 @@
 .page-strategy tbody tr.copied.hover, .page-strategy tr.copied.hover > td { background:#2C2645; }
 .page-strategy tr.copied td.code { color:#B9A2F5; }
 .page-strategy tr.copied.off td.code { color:#6B7C90; }
+
+/* thirteen strategy cards: 均線糾結突破 does not fit the two card rows and takes a third. On the full
+   (description-carrying) screens lay that card out on one line, as the compact result screens already do
+   for their second row, and give the 13-row settings list back the height of its extra row. */
+.page-strategy:not(.nodesc) .cards .card.sq { display:flex; align-items:center; gap:10px; flex-wrap:nowrap; padding-top:2px; padding-bottom:2px; }
+.page-strategy:not(.nodesc) .cards .card.sq > * { margin:0; }
+.page-strategy:not(.nodesc) .cards .card.sq .desc { width:auto; min-width:0; }
+.page-strategy .setlist { gap:2px; }
+.page-strategy .setrow { height:25px; }

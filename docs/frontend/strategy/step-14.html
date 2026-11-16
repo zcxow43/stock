@@ -85,6 +85,11 @@
           <div class="desc">收盤價由下往上站上均線當日為訊號日：前一交易日收盤未高於均線，當日收盤高於均線</div>
           <div class="rise"><span class="rl">均線</span><span class="grp on"><span class="gbox"></span><span class="gl">MA5</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA20</span></span><span class="grp on"><span class="gbox"></span><span class="gl">MA60</span></span></div>
           <div class="desc">三條均線各自判定，任一條達標即命中</div></div>
+        <div class="card sq"><div class="top"><span class="box"></span><span class="nm">均線糾結突破</span></div>
+          <div class="desc">前指定天數內每日 MA5／MA20／MA60 三線差距 ÷ 三線平均皆低於門檻，當日收盤同時高於三線且 MA5 高於前一日</div>
+          <div class="rise"><span class="rl">糾結天數</span><input value="10" style="width:44px"><span class="pct">日</span>
+            <span class="rl" style="margin-left:6px">糾結幅度</span><input value="3.0"><span class="pct">%</span></div>
+          <div class="desc">糾結天數為回看的交易日數，不含週末與休市日</div></div>
       </div>
       <div class="condrow"><span class="lbl">股票範圍</span>
         <div class="seg"><button class="on">全市場</button><button>指定股票</button><button>月統計</button></div></div>

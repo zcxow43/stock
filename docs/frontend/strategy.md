@@ -2,7 +2,7 @@
 
 從只有種子股票的初始狀態，走過「更新股票清單 → 同步日 K → 按條件區最右邊的「設定」進入設定模式，隱藏用不到的 KDJ 黃金交叉、把「量多」拖到第七位，按「完成」回到卡片 → 於剩下的十一張策略卡片中勾選三個（箱型突破、MACD 黃金交叉、站上均線）掃描 → 命中彙總表以**命中策略數由多到少**的新預設排序呈現並自動回測（五個批次框預設勾選，表格一出現就是報酬率降冪） → 取消勾選「取消買進價高於 500 元」讓被藏起來的筆勾回並重新顯示 → 展開一檔的多個買進日 → 取消其中一筆重算總計（排序位置不動） → 勾選「取消全選」 → 取消勾選「取消全選」全部勾回 → 勾選「僅選取全符合」只留下三個策略都命中過的那幾檔 → 往下捲動、三個總計浮動跟隨 → 捲回頂端，在「加入模擬以 {D} 起第一個交易日開盤買進」預設勾選下按一筆「加入模擬」（實際區間止於今日，{D} 以後尚無行情 → 加入失敗），取消勾選後逐列「加入模擬」一筆，再以批次列的「報酬率 [N] % 以上 [加入模擬]」一次加入其餘達標的筆 → 股票範圍改選「月統計」（不選區間，統計本月與前三個月） → 按「開始掃描」，18 段逐段掃描並回測 → 月統計表每段列出總成本、總報酬率、總收益」的完整流程。
 
-選三個而不是十二個策略，是因為「僅選取全符合」要求一檔被**每一個**已選策略各命中過至少一次——選滿十二個時幾乎不會有任何一檔全中，每一列都會被取消勾選、三個總計顯示「—」，那一步就看不出這個框在做什麼。
+選三個而不是十三個策略，是因為「僅選取全符合」要求一檔被**每一個**已選策略各命中過至少一次——選滿十三個時幾乎不會有任何一檔全中，每一列都會被取消勾選、三個總計顯示「—」，那一步就看不出這個框在做什麼。
 
 ![storyboard](strategy/storyboard.png)
 
@@ -22,10 +22,10 @@
 | 3 | 按「同步日 K 至今日」 | `POST /api/stocks/sync/backfill` | **此端點即是抓取歷史日 K 的起點**；全市場模式逐交易日各向交易所取一次當日全市場快照 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 3 | 同步執行中（每 5 秒） | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 輪詢進度，更新已完成檔數 | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
 | 4 | 同步完成 | `GET /api/stocks/sync/progress?jobType=PRICE_BACKFILL` | 重取 `lastSyncedAt` | [stock-price-ingestion](../backend/stock-price-ingestion.md) |
-| 5 | 按「設定」 | —（不發請求） | 進入設定模式：卡片換成設定清單，列出 `GET /api/strategies` 第 1 步已取回的全部十二個策略；純前端 | [strategy-scan](../backend/strategy-scan.md) |
+| 5 | 按「設定」 | —（不發請求） | 進入設定模式：卡片換成設定清單，列出 `GET /api/strategies` 第 1 步已取回的全部十三個策略；純前端 | [strategy-scan](../backend/strategy-scan.md) |
 | 6 | 按某一列的「隱藏」 | —（不發請求） | 隱藏只寫瀏覽器的 `localStorage`（以策略 `code` 記），即時生效、後端不知情 | [strategy-scan](../backend/strategy-scan.md) |
 | 7 | 拖拉某一列（或按「上移」「下移」） | —（不發請求） | 順序同樣只寫 `localStorage`；它同時決定卡片排列與之後掃描請求 `strategies` 的先後 | [strategy-scan](../backend/strategy-scan.md) |
-| 8 | 按「完成」、勾選三個策略 | —（不發請求） | 回到卡片：只畫未隱藏的十一張、依設定的順序；勾選純前端 | [strategy-scan](../backend/strategy-scan.md) |
+| 8 | 按「完成」、勾選三個策略 | —（不發請求） | 回到卡片：只畫未隱藏的十二張、依設定的順序；勾選純前端 | [strategy-scan](../backend/strategy-scan.md) |
 | 9 | 按「開始掃描」 | `POST /api/strategies/scan` | 一次送入本輪勾選的三個策略——箱型突破（除 `preset`／`risePercent` 外另帶 `requireVolume`，取自卡片上的「要求量增」勾選框、此處為預設的 `true`）、MACD 黃金交叉（帶 `fastPeriod`／`slowPeriod`，指標由日線即時算出、不讀指標表）、站上均線（帶 `maPeriods` 複選，此處為 MA5／MA20／MA60 全選，不帶 `preset`）；只送未隱藏且已勾選的策略、依卡片顯示順序排列，未勾選的八張卡片與被隱藏的 KDJ 黃金交叉不在請求裡。回應組成單一命中彙總表與標題下的採用參數那一行，每一筆另帶 `buyDate`（＝確認完成日之後的下一個交易日）與各型態的 `detail`（站上均線為 `matchedPeriods`，供命中策略欄標出是哪一條均線）；訊號落在該檔最新一根日線、其後還沒有交易日的命中沒有 `buyDate`，回在 `pendingConfirm`，不進表。本端點只讀已入庫的資料，**不會**向交易所抓取 | [strategy-scan](../backend/strategy-scan.md) |
 | 9 | 掃描成功且命中 ≥ 1 檔時**自動送出**（無按鈕） | `POST /api/strategies/backtest` | 對命中清單**逐買進日**算買賣結果（一檔有幾個相異買進日就送幾筆、以 `(stockId, buyDate)` 去重；十二個型態一律以確認完成日之後的下一個交易日為買進日，上漲支撐為 D+`confirmBars`+1、其餘十一個為訊號日的次一交易日）；失敗時「重試回測」以同一份內容重送 | [strategy-backtest](../backend/strategy-backtest.md) |
 | 10 | 自動回測完成 | —（不發請求） | 第 9 步的回測回應抵達，填入表格右側六欄、標題右側總成本／總報酬率／總收益三個標籤、標題列下方五個批次勾選框與最右的「報酬率 [10] % 以上 [加入模擬]」；初始勾選狀態為「全部勾選 → 隱藏資料不齊 → 取消買進價高於 N 元 → 僅選取報酬率 n% 以上 → 僅選取全符合」五步的結果，初始排序即報酬率降冪。買進日就是該檔最新交易日的筆（緯創）在回應裡以買進日的開盤價賣出（`sellDate` 等於 `buyDate`、`sellPrice` 等於 `buyPrice`），有賣出日所以留在表上；回應沒有任何 `sellDate` 為 `null` 的筆，「隱藏資料不齊」因此 disabled 未勾選。這些預設不發出任何額外請求 | [strategy-backtest](../backend/strategy-backtest.md) |
