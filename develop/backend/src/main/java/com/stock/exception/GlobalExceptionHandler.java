@@ -285,6 +285,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSettleDate(e.getSettleDate()));
     }
 
+    @ExceptionHandler(InvalidBuyOnOrAfterException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBuyOnOrAfter(InvalidBuyOnOrAfterException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidBuyOnOrAfter(e.getBuyOnOrAfter()));
+    }
+
+    @ExceptionHandler(NoPriceOnOrAfterException.class)
+    public ResponseEntity<ErrorResponse> handleNoPriceOnOrAfter(NoPriceOnOrAfterException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.noPriceOnOrAfter(e.getStockId(), e.getBuyOnOrAfter()));
+    }
+
     @ExceptionHandler(NoPriceOnBuyDateException.class)
     public ResponseEntity<ErrorResponse> handleNoPriceOnBuyDate(NoPriceOnBuyDateException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

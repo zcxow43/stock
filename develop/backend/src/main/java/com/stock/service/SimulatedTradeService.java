@@ -10,7 +10,9 @@ import com.stock.dto.SimulatedTradeItemDto;
 import com.stock.dto.SimulatedTradeResponseDto;
 import com.stock.exception.DuplicateSimulatedTradeException;
 import com.stock.exception.InvalidSimulatedTradeBuyDateException;
+import com.stock.exception.InvalidBuyOnOrAfterException;
 import com.stock.exception.InvalidPriceBasisException;
+import com.stock.exception.NoPriceOnOrAfterException;
 import com.stock.exception.InvalidSettleDateException;
 import com.stock.exception.InvalidStockIdException;
 import com.stock.exception.NoPriceBeforeTodayException;
@@ -82,7 +84,22 @@ public class SimulatedTradeService {
             throw new InvalidStockIdException();
         }
 
-        boolean useOpen = parsePriceBasisIsOpen(request.getPriceBasis(), request.getBuyDate());
+        String rawOnOrAfter = request.getBuyOnOrAfter();
+        boolean hasBuyDate = request.getBuyDate() != null && !request.getBuyDate().trim().isEmpty();
+        boolean hasOnOrAfter = rawOnOrAfter != null && !rawOnOrAfter.trim().isEmpty();
+        LocalDate onOrAfter = null;
+        if (hasOnOrAfter) {
+            if (hasBuyDate) {
+                throw new InvalidBuyOnOrAfterException(rawOnOrAfter);
+            }
+            try {
+                onOrAfter = LocalDate.parse(rawOnOrAfter.trim());
+            } catch (DateTimeParseException e) {
+                throw new InvalidBuyOnOrAfterException(rawOnOrAfter);
+            }
+        }
+
+        boolean useOpen = parsePriceBasisIsOpen(request.getPriceBasis(), hasBuyDate || hasOnOrAfter);
 
         Stock stock = stockMapper.findById(stockId);
         if (stock == null) {
@@ -93,7 +110,16 @@ public class SimulatedTradeService {
         String rawBuyDate = request.getBuyDate();
         LocalDate buyDate;
         BigDecimal buyPrice;
-        if (rawBuyDate == null || rawBuyDate.trim().isEmpty()) {
+        if (onOrAfter != null) {
+            // buyOnOrAfter: the stock's own first day on/after it (up to today) with a positive
+            // price on the chosen basis; none -> NO_PRICE_ON_OR_AFTER (also covers a future date).
+            StockDailyPrice buyRow = priceMapper.findFirstPositivePriceOnOrAfter(stockId, onOrAfter, today, useOpen);
+            if (buyRow == null) {
+                throw new NoPriceOnOrAfterException(stockId, onOrAfter);
+            }
+            buyDate = buyRow.getTradeDate();
+            buyPrice = useOpen ? buyRow.getOpenPrice() : buyRow.getClosePrice();
+        } else if (rawBuyDate == null || rawBuyDate.trim().isEmpty()) {
             // 省略時：trade_date <= 今日 且 close_price > 0 的最大 trade_date（specs/backend/
             // simulated-trade.md, "一筆持股怎麼建立"）. Note this is "<=" at the call site below but
             // findLatestPositiveCloseBefore takes an exclusive upper bound, so today is passed as
@@ -352,13 +378,13 @@ public class SimulatedTradeService {
      * priceBasis: absent or CLOSE -> false, OPEN -> true; anything else, or OPEN without a buyDate,
      * -> INVALID_PRICE_BASIS (specs/backend/simulated-trade.md).
      */
-    private boolean parsePriceBasisIsOpen(String priceBasis, String buyDate) {
+    private boolean parsePriceBasisIsOpen(String priceBasis, boolean hasDateAnchor) {
         if (priceBasis == null || "CLOSE".equals(priceBasis)) {
             return false;
         }
         if ("OPEN".equals(priceBasis)) {
-            if (buyDate == null || buyDate.trim().isEmpty()) {
-                throw new InvalidPriceBasisException("priceBasis OPEN requires buyDate");
+            if (!hasDateAnchor) {
+                throw new InvalidPriceBasisException("priceBasis OPEN requires buyDate or buyOnOrAfter");
             }
             return true;
         }

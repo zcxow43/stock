@@ -139,16 +139,25 @@ export async function fetchSimulatedTrades(
  * totals are backend-owned. */
 export async function createSimulatedTrade(
   stockId: string,
-  buyDate: string,
+  /** A string is a plain `buyDate`. The object form sends `buyOnOrAfter` instead when set
+   * (the backend picks that stock's first trading day with an open price on/after it),
+   * else `buyDate` — never both. */
+  buy: string | { buyDate: string; buyOnOrAfter?: string | null },
   signal?: AbortSignal,
   priceBasis?: 'CLOSE' | 'OPEN',
 ): Promise<SimulatedTradeItem> {
+  const dateFields =
+    typeof buy === 'string'
+      ? { buyDate: buy }
+      : buy.buyOnOrAfter
+        ? { buyOnOrAfter: buy.buyOnOrAfter }
+        : { buyDate: buy.buyDate }
   return request<SimulatedTradeItem>(
     '/api/simulated-trades',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(priceBasis ? { stockId, buyDate, priceBasis } : { stockId, buyDate }),
+      body: JSON.stringify(priceBasis ? { stockId, ...dateFields, priceBasis } : { stockId, ...dateFields }),
     },
     signal,
   )

@@ -1196,6 +1196,8 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   // `returnThresholdInput`) and whether the sequential bulk run is in flight.
   const [bulkAddInput, setBulkAddInput] = useState('10')
   const [bulkAdding, setBulkAdding] = useState(false)
+  // 「加入模擬以 {D} 起第一個交易日開盤買進」: default checked, kept for the whole page visit.
+  const [buyOnOrAfterChecked, setBuyOnOrAfterChecked] = useState(true)
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(null)
   const [backtestErrorMessage, setBacktestErrorMessage] = useState<string | null>(null)
   // Distinguishes a running 重試回測 from the initial auto-backtest — both share
@@ -2231,8 +2233,18 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
     return map
   })()
 
+  // D = the scan response's endDate + 1 day (not the live range input), so changing the end week
+  // without rescanning leaves it alone.
+  const buyOnOrAfterDate = scanResult ? toIsoDate(shiftDays(parseIsoDate(scanResult.endDate), 1)) : null
+  const useBuyOnOrAfter = buyOnOrAfterChecked && buyOnOrAfterDate !== null
+  // The state of an 加入模擬 button is that of the request it would send now: (stockId, D) when
+  // checked — shared by every child row of a stock — else (stockId, buyDate). Modes never overwrite.
+  const simKey = (stockId: string, buyDate: string): string =>
+    useBuyOnOrAfter ? `${stockId}::on-or-after::${buyOnOrAfterDate}` : itemKey(stockId, buyDate)
+
   const handleAddSimulation = (stockId: string, buyDate: string): Promise<void> => {
-    const key = itemKey(stockId, buyDate)
+    const key = simKey(stockId, buyDate)
+    const onOrAfter = useBuyOnOrAfter ? buyOnOrAfterDate : null
     const generation = backtestGenerationRef.current
     const setState = (state: AddSimState) => {
       // A new scan/backtest bumps the generation; its button states start fresh, so a late reply is dropped.
@@ -2240,17 +2252,20 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       setAddSimStates((prev) => new Map(prev).set(key, state))
     }
     setState({ status: 'adding' })
-    return createSimulatedTrade(stockId, buyDate, undefined, 'OPEN')
+    return createSimulatedTrade(stockId, { buyDate, buyOnOrAfter: onOrAfter }, undefined, 'OPEN')
       .then(() => setState({ status: 'added' }))
       .catch((err: unknown) => {
         if (err instanceof SimulatedTradeApiError && err.code === 'DUPLICATE_SIMULATED_TRADE') {
           setState({ status: 'added' })
           return
         }
+        const code = err instanceof SimulatedTradeApiError ? err.code : null
         const message =
-          err instanceof SimulatedTradeApiError && err.code === 'NO_PRICE_ON_BUY_DATE'
+          code === 'NO_PRICE_ON_BUY_DATE'
             ? `${stockId} 在 ${buyDate} 沒有開盤價，無法加入`
-            : '加入失敗，請稍後再試'
+            : code === 'NO_PRICE_ON_OR_AFTER'
+              ? `${stockId} 在 ${onOrAfter} 以後尚無開盤價，無法加入`
+              : '加入失敗，請稍後再試'
         setState({ status: 'failed', message })
       })
   }
@@ -2258,9 +2273,9 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
   /** 「加入模擬」按鈕 — only for a row standing for exactly one buy date; stops the click so it
    * neither toggles the row's checkbox nor expands/collapses anything. */
   const renderAddSimButton = (stockId: string, buyDate: string) => {
-    const key = itemKey(stockId, buyDate)
-    const state = addSimStates.get(key)
-    const noPrice = (backtestItemsByKey.get(key)?.buyPrice ?? null) === null
+    const state = addSimStates.get(simKey(stockId, buyDate))
+    // Checked: the request carries no buy date, so a null buyPrice on this row is irrelevant.
+    const noPrice = !useBuyOnOrAfter && (backtestItemsByKey.get(itemKey(stockId, buyDate))?.buyPrice ?? null) === null
     const status = state?.status
     const label = status === 'adding' ? '加入中…' : status === 'added' ? '已加入' : status === 'failed' ? '加入失敗' : '加入模擬'
     return (
@@ -2449,9 +2464,11 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
       for (const group of visibleGroups(row)) {
         const key = itemKey(row.stockId, group.buyDate)
         const returnPercent = backtestItemsByKey.get(key)?.returnPercent ?? null
-        const status = addSimStates.get(key)?.status
+        const status = addSimStates.get(simKey(row.stockId, group.buyDate))?.status
         if (returnPercent === null || returnPercent < threshold) continue
         if (status === 'added' || status === 'adding') continue
+        // Checked: every child row of a stock sends the same body, so only the first goes out.
+        if (useBuyOnOrAfter && targets.some((t) => t.stockId === row.stockId)) continue
         targets.push({ stockId: row.stockId, buyDate: group.buyDate })
       }
     }
@@ -2888,6 +2905,19 @@ export default function StrategyTab({ commonStocksOnly = true }: StrategyTabProp
           ) : null}
           {hiddenItemKeys.size > 0 ? <p className="st-uncounted-note">另 {hiddenItemKeys.size} 筆已隱藏</p> : null}
         </div>
+      ) : null}
+      {backtestTotals && buyOnOrAfterDate ? (
+        <label className="st-selectall-item st-buy-on-or-after-item">
+          <input
+            type="checkbox"
+            className="st-row-checkbox"
+            checked={buyOnOrAfterChecked}
+            disabled={bulkAdding}
+            onChange={(e) => setBuyOnOrAfterChecked(e.target.checked)}
+            aria-label="加入模擬以隔日起第一個交易日開盤買進"
+          />
+          <span className="st-total-label">加入模擬以 {buyOnOrAfterDate} 起第一個交易日開盤買進</span>
+        </label>
       ) : null}
       {unionRows.length === 0 ? (
         <div className="st-result-zero">

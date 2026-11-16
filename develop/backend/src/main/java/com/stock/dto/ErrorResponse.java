@@ -55,6 +55,8 @@ public class ErrorResponse {
     private final BigDecimal targetSellPrice;
     // simulated-trade.md wire contract: INVALID_SETTLE_DATE's "settleDate" echoes the offending string as sent.
     private final String settleDate;
+    // simulated-trade.md wire contract: INVALID_BUY_ON_OR_AFTER's / NO_PRICE_ON_OR_AFTER's "buyOnOrAfter" key.
+    private final String buyOnOrAfter;
 
     public ErrorResponse(String code) {
         this(code, null, null, null, null, null, null, null, null, null, null, null, null);
@@ -104,6 +106,28 @@ public class ErrorResponse {
     // Explicit @JsonCreator: with more than one constructor present, Jackson's implicit
     // single-constructor auto-detection no longer applies, so response deserialization in tests
     // needs this to be unambiguous.
+    // Pre-buyOnOrAfter 17-arg form; delegates to the full constructor.
+    private ErrorResponse(String code,
+                           List<String> unknownIds,
+                           Integer limit,
+                           List<?> allowed,
+                           String stockId,
+                           List<String> fields,
+                           List<String> unknown,
+                           List<String> duplicated,
+                           String strategy,
+                           String param,
+                           List<BacktestDuplicateItemDto> duplicatedItems,
+                           String buyDate,
+                           Long id,
+                           BigDecimal buyPrice,
+                           BigDecimal shares,
+                           BigDecimal targetSellPrice,
+                           String settleDate) {
+        this(code, unknownIds, limit, allowed, stockId, fields, unknown, duplicated, strategy, param,
+                duplicatedItems, buyDate, id, buyPrice, shares, targetSellPrice, settleDate, null);
+    }
+
     @JsonCreator
     private ErrorResponse(@JsonProperty("code") String code,
                            @JsonProperty("unknownIds") List<String> unknownIds,
@@ -121,7 +145,9 @@ public class ErrorResponse {
                            @JsonProperty("buyPrice") BigDecimal buyPrice,
                            @JsonProperty("shares") BigDecimal shares,
                            @JsonProperty("targetSellPrice") BigDecimal targetSellPrice,
-                           @JsonProperty("settleDate") String settleDate) {
+                           @JsonProperty("settleDate") String settleDate,
+                           @JsonProperty("buyOnOrAfter") String buyOnOrAfter) {
+        this.buyOnOrAfter = buyOnOrAfter;
         this.code = code;
         this.unknownIds = unknownIds;
         this.limit = limit;
@@ -335,6 +361,18 @@ public class ErrorResponse {
                 null, null, buyDate == null ? null : buyDate.toString(), null);
     }
 
+    /** INVALID_BUY_ON_OR_AFTER (specs/backend/simulated-trade.md): {buyOnOrAfter}, as sent. */
+    public static ErrorResponse invalidBuyOnOrAfter(String buyOnOrAfter) {
+        return new ErrorResponse("INVALID_BUY_ON_OR_AFTER", null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, buyOnOrAfter);
+    }
+
+    /** NO_PRICE_ON_OR_AFTER (specs/backend/simulated-trade.md): {stockId, buyOnOrAfter}. */
+    public static ErrorResponse noPriceOnOrAfter(String stockId, LocalDate buyOnOrAfter) {
+        return new ErrorResponse("NO_PRICE_ON_OR_AFTER", null, null, null, stockId, null, null, null, null, null,
+                null, null, null, null, null, null, null, buyOnOrAfter == null ? null : buyOnOrAfter.toString());
+    }
+
     /** INVALID_PRICE_BASIS (specs/backend/simulated-trade.md, "以開盤價建立"): code only. */
     public static ErrorResponse invalidPriceBasis() {
         return new ErrorResponse("INVALID_PRICE_BASIS");
@@ -438,6 +476,10 @@ public class ErrorResponse {
 
     public Long getId() {
         return id;
+    }
+
+    public String getBuyOnOrAfter() {
+        return buyOnOrAfter;
     }
 
     public String getSettleDate() {

@@ -138,6 +138,15 @@ public interface StockDailyPriceMapper {
                                                    @Param("beforeDate") LocalDate beforeDate);
 
     /**
+     * The earliest row for one stock with onOrAfter <= trade_date <= upTo whose open (useOpen) or
+     * close price is > 0; carries trade_date, open_price and close_price. Null when none exists.
+     */
+    StockDailyPrice findFirstPositivePriceOnOrAfter(@Param("stockId") String stockId,
+                                                    @Param("onOrAfter") LocalDate onOrAfter,
+                                                    @Param("upTo") LocalDate upTo,
+                                                    @Param("useOpen") boolean useOpen);
+
+    /**
      * The single most recent (trade_date, close_price) row on or before asOfDate, per stock id,
      * skipping any 0-close row — one batched window-function query, not one query per stock (see
      * specs/backend/simulated-trade.md, "以整份代號清單為條件批次查詢"). A stock absent from the result

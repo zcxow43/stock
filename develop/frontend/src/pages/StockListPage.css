@@ -1725,3 +1725,13 @@
   justify-content: flex-end;
   padding-right: 18px;
 }
+
+/* 「加入模擬以 {D} 起第一個交易日開盤買進」 — own left-aligned row directly above the table
+   head; checkbox and label colours are the 「取消全選」 ones (st-row-checkbox / st-total-label). */
+.st-selectall-item.st-buy-on-or-after-item {
+  display: flex;
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 18px;
+  white-space: nowrap;
+}

@@ -15,6 +15,7 @@ public class CreateSimulatedTradeRequest {
     private String stockId;
     private String buyDate;
     private String priceBasis;
+    private String buyOnOrAfter;
 
     public CreateSimulatedTradeRequest() {
     }
@@ -42,5 +43,14 @@ public class CreateSimulatedTradeRequest {
 
     public void setPriceBasis(String priceBasis) {
         this.priceBasis = priceBasis;
+    }
+
+    /** Optional, mutually exclusive with buyDate; a raw String so bad values reach the service. */
+    public String getBuyOnOrAfter() {
+        return buyOnOrAfter;
+    }
+
+    public void setBuyOnOrAfter(String buyOnOrAfter) {
+        this.buyOnOrAfter = buyOnOrAfter;
     }
 }

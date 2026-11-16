@@ -196,6 +196,16 @@
         LIMIT 1
     </select>
 
+    <select id="findFirstPositivePriceOnOrAfter" resultType="com.stock.domain.StockDailyPrice">
+        SELECT stock_id, trade_date, open_price, close_price
+        FROM stock_daily_price
+        WHERE stock_id = #{stockId} AND trade_date &gt;= #{onOrAfter} AND trade_date &lt;= #{upTo}
+          <if test="useOpen">AND open_price &gt; 0</if>
+          <if test="!useOpen">AND close_price &gt; 0</if>
+        ORDER BY trade_date ASC
+        LIMIT 1
+    </select>
+
     <select id="findLatestPositiveCloseOnOrBeforeByStockIds" resultType="com.stock.domain.StockDailyPrice">
         SELECT stock_id, trade_date, close_price
         FROM (

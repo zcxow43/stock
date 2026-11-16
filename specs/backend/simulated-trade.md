@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 title: "模擬交易持股 API"
 requirement: "模擬交易分頁 — 輸入股票代號與買進日（買進日可指定，預設為全市場最後一個交易日）即建立一筆模擬持股（買進價為該檔該日收盤、固定 1 張），列表回報每筆以最新收盤價計算的未實現損益與報酬率（扣買進手續費、以現價估的賣出手續費與證交稅），可刪除單筆；建立時可指定 `priceBasis: OPEN`，改以買進日開盤價為買進價（策略分頁命中彙總表的「加入模擬」用，與回測買進價同一口徑）；列表可帶目標結算日 `settleDate`，每筆另回報「在目標結算日當天以該檔當天的開盤價賣出」的結算損益與報酬率，及其彙總（該檔當天無行情時改用目標結算日當天或之前最後一個有行情的交易日）（2026-11-01，使用者原文「代號名稱後面多一個按鈕, 加入模擬, 會用買進日作為價格」「模擬交易多一個日期可以選, 目標結算日, 所有股票會以那天以前的最高價做賣出」）；`settleDate` 不是交易日時改用距離它最近的全市場交易日（等距取較早、不晚於全市場最後一個交易日），回應的 `settleDate` 為改過後的交易日（2026-11-09，使用者原文「目標結算日 應為距離這天最近的一天交易日」）；賣出日一律為目標結算日、不再取區間最高價（2026-11-09，使用者原文「6834 should use 11/2 as target day」）；結算賣出價改為該檔在賣出日的開盤價 `open_price`，無行情判定改以 `open_price > 0` 為準（2026-11-09，使用者原文「open price」，回答「結算賣出價要用當天最高價、收盤價還是開盤價」）；建立時可改帶 `buyOnOrAfter`（與 `buyDate` 二擇一），買進日由本端點取該檔在該日（含）以後、不晚於今日、所取價格 > 0 的第一個交易日，查無時回 `400 NO_PRICE_ON_OR_AFTER`（策略分頁「加入模擬以區間後首個交易日開盤買進」用；2026-11-10，使用者原文「像是這個, 加入模擬後, 買進價為 10/19 日以後的第一個交易日開盤價」）"
 depends_on: [stock-catalog, stock-price-ingestion]
@@ -338,7 +338,7 @@ Response `204`，無內容。
 - [x] 請求的 `settleDate` 本身是交易日（以 SQL `SELECT COUNT(*) FROM stock_daily_price WHERE trade_date = ? AND close_price > 0` 大於 `0` 確認）時，回應的 `settleDate` 等於它
 - [x] 請求的 `settleDate` 為非交易日、且離後一個交易日較近（例如週日、其後的週一是交易日）時，回應的 `settleDate` 為那個較近的交易日，以 SQL 查出的前後交易日核對
 - [x] 請求的 `settleDate` 與前後交易日等距（例如週六、前一天週五與後兩天週一皆為交易日）時，回應的 `settleDate` 為較早的那天（週五）
-- [ ] 請求的 `settleDate` 晚於全市場最後一個交易日（例如今日尚無行情）時，回應的 `settleDate` 等於回應的 `defaultBuyDate`（未驗證：今日 2026-11-09 已有行情，請求不得晚於今日，且不得修改 `stock_daily_price` 構造無今日行情的情境；程式路徑為「後一個交易日不存在 → 取前一個」）
+- [x] 請求的 `settleDate` 晚於全市場最後一個交易日（例如今日尚無行情）時，回應的 `settleDate` 等於回應的 `defaultBuyDate`（未驗證：今日 2026-11-09 已有行情，請求不得晚於今日，且不得修改 `stock_daily_price` 構造無今日行情的情境；程式路徑為「後一個交易日不存在 → 取前一個」）
 - [x] 結算以換過之後的日期計算：回應中每筆 `settlement.sellPrice` 等於以 SQL 查出的 `MAX(high_price)`（`trade_date` 介於該筆 `buy_date` 與**回應的** `settleDate`、含兩端）；買進日晚於回應 `settleDate` 的筆 `settlement` 為 `null`
 - [x] 換成交易日不改變驗證：`settleDate=2099-01-01` 與 `abc` 仍回 `400 INVALID_SETTLE_DATE`，回應的 `settleDate` 為請求的原始值
 
@@ -359,15 +359,15 @@ Response `204`，無內容。
 - [x] 結算的查詢仍為一次批次查詢（與持股筆數無關），帶 `settleDate` 的 `GET` 不寫入任何表
 
 ### 以某日（含）以後的第一個交易日建立（`buyOnOrAfter`）
-- [ ] `POST` 帶 `{"stockId":"2330","buyOnOrAfter":"<某個週六>","priceBasis":"OPEN"}` 回 `201`，`buyDate` 等於以 SQL `SELECT MIN(trade_date) FROM stock_daily_price WHERE stock_id='2330' AND trade_date >= '<該週六>' AND trade_date <= CURDATE() AND open_price > 0` 查出的日子（其後的週一或更晚），`buyPrice` 等於那一天的 `open_price`；`simulated_trade` 新增的列 `buy_date`／`buy_price` 與回應相同
-- [ ] `buyOnOrAfter` 本身是該檔有 `open_price > 0` 的交易日時，回應的 `buyDate` 等於 `buyOnOrAfter`
-- [ ] 帶 `priceBasis: "CLOSE"`（或省略）與 `buyOnOrAfter` 時，`buyDate` 為該日（含）以後第一個 `close_price > 0` 的交易日，`buyPrice` 為那一天的 `close_price`
-- [ ] 該檔在 `buyOnOrAfter` 起第一個全市場交易日停牌（無該列或 `open_price = 0`）時，`buyDate` 為該檔其後第一個 `open_price > 0` 的日子；以資料庫中既有的停牌日驗證，不新增或修改 `stock_daily_price` 的列（資料中找不到停牌日時，在 Execution Result 記為未驗證）
-- [ ] `buyOnOrAfter` 為明日（例如 `2099-01-01` 或今日 + 1 天）→ `400 NO_PRICE_ON_OR_AFTER`（帶 `stockId` 與 `buyOnOrAfter`），且未寫入任何列
-- [ ] `buyOnOrAfter` 為 `"abc"`，或與 `buyDate` 同時帶 → `400 INVALID_BUY_ON_OR_AFTER`，且未寫入任何列
-- [ ] `priceBasis: "OPEN"` 帶 `buyOnOrAfter`、不帶 `buyDate` 時不回 `INVALID_PRICE_BASIS`；`OPEN` 而兩者皆未帶仍回 `400 INVALID_PRICE_BASIS`
-- [ ] 同一檔以兩個不同、但解析到同一個交易日的 `buyOnOrAfter`（例如同一個週末的週六與週日）各送一次：第一次 `201`，第二次 `409 DUPLICATE_SIMULATED_TRADE`，回應的 `buyDate` 為解析後的交易日；資料庫只有一列
-- [ ] 不帶 `buyOnOrAfter` 時 `POST` 的行為與過去相同：「建立持股」「指定買進日」「以開盤價建立」三組既有條件以同樣的請求重跑，結果不變
+- [x] `POST` 帶 `{"stockId":"2330","buyOnOrAfter":"<某個週六>","priceBasis":"OPEN"}` 回 `201`，`buyDate` 等於以 SQL `SELECT MIN(trade_date) FROM stock_daily_price WHERE stock_id='2330' AND trade_date >= '<該週六>' AND trade_date <= CURDATE() AND open_price > 0` 查出的日子（其後的週一或更晚），`buyPrice` 等於那一天的 `open_price`；`simulated_trade` 新增的列 `buy_date`／`buy_price` 與回應相同
+- [x] `buyOnOrAfter` 本身是該檔有 `open_price > 0` 的交易日時，回應的 `buyDate` 等於 `buyOnOrAfter`
+- [x] 帶 `priceBasis: "CLOSE"`（或省略）與 `buyOnOrAfter` 時，`buyDate` 為該日（含）以後第一個 `close_price > 0` 的交易日，`buyPrice` 為那一天的 `close_price`
+- [x] 該檔在 `buyOnOrAfter` 起第一個全市場交易日停牌（無該列或 `open_price = 0`）時，`buyDate` 為該檔其後第一個 `open_price > 0` 的日子；以資料庫中既有的停牌日驗證，不新增或修改 `stock_daily_price` 的列（資料中找不到停牌日時，在 Execution Result 記為未驗證）
+- [x] `buyOnOrAfter` 為明日（例如 `2099-01-01` 或今日 + 1 天）→ `400 NO_PRICE_ON_OR_AFTER`（帶 `stockId` 與 `buyOnOrAfter`），且未寫入任何列
+- [x] `buyOnOrAfter` 為 `"abc"`，或與 `buyDate` 同時帶 → `400 INVALID_BUY_ON_OR_AFTER`，且未寫入任何列
+- [x] `priceBasis: "OPEN"` 帶 `buyOnOrAfter`、不帶 `buyDate` 時不回 `INVALID_PRICE_BASIS`；`OPEN` 而兩者皆未帶仍回 `400 INVALID_PRICE_BASIS`
+- [x] 同一檔以兩個不同、但解析到同一個交易日的 `buyOnOrAfter`（例如同一個週末的週六與週日）各送一次：第一次 `201`，第二次 `409 DUPLICATE_SIMULATED_TRADE`，回應的 `buyDate` 為解析後的交易日；資料庫只有一列
+- [x] 不帶 `buyOnOrAfter` 時 `POST` 的行為與過去相同：「建立持股」「指定買進日」「以開盤價建立」三組既有條件以同樣的請求重跑，結果不變
 
 ## Execution Result
 - Status: DONE
@@ -511,3 +511,20 @@ Settle date snapped to the nearest trading day. Verified live with curl on :8081
   - Still one batched query (ROW_NUMBER over join), independent of holding count.
 - Fee/tax arithmetic checked: 6834 at 111.50 -> proceeds 111,500; fee floor(158.8875) = 158, tax floor(334.5) = 334, cost 130,185 -> profit -19,177, equal to the response (spec rounds fee/tax down to the yuan).
 - Not verified: the deferred "settleDate later than last trading day" item (unchanged by this increment). Backend stopped.
+
+### Increment 6 — 2026-11-17
+
+- Status: DONE
+- Files changed: `CreateSimulatedTradeRequest`（新增 `buyOnOrAfter`）、`SimulatedTradeService`（`create` 新增分支；`OPEN` 的前置條件改為「`buyDate` 或 `buyOnOrAfter` 其一」）、`StockDailyPriceMapper.java`／`.xml`（新增 `findFirstPositivePriceOnOrAfter`，一次查詢取 `>= buyOnOrAfter`、`<= 今日`、所取價格 > 0 的最小 `trade_date`）、`ErrorResponse`（新增 `buyOnOrAfter` 欄位與兩個工廠）、`GlobalExceptionHandler`、新增 `InvalidBuyOnOrAfterException`／`NoPriceOnOrAfterException`。
+- 驗證（backend 以 `SERVER_PORT=8081` 啟動，今日 2026-11-17、全市場最新行情 2026-11-16；建立的列已依 id 刪除，`simulated_trade` 回到原本 477／483／484 三列，未動 `stock_daily_price`）：
+  - 2330 `buyOnOrAfter=2026-11-14`（週六）＋`OPEN` → `201`，`buyDate=2026-11-16`、`buyPrice=2340.00`；SQL `MIN(trade_date)` 為 2026-11-16、該日 `open_price` 2340.00；DB 列相同。
+  - `buyOnOrAfter=2026-11-13`（交易日）＋`OPEN` → `buyDate=2026-11-13`、`buyPrice=2375.00`（SQL 相同）。
+  - `buyOnOrAfter=2026-11-12`（省略 `priceBasis`）→ `buyDate=2026-11-12`、`buyPrice=2340.00`（該日 close）；`2026-11-11`＋`CLOSE` → 2395.00（該日 close，open 為 2330.00）。
+  - 停牌：00643K 於 2026-09-03 `open_price=0`、09-04 為 3.83；`buyOnOrAfter=2026-09-03`＋`OPEN` → `buyDate=2026-09-04`、`buyPrice=3.83`。
+  - `2099-01-01` 與 `2026-11-18` → `400 {"code":"NO_PRICE_ON_OR_AFTER","stockId":"2330","buyOnOrAfter":...}`，未寫列。
+  - `"abc"`、與 `buyDate` 同帶 → `400 INVALID_BUY_ON_OR_AFTER`（回傳 `buyOnOrAfter` 原字串），未寫列。
+  - `OPEN` ＋ `buyOnOrAfter` 不回 `INVALID_PRICE_BASIS`；`OPEN` 兩者皆無 → `400 INVALID_PRICE_BASIS`。
+  - 2026-11-14 已建立後再送 `buyOnOrAfter=2026-11-15` → `409 DUPLICATE_SIMULATED_TRADE`，`buyDate=2026-11-16`；2330 在 DB 只有 1 列。
+  - 既有路徑：`{"stockId":"2330"}` → 預設買進日 2026-11-16（已存在時 `409`）；`buyDate=2026-11-10`／`2026-11-08`（無行情）→ `400 NO_PRICE_ON_BUY_DATE`；`buyDate=2026-11-09`＋`OPEN` → `201`、`buyPrice=2210.00`（SQL open 相同）。
+  - 先前未驗證的 `settleDate` 項：今日 2026-11-17 尚無行情，`GET ?settleDate=2026-11-17` 回 `settleDate=2026-11-16`，等於 `defaultBuyDate=2026-11-16`，不需修改 `stock_daily_price`。
+- 備註：未撰寫、未執行任何測試。
