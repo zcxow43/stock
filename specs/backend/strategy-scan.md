@@ -1,7 +1,7 @@
 ---
 status: pending
 title: "策略型態掃描 API"
-requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）＝**確認完成日的下一個交易日**，回測以該日開盤價買進：上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日；上漲支撐新增確認長度 confirmBars（1 或 2，預設 2，與靈敏度正交，目錄端點以 params 廣告）；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 為訊號日之後的下一個交易日（尚無下一個交易日時列入 pendingConfirm，與法人籌碼型態同一條規則）；箱型突破新增 requireVolume 開關（boolean，預設 true），為 false 時跳過量能判定，與靈敏度正交、不改動 volumeMultiple，目錄端點以 paramGroups 的 volume 一筆廣告，掃描回應同時回 preset 與 requireVolume；新增均線型態站上均線（MA_BREAKOUT），以 maPeriods 複選 MA5／MA20／MA60（預設三者全選、至少一個），勾選的每一條各自獨立判定、任一條達標即命中：前一交易日收盤 ≤ 該日均線、當日收盤 > 當日均線即為訊號日，不做量能與站穩確認，buyDate 為訊號日的下一個交易日；新增量能型態量多（VOLUME_SURGE，顯示名稱原為「量開始變多」，改為「量多」，只改名不改判定）：訊號日成交量 ≥ 前 5 個交易日（不含當日）平均成交量 ×（1 + increasePercent%），且前一交易日以同一條規則不成立（放量的第一天才是訊號日，連續放量的第 2、3 天不重複出訊號）；increasePercent 由使用者輸入，預設 50，均量窗口固定 5 日不開放輸入，沒有靈敏度，buyDate 為訊號日的下一個交易日；同一檔在掃描區間內對同一型態多次命中時，改為回報區間內第一次命中（原為最近一次），signalDate／buyDate／detail 與回測皆依該次推算，十三個型態一致；新增均線型態均線糾結突破（MA_SQUEEZE_BREAKOUT）：訊號日 D 之前（不含 D）連續 squeezeDays 個交易日每日 MA5／MA20／MA60 三線最大值與最小值之差 ÷ 三線平均 < squeezePercent%（糾結），D 收盤同時高於三線（突破），且 D 的 MA5 > D−1 的 MA5（上彎）；squeezeDays 預設 10、範圍 1~60，squeezePercent 預設 3、範圍 0~10 最多一位小數，無靈敏度、不接受 risePercent，均線掃描時即時計算不落地，前置資料 squeezeDays+59 個交易日，buyDate 為訊號日的下一個交易日；與箱型突破分工——箱型看價格區間、本型態看均線收斂，命中集合刻意不同"
+requirement: "策略分頁 — 勾選策略（底底高、箱型突破、上漲支撐、反彈、累積上漲）對股票掃描並列出命中標的；底底高改以 MA5（5 日收盤均線）平滑線為判定基準找擺動低點、遞增幅度亦以 MA5 值比較，原始最低價僅一併回報供對照；底底高／箱型突破／上漲支撐各可選三種靈敏度且漲幅門檻可自行輸入覆寫；累積上漲自行輸入回看天數與漲幅門檻；反彈改為自行輸入「下跌天數／跌幅門檻」與「反彈天數／反彈幅度」，後者為可關閉的選用條件，關閉時只以跌幅判定，兩者皆不再有靈敏度。掃描母體預設只含上市普通股（排除 ETF／特別股／TDR），掃描區間預設近一個月且可自由指定；`risePercent` 的上限改為逐型態認定——箱型突破／底底高／上漲支撐為 0~20，反彈／累積上漲為 0~50；每一筆命中另回報 `buyDate`（進場日）＝**確認完成日的下一個交易日**，回測以該日開盤價買進：上漲支撐為 D+confirmBars+1，其餘十個型態為訊號日的下一個交易日；上漲支撐新增確認長度 confirmBars（1 或 2，預設 2，與靈敏度正交，目錄端點以 params 廣告）；新增三個法人籌碼型態，皆可複選外資（不含外資自營商）與投信、各自判定且任一方達標即命中：法人買賣超佔比（近 windowDays 日買賣超合計取絕對值 ÷ 成交股數合計 ≥ ratioPercent，預設 5 日、10%）、法人連續買超（連續 buyDays 日每日買超，預設 5）、法人買超強度排名（近 windowDays 日買超合計 ÷ 成交股數合計，只有合計為買超者參與，每個交易日各取前 topN 名，預設 5 日、10 名）；三大法人日報收盤後才發布，三者的 buyDate 皆為訊號日的下一個交易日；新增兩個技術指標型態：MACD 黃金交叉（短期／長期 EMA 天數可自訂，預設 5／20，訊號線固定 9，DIF 由下往上穿越 DEA 當日為訊號日）與 KDJ 黃金交叉（KD 固定 9,3,3，J 由下往上同時穿越 K 與 D 當日為訊號日，且前一交易日 J 須低於可自訂門檻 jThreshold，預設 40）；兩者於掃描當下由日線即時運算、取 startDate 前最多 250 個交易日暖身，訊號日之前不足 100 個交易日者不判定，buyDate 為訊號日之後的下一個交易日（尚無下一個交易日時列入 pendingConfirm，與法人籌碼型態同一條規則）；箱型突破新增 requireVolume 開關（boolean，預設 true），為 false 時跳過量能判定，與靈敏度正交、不改動 volumeMultiple，目錄端點以 paramGroups 的 volume 一筆廣告，掃描回應同時回 preset 與 requireVolume；新增均線型態站上均線（MA_BREAKOUT），以 maPeriods 複選 MA5／MA20／MA60（預設三者全選、至少一個），勾選的每一條各自獨立判定、任一條達標即命中：前一交易日收盤 ≤ 該日均線、當日收盤 > 當日均線即為訊號日，不做量能與站穩確認，buyDate 為訊號日的下一個交易日；新增量能型態量多（VOLUME_SURGE，顯示名稱原為「量開始變多」，改為「量多」，只改名不改判定）：訊號日成交量 ≥ 前 5 個交易日（不含當日）平均成交量 ×（1 + increasePercent%），且前一交易日以同一條規則不成立（放量的第一天才是訊號日，連續放量的第 2、3 天不重複出訊號）；increasePercent 由使用者輸入，預設 50，均量窗口固定 5 日不開放輸入，沒有靈敏度，buyDate 為訊號日的下一個交易日；同一檔在掃描區間內對同一型態多次命中時，改為回報區間內第一次命中（原為最近一次），signalDate／buyDate／detail 與回測皆依該次推算，十三個型態一致；新增均線型態均線糾結突破（MA_SQUEEZE_BREAKOUT）：訊號日 D 之前（不含 D）連續 squeezeDays 個交易日每日 MA5／MA20／MA60 三線最大值與最小值之差 ÷ 三線平均 < squeezePercent%（糾結），D 收盤同時高於三線（突破），且 D 的 MA5 > D−1 的 MA5（上彎）；squeezeDays 預設 10、範圍 1~60，squeezePercent 預設 3、範圍 0.1~10 最多一位小數（0 永遠不可能命中，回 400 INVALID_SQUEEZE_PERCENT），無靈敏度、不接受 risePercent，均線掃描時即時計算不落地，前置資料 squeezeDays+59 個交易日，buyDate 為訊號日的下一個交易日；與箱型突破分工——箱型看價格區間、本型態看均線收斂，命中集合刻意不同"
 depends_on: [stock-price-ingestion, stock-catalog, institutional-trade-ingestion, stock-indicator-statistics]
 ---
 
@@ -417,13 +417,13 @@ MA5、MA20、MA60 三條均線先**糾結**一段時間，之後收盤**同時�
 | 參數 | 型別 | 預設 | 範圍 | 說明 |
 |---|---|---|---|---|
 | `squeezeDays` | 整數 | `10` | `1` ~ `60` | 糾結窗口的交易日數，**不含** D 本身 |
-| `squeezePercent` | 數值 | `3` | `0` ~ `10`，最多一位小數 | 每日三線差距 ÷ 三線平均的上限（不含），單位 % |
+| `squeezePercent` | 數值 | `3` | `0.1` ~ `10`，最多一位小數 | 每日三線差距 ÷ 三線平均的上限（不含），單位 % |
 
 本型態**沒有靈敏度**（`presets` 為空陣列），兩個參數由呼叫端直接指定，與累積上漲、站上均線同一慣例；不接受 `risePercent`、`days`、`confirmBars`、`requireVolume`、`maPeriods`、`increasePercent` 與其餘型態專屬的欄位。均線固定為 MA5／MA20／MA60 三條，不開放複選。
 
 **邊界**：糾結取嚴格小於 `<`；突破與上彎皆取嚴格大於 `>`——收盤恰等於任一條均線、或 MA5 與前一日持平，都不命中。
 
-**`squeezePercent` 為 `0` 是合法值，但不會命中**：三線差距不會小於 0%。與累積上漲 `days = 1` 同一種處置——合法、不回 `400`，由前端在輸入當下提示。
+**`squeezePercent` 下限為 `0.1`，`0` 回 `400`**：糾結判定是嚴格 `<`，三線差距不會小於 0%，`squeezePercent = 0` 永遠不可能命中，依本 spec「一個永遠不可能命中的請求應該被拒絕」的原則回 `INVALID_SQUEEZE_PERCENT`。
 
 **不要求 D−1 未站上三線。** 事件性由糾結窗口提供：三線剛糾結完、收盤跳到三線之上的那一天才命中。突破後的下一個交易日若窗口仍全數糾結、收盤仍在三線之上且 MA5 仍上彎，也會成立；同一檔多次成立時依「收斂」只回報區間內的第一次。
 
@@ -724,7 +724,7 @@ Response `200`：
       "presets": [],
       "params": [
         { "code": "squeezeDays",    "name": "糾結天數", "unit": "日", "default": 10, "min": 1, "max": 60, "step": 1 },
-        { "code": "squeezePercent", "name": "糾結幅度", "unit": "%",  "default": 3,  "min": 0, "max": 10, "step": 0.1 }
+        { "code": "squeezePercent", "name": "糾結幅度", "unit": "%",  "default": 3,  "min": 0.1, "max": 10, "step": 0.1 }
       ]
     }
   ]
@@ -779,7 +779,7 @@ Request：
 | `strategies[].jThreshold` | number | 否 | **只有 `KDJ_GOLDEN_CROSS` 接受本欄位**。交叉前一交易日 J 的上限（不含），範圍 `-100`～`100`，最多一位小數；省略時為 `40` |
 | `strategies[].maPeriods` | string[] | 否 | **只有 `MA_BREAKOUT` 接受本欄位**。要判定的均線，`MA5`／`MA20`／`MA60` 的任意非空子集、不得重複；省略時視為三者全選 |
 | `strategies[].squeezeDays` | int | 否 | **只有 `MA_SQUEEZE_BREAKOUT` 接受本欄位**。糾結窗口的交易日數（不含訊號日），整數，範圍 `1`～`60`；省略時為 `10` |
-| `strategies[].squeezePercent` | number | 否 | **只有 `MA_SQUEEZE_BREAKOUT` 接受本欄位**。每日三線差距 ÷ 三線平均的上限（不含），單位 %，範圍 `0`～`10`，最多一位小數；省略時為 `3` |
+| `strategies[].squeezePercent` | number | 否 | **只有 `MA_SQUEEZE_BREAKOUT` 接受本欄位**。每日三線差距 ÷ 三線平均的上限（不含），單位 %，範圍 `0.1`～`10`，最多一位小數；省略時為 `3` |
 | `strategies[].increasePercent` | number | 否 | **只有 `VOLUME_SURGE` 接受本欄位**。當日成交量較前 5 個交易日均量增加的最小幅度，單位 %，範圍 `0`～`1000`，最多一位小數；省略時為 `50` |
 | `strategies[].days` | int | 否 | **只有 `CUMULATIVE_RISE` 接受本欄位**，其餘型態帶了視為無效。回看窗口的交易日數，整數，範圍 `1`～`90`；省略時為 `20` |
 | `strategies[].confirmBars` | int | 否 | **只有 `RISING_SUPPORT` 接受本欄位**。支撐必須守住的交易日數，整數，只接受 `1` 或 `2`；省略時為 `2`。與靈敏度正交，不受 `preset` 影響 |
@@ -1114,7 +1114,7 @@ Response `200`：
 - `maPeriods` 為空陣列、含 `MA5`／`MA20`／`MA60` 以外的值、或有重複 → `400`，`{"code":"INVALID_MA_PERIODS","strategy":"MA_BREAKOUT"}`
 - `increasePercent` 小於 `0`、大於 `1000`、或小數超過一位 → `400`，`{"code":"INVALID_INCREASE_PERCENT","strategy":"VOLUME_SURGE"}`
 - `squeezeDays` 非整數、小於 `1` 或大於 `60` → `400`，`{"code":"INVALID_SQUEEZE_DAYS","strategy":"MA_SQUEEZE_BREAKOUT"}`
-- `squeezePercent` 小於 `0`、大於 `10`、或小數超過一位 → `400`，`{"code":"INVALID_SQUEEZE_PERCENT","strategy":"MA_SQUEEZE_BREAKOUT"}`
+- `squeezePercent` 小於 `0.1`（含 `0`）、大於 `10`、或小數超過一位 → `400`，`{"code":"INVALID_SQUEEZE_PERCENT","strategy":"MA_SQUEEZE_BREAKOUT"}`
 - 對 `CUMULATIVE_RISE` 以外的型態帶了 `days` → `400`，`{"code":"DAYS_NOT_APPLICABLE","strategy":"REBOUND"}`
 - **請求本體無法解析**（欄位型別不符、JSON 格式錯誤）→ `400`，`{"code":"INVALID_REQUEST_BODY"}`。這是所有端點共用的規則，不限本端點：型別錯誤的本體是呼叫端的錯，回 `500` 會把它讀成伺服器故障。布林欄位一律嚴格解析，`"false"`（字串）與 `0`（數字）**不得**被寬鬆轉成 `false`——靜默轉型會讓呼叫端以為自己關掉了某個條件。
 - `confirmBars` 非整數、或不是 `1` 也不是 `2` → `400`，`{"code":"INVALID_CONFIRM_BARS","strategy":"RISING_SUPPORT"}`
@@ -1437,7 +1437,7 @@ KDJ 黃金交叉：
 - [x] 請求與錯誤契約不變：`code` 仍為 `VOLUME_SURGE`、參數仍為 `increasePercent`，`increasePercent: 1000.1` 仍回 `400` `{"code":"INVALID_INCREASE_PERCENT","strategy":"VOLUME_SURGE"}`
 
 ### 均線糾結突破（`MA_SQUEEZE_BREAKOUT`）
-- [ ] `GET /api/strategies` 回傳十三個策略，既有十二個之後為 `MA_SQUEEZE_BREAKOUT`：`name` 為「均線糾結突破」、`presets` 為空陣列、`params` 依序為 `squeezeDays`（`name`「糾結天數」、`unit`「日」、`default` `10`、`min` `1`、`max` `60`、`step` `1`）與 `squeezePercent`（`name`「糾結幅度」、`unit` `%`、`default` `3`、`min` `0`、`max` `10`、`step` `0.1`），皆不帶 `type`，與本 spec 的 JSON 範例完全一致
+- [ ] `GET /api/strategies` 回傳十三個策略，既有十二個之後為 `MA_SQUEEZE_BREAKOUT`：`name` 為「均線糾結突破」、`presets` 為空陣列、`params` 依序為 `squeezeDays`（`name`「糾結天數」、`unit`「日」、`default` `10`、`min` `1`、`max` `60`、`step` `1`）與 `squeezePercent`（`name`「糾結幅度」、`unit` `%`、`default` `3`、`min` `0.1`、`max` `10`、`step` `0.1`），皆不帶 `type`，與本 spec 的 JSON 範例完全一致
 - [ ] 既有十二個策略的目錄條目完全未變
 - [ ] 以構造資料驗證命中：D−10～D−1 每日三線差距 ÷ 三線平均皆 < 3%、D 收盤高於 D 的 MA5／MA20／MA60、D 的 MA5 > D−1 的 MA5 → 以預設參數命中，`signalDate` 為 D，`detail` 的 `close`／`ma5`／`ma20`／`ma60`／`prevMa5`／`squeezeStartDate`／`maxSpreadPercent` 與手算相符
 - [ ] 糾結條件逐日檢查：同一份資料只把 D−5 一天的三線差距調到 ≥ 3% → D 不命中
@@ -1450,7 +1450,6 @@ KDJ 黃金交叉：
 - [ ] 不要求 D−1 未站上三線：D 與 D+1 都成立時，`items` 只回報 D（區間內第一次）
 - [ ] `squeezeDays` 與 `squeezePercent` 省略時以 `10` 與 `3` 判定：同一份資料省略兩欄與明確送 `squeezeDays: 10, squeezePercent: 3`，`items`／`matchedCount`／`insufficientData`／`pendingConfirm` 皆相同；回應該筆回 `squeezeDays: 10`、`squeezePercent: 3` 且**不含** `preset`
 - [ ] 自訂參數生效：同一份資料送 `squeezeDays: 5` 與 `squeezeDays: 20` 得到不同的命中集合，各自等於依該參數手算的結果
-- [ ] `squeezePercent: 0` 為合法請求（回 `200`、不回 `400`）且零命中
 - [ ] 前置資料為 `squeezeDays + 59` 個交易日：`squeezeDays: 10` 時，D 之前恰有 68 個交易日 D 不判定、恰有 69 個時照常判定；區間內沒有任何一個 D 可判定的股票列於 `insufficientData`，不列入 `items`、也不計入 `matchedCount`
 - [ ] 以相鄰交易日計算：糾結窗口與均線窗口跨越週末或停牌缺列時，取的是相鄰資料列，不做任何日曆插補
 - [ ] `buyDate` 為 `signalDate` 之後的下一個交易日，依相鄰日線資料列認定（訊號日之後有日曆缺口時取下一筆資料列，不以日曆日加 1），且可晚於 `endDate`
@@ -1458,7 +1457,7 @@ KDJ 黃金交叉：
 - [ ] 以真實行情手算驗證：`4526` 以預設參數掃描近半年，若有命中，由 `stock_daily_price` 自行算出訊號日前 10 個交易日每日的 MA5／MA20／MA60 與三線差距（皆 < 3%）、訊號日收盤高於三線、MA5 高於前一日，與回應 `detail` 相符；若無命中，以同一方式手算說明區間內每一個 D 不成立的條件
 - [ ] 不讀也不寫 `stock_daily_indicator`，不新增任何資料表或欄位、不產生 DBA migration；全市場掃描時行情查詢次數不因本型態增加
 - [ ] `squeezeDays` 為 `0`、`61`、`10.5` → `400`，`{"code":"INVALID_SQUEEZE_DAYS","strategy":"MA_SQUEEZE_BREAKOUT"}`；`1`、`60` 為合法請求
-- [ ] `squeezePercent` 為 `-1`、`10.1`、`3.25` → `400`，`{"code":"INVALID_SQUEEZE_PERCENT","strategy":"MA_SQUEEZE_BREAKOUT"}`；`0`、`10`、`2.5` 為合法請求
+- [ ] `squeezePercent` 為 `-1`、`0`、`0.05`、`10.1`、`3.25` → `400`，`{"code":"INVALID_SQUEEZE_PERCENT","strategy":"MA_SQUEEZE_BREAKOUT"}`；`0.1`、`10`、`2.5` 為合法請求
 - [ ] 對 `MA_SQUEEZE_BREAKOUT` 以外的任一型態帶 `squeezeDays` 或 `squeezePercent` → `400`，`{"code":"PARAM_NOT_APPLICABLE","strategy":"<該策略 code>","param":"<該欄位名>"}`
 - [ ] 對 `MA_SQUEEZE_BREAKOUT` 帶 `preset` → `400` `PRESET_NOT_APPLICABLE`；帶 `risePercent`／`confirmBars`／`requireVolume`／`maPeriods`／`increasePercent` → `400` `PARAM_NOT_APPLICABLE`，`param` 指名該欄位；帶 `days` → `400` `DAYS_NOT_APPLICABLE`
 - [ ] 十三個策略同一次送出時 `results` 依送入順序回傳十三筆，既有十二個型態的命中結果與未加本功能時相同
