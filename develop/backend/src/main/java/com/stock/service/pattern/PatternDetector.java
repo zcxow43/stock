@@ -216,6 +216,30 @@ public interface PatternDetector {
         return BigDecimal.ZERO;
     }
 
+    /** Whether this detector accepts the request's `squeezeDays` and `squeezePercent` fields — true
+     *  only for MA_SQUEEZE_BREAKOUT. */
+    default boolean acceptsSqueezeParams() {
+        return false;
+    }
+
+    /** Inclusive bounds for `squeezeDays`/`squeezePercent` — meaningful only when
+     *  {@link #acceptsSqueezeParams()} is true; see specs/backend/strategy-scan.md, "均線糾結突破". */
+    default int getSqueezeDaysMin() {
+        return 0;
+    }
+
+    default int getSqueezeDaysMax() {
+        return 0;
+    }
+
+    default BigDecimal getSqueezePercentMin() {
+        return BigDecimal.ZERO;
+    }
+
+    default BigDecimal getSqueezePercentMax() {
+        return BigDecimal.ZERO;
+    }
+
     /**
      * The selectable line codes of the request's `maPeriods` multiSelect, in canonical order —
      * empty (the default) for every detector that does not accept `maPeriods`, non-empty only for

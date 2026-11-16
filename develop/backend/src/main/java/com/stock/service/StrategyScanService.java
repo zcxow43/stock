@@ -17,6 +17,8 @@ import com.stock.exception.InvalidDropDaysException;
 import com.stock.exception.InvalidDropPercentException;
 import com.stock.exception.InvalidFastPeriodException;
 import com.stock.exception.InvalidIncreasePercentException;
+import com.stock.exception.InvalidSqueezeDaysException;
+import com.stock.exception.InvalidSqueezePercentException;
 import com.stock.exception.InvalidInvestorsException;
 import com.stock.exception.InvalidJThresholdException;
 import com.stock.exception.InvalidMaPeriodsException;
@@ -201,6 +203,7 @@ public class StrategyScanService {
             validateIndicatorParams(selection, detector);
             validateMaPeriods(selection, detector);
             validateIncreasePercent(selection, detector);
+            validateSqueezeParams(selection, detector);
             if (selection.getRequireVolume() != null && !detector.acceptsRequireVolume()) {
                 // Only BOX_BREAKOUT accepts requireVolume — see specs/backend/strategy-scan.md, "對
                 // BOX_BREAKOUT 以外的型態帶了 requireVolume".
@@ -329,6 +332,29 @@ public class StrategyScanService {
             validateRangeAndScale(selection.getIncreasePercent(), detector.getIncreasePercentMin(),
                     detector.getIncreasePercentMax(), RISE_PERCENT_MAX_SCALE,
                     () -> new InvalidIncreasePercentException(code));
+        }
+    }
+
+    /**
+     * `squeezeDays`/`squeezePercent` (MA_SQUEEZE_BREAKOUT only): rejected with PARAM_NOT_APPLICABLE
+     * for every other detector; otherwise `squeezeDays` must be an integer in [1, 60] and
+     * `squeezePercent` in [0.1, 10] with at most one decimal — see specs/backend/strategy-scan.md,
+     * "均線糾結突破" and 驗證與錯誤.
+     */
+    private void validateSqueezeParams(StrategySelectionDto selection, PatternDetector detector) {
+        String code = selection.getCode();
+        if (selection.getSqueezeDays() != null && !detector.acceptsSqueezeParams()) {
+            throw new ParamNotApplicableException(code, "squeezeDays");
+        }
+        if (selection.getSqueezePercent() != null && !detector.acceptsSqueezeParams()) {
+            throw new ParamNotApplicableException(code, "squeezePercent");
+        }
+        if (detector.acceptsSqueezeParams()) {
+            validateIntInRange(selection.getSqueezeDays(), detector.getSqueezeDaysMin(),
+                    detector.getSqueezeDaysMax(), () -> new InvalidSqueezeDaysException(code));
+            validateRangeAndScale(selection.getSqueezePercent(), detector.getSqueezePercentMin(),
+                    detector.getSqueezePercentMax(), RISE_PERCENT_MAX_SCALE,
+                    () -> new InvalidSqueezePercentException(code));
         }
     }
 

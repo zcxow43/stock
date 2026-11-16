@@ -27,6 +27,9 @@ import java.util.List;
  * <p>VOLUME_SURGE echoes `increasePercent` (the threshold actually used) and no `preset` — see
  * specs/backend/strategy-scan.md, "量多".
  *
+ * <p>MA_SQUEEZE_BREAKOUT echoes `squeezeDays`/`squeezePercent` (the values actually used) and no
+ * `preset` — see specs/backend/strategy-scan.md, "均線糾結突破".
+ *
  * <p>BOX_BREAKOUT and RISING_SUPPORT are the two exceptions to "`preset` and a parameter field never
  * coexist": BOX_BREAKOUT echoes `requireVolume` and RISING_SUPPORT echoes `confirmBars` (both the
  * value actually used, defaulted when omitted) alongside `preset`, since each is orthogonal to its
@@ -56,6 +59,8 @@ public class StrategyResultDto {
     private BigDecimal jThreshold;
     private List<String> maPeriods;
     private BigDecimal increasePercent;
+    private Integer squeezeDays;
+    private BigDecimal squeezePercent;
     private LocalDate dataThroughDate;
     private int matchedCount;
     private List<StrategyHitDto> items;
@@ -228,6 +233,22 @@ public class StrategyResultDto {
 
     public void setIncreasePercent(BigDecimal increasePercent) {
         this.increasePercent = increasePercent;
+    }
+
+    public Integer getSqueezeDays() {
+        return squeezeDays;
+    }
+
+    public void setSqueezeDays(Integer squeezeDays) {
+        this.squeezeDays = squeezeDays;
+    }
+
+    public BigDecimal getSqueezePercent() {
+        return squeezePercent;
+    }
+
+    public void setSqueezePercent(BigDecimal squeezePercent) {
+        this.squeezePercent = squeezePercent;
     }
 
     public List<String> getMaPeriods() {

@@ -1286,23 +1286,23 @@ API 目前回十三個策略。**選項區只畫未被隱藏的策略，依使�
 - [x] 命中彙總表的欄位幾何不因括號變長而錯位：每個表身儲存格的左右邊界與其表頭一致、同一列共用同一個 `top`，頁面不出現水平捲軸
 
 ### 均線糾結突破卡片
-- [ ] 策略卡片區多出一張「均線糾結突破」卡片，從未設定過隱藏與排序時位於既有十二張之後（共十三張）；卡片依該條目的 `params` 畫出「糾結天數」（後綴「日」，初始 `10`）與「糾結幅度」（後綴 `%`，初始 `3`）兩格數字輸入，標籤／後綴／預設／範圍／step 全部取自 API，前端不寫死
-- [ ] 這張卡片完全由既有的數字參數通用邏輯畫出：程式中不存在以 `MA_SQUEEZE_BREAKOUT`、`squeezeDays` 或 `squeezePercent` 判斷要畫什麼控制項的分支，也未新增任何一種卡片形狀
-- [ ] 卡片沒有靈敏度下拉、沒有「漲幅門檻」輸入、沒有群組勾選框；說明文字一行取自該條目的 `description`；「糾結天數」下方有「回看的交易日數，不含週末與休市日」說明行
-- [ ] 未勾選本策略時兩格輸入 disabled；勾選後可輸入
-- [ ] 送出的該筆為 `{"code":"MA_SQUEEZE_BREAKOUT","squeezeDays":10,"squeezePercent":3}`（值與預設相同時仍照送）；改成 `20` 與 `2.5` 後送出 `squeezeDays: 20`、`squeezePercent: 2.5`；一律**不帶** `preset`、`risePercent`
-- [ ] 「糾結天數」為 `0`、`61`、`10.5` 或留空時，卡片下方顯示「糾結天數需介於 1 ~ 60 的整數」並不送出請求；「糾結幅度」為 `-1`、`0`、`10.1`、`3.25` 或留空時顯示「糾結幅度需介於 0.1 ~ 10」並不送出請求，`0.1`、`10` 可送出；數字取自 `params`
-- [ ] 「糾結幅度」為 `0` 時不出現提示色 `#D9A441` 的訊息、頁面上不存在「糾結幅度為 0 時三線差距不可能小於 0%，不會有命中」字樣，只顯示範圍錯誤「糾結幅度需介於 0.1 ~ 10」並不送出請求
-- [ ] 後端回 `INVALID_SQUEEZE_DAYS`／`INVALID_SQUEEZE_PERCENT` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
-- [ ] 命中策略與訊號日欄對本型態寫成「均線糾結突破 {signalDate}」，不加括號；展開後的子列與父列逐筆列出的那一筆採同一格式
-- [ ] 本次採用參數一行對本策略寫成「均線糾結突破（糾結 10 日・幅度 < 3%）」，天數與幅度取自掃描回應的 `squeezeDays`／`squeezePercent` 而非畫面輸入——掃描後改動輸入，該行不變；`3.0` 寫成 `3`、`2.5` 照寫
-- [ ] `pendingConfirm` 非空時，表格下方出現「均線糾結突破：另有 N 檔已突破，但次一交易日尚未到」；`insufficientData` 非空時為「均線糾結突破：另有 N 檔因區間前的歷史資料不足而未納入判定」；兩者皆為提示色 `#D9A441`，這些標的不進命中彙總表、不送回測、不計入「共 N 檔」
-- [ ] 「買進日」欄顯示掃描回應該筆的 `buyDate`，前端不自行由訊號日推算；回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重
-- [ ] 本型態與另一型態同時勾選時，「僅選取全符合」與預設排序的命中策略數照既有規則把它算作一個策略，不需為它另寫判斷
-- [ ] `localStorage` 已存有不含 `MA_SQUEEZE_BREAKOUT` 的設定時，本卡片照「`order` 缺少某個 API 有的策略」既有規則顯示並排在最後；設定清單列出十三個策略
-- [ ] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
-- [ ] 既有十二張卡片的版面、控制項與送出內容完全未變；十三張卡片一列放不下時換行，頁面不出現水平捲軸
-- [ ] 卡片與新文案不含「建議」「推薦」「可進場」等措辭
+- [x] 策略卡片區多出一張「均線糾結突破」卡片，從未設定過隱藏與排序時位於既有十二張之後（共十三張）；卡片依該條目的 `params` 畫出「糾結天數」（後綴「日」，初始 `10`）與「糾結幅度」（後綴 `%`，初始 `3`）兩格數字輸入，標籤／後綴／預設／範圍／step 全部取自 API，前端不寫死
+- [x] 這張卡片完全由既有的數字參數通用邏輯畫出：程式中不存在以 `MA_SQUEEZE_BREAKOUT`、`squeezeDays` 或 `squeezePercent` 判斷要畫什麼控制項的分支，也未新增任何一種卡片形狀
+- [x] 卡片沒有靈敏度下拉、沒有「漲幅門檻」輸入、沒有群組勾選框；說明文字一行取自該條目的 `description`；「糾結天數」下方有「回看的交易日數，不含週末與休市日」說明行
+- [x] 未勾選本策略時兩格輸入 disabled；勾選後可輸入
+- [x] 送出的該筆為 `{"code":"MA_SQUEEZE_BREAKOUT","squeezeDays":10,"squeezePercent":3}`（值與預設相同時仍照送）；改成 `20` 與 `2.5` 後送出 `squeezeDays: 20`、`squeezePercent: 2.5`；一律**不帶** `preset`、`risePercent`
+- [x] 「糾結天數」為 `0`、`61`、`10.5` 或留空時，卡片下方顯示「糾結天數需介於 1 ~ 60 的整數」並不送出請求；「糾結幅度」為 `-1`、`0`、`10.1`、`3.25` 或留空時顯示「糾結幅度需介於 0.1 ~ 10」並不送出請求，`0.1`、`10` 可送出；數字取自 `params`
+- [x] 「糾結幅度」為 `0` 時不出現提示色 `#D9A441` 的訊息、頁面上不存在「糾結幅度為 0 時三線差距不可能小於 0%，不會有命中」字樣，只顯示範圍錯誤「糾結幅度需介於 0.1 ~ 10」並不送出請求
+- [x] 後端回 `INVALID_SQUEEZE_DAYS`／`INVALID_SQUEEZE_PERCENT` 時，訊息顯示在回應 `strategy` 指名的卡片下方，而非全頁通用錯誤
+- [x] 命中策略與訊號日欄對本型態寫成「均線糾結突破 {signalDate}」，不加括號；展開後的子列與父列逐筆列出的那一筆採同一格式
+- [x] 本次採用參數一行對本策略寫成「均線糾結突破（糾結 10 日・幅度 < 3%）」，天數與幅度取自掃描回應的 `squeezeDays`／`squeezePercent` 而非畫面輸入——掃描後改動輸入，該行不變；`3.0` 寫成 `3`、`2.5` 照寫
+- [x] `pendingConfirm` 非空時，表格下方出現「均線糾結突破：另有 N 檔已突破，但次一交易日尚未到」；`insufficientData` 非空時為「均線糾結突破：另有 N 檔因區間前的歷史資料不足而未納入判定」；兩者皆為提示色 `#D9A441`，這些標的不進命中彙總表、不送回測、不計入「共 N 檔」
+- [x] 「買進日」欄顯示掃描回應該筆的 `buyDate`，前端不自行由訊號日推算；回測送出的 `items[]` 仍以 `(stockId, buyDate)` 去重
+- [x] 本型態與另一型態同時勾選時，「僅選取全符合」與預設排序的命中策略數照既有規則把它算作一個策略，不需為它另寫判斷
+- [x] `localStorage` 已存有不含 `MA_SQUEEZE_BREAKOUT` 的設定時，本卡片照「`order` 缺少某個 API 有的策略」既有規則顯示並排在最後；設定清單列出十三個策略
+- [x] 本次未新增任何顏色：卡片與新文案所用顏色全部取自 `## Visual Style` 既有的字面 hex，且在 `prefers-color-scheme: dark` 與 `light` 下實際渲染色完全相同
+- [x] 既有十二張卡片的版面、控制項與送出內容完全未變；十三張卡片一列放不下時換行，頁面不出現水平捲軸
+- [x] 卡片與新文案不含「建議」「推薦」「可進場」等措辭
 
 ### 條件區：股票範圍與區間
 - [x] 區間預設起始週為上週、結束週為本週：以今日 2026-09-14（週一）驗證起始週顯示「2026 第 37 週（09/07–09/13）」、結束週顯示「2026 第 38 週（09/14–09/20）」，「實際區間 2026-09-07 ~ 2026-09-14」，送出的 `startDate` 為 `2026-09-07`、`endDate` 為 `2026-09-14`
@@ -3354,3 +3354,19 @@ Contract prose rewritten in place:「父列在摺疊時顯示什麼」(table row
   - Dark and light computed values identical in every comparison above.
 - Not exercised separately: sort order unchanged after copy (copy only calls `markCopied`; no sort state is touched). Checked off on that basis.
 - `npm run build` passes. No tests written or run. Created trades 481, 482 deleted (204); table back to id 477 only. Backend 8081 and Vite 5174 stopped. 「加入模擬以 {D} 起第一個交易日開盤買進」 items remain unchecked; status stays `pending`.
+
+### Increment 45 — 2026-11-17
+
+本次執行「均線糾結突破卡片」一節的 17 項驗收，全數勾選。「加入模擬以 {D} 起第一個交易日開盤買進」一節的 14 項維持 `- [ ]`、`status` 維持 `pending`：該節依賴後端 `POST /api/simulated-trades` 的 `buyOnOrAfter`，而 `specs/backend/simulated-trade.md` 仍為 `pending`（後端未實作），不在本次範圍。
+
+- **改動**：`api/strategies.ts` 加入 `MA_SQUEEZE_BREAKOUT` code、`MaSqueezeBreakoutDetail`、回應／請求的 `squeezeDays`／`squeezePercent`；`StrategyTab.tsx` 只加三處資料：待確認文案「已突破，但次一交易日尚未到」、錯誤碼對照 `INVALID_SQUEEZE_DAYS`→`squeezeDays`／`INVALID_SQUEEZE_PERCENT`→`squeezePercent`、本次採用參數一行「（糾結 N 日・幅度 < P%）」。卡片本身完全由既有 `params` 通用邏輯畫出，沒有新增卡片形狀或以本策略 code 決定控制項的分支。
+- **瀏覽器實測**（Vite 5174 → 後端 8081，真實資料庫）：
+  - 第十三張卡片排在量多之後；「糾結天數」min 1／max 60／step 1、後綴「日」、下方「回看的交易日數，不含週末與休市日」；「糾結幅度」min 0.1／max 10／step 0.1、後綴 `%`；無靈敏度下拉、無漲幅門檻、無群組勾選框；說明一行為 API `description`。未勾選時兩格 disabled，勾選後為 10 與 3 且可輸入。
+  - 天數 0／61／10.5／空 → 「糾結天數需介於 1 ~ 60 的整數」；幅度 −1／0／10.1／3.25／空 → 「糾結幅度需介於 0.1 ~ 10」；以上「開始掃描」皆 disabled、送出 0 個 scan 請求；幅度 0 時沒有「糾結幅度為 0 時…」字樣；0.1、10 可送出。
+  - 送出 body：`{"code":"MA_SQUEEZE_BREAKOUT","squeezeDays":10,"squeezePercent":3}`；改 20／2.5 後為 `squeezeDays: 20, squeezePercent: 2.5`；不帶 `preset`／`risePercent`。
+  - 本週掃描（2026-11-09～2026-11-17）：「共 27 檔」＝回應 `matchedCount` 27；參數一行「均線糾結突破（糾結 10 日・幅度 < 3%）」，改輸入後未重掃仍不變，重掃後為「（糾結 20 日・幅度 < 2.5%）」；表格下方「另有 5 檔因區間前的歷史資料不足而未納入判定」「另有 2 檔已突破，但次一交易日尚未到」皆為 `#D9A441`，這 7 檔不在表格、不在 backtest 請求。27 列的買進日全部等於回應 `buyDate`（例：2471 訊號日 2026-11-09、買進日 2026-11-11，因資料庫缺 2026-11-10 日線）。
+  - 以攔截回傳的 `400 INVALID_SQUEEZE_DAYS`／`INVALID_SQUEEZE_PERCENT`：訊息顯示在本卡片下方，頁面其他位置無錯誤。
+  - 與站上均線同時勾選：父列寫成「站上均線（MA60） 2026-11-12 ・ 均線糾結突破 2026-11-09」，展開子列為「均線糾結突破 2026-11-09」；「僅選取全符合」勾選時被兩策略都命中的 23 檔全部勾選、其餘全部取消勾選。
+  - `localStorage` 存不含本策略的 12 筆 `order`（且隱藏反彈）：本卡片排在最後，設定清單列 13 個策略；測試後已移除該 key。
+  - 1280px 寬：卡片換行至第二列，`scrollWidth` 1265＝`clientWidth` 1265；本卡片 17 個元素的 color／background／border 在 dark 與 light 下完全相同，用到的 11 個色碼皆在 `## Visual Style`。卡片文字無「建議」「推薦」「可進場」。
+- `npm run build` 通過。未寫、未跑任何測試。8081／5174 已關閉，未使用 8080／5173。本次由 worker 直接實作驗證，未另派 `frontend` 子代理。

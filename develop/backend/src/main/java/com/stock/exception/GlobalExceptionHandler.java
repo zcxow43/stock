@@ -212,6 +212,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidJThreshold(e.getStrategy()));
     }
 
+    @ExceptionHandler(InvalidSqueezeDaysException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSqueezeDays(InvalidSqueezeDaysException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSqueezeDays(e.getStrategy()));
+    }
+
+    @ExceptionHandler(InvalidSqueezePercentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSqueezePercent(InvalidSqueezePercentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidSqueezePercent(e.getStrategy()));
+    }
+
     @ExceptionHandler(InvalidIncreasePercentException.class)
     public ResponseEntity<ErrorResponse> handleInvalidIncreasePercent(InvalidIncreasePercentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidIncreasePercent(e.getStrategy()));

@@ -49,6 +49,10 @@ import java.util.List;
  * <p>`increasePercent` is accepted only by VOLUME_SURGE — see specs/backend/strategy-scan.md, "量多".
  * BigDecimal for the same reason as `jThreshold`: a value with more than one decimal digit
  * deserializes successfully and is rejected by INVALID_INCREASE_PERCENT.
+ *
+ * <p>`squeezeDays`/`squeezePercent` are accepted only by MA_SQUEEZE_BREAKOUT — see
+ * specs/backend/strategy-scan.md, "均線糾結突破". BigDecimal so a non-integer `squeezeDays` or a
+ * two-decimal `squeezePercent` deserializes and is rejected by INVALID_SQUEEZE_DAYS/PERCENT.
  */
 public class StrategySelectionDto {
 
@@ -72,6 +76,8 @@ public class StrategySelectionDto {
     private BigDecimal confirmBars;
     private List<String> maPeriods;
     private BigDecimal increasePercent;
+    private BigDecimal squeezeDays;
+    private BigDecimal squeezePercent;
 
     public StrategySelectionDto() {
     }
@@ -242,5 +248,21 @@ public class StrategySelectionDto {
 
     public void setIncreasePercent(BigDecimal increasePercent) {
         this.increasePercent = increasePercent;
+    }
+
+    public BigDecimal getSqueezeDays() {
+        return squeezeDays;
+    }
+
+    public void setSqueezeDays(BigDecimal squeezeDays) {
+        this.squeezeDays = squeezeDays;
+    }
+
+    public BigDecimal getSqueezePercent() {
+        return squeezePercent;
+    }
+
+    public void setSqueezePercent(BigDecimal squeezePercent) {
+        this.squeezePercent = squeezePercent;
     }
 }

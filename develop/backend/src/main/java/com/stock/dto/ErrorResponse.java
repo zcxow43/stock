@@ -286,6 +286,16 @@ public class ErrorResponse {
                 null, null, null);
     }
 
+    public static ErrorResponse invalidSqueezeDays(String strategy) {
+        return new ErrorResponse("INVALID_SQUEEZE_DAYS", null, null, null, null, null, null, null, strategy, null,
+                null, null, null);
+    }
+
+    public static ErrorResponse invalidSqueezePercent(String strategy) {
+        return new ErrorResponse("INVALID_SQUEEZE_PERCENT", null, null, null, null, null, null, null, strategy, null,
+                null, null, null);
+    }
+
     public static ErrorResponse invalidConfirmBars(String strategy) {
         return new ErrorResponse("INVALID_CONFIRM_BARS", null, null, null, null, null, null, null, strategy, null,
                 null, null, null);

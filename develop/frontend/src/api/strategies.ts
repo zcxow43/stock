@@ -16,6 +16,7 @@ export type StrategyCode =
   | 'KDJ_GOLDEN_CROSS'
   | 'MA_BREAKOUT'
   | 'VOLUME_SURGE'
+  | 'MA_SQUEEZE_BREAKOUT'
 export type PresetCode = 'STRICT' | 'STANDARD' | 'LOOSE'
 export type InvestorCode = 'FOREIGN' | 'TRUST'
 
@@ -247,6 +248,20 @@ export interface VolumeSurgeDetail {
   prevIncreasePercent: number | null
 }
 
+/** `MA_SQUEEZE_BREAKOUT`'s judgement detail — signal-day close and three MAs, the previous
+ * day's MA5, the squeeze window's first day and its widest spread. Nothing of it is rendered
+ * (「均線糾結突破 {signalDate}」carries no bracket); it is modeled so `item.detail` matches the
+ * wire contract (specs/backend/strategy-scan.md「均線糾結突破 MA_SQUEEZE_BREAKOUT」). */
+export interface MaSqueezeBreakoutDetail {
+  close: number
+  ma5: number
+  ma20: number
+  ma60: number
+  prevMa5: number
+  squeezeStartDate: string
+  maxSpreadPercent: number
+}
+
 export type StrategyDetail =
   | BoxBreakoutDetail
   | HigherLowsDetail
@@ -260,6 +275,7 @@ export type StrategyDetail =
   | KdjGoldenCrossDetail
   | MaBreakoutDetail
   | VolumeSurgeDetail
+  | MaSqueezeBreakoutDetail
 
 export interface StrategyHit {
   stockId: string
@@ -322,6 +338,10 @@ export interface StrategyResult {
   maPeriods?: string[]
   /** `VOLUME_SURGE` only — the 量增門檻 (%) actually applied, echoed from the response. */
   increasePercent?: number
+  /** `MA_SQUEEZE_BREAKOUT` only — the 糾結天數／糾結幅度 (%) actually applied, echoed from the
+   * response (never from the card's current inputs). */
+  squeezeDays?: number
+  squeezePercent?: number
   matchedCount: number
   items: StrategyHit[]
   insufficientData: string[]
@@ -370,6 +390,9 @@ export interface ScanStrategySelection {
   maPeriods?: string[]
   /** Only sent by `VOLUME_SURGE`. */
   increasePercent?: number
+  /** Only sent by `MA_SQUEEZE_BREAKOUT`. */
+  squeezeDays?: number
+  squeezePercent?: number
 }
 
 export interface ScanRequest {
